@@ -2,4 +2,15 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+
+    <!-- Esquema negro y amarillo de UltiMusic -->
+    <color name="um_background">#FF000000</color>
+    <color name="um_surface">#FF141414</color>
+    <color name="um_surface_variant">#FF1F1F1F</color>
+    <color name="um_yellow">#FFFFD200</color>
+    <color name="um_yellow_dark">#FFC9A600</color>
+    <color name="um_on_background">#FFF2F2F2</color>
+    <color name="um_on_surface_muted">#FFB0B0B0</color>
+    <color name="um_divider">#FF2A2A2A</color>
+    <color name="um_cover_placeholder">#FF000000</color>
 </resources>

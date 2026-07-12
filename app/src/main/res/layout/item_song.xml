@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/songRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp">
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/albumCover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:background="@drawable/cover_placeholder"
+        android:contentDescription="@string/album_cover_desc"
+        android:scaleType="centerCrop"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/songCover"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:layout_marginStart="8dp"
+        android:background="@drawable/cover_placeholder"
+        android:contentDescription="@string/song_cover_desc"
+        android:scaleType="centerCrop"
+        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginStart="12dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/songTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="16sp"
+            android:textStyle="italic"
+            tools:text="AAAAAAAAAAAAAAAA"
+            xmlns:tools="http://schemas.android.com/tools" />
+
+        <TextView
+            android:id="@+id/songSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="14sp"
+            tools:text="Artista A | Álbum A"
+            xmlns:tools="http://schemas.android.com/tools" />
+
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btnSongMore"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/song_more"
+        android:src="@drawable/ic_more_vert" />
+
+</LinearLayout>

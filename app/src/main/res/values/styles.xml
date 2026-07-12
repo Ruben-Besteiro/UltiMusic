@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Esquinas redondeadas para las carátulas (recuadros del wireframe). -->
+    <style name="ShapeAppearanceOverlay.UltiMusic.Cover" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">8dp</item>
+    </style>
+</resources>

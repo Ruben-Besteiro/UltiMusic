@@ -1,19 +1,58 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/main"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    tools:context=".MainActivity">
+    android:background="@color/um_background"
+    android:orientation="vertical"
+    tools:context=".ui.MainActivity">
 
-    <TextView
-        android:layout_width="wrap_content"
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="?attr/actionBarSize"
+        android:background="@color/um_background"
+        app:navigationIcon="@drawable/ic_menu"
+        app:navigationIconTint="@color/um_on_background"
+        app:title="@string/app_name"
+        app:titleTextColor="@color/um_on_background" />
+
+    <com.google.android.material.tabs.TabLayout
+        android:id="@+id/tabLayout"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Hello World!"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        android:background="@color/um_background"
+        app:tabGravity="start"
+        app:tabIndicatorColor="@color/um_yellow"
+        app:tabMode="scrollable"
+        app:tabSelectedTextColor="@color/um_yellow"
+        app:tabTextColor="@color/um_on_surface_muted" />
 
-</androidx.constraintlayout.widget.ConstraintLayout>
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <androidx.viewpager2.widget.ViewPager2
+        android:id="@+id/viewPager"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <ProgressBar
+        android:id="@+id/songProgress"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="4dp"
+        android:max="1000"
+        android:progress="0"
+        android:progressTint="@color/um_yellow"
+        android:progressBackgroundTint="@color/um_divider" />
+
+    <include
+        android:id="@+id/miniPlayer"
+        layout="@layout/view_mini_player" />
+
+</LinearLayout>

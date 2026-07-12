@@ -11,6 +11,8 @@ data class Song(
     val genres: List<String>,
     val imageName: String?,
     val comment: String?,
+    val producer: String?,
+    
     val ogTitle: String?,
     val ogArtist: String?,
     val ogAlbum: String?,

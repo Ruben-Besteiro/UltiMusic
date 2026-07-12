@@ -1,19 +1,18 @@
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.ksp)
 }
 
 android {
     namespace = "com.untarlamanteca.ultimusic"
     compileSdk {
-        version = release(36)
+        version = release(37)
     }
 
     defaultConfig {
         applicationId = "com.untarlamanteca.ultimusic"
         minSdk = 24
-        targetSdk = 36
+        targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
@@ -41,6 +40,12 @@ dependencies {
     implementation(libs.material)
     implementation(libs.androidx.activity)
     implementation(libs.androidx.constraintlayout)
+    implementation(libs.androidx.fragment.ktx)
+    implementation(libs.androidx.viewpager2)
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.recyclerview)
+    implementation(libs.coil)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)

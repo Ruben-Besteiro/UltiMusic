@@ -1,3 +1,36 @@
 <resources>
     <string name="app_name">UltiMusic</string>
+
+    <!-- Pestañas -->
+    <string name="tab_songs">Canciones</string>
+    <string name="tab_albums">Álbumes</string>
+    <string name="tab_artists">Artistas</string>
+    <string name="tab_genres">Géneros</string>
+    <string name="tab_playlists">Listas de reproducción</string>
+
+    <!-- Barra superior -->
+    <string name="action_menu">Menú</string>
+    <string name="action_help">Ayuda</string>
+    <string name="action_search">Buscar</string>
+    <string name="action_more">Más opciones</string>
+
+    <!-- Canciones -->
+    <string name="shuffle_title">Escoger al azar</string>
+    <string name="song_subtitle_format">%1$s | %2$s</string>
+    <string name="song_more">Más opciones de la canción</string>
+    <string name="album_cover_desc">Portada del álbum</string>
+    <string name="song_cover_desc">Portada de la canción</string>
+    <string name="no_songs">No se han encontrado canciones en ninguna de las carpetas seleccionadas.</string>
+
+    <!-- Mini-reproductor -->
+    <string name="expand_player">Expandir reproductor</string>
+    <string name="play_pause">Reproducir o pausar</string>
+    <string name="nothing_playing">Nada en reproducción</string>
+
+    <!-- Permisos -->
+    <string name="permission_needed_title">Permiso necesario</string>
+    <string name="permission_needed_message">UltiMusic necesita acceso a todos los archivos para leer tus canciones de Descargas y de la carpeta UltiMusic.</string>
+    <string name="permission_grant">Conceder</string>
+    <string name="permission_cancel">Ahora no</string>
+    <string name="permission_denied">Sin permiso no se pueden mostrar las canciones.</string>
 </resources>

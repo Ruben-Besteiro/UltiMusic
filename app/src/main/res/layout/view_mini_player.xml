@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/miniPlayer"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/um_surface"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="6dp">
+
+    <ImageButton
+        android:id="@+id/btnExpand"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/expand_player"
+        android:src="@drawable/ic_arrow_up" />
+
+    <TextView
+        android:id="@+id/miniTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:layout_marginHorizontal="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:text="@string/nothing_playing"
+        android:textColor="@color/um_on_background"
+        android:textSize="16sp"
+        android:textStyle="italic" />
+
+    <ImageButton
+        android:id="@+id/btnPlayPause"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/play_pause"
+        android:src="@drawable/ic_play" />
+
+</LinearLayout>

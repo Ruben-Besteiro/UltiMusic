@@ -1,7 +1,16 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Base application theme. -->
-    <style name="Base.Theme.UltiMusic" parent="Theme.Material3.DayNight.NoActionBar">
-        <!-- Customize your dark theme here. -->
-        <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+    <!-- UltiMusic es siempre oscuro; night hereda del mismo base para no cambiar de aspecto. -->
+    <style name="Base.Theme.UltiMusic" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="colorPrimary">@color/um_yellow</item>
+        <item name="colorOnPrimary">@color/black</item>
+        <item name="colorSecondary">@color/um_yellow</item>
+        <item name="colorOnSecondary">@color/black</item>
+        <item name="android:colorBackground">@color/um_background</item>
+        <item name="colorSurface">@color/um_surface</item>
+        <item name="colorSurfaceVariant">@color/um_surface_variant</item>
+        <item name="colorOnBackground">@color/um_on_background</item>
+        <item name="colorOnSurface">@color/um_on_background</item>
+        <item name="android:statusBarColor">@color/um_background</item>
+        <item name="android:navigationBarColor">@color/um_background</item>
     </style>
 </resources>

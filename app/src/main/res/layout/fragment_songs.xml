@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerSongs"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:scrollbars="vertical"
+        tools:listitem="@layout/item_song"
+        xmlns:tools="http://schemas.android.com/tools" />
+
+    <TextView
+        android:id="@+id/emptyView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="24dp"
+        android:gravity="center"
+        android:text="@string/no_songs"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <ProgressBar
+        android:id="@+id/loadingSpinner"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:indeterminateTint="@color/um_yellow"
+        android:visibility="gone" />
+
+</FrameLayout>
