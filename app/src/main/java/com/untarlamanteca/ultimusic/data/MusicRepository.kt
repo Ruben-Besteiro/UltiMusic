@@ -36,7 +36,7 @@ object MusicRepository {            // OBJECT = SINGLETON
     }
 
     /**
-     * Escanea las carpetas configuradas y devuelve las canciones ordenadas por título.
+     * Escanea las carpetas configuradas y creamos sus modelos llamando a readSong
      **/
     suspend fun scanSongs(): List<Song> = withContext(Dispatchers.IO) {
         val files = LinkedHashSet<File>()

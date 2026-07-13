@@ -44,16 +44,8 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
-    private val manageStorageLauncher =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            loadIfPermitted()
-        }
-
-    private val legacyPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) songsViewModel.loadIfNeeded()
-            else Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-        }
+    /** En caso de ser true, mostramos el "por favor concede el permiso de almacenamiento" **/
+    private var permissionDialogPending = true
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -68,13 +60,62 @@ class MainActivity : AppCompatActivity() {
         setupToolbar()
         setupPager()
         setupMiniPlayer()
-        ensureStoragePermission()
+        checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
     }
 
+    private fun checkStoragePermission() {
+        if (hasStoragePermission()) {
+            songsViewModel.loadIfNeeded()   /** Si el permiso está, creamos los modelos de las canciones **/
+        }
+        else {
+            AlertDialog.Builder(this)
+                .setTitle(R.string.permission_needed_title)
+                .setMessage(R.string.permission_needed_message)
+                .setPositiveButton(R.string.permission_grant) { _, _ ->
+                    permissionDialogPending = false
+                    requestStoragePermission()
+                }
+                .setNegativeButton(R.string.permission_cancel) { _, _ ->
+                    permissionDialogPending = false
+                    loadIfPermitted()       /** No permite -> muestra un toast **/
+                }
+                .show()
+        }
+    }
+
+    /** Si el permiso no está, lo pedimos **/
+    private fun requestStoragePermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            val intent = Intent(
+                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                Uri.parse("package:$packageName")
+            )
+            try {
+                grantStoragePermissionNewPhones.launch(intent)
+            } catch (e: Exception) {
+                grantStoragePermissionNewPhones.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+            }
+        } else {
+            grantStoragePermissionOldPhones.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+        }
+    }
+
+    private val grantStoragePermissionNewPhones =
+        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+            loadIfPermitted()
+        }
+
+    private val grantStoragePermissionOldPhones =
+        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            if (granted) songsViewModel.loadIfNeeded()
+            else Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
+        }
+
+    
+    /** OBTENEMOS LA LISTA DE CANCIONES **/
     override fun onResume() {
         super.onResume()
-        // Al volver de Ajustes, si ya hay permiso, cargamos.
-        if (hasStoragePermission()) songsViewModel.loadIfNeeded()
+        loadIfPermitted()
     }
 
     private fun setupToolbar() {
@@ -140,40 +181,12 @@ class MainActivity : AppCompatActivity() {
             ) == PackageManager.PERMISSION_GRANTED
         }
 
+    // Se llama desde el onResume = recargamos la lista de canciones cada vez que volvemos a la aplicación
     private fun loadIfPermitted() {
         if (hasStoragePermission()) {
             songsViewModel.loadIfNeeded()
-        } else {
+        } else if (!permissionDialogPending) {
             Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-        }
-    }
-
-    private fun ensureStoragePermission() {
-        if (hasStoragePermission()) {
-            songsViewModel.loadIfNeeded()
-            return
-        }
-        AlertDialog.Builder(this)
-            .setTitle(R.string.permission_needed_title)
-            .setMessage(R.string.permission_needed_message)
-            .setPositiveButton(R.string.permission_grant) { _, _ -> requestStoragePermission() }
-            .setNegativeButton(R.string.permission_cancel, null)
-            .show()
-    }
-
-    private fun requestStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            try {
-                manageStorageLauncher.launch(intent)
-            } catch (e: Exception) {
-                manageStorageLauncher.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
-            }
-        } else {
-            legacyPermissionLauncher.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
         }
     }
 }

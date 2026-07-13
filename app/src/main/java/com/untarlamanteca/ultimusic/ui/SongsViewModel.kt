@@ -8,24 +8,29 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
-/** Mantiene en memoria la lista de canciones escaneadas del almacenamiento. */
+/**
+ * Este archivo se encarga de almacenar la lista de canciones que leímos con el MusicRepository
+ * Así sobreviven a cambios de orientación entre otras cosas
+ * Actualmente es la única forma de almacenamiento de modelos que hay
+ */
+
 class SongsViewModel : ViewModel() {
 
     private val _songs = MutableStateFlow<List<Song>>(emptyList())
-    val songs = _songs.asStateFlow()
+    val songs = _songs.asStateFlow()        /** Esto es de solo lectura y es lo que exponemos **/
 
     private val _loading = MutableStateFlow(false)
     val loading = _loading.asStateFlow()
 
     private var loaded = false
 
-    /** Escanea solo la primera vez (p. ej. al conceder el permiso). */
+    /** Escanea solo la primera vez (p. ej. al conceder el permiso) */
     fun loadIfNeeded() {
         if (loaded) return
         reload()
     }
 
-    /** Fuerza un nuevo escaneo. */
+    /** Escanea siempre */
     fun reload() {
         viewModelScope.launch {
             _loading.value = true
