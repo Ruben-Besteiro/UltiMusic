@@ -27,6 +27,10 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.untarlamanteca.ultimusic.R
+import com.untarlamanteca.ultimusic.data.LibraryRepository
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
@@ -39,6 +43,7 @@ class MainActivity : AppCompatActivity() {
             getString(R.string.tab_songs),
             getString(R.string.tab_albums),
             getString(R.string.tab_artists),
+            getString(R.string.tab_producers),
             getString(R.string.tab_genres),
             getString(R.string.tab_playlists)
         )
@@ -46,6 +51,9 @@ class MainActivity : AppCompatActivity() {
 
     /** En caso de ser true, mostramos el "por favor concede el permiso de almacenamiento" **/
     private var permissionDialogPending = true
+
+    /** Scope de proceso para tareas best-effort que deben sobrevivir a la Activity (exportar la BD). */
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -118,6 +126,17 @@ class MainActivity : AppCompatActivity() {
         loadIfPermitted()
     }
 
+    /**
+     * Al pasar a segundo plano, exportamos una copia visible de la base de datos a
+     * ~/UltiMusic/databases (best-effort, prioridad baja). El scope de la app garantiza que
+     * termine aunque la Activity se destruya.
+     */
+    override fun onStop() {
+        super.onStop()
+        val repository = LibraryRepository.get(this)
+        appScope.launch { repository.exportDatabaseCopy() }
+    }
+
     private fun setupToolbar() {
         val toolbar = findViewById<MaterialToolbar>(R.id.toolbar)
         toolbar.inflateMenu(R.menu.menu_main)
@@ -142,7 +161,7 @@ class MainActivity : AppCompatActivity() {
         val progress = findViewById<ProgressBar>(R.id.songProgress)
 
         playPause.setOnClickListener { playerViewModel.togglePlayPause() }
-        // La flecha de expandir no hace nada de momento.
+        // La flecha de expandir no hace nada de momento
         expand.setOnClickListener { }
 
         lifecycleScope.launch {

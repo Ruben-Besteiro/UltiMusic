@@ -11,21 +11,11 @@
     android:paddingVertical="8dp">
 
     <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/albumCover"
+        android:id="@+id/cover"
         android:layout_width="48dp"
         android:layout_height="48dp"
         android:background="@drawable/cover_placeholder"
         android:contentDescription="@string/album_cover_desc"
-        android:scaleType="centerCrop"
-        app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
-
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/songCover"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/cover_placeholder"
-        android:contentDescription="@string/song_cover_desc"
         android:scaleType="centerCrop"
         app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
 

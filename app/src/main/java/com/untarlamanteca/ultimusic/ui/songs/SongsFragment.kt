@@ -34,6 +34,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
+        /** Pintamos las canciones en la pantalla **/
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {

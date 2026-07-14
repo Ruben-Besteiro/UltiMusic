@@ -1,0 +1,732 @@
+<title>UltiMusic — Documentación del proyecto</title>
+<style>
+  :root {
+    --bg: #f6f3ec;
+    --surface: #fffdf8;
+    --surface-2: #f0ebe0;
+    --text: #201d17;
+    --muted: #6d675b;
+    --border: #e3dccd;
+    --accent: #a76d05;
+    --accent-strong: #8a5a03;
+    --accent-soft: #f5e7c6;
+    --concept-bd: #3d6f7a;
+    --concept-bg: #e8f0f1;
+    --concept-tx: #234952;
+    --code-bg: #f2ede2;
+    --code-tx: #3a352b;
+    --ok: #2f7d4f;
+    --shadow: 0 1px 2px rgba(40,33,15,.06), 0 8px 24px rgba(40,33,15,.05);
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", "Consolas", "Liberation Mono", monospace;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #131209;
+      --surface: #1b190f;
+      --surface-2: #221f13;
+      --text: #ece6d6;
+      --muted: #9f9782;
+      --border: #2f2b1c;
+      --accent: #e6b53c;
+      --accent-strong: #f0c860;
+      --accent-soft: #2b2413;
+      --concept-bd: #4f8b98;
+      --concept-bg: #16221f;
+      --concept-tx: #a7d3d9;
+      --code-bg: #100f08;
+      --code-tx: #d7d0bd;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f3ec; --surface: #fffdf8; --surface-2: #f0ebe0; --text: #201d17;
+    --muted: #6d675b; --border: #e3dccd; --accent: #a76d05; --accent-strong: #8a5a03;
+    --accent-soft: #f5e7c6; --concept-bd: #3d6f7a; --concept-bg: #e8f0f1; --concept-tx: #234952;
+    --code-bg: #f2ede2; --code-tx: #3a352b;
+    --shadow: 0 1px 2px rgba(40,33,15,.06), 0 8px 24px rgba(40,33,15,.05);
+  }
+  :root[data-theme="dark"] {
+    --bg: #131209; --surface: #1b190f; --surface-2: #221f13; --text: #ece6d6;
+    --muted: #9f9782; --border: #2f2b1c; --accent: #e6b53c; --accent-strong: #f0c860;
+    --accent-soft: #2b2413; --concept-bd: #4f8b98; --concept-bg: #16221f; --concept-tx: #a7d3d9;
+    --code-bg: #100f08; --code-tx: #d7d0bd;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text);
+    font-family: var(--sans); line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+  }
+  .layout { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: 0; }
+  @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
+
+  /* Sidebar */
+  aside.nav {
+    position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    background: var(--surface); border-right: 1px solid var(--border);
+    padding: 28px 20px 60px;
+  }
+  @media (max-width: 940px) {
+    aside.nav { position: static; height: auto; border-right: none; border-bottom: 1px solid var(--border); }
+  }
+  .brand { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+  .brand b { font-size: 1.15rem; letter-spacing: -.02em; }
+  .brand .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  .nav .sub { color: var(--muted); font-size: .78rem; margin: 0 0 22px; }
+  .nav h5 {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em;
+    font-size: .68rem; color: var(--muted); margin: 20px 0 8px; font-weight: 600;
+  }
+  .nav a {
+    display: block; color: var(--text); text-decoration: none; font-size: .875rem;
+    padding: 4px 8px; border-radius: 6px; border-left: 2px solid transparent;
+  }
+  .nav a:hover { background: var(--surface-2); border-left-color: var(--accent); color: var(--accent-strong); }
+  .nav a code { font-size: .82em; color: var(--muted); }
+
+  /* Main */
+  main { padding: 48px clamp(20px, 5vw, 72px) 120px; max-width: 1000px; }
+  .hero { border-bottom: 1px solid var(--border); padding-bottom: 32px; margin-bottom: 8px; }
+  .eyebrow {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: .18em;
+    font-size: .72rem; color: var(--accent-strong); font-weight: 600; margin-bottom: 14px;
+  }
+  h1 { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.05; letter-spacing: -.03em; margin: 0 0 16px; text-wrap: balance; }
+  h1 .thin { color: var(--muted); font-weight: 400; }
+  .lede { font-size: 1.12rem; color: var(--muted); max-width: 62ch; margin: 0; }
+
+  section { scroll-margin-top: 20px; padding-top: 44px; }
+  h2 {
+    font-size: 1.6rem; letter-spacing: -.02em; margin: 0 0 6px;
+    padding-bottom: 10px; border-bottom: 2px solid var(--accent-soft); display: inline-block;
+  }
+  section > .section-intro { color: var(--muted); max-width: 68ch; margin: 12px 0 8px; }
+  h3 { font-size: 1.15rem; margin: 34px 0 4px; letter-spacing: -.01em; }
+  h4 {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: .1em;
+    font-size: .72rem; color: var(--muted); margin: 18px 0 6px; font-weight: 600;
+  }
+  p { max-width: 70ch; }
+  a { color: var(--accent-strong); }
+
+  /* File card */
+  .file {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px 24px; margin: 20px 0; box-shadow: var(--shadow);
+  }
+  .file > header { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px; margin-bottom: 10px; }
+  .file .path {
+    font-family: var(--mono); font-size: .85rem; color: var(--accent-strong);
+    background: var(--accent-soft); padding: 3px 9px; border-radius: 6px; word-break: break-all;
+  }
+  .file .role { font-size: .8rem; color: var(--muted); }
+  .file p { margin: 8px 0; }
+
+  ul.tight, ol.tight { margin: 8px 0; padding-left: 22px; }
+  ul.tight li, ol.tight li { margin: 5px 0; max-width: 68ch; }
+  li code, p code, td code, .role code { font-family: var(--mono); font-size: .86em; background: var(--code-bg); color: var(--code-tx); padding: 1px 5px; border-radius: 4px; }
+
+  .uses { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+  .uses .chip {
+    font-family: var(--mono); font-size: .72rem; color: var(--muted);
+    border: 1px solid var(--border); background: var(--surface-2);
+    padding: 3px 8px; border-radius: 999px;
+  }
+  .uses::before {
+    content: "usa"; font-family: var(--mono); font-size: .72rem; text-transform: uppercase;
+    letter-spacing: .1em; color: var(--muted); align-self: center; margin-right: 2px;
+  }
+
+  /* Concept callout */
+  aside.concept {
+    border: 1px solid var(--concept-bd); background: var(--concept-bg); color: var(--concept-tx);
+    border-radius: 10px; padding: 14px 18px; margin: 16px 0; border-left-width: 4px;
+  }
+  aside.concept .tag {
+    font-family: var(--mono); text-transform: uppercase; letter-spacing: .12em;
+    font-size: .66rem; font-weight: 700; display: inline-block; margin-bottom: 4px;
+  }
+  aside.concept p { margin: 4px 0; max-width: 72ch; color: var(--concept-tx); }
+  aside.concept code { background: color-mix(in srgb, var(--concept-bd) 18%, transparent); color: inherit; padding: 1px 5px; border-radius: 4px; font-family: var(--mono); font-size: .86em; }
+
+  /* Code block */
+  pre {
+    background: var(--code-bg); color: var(--code-tx); border: 1px solid var(--border);
+    border-radius: 10px; padding: 16px 18px; overflow-x: auto; font-family: var(--mono);
+    font-size: .82rem; line-height: 1.6; margin: 14px 0;
+  }
+  pre .c { color: var(--muted); font-style: italic; }
+  pre .k { color: var(--accent-strong); font-weight: 600; }
+
+  /* Flow diagram */
+  .flow { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin: 22px 0; }
+  .flow .step {
+    flex: 1 1 130px; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 10px; padding: 12px 14px; position: relative; box-shadow: var(--shadow);
+  }
+  .flow .step b { display: block; font-size: .9rem; }
+  .flow .step span { font-size: .76rem; color: var(--muted); font-family: var(--mono); }
+  .flow .arrow { align-self: center; color: var(--accent); font-size: 1.3rem; font-weight: 700; }
+  @media (max-width: 700px) { .flow .arrow { transform: rotate(90deg); } }
+
+  /* Schema */
+  .schema { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin: 20px 0; }
+  .tbl { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+  .tbl .th { background: var(--accent-soft); color: var(--accent-strong); font-family: var(--mono); font-weight: 700; padding: 8px 12px; font-size: .82rem; border-bottom: 1px solid var(--border); }
+  .tbl ul { list-style: none; margin: 0; padding: 8px 12px; }
+  .tbl li { font-family: var(--mono); font-size: .78rem; color: var(--text); padding: 2px 0; }
+  .tbl li .pk { color: var(--accent-strong); font-weight: 700; }
+  .tbl li .fk { color: var(--concept-bd); }
+  .tbl li .muted { color: var(--muted); }
+  .rels { margin: 14px 0; }
+  .rels li { font-size: .9rem; }
+
+  table.grid { width: 100%; border-collapse: collapse; margin: 14px 0; font-size: .88rem; }
+  table.grid th, table.grid td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  table.grid th { font-family: var(--mono); text-transform: uppercase; font-size: .7rem; letter-spacing: .08em; color: var(--muted); }
+
+  .note { font-size: .86rem; color: var(--muted); }
+  hr.soft { border: none; border-top: 1px solid var(--border); margin: 40px 0; }
+  .pill { display:inline-block; font-family: var(--mono); font-size:.7rem; padding:2px 8px; border-radius:999px; border:1px solid var(--border); color:var(--muted); }
+  .pill.ok { color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, var(--border)); }
+  .pill.todo { color: var(--accent-strong); border-color: var(--accent); }
+  a:focus-visible, .nav a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+</style>
+
+<div class="layout">
+  <aside class="nav">
+    <div class="brand"><span class="dot"></span><b>UltiMusic</b></div>
+    <p class="sub">Documentación técnica del proyecto</p>
+
+    <h5>Visión general</h5>
+    <a href="#intro">Qué es UltiMusic</a>
+    <a href="#arquitectura">Arquitectura y flujo</a>
+    <a href="#conceptos">Conceptos base</a>
+
+    <h5>Capa de modelos</h5>
+    <a href="#model">model/ <code>· dominio</code></a>
+
+    <h5>Capa de datos</h5>
+    <a href="#scan">data/scan/ <code>· escaneo</code></a>
+    <a href="#entities">data/db/entities/ <code>· tablas</code></a>
+    <a href="#relations">data/db/relations/</a>
+    <a href="#db-core">data/db/ <code>· núcleo Room</code></a>
+    <a href="#repository">data/ <code>· repositorio</code></a>
+
+    <h5>Capa de interfaz</h5>
+    <a href="#ui">ui/ <code>· pantallas</code></a>
+    <a href="#util">util/ <code>· carátulas</code></a>
+
+    <h5>Referencia</h5>
+    <a href="#esquema">Esquema de la BD</a>
+    <a href="#config">Config y recursos</a>
+    <a href="#inspeccionar">Inspeccionar la BD</a>
+    <a href="#mantenimiento">Mantenimiento</a>
+  </aside>
+
+  <main>
+    <div class="hero">
+      <div class="eyebrow">Reproductor de música para Android · Kotlin</div>
+      <h1>UltiMusic <span class="thin">por dentro</span></h1>
+      <p class="lede">Cómo está construido el reproductor: cada script explicado uno a uno, su estructura, el flujo de datos que los conecta y los conceptos de Android, Kotlin y Room que necesitas para entenderlos.</p>
+    </div>
+
+    <!-- ================= INTRO ================= -->
+    <section id="intro">
+      <h2>Qué es UltiMusic</h2>
+      <p class="section-intro">UltiMusic es «el reproductor de música definitivo, libre de las restricciones de MediaStore». Esa frase resume su decisión de diseño más importante.</p>
+
+      <aside class="concept">
+        <span class="tag">Concepto · MediaStore</span>
+        <p><b>MediaStore</b> es el índice de medios del sistema Android: una base de datos que el propio Android mantiene con todas las canciones, fotos y vídeos del móvil. La mayoría de reproductores se limitan a preguntarle a MediaStore «dame las canciones». El problema: si MediaStore tiene una etiqueta mal, un artista mal escrito, etc., tú no lo puedes corregir de verdad.</p>
+      </aside>
+
+      <p>UltiMusic da la vuelta a eso con dos reglas:</p>
+      <ul class="tight">
+        <li><b>Descubrir canciones escaneando el sistema de archivos directamente</b> (recorriendo carpetas), no preguntando a MediaStore.</li>
+        <li><b>Lo que el usuario edita dentro de la app manda.</b> Las ediciones se guardan en una base de datos propia y sobrescriben lo que hubiera. MediaStore solo se usaría como fuente inicial de etiquetas, nunca como verdad definitiva.</li>
+      </ul>
+      <p>Funciones previstas: editor de metadatos de canciones/álbumes/artistas e integraciones con YT-DLP, Last.fm y Musixmatch. Esta documentación cubre el estado actual del código, centrado en la <b>persistencia</b> (guardar los modelos para que sobrevivan al cierre de la app) y la <b>interfaz</b> de la pestaña de canciones.</p>
+    </section>
+
+    <!-- ================= ARQUITECTURA ================= -->
+    <section id="arquitectura">
+      <h2>Arquitectura y flujo de datos</h2>
+      <p class="section-intro">El proyecto sigue una separación en capas: la interfaz no habla nunca directamente con la base de datos ni con el disco; cada capa solo conoce a su vecina.</p>
+
+      <table class="grid">
+        <thead><tr><th>Capa</th><th>Paquete</th><th>Responsabilidad</th></tr></thead>
+        <tbody>
+          <tr><td><b>Interfaz (UI)</b></td><td><code>ui/</code></td><td>Pantallas, listas y reproductor. Observa datos y muestra; envía acciones del usuario.</td></tr>
+          <tr><td><b>Repositorio</b></td><td><code>data/</code></td><td>Fachada única de la biblioteca. Orquesta escaneo + base de datos.</td></tr>
+          <tr><td><b>Persistencia</b></td><td><code>data/db/</code></td><td>Room: tablas, consultas y la base de datos SQLite interna.</td></tr>
+          <tr><td><b>Escaneo</b></td><td><code>data/scan/</code></td><td>Lee etiquetas de los archivos de audio del disco.</td></tr>
+          <tr><td><b>Modelos de dominio</b></td><td><code>model/</code></td><td>Los objetos «limpios» que entiende la interfaz.</td></tr>
+        </tbody>
+      </table>
+
+      <h3>Flujo 1 — Arranque: del disco a la pantalla</h3>
+      <div class="flow">
+        <div class="step"><b>MusicScanner</b><span>lee el disco</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>LibraryRepository</b><span>reconcile()</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>LibraryDao</b><span>guarda en Room</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>Flow</b><span>emite la lista</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>SongsViewModel</b><span>la expone</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>SongsFragment</b><span>pinta la lista</span></div>
+      </div>
+
+      <h3>Flujo 2 — Edición: instantánea y persistente</h3>
+      <p>Cuando exista el editor, guardará el cambio con <code>LibraryRepository.updateSong(...)</code> → Room actualiza la fila → el <b>Flow</b> vuelve a emitir automáticamente → la lista se refresca sola. Al reabrir la app, la reconciliación <b>respeta</b> las ediciones (ver <a href="#repository">repositorio</a>).</p>
+
+      <h3>Flujo 3 — Al cerrar: copia visible</h3>
+      <p>Al pasar la app a segundo plano, se exporta una copia de la base de datos a <code>~/UltiMusic/databases</code> para poder inspeccionarla en móviles donde no se puede entrar en <code>/data/data</code>.</p>
+    </section>
+
+    <!-- ================= CONCEPTOS ================= -->
+    <section id="conceptos">
+      <h2>Conceptos base</h2>
+      <p class="section-intro">Ideas de Android, Kotlin y Room que se repiten por todo el código. Si algún término te suena raro más adelante, vuelve aquí.</p>
+
+      <aside class="concept">
+        <span class="tag">Kotlin · data class</span>
+        <p>Una <code>data class</code> es una clase pensada para <i>guardar datos</i>. Kotlin le genera automáticamente cosas útiles (comparación, copia con <code>copy()</code>, texto legible). Casi todos los «modelos» son data classes.</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Kotlin · object y companion object</span>
+        <p><code>object X { }</code> crea un <b>singleton</b>: una única instancia global para toda la app (útil para utilidades sin estado). Un <code>companion object</code> dentro de una clase es como su «zona estática»: constantes y funciones que pertenecen a la clase, no a cada objeto (p. ej. <code>UltiMusicDatabase.get(...)</code>).</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Kotlin · coroutines, suspend y Dispatchers</span>
+        <p>Una <b>corrutina</b> es una tarea que puede pausarse y reanudarse sin bloquear el hilo. Una función <code>suspend</code> solo se llama desde dentro de una corrutina. <code>withContext(Dispatchers.IO)</code> mueve el trabajo a hilos de <i>entrada/salida</i> (disco, red, base de datos), dejando libre el hilo principal para que la interfaz no se congele.</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Kotlin · Flow y StateFlow</span>
+        <p>Un <b>Flow</b> es un «grifo» de valores que van llegando con el tiempo. Si te suscribes, recibes cada nuevo valor. Room puede devolver un <code>Flow</code> de una consulta: cuando la tabla cambia, el Flow <b>reemite</b> la nueva lista solo. Un <b>StateFlow</b> es un Flow que además recuerda siempre su último valor (ideal para la interfaz).</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Android · Activity, Fragment y ViewModel</span>
+        <p>Una <b>Activity</b> es una pantalla del sistema. Un <b>Fragment</b> es un trozo reutilizable de pantalla dentro de una Activity (aquí, cada pestaña). Un <b>ViewModel</b> guarda los datos de la pantalla y <i>sobrevive</i> a girar el móvil o a recrear la vista; separa «los datos» de «cómo se dibujan».</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Android · RecyclerView y Adapter</span>
+        <p>Un <b>RecyclerView</b> es una lista eficiente: solo crea las filas visibles y las <i>recicla</i> al hacer scroll. El <b>Adapter</b> es el puente entre tus datos y esas filas: dice cuántas hay, crea cada fila (<code>ViewHolder</code>) y rellena su contenido.</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Android · Room</span>
+        <p><b>Room</b> es la librería oficial para usar una base de datos SQLite con comodidad. Tú describes las <b>tablas</b> con clases anotadas (<code>@Entity</code>), las <b>consultas</b> en una interfaz (<code>@Dao</code>), y Room genera todo el código SQL por ti, comprobando los errores <i>al compilar</i>.</p>
+      </aside>
+    </section>
+
+    <!-- ================= MODEL ================= -->
+    <section id="model">
+      <h2>Capa de modelos — <code>model/</code></h2>
+      <p class="section-intro">Los modelos de <b>dominio</b>: objetos limpios que consume la interfaz. No saben nada de Room ni del disco; son solo «una canción», «un álbum», «un artista». La capa de datos los produce a partir de las tablas.</p>
+
+      <article class="file" id="f-song">
+        <header><span class="path">model/Song.kt</span><span class="role">data class · una canción</span></header>
+        <p>Representa una canción tal como la ve la interfaz, ya con sus artistas y álbumes incrustados como listas.</p>
+        <h4>Estructura</h4>
+        <ul class="tight">
+          <li><code>id</code>, <code>filePath</code> (ruta del archivo), <code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>.</li>
+          <li><code>artists: List&lt;Artist&gt;</code> y <code>albums: List&lt;Album&gt;</code> — una canción puede tener varios de cada uno.</li>
+          <li><code>imageName</code>, <code>comment</code>, <code>producer</code> — metadatos editables.</li>
+          <li><code>ogTitle / ogArtist / ogAlbum / ogYear</code> — <b>info de la canción original de un remix</b> (el prefijo «og» = <i>original</i>). No son etiquetas del archivo: los rellena el usuario cuando la canción es un remix, y valen <code>null</code> mientras no lo sea.</li>
+        </ul>
+        <div class="uses"><span class="chip">Artist</span><span class="chip">Album</span></div>
+      </article>
+
+      <article class="file" id="f-album">
+        <header><span class="path">model/Album.kt</span><span class="role">data class · un álbum</span></header>
+        <p>Un álbum de dominio: <code>id</code>, <code>title</code>, <code>artists</code>, <code>year</code>, <code>genres</code>, <code>imageName</code>.</p>
+        <div class="uses"><span class="chip">Artist</span></div>
+      </article>
+
+      <article class="file" id="f-artist">
+        <header><span class="path">model/Artist.kt</span><span class="role">data class · un artista</span></header>
+        <p>Lo más simple: <code>id</code>, <code>name</code> e <code>imageName</code>.</p>
+      </article>
+    </section>
+
+    <!-- ================= SCAN ================= -->
+    <section id="scan">
+      <h2>Capa de escaneo — <code>data/scan/</code></h2>
+      <p class="section-intro">La parte de «lectura» de la fonoteca. Recorre el disco y extrae las etiquetas de cada archivo de audio, sin tocar la base de datos.</p>
+
+      <article class="file" id="f-scannedsong">
+        <header><span class="path">data/scan/ScannedSong.kt</span><span class="role">data class · etiquetas crudas</span></header>
+        <p>El resultado de escanear <i>un</i> archivo: solo las etiquetas leídas (título, artista, álbum, artista del álbum, géneros, año, duración, productor, nº de pista y disco). Sin IDs ni relaciones. Es lo que el escáner entrega a la capa de datos.</p>
+        <p class="note">Los campos de artista/álbum pueden ser <code>null</code> (no todas las canciones traen etiquetas); es la capa de datos quien decide el valor «desconocido».</p>
+      </article>
+
+      <article class="file" id="f-scanner">
+        <header><span class="path">data/scan/MusicScanner.kt</span><span class="role">object (singleton) · escáner de disco</span></header>
+        <p>Busca canciones directamente en el sistema de archivos, fiel a la filosofía «libre de MediaStore».</p>
+        <h4>Estructura</h4>
+        <ul class="tight">
+          <li><code>AUDIO_EXTENSIONS</code> — extensiones reconocidas (mp3, flac, m4a, opus…).</li>
+          <li>Constantes <code>UNKNOWN_ARTIST</code> / <code>UNKNOWN_ALBUM</code> («Artista/Álbum desconocido»).</li>
+          <li><code>scanRoots()</code> — carpetas donde busca: Descargas, <code>Music</code> y <code>UltiMusic</code>.</li>
+          <li><code>collectAudioFiles(...)</code> — recorre carpetas <i>recursivamente</i> juntando archivos de audio.</li>
+          <li><code>readSong(file)</code> — abre el archivo y lee sus etiquetas.</li>
+          <li><code>scan(): List&lt;ScannedSong&gt;</code> — la función pública; junta todo en segundo plano.</li>
+        </ul>
+        <h4>Flujo / por qué</h4>
+        <p><code>scan()</code> corre en <code>Dispatchers.IO</code> (leer disco es lento; no debe bloquear la interfaz). Usa un <code>LinkedHashSet</code> para evitar archivos duplicados manteniendo el orden.</p>
+        <aside class="concept">
+          <span class="tag">Android · MediaMetadataRetriever</span>
+          <p>Es la clase del sistema que abre un archivo de audio/vídeo y extrae sus metadatos (título, artista, duración, carátula embebida…). Hay que <code>release()</code>-arla siempre al terminar para liberar recursos; por eso se usa dentro de <code>try/finally</code>.</p>
+        </aside>
+        <div class="uses"><span class="chip">MediaMetadataRetriever</span><span class="chip">Environment</span><span class="chip">Dispatchers.IO</span><span class="chip">ScannedSong</span></div>
+      </article>
+    </section>
+
+    <!-- ================= ENTITIES ================= -->
+    <section id="entities">
+      <h2>Tablas de la base de datos — <code>data/db/entities/</code></h2>
+      <p class="section-intro">Cada clase aquí es una <b>tabla</b> de la base de datos. La interfaz no las usa directamente; son la forma «normalizada» de guardar los datos.</p>
+
+      <aside class="concept">
+        <span class="tag">Room · @Entity, clave primaria e índices</span>
+        <p><code>@Entity</code> convierte una clase en una tabla. La <b>clave primaria</b> (<code>@PrimaryKey</code>) identifica cada fila de forma única; <code>autoGenerate</code> deja que Room asigne un número. Un <b>índice</b> (<code>@Index</code>) acelera las búsquedas por una columna y, si es <code>unique</code>, impide filas repetidas en esa columna.</p>
+      </aside>
+
+      <aside class="concept">
+        <span class="tag">Concepto · normalización y «clave de emparejamiento»</span>
+        <p>En vez de repetir «DECO*27» en cada canción, se guarda el artista <b>una sola vez</b> en su tabla y las canciones lo <i>referencian</i>. Eso es <b>normalizar</b>: editar el artista una vez lo cambia en todas sus canciones. Para reencontrar al mismo artista en escaneos futuros, cada artista/álbum guarda su valor de etiqueta original (<code>tagName</code>, <code>tagTitle</code>…) como clave estable de emparejamiento, independiente del nombre editable que se muestre.</p>
+      </aside>
+
+      <article class="file" id="f-songentity">
+        <header><span class="path">data/db/entities/SongEntity.kt</span><span class="role">tabla <code>songs</code></span></header>
+        <p>Una fila por canción. <code>filePath</code> tiene índice único: es el <b>ancla estable</b> que identifica la canción entre escaneos (aunque el <code>id</code> autogenerado cambie).</p>
+        <p>Guarda los campos editables (<code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>, <code>imageName</code>, <code>comment</code>, <code>producer</code>) y los <code>og*</code> de remix (a <code>null</code> al escanear).</p>
+        <div class="uses"><span class="chip">@Entity</span><span class="chip">@PrimaryKey</span><span class="chip">@Index(unique)</span></div>
+      </article>
+
+      <article class="file" id="f-artistentity">
+        <header><span class="path">data/db/entities/ArtistEntity.kt</span><span class="role">tabla <code>artists</code></span></header>
+        <p><code>name</code> (nombre editable que se muestra) + <code>tagName</code> (nombre original de la etiqueta, índice único = clave de emparejamiento) + <code>imageName</code>.</p>
+      </article>
+
+      <article class="file" id="f-albumentity">
+        <header><span class="path">data/db/entities/AlbumEntity.kt</span><span class="role">tabla <code>albums</code></span></header>
+        <p><code>title</code> editable + la pareja <code>tagTitle</code>/<code>tagAlbumArtist</code> como índice único compuesto (desambigua álbumes con el mismo título de artistas distintos) + <code>year</code>, <code>genres</code>, <code>imageName</code>.</p>
+      </article>
+
+      <aside class="concept">
+        <span class="tag">Room · relaciones N:N y claves foráneas</span>
+        <p>Una canción puede tener varios artistas y un artista varias canciones: es una relación <b>muchos-a-muchos</b>. En SQL eso se resuelve con una <b>tabla de cruce</b> (<i>cross-ref</i>) que empareja los IDs de ambos lados. Una <b>clave foránea</b> (<code>@ForeignKey</code>) con <code>onDelete = CASCADE</code> hace que, al borrar una canción, se borren solas sus filas de cruce (sin dejar «basura»).</p>
+      </aside>
+
+      <article class="file" id="f-crossrefs">
+        <header><span class="path">data/db/entities/SongArtistCrossRef.kt · SongAlbumCrossRef.kt · AlbumArtistCrossRef.kt</span><span class="role">tablas de cruce N:N</span></header>
+        <ul class="tight">
+          <li><b>song_artist</b> — empareja <code>songId</code> ↔ <code>artistId</code>.</li>
+          <li><b>song_album</b> — <code>songId</code> ↔ <code>albumId</code>, más <code>trackNumber</code> y <code>discNumber</code> propios de esa aparición.</li>
+          <li><b>album_artist</b> — <code>albumId</code> ↔ <code>artistId</code>.</li>
+        </ul>
+        <p class="note">Cada una tiene clave primaria compuesta, claves foráneas en cascada e índice en la columna secundaria (Room exige indexar las columnas foráneas).</p>
+        <div class="uses"><span class="chip">@ForeignKey CASCADE</span><span class="chip">primaryKeys</span></div>
+      </article>
+    </section>
+
+    <!-- ================= RELATIONS ================= -->
+    <section id="relations">
+      <h2>Relaciones de lectura — <code>data/db/relations/</code></h2>
+      <article class="file" id="f-songwithrelations">
+        <header><span class="path">data/db/relations/SongWithRelations.kt</span><span class="role">POJO de relación</span></header>
+        <p>Junta en un solo objeto una <code>SongEntity</code> con sus listas de <code>ArtistEntity</code> y <code>AlbumEntity</code>, resueltas a través de las tablas de cruce. Es lo que Room devuelve al leer, y luego se convierte al modelo de dominio <code>Song</code>.</p>
+        <aside class="concept">
+          <span class="tag">Room · @Embedded, @Relation y @Junction</span>
+          <p><code>@Embedded</code> mete las columnas de la canción «en plano» dentro del objeto. <code>@Relation</code> le dice a Room que rellene una lista con las entidades relacionadas, y <code>@Junction</code> indica la tabla de cruce por la que pasar. Room hace las consultas y el emparejamiento por ti.</p>
+        </aside>
+        <div class="uses"><span class="chip">@Embedded</span><span class="chip">@Relation</span><span class="chip">@Junction</span></div>
+      </article>
+    </section>
+
+    <!-- ================= DB CORE ================= -->
+    <section id="db-core">
+      <h2>Núcleo de Room — <code>data/db/</code></h2>
+      <p class="section-intro">La base de datos en sí, las consultas y los conversores.</p>
+
+      <article class="file" id="f-converters">
+        <header><span class="path">data/db/Converters.kt</span><span class="role">TypeConverter</span></header>
+        <p>SQLite no sabe guardar una <code>List&lt;String&gt;</code>. Este conversor traduce la lista de géneros a texto (unido por un separador especial) al guardar, y la reconstruye al leer.</p>
+        <aside class="concept">
+          <span class="tag">Room · @TypeConverter</span>
+          <p>Un <b>TypeConverter</b> enseña a Room a guardar un tipo que SQLite no entiende, convirtiéndolo a uno que sí (aquí, lista ↔ texto). Se registra en la base de datos con <code>@TypeConverters</code>.</p>
+        </aside>
+        <p class="note">Nota de mantenimiento: los géneros son provisionales como texto; cuando exista la pestaña «Géneros» convendría normalizarlos en su propia tabla.</p>
+      </article>
+
+      <article class="file" id="f-dao">
+        <header><span class="path">data/db/LibraryDao.kt</span><span class="role">@Dao · el corazón de la persistencia</span></header>
+        <p>Define todas las operaciones sobre la base de datos. Es una <b>clase abstracta</b> (no interfaz) para poder incluir la lógica de reconciliación con <code>@Transaction</code>.</p>
+        <aside class="concept">
+          <span class="tag">Room · @Dao, @Query/@Insert/@Update y @Transaction</span>
+          <p>Un <b>DAO</b> (<i>Data Access Object</i>) agrupa las operaciones de una tabla. <code>@Query</code> lleva SQL escrito por ti; <code>@Insert</code>/<code>@Update</code> generan el SQL automáticamente. <code>@Transaction</code> agrupa varias operaciones en un <b>todo-o-nada</b>: si algo falla a mitad, no queda la base de datos a medias.</p>
+        </aside>
+        <h4>Qué contiene</h4>
+        <ul class="tight">
+          <li><code>observeSongs(): Flow&lt;List&lt;SongWithRelations&gt;&gt;</code> — la lectura reactiva que observa la interfaz.</li>
+          <li>Consultas de apoyo: <code>allSongPaths()</code>, <code>findArtistByTag()</code>, <code>findAlbumByTag()</code>.</li>
+          <li>Inserciones, <code>updateSong/Artist/Album</code>, borrado por ruta y poda de huérfanos.</li>
+          <li><code>reconcile(scanned)</code> — dentro de una transacción: inserta lo nuevo, crea/enlaza artistas y álbumes, y borra lo que ya no está en disco.</li>
+        </ul>
+        <h4>La regla de oro de <code>reconcile()</code></h4>
+        <pre><span class="c">// Si la canción ya existe, NO se toca: las ediciones del usuario mandan.</span>
+<span class="k">if</span> (s.filePath <span class="k">in</span> existing) <span class="k">continue</span></pre>
+        <p>Esa línea es la que garantiza que las ediciones sobrevivan a reabrir la app: una canción ya guardada se salta por completo, así que ningún reescaneo puede pisar lo que editaste.</p>
+        <div class="uses"><span class="chip">@Dao</span><span class="chip">@Query</span><span class="chip">@Transaction</span><span class="chip">Flow</span></div>
+      </article>
+
+      <article class="file" id="f-database">
+        <header><span class="path">data/db/UltiMusicDatabase.kt</span><span class="role">@Database · SQLite interna</span></header>
+        <p>Declara la base de datos: sus 6 tablas, la versión y los conversores. Vive en el almacenamiento interno (<code>/data/data/&lt;paquete&gt;/databases/ultimusic.db</code>) y es la <b>única fuente de verdad</b> de los modelos.</p>
+        <p>Su <code>companion object</code> ofrece <code>get(context)</code>, que construye la base de datos <b>una sola vez</b> (patrón singleton con doble comprobación) y la reutiliza.</p>
+        <aside class="concept">
+          <span class="tag">Room · migraciones y fallbackToDestructiveMigration</span>
+          <p>Cuando cambias la estructura de las tablas, subes la <code>version</code> y das una «migración» que transforma los datos viejos. Durante el desarrollo se usa <code>fallbackToDestructiveMigration</code>: si el esquema cambió, <b>recrea</b> la base de datos desde cero (se pierden los datos de prueba). Antes de publicar habrá que escribir migraciones reales.</p>
+        </aside>
+        <div class="uses"><span class="chip">@Database</span><span class="chip">RoomDatabase</span><span class="chip">@TypeConverters</span></div>
+      </article>
+
+      <article class="file" id="f-mappers">
+        <header><span class="path">data/db/Mappers.kt</span><span class="role">funciones de conversión</span></header>
+        <p>Traduce las entidades/relaciones de Room a los modelos de dominio (<code>SongWithRelations.toDomain()</code> → <code>Song</code>, etc.). Así la interfaz sigue hablando de <code>Song</code>/<code>Album</code>/<code>Artist</code> sin saber que por debajo hay Room.</p>
+        <p class="note">En la lista de canciones, los artistas del álbum se dejan vacíos a propósito (ahí solo se necesita el título); el flujo dedicado de álbumes los poblará.</p>
+      </article>
+    </section>
+
+    <!-- ================= REPOSITORY ================= -->
+    <section id="repository">
+      <h2>Repositorio — <code>data/</code></h2>
+      <article class="file" id="f-repository">
+        <header><span class="path">data/LibraryRepository.kt</span><span class="role">fachada de la biblioteca</span></header>
+        <p>El único punto por el que el resto de la app accede a la biblioteca. Orquesta el escáner y la base de datos, y esconde los detalles.</p>
+        <h4>Qué ofrece</h4>
+        <ul class="tight">
+          <li><code>songs: Flow&lt;List&lt;Song&gt;&gt;</code> — la lista reactiva ya en modelos de dominio.</li>
+          <li><code>reconcile()</code> — escanea el disco (lento, fuera de transacción) y delega en el DAO la conciliación.</li>
+          <li><code>updateSong / updateArtist / updateAlbum</code> — ediciones que se reflejan al instante vía el Flow.</li>
+          <li><code>exportDatabaseCopy()</code> — copia la base de datos a <code>~/UltiMusic/databases</code>.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">SQLite · WAL y checkpoint</span>
+          <p>Room usa el modo <b>WAL</b> (<i>Write-Ahead Log</i>): los cambios se escriben primero en un archivo aparte (<code>.db-wal</code>) y más tarde se «consolidan» en el <code>.db</code> principal. Por eso, para hacer una copia consistente, primero se ejecuta un <b>checkpoint</b> (<code>PRAGMA wal_checkpoint</code>) que vuelca el WAL al archivo principal.</p>
+        </aside>
+        <p>La copia es <b>unidireccional</b> (solo para inspección; la base interna sigue mandando) y <b>best-effort</b> (si algo falla, se ignora con <code>runCatching</code>). Se hace porque en algunos móviles no se puede entrar en <code>/data/data</code>.</p>
+        <div class="uses"><span class="chip">MusicScanner</span><span class="chip">LibraryDao</span><span class="chip">Flow.map</span><span class="chip">Dispatchers.IO</span></div>
+      </article>
+    </section>
+
+    <!-- ================= UI ================= -->
+    <section id="ui">
+      <h2>Interfaz — <code>ui/</code></h2>
+      <p class="section-intro">Las pantallas. La app tiene una Activity con pestañas; de momento solo la de Canciones está implementada y el resto son marcadores de posición.</p>
+
+      <article class="file" id="f-mainactivity">
+        <header><span class="path">ui/MainActivity.kt</span><span class="role">Activity principal</span></header>
+        <p>La única pantalla. Monta la barra superior, el paginador de pestañas y el mini-reproductor, y gestiona el permiso de almacenamiento.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li><code>onCreate</code> — configura barra, pestañas, mini-reproductor y pide permiso.</li>
+          <li>Permiso «Acceso a todos los archivos» (API 30+) o <code>READ_EXTERNAL_STORAGE</code> (antiguos), con <code>registerForActivityResult</code>.</li>
+          <li><code>onResume</code> — al volver a la app, recarga la lista si hay permiso.</li>
+          <li><code>onStop</code> — al pasar a segundo plano, lanza <code>exportDatabaseCopy()</code> en un <code>appScope</code> propio (para que termine aunque la Activity muera).</li>
+          <li>El mini-reproductor observa el estado del <code>PlayerViewModel</code> con <code>repeatOnLifecycle</code>.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · ciclo de vida y repeatOnLifecycle</span>
+          <p>Una Activity pasa por estados: creada, visible, en primer plano, parada… (<code>onCreate</code>, <code>onResume</code>, <code>onStop</code>). <code>repeatOnLifecycle(STARTED)</code> observa un Flow solo mientras la pantalla está visible y lo suelta cuando no, evitando trabajo y fugas.</p>
+        </aside>
+        <div class="uses"><span class="chip">AppCompatActivity</span><span class="chip">ViewPager2</span><span class="chip">viewModels()</span><span class="chip">LibraryRepository</span></div>
+      </article>
+
+      <article class="file" id="f-pager">
+        <header><span class="path">ui/MainPagerAdapter.kt</span><span class="role">FragmentStateAdapter</span></header>
+        <p>Decide qué Fragment mostrar en cada pestaña: la posición 0 es <code>SongsFragment</code> (real); el resto, <code>PlaceholderFragment</code> con el nombre de la pestaña.</p>
+        <div class="uses"><span class="chip">ViewPager2</span><span class="chip">FragmentStateAdapter</span></div>
+      </article>
+
+      <article class="file" id="f-songsvm">
+        <header><span class="path">ui/SongsViewModel.kt</span><span class="role">AndroidViewModel</span></header>
+        <p>Expone la lista de canciones observando la base de datos vía el repositorio, y dispara la reconciliación.</p>
+        <h4>Estructura</h4>
+        <ul class="tight">
+          <li><code>songs: StateFlow&lt;List&lt;Song&gt;&gt;</code> — la lista, obtenida con <code>repository.songs.stateIn(...)</code>.</li>
+          <li><code>loading</code> — indicador de carga durante la reconciliación.</li>
+          <li><code>loadIfNeeded()</code> reconcilia una vez; <code>reload()</code> reconcilia siempre.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Kotlin · stateIn</span>
+          <p><code>stateIn</code> convierte un Flow «frío» (que arranca al suscribirse) en un <code>StateFlow</code> «caliente» compartido, cacheando el último valor. <code>WhileSubscribed(5000)</code> mantiene la suscripción a Room 5 s tras cerrar la pantalla, para no reiniciar todo al girar el móvil.</p>
+        </aside>
+        <div class="uses"><span class="chip">AndroidViewModel</span><span class="chip">StateFlow</span><span class="chip">LibraryRepository</span></div>
+      </article>
+
+      <article class="file" id="f-playervm">
+        <header><span class="path">ui/PlayerViewModel.kt</span><span class="role">AndroidViewModel · reproducción</span></header>
+        <p>Posee el reproductor y expone el estado (canción actual, si suena, progreso). Compartido por ámbito de Activity entre el mini-reproductor y la lista.</p>
+        <ul class="tight">
+          <li><code>play(song)</code>, <code>playRandom(songs)</code>, <code>togglePlayPause()</code>.</li>
+          <li>Un bucle actualiza el progreso cada 500 ms.</li>
+          <li><code>onCleared()</code> libera el reproductor.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · ExoPlayer (Media3)</span>
+          <p><b>ExoPlayer</b> (de la librería Media3 de Google) es el motor de reproducción de audio/vídeo: más flexible que el reproductor básico del sistema. Aquí reproduce el archivo por su ruta y avisa de los cambios de estado mediante un <i>listener</i>.</p>
+        </aside>
+        <div class="uses"><span class="chip">ExoPlayer</span><span class="chip">MediaItem</span><span class="chip">StateFlow</span></div>
+      </article>
+
+      <article class="file" id="f-songsfragment">
+        <header><span class="path">ui/songs/SongsFragment.kt</span><span class="role">Fragment · pestaña Canciones</span></header>
+        <p>La pantalla de la lista. Crea el <code>RecyclerView</code> con su <code>SongsAdapter</code>, observa <code>songsViewModel.songs</code> y <code>loading</code>, y muestra la lista, el spinner o el mensaje de vacío según toque.</p>
+        <ul class="tight">
+          <li>Obtiene los ViewModels con <code>activityViewModels()</code> para compartirlos con la Activity.</li>
+          <li>Al pulsar «Escoger al azar» → <code>playerViewModel.playRandom(...)</code>; al pulsar una canción → <code>play(song)</code>.</li>
+        </ul>
+        <div class="uses"><span class="chip">Fragment</span><span class="chip">RecyclerView</span><span class="chip">activityViewModels()</span></div>
+      </article>
+
+      <article class="file" id="f-songsadapter">
+        <header><span class="path">ui/songs/SongsAdapter.kt</span><span class="role">RecyclerView.Adapter</span></header>
+        <p>Dibuja la lista con dos tipos de fila: la cabecera «Escoger al azar» (posición 0) y una fila por canción.</p>
+        <ul class="tight">
+          <li><code>getItemViewType</code> distingue cabecera de canción; <code>onCreateViewHolder</code> infla el layout adecuado.</li>
+          <li><code>SongViewHolder.bind</code> pone título, subtítulo «artista | álbum» y la carátula (vía <code>CoverArt</code> + Coil).</li>
+          <li><code>submit(list)</code> recibe la lista nueva y refresca.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Concepto · ViewHolder y tipos de vista</span>
+          <p>Un <b>ViewHolder</b> guarda las referencias a las vistas de una fila para no buscarlas cada vez (caro). Cuando una lista mezcla filas distintas (cabecera vs. canción), <code>getItemViewType</code> permite crear y rellenar cada tipo por separado.</p>
+        </aside>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">Coil</span><span class="chip">CoverArt</span></div>
+      </article>
+
+      <article class="file" id="f-placeholder">
+        <header><span class="path">ui/common/PlaceholderFragment.kt</span><span class="role">Fragment temporal</span></header>
+        <p>Marcador de posición para las pestañas aún sin implementar (Álbumes, Artistas, Géneros…): solo muestra el nombre de la pestaña.</p>
+      </article>
+    </section>
+
+    <!-- ================= UTIL ================= -->
+    <section id="util">
+      <h2>Utilidades — <code>util/</code></h2>
+      <article class="file" id="f-coverart">
+        <header><span class="path">util/CoverArt.kt</span><span class="role">carátulas con Coil</span></header>
+        <p>Resuelve la carátula de cada canción con una cadena de reserva: <b>imagen personalizada → arte embebido en el archivo → recuadro negro</b>. Incluye un <i>Fetcher</i> propio para que Coil sepa extraer la imagen embebida de un archivo de audio, y un <code>ImageLoader</code> compartido (<code>CoverLoader</code>).</p>
+        <aside class="concept">
+          <span class="tag">Android · Coil</span>
+          <p><b>Coil</b> es una librería para cargar imágenes de forma asíncrona en un <code>ImageView</code> (descarga/decodifica en segundo plano y cachea). Un <b>Fetcher</b> personalizado le enseña a obtener imágenes de una fuente no estándar — aquí, el arte embebido dentro del MP3.</p>
+        </aside>
+        <div class="uses"><span class="chip">Coil</span><span class="chip">MediaMetadataRetriever</span><span class="chip">Fetcher</span></div>
+      </article>
+    </section>
+
+    <!-- ================= ESQUEMA ================= -->
+    <section id="esquema">
+      <h2>Esquema de la base de datos</h2>
+      <p class="section-intro">Las 6 tablas y cómo se relacionan. Las tablas de cruce (en el centro) son las que permiten las relaciones muchos-a-muchos.</p>
+      <div class="schema">
+        <div class="tbl"><div class="th">songs</div><ul>
+          <li><span class="pk">id</span> <span class="muted">PK</span></li>
+          <li>filePath <span class="muted">único</span></li>
+          <li>title, duration, year</li>
+          <li>genres, imageName</li>
+          <li>comment, producer</li>
+          <li class="muted">og* (remix)</li>
+        </ul></div>
+        <div class="tbl"><div class="th">artists</div><ul>
+          <li><span class="pk">id</span> <span class="muted">PK</span></li>
+          <li>name <span class="muted">(editable)</span></li>
+          <li>tagName <span class="muted">único</span></li>
+          <li>imageName</li>
+        </ul></div>
+        <div class="tbl"><div class="th">albums</div><ul>
+          <li><span class="pk">id</span> <span class="muted">PK</span></li>
+          <li>title <span class="muted">(editable)</span></li>
+          <li>tagTitle + tagAlbumArtist <span class="muted">único</span></li>
+          <li>year, genres, imageName</li>
+        </ul></div>
+        <div class="tbl"><div class="th">song_artist</div><ul>
+          <li><span class="fk">songId</span> → songs</li>
+          <li><span class="fk">artistId</span> → artists</li>
+        </ul></div>
+        <div class="tbl"><div class="th">song_album</div><ul>
+          <li><span class="fk">songId</span> → songs</li>
+          <li><span class="fk">albumId</span> → albums</li>
+          <li>trackNumber, discNumber</li>
+        </ul></div>
+        <div class="tbl"><div class="th">album_artist</div><ul>
+          <li><span class="fk">albumId</span> → albums</li>
+          <li><span class="fk">artistId</span> → artists</li>
+        </ul></div>
+      </div>
+      <ul class="rels tight">
+        <li><b>canción ↔ artista</b> (N:N) vía <code>song_artist</code></li>
+        <li><b>canción ↔ álbum</b> (N:N) vía <code>song_album</code></li>
+        <li><b>álbum ↔ artista</b> (N:N) vía <code>album_artist</code></li>
+      </ul>
+    </section>
+
+    <!-- ================= CONFIG ================= -->
+    <section id="config">
+      <h2>Configuración y recursos</h2>
+      <p class="section-intro">Archivos que no son «código de la app» pero definen cómo se compila y qué recursos usa.</p>
+      <table class="grid">
+        <thead><tr><th>Archivo</th><th>Para qué sirve</th></tr></thead>
+        <tbody>
+          <tr><td><code>app/build.gradle.kts</code></td><td>Dependencias y configuración del módulo: Room + KSP, Media3/ExoPlayer, Coil, RecyclerView, ViewPager2, lifecycle…</td></tr>
+          <tr><td><code>gradle/libs.versions.toml</code></td><td>Catálogo central de versiones de todas las librerías (Room 2.7.1, Media3, etc.).</td></tr>
+          <tr><td><code>AndroidManifest.xml</code></td><td>Declara la Activity y los permisos de almacenamiento (<code>MANAGE_EXTERNAL_STORAGE</code> y <code>READ_EXTERNAL_STORAGE</code> en API ≤29).</td></tr>
+          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>.</td></tr>
+          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: nombres de pestañas, mensajes de permiso…), colores y tema.</td></tr>
+        </tbody>
+      </table>
+      <aside class="concept">
+        <span class="tag">Android · KSP</span>
+        <p><b>KSP</b> (<i>Kotlin Symbol Processing</i>) es el sistema que, al compilar, lee las anotaciones de Room (<code>@Entity</code>, <code>@Dao</code>…) y <b>genera el código SQL</b> necesario. Si escribes una consulta mal, KSP lo detecta al compilar, no en ejecución.</p>
+      </aside>
+    </section>
+
+    <!-- ================= INSPECCIONAR ================= -->
+    <section id="inspeccionar">
+      <h2>Cómo inspeccionar la base de datos</h2>
+      <p class="section-intro">Los tres archivos (<code>ultimusic.db</code>, <code>.db-wal</code>, <code>.db-shm</code>) son SQLite estándar. Cópialos <b>los tres juntos</b> o haz checkpoint antes, porque con la app abierta gran parte de los datos vive en el <code>.db-wal</code>.</p>
+      <ul class="tight">
+        <li><b>Android Studio · Database Inspector</b> (View ▸ Tool Windows ▸ App Inspection): con la app en modo debug, ves y editas la BD en vivo. Cero instalación.</li>
+        <li><b>DB Browser for SQLite</b> (PC, gratis): abre el <code>.db</code> con sus sidecars en la misma carpeta.</li>
+        <li><b>La copia externa</b> de <code>~/UltiMusic/databases</code>: ya viene con checkpoint hecho, así que es un archivo consistente y autónomo.</li>
+        <li><b>Línea de comandos</b>: <code>sqlite3 ultimusic.db "SELECT * FROM songs;"</code>.</li>
+      </ul>
+    </section>
+
+    <!-- ================= MANTENIMIENTO ================= -->
+    <section id="mantenimiento">
+      <h2>Mantenimiento de esta documentación</h2>
+      <aside class="concept">
+        <span class="tag">Importante</span>
+        <p>Esta documentación debe <b>actualizarse cada vez que algo quede desactualizado</b>. El archivo fuente está en <code>docs/documentacion.html</code> (versionado en el repo). Tras cualquier cambio de arquitectura, archivos, flujo o dependencias, actualízalo en la misma tanda y vuelve a publicarlo.</p>
+      </aside>
+      <p class="note">Estado actual: la capa de persistencia (Room + reconciliación + copia externa) está implementada y verificada en emulador. Pendiente: editor de metadatos, pestañas de Álbumes/Artistas/Géneros/Listas, e integraciones (YT-DLP, Last.fm, Musixmatch).</p>
+    </section>
+
+    <hr class="soft">
+    <p class="note">UltiMusic · documentación generada del código actual. Paquete raíz: <code>com.untarlamanteca.ultimusic</code>.</p>
+  </main>
+</div>

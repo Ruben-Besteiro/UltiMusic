@@ -25,14 +25,8 @@ import java.io.File
 object CoverArt {
 
     /** Dato que se pasa a Coil para cargar la carátula de una canción. */
-    fun songCover(song: Song): Any {
+    fun cover(song: Song): Any {
         // TODO: cuando exista imagen personalizada, devolver ese File aquí.
-        return AudioCover(File(song.filePath))
-    }
-
-    /** Carátula del álbum de la canción. Por ahora comparte el arte embebido del archivo. */
-    fun albumCover(song: Song): Any {
-        // TODO: cuando exista imagen personalizada de álbum, devolver ese File aquí.
         return AudioCover(File(song.filePath))
     }
 }

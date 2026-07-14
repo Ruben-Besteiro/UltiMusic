@@ -1,41 +1,47 @@
 package com.untarlamanteca.ultimusic.ui
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.untarlamanteca.ultimusic.data.MusicRepository
+import com.untarlamanteca.ultimusic.data.LibraryRepository
 import com.untarlamanteca.ultimusic.model.Song
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Este archivo se encarga de almacenar la lista de canciones que leímos con el MusicRepository
- * Así sobreviven a cambios de orientación entre otras cosas
- * Actualmente es la única forma de almacenamiento de modelos que hay
+ * Expone la lista de canciones observando la base de datos (vía [LibraryRepository]). Así las
+ * ediciones se ven al instante y los datos sobreviven al cierre de la app. La reconciliación con
+ * el filesystem (altas/bajas de archivos) se dispara con [loadIfNeeded]/[reload].
  */
+class SongsViewModel(app: Application) : AndroidViewModel(app) {
 
-class SongsViewModel : ViewModel() {
+    private val repository = LibraryRepository.get(app)
 
-    private val _songs = MutableStateFlow<List<Song>>(emptyList())
-    val songs = _songs.asStateFlow()        /** Esto es de solo lectura y es lo que exponemos **/
+    /** Solo lectura; es lo que exponemos a la UI. */
+    val songs: StateFlow<List<Song>> = repository.songs
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     private val _loading = MutableStateFlow(false)
     val loading = _loading.asStateFlow()
 
-    private var loaded = false
+    private var reconciled = false
 
-    /** Escanea solo la primera vez (p. ej. al conceder el permiso) */
+    /** Reconcilia solo la primera vez (p. ej. al conceder el permiso). */
     fun loadIfNeeded() {
-        if (loaded) return
+        if (reconciled) return
         reload()
     }
 
-    /** Escanea siempre */
+    /** Reconcilia siempre (detecta archivos nuevos/borrados). */
     fun reload() {
         viewModelScope.launch {
             _loading.value = true
-            _songs.value = MusicRepository.scanSongs()
-            loaded = true
+            runCatching { repository.reconcile() }
+            reconciled = true
             _loading.value = false
         }
     }

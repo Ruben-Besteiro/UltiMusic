@@ -8,7 +8,7 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untarlamanteca.ultimusic.R
-import com.untarlamanteca.ultimusic.data.MusicRepository
+import com.untarlamanteca.ultimusic.data.scan.MusicScanner
 import com.untarlamanteca.ultimusic.model.Song
 import com.untarlamanteca.ultimusic.util.CoverArt
 import com.untarlamanteca.ultimusic.util.CoverLoader
@@ -30,14 +30,19 @@ class SongsAdapter(
         notifyDataSetChanged()
     }
 
+    private companion object {
+        const val VIEW_TYPE_HEADER = 0
+        const val VIEW_TYPE_SONG = 1
+    }
+
     override fun getItemCount(): Int = songs.size + 1
 
     override fun getItemViewType(position: Int): Int =
-        if (position == 0) TYPE_HEADER else TYPE_SONG
+        if (position == 0) VIEW_TYPE_HEADER else VIEW_TYPE_SONG
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
-        return if (viewType == TYPE_HEADER) {
+        return if (viewType == VIEW_TYPE_HEADER) {
             HeaderViewHolder(inflater.inflate(R.layout.item_shuffle_header, parent, false))
         } else {
             SongViewHolder(inflater.inflate(R.layout.item_song, parent, false))
@@ -58,8 +63,7 @@ class SongsAdapter(
     }
 
     class SongViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val albumCover: ShapeableImageView = itemView.findViewById(R.id.albumCover)
-        private val songCover: ShapeableImageView = itemView.findViewById(R.id.songCover)
+        private val cover: ShapeableImageView = itemView.findViewById(R.id.cover)
         private val title: TextView = itemView.findViewById(R.id.songTitle)
         private val subtitle: TextView = itemView.findViewById(R.id.songSubtitle)
         private val more: View = itemView.findViewById(R.id.btnSongMore)
@@ -67,22 +71,16 @@ class SongsAdapter(
         fun bind(song: Song, onSongClick: (Song) -> Unit) {
             title.text = song.title
 
-            val artist = song.artists.firstOrNull()?.name ?: MusicRepository.UNKNOWN_ARTIST
-            val album = song.albums.firstOrNull()?.title ?: MusicRepository.UNKNOWN_ALBUM
+            val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
+            val album = song.albums.firstOrNull()?.title ?: MusicScanner.UNKNOWN_ALBUM
             subtitle.text = itemView.context.getString(R.string.song_subtitle_format, artist, album)
 
             val loader = CoverLoader.get(itemView.context)
-            albumCover.load(CoverArt.albumCover(song), loader)
-            songCover.load(CoverArt.songCover(song), loader)
+            cover.load(CoverArt.cover(song), loader)
 
             itemView.setOnClickListener { onSongClick(song) }
             // El menú de 3 puntos no hace nada de momento.
             more.setOnClickListener { }
         }
-    }
-
-    companion object {
-        private const val TYPE_HEADER = 0
-        private const val TYPE_SONG = 1
     }
 }
