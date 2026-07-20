@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fila de la cola de reproducción. El "hueco" izquierdo muestra el icono de altavoz cuando es la
+  canción que suena ahora, o el número de posición en el resto de filas (el adaptador alterna cuál).
+  Debajo, un divisor que el adaptador solo muestra en la frontera entre la cola 1 y la cola 2.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:minHeight="40dp"
+        android:orientation="horizontal"
+        android:paddingHorizontal="4dp"
+        android:paddingVertical="6dp">
+
+        <FrameLayout
+            android:layout_width="32dp"
+            android:layout_height="wrap_content">
+
+            <ImageView
+                android:id="@+id/queueSpeaker"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/ipod_now_playing"
+                android:src="@drawable/ic_speaker"
+                android:tint="@color/um_yellow"
+                android:visibility="gone" />
+
+            <TextView
+                android:id="@+id/queueNumber"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/queueSubtitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+    <!-- Divisor gris oscuro entre la cola 1 y la cola 2 (solo visible en la fila frontera). -->
+    <View
+        android:id="@+id/queueDivider"
+        android:layout_width="match_parent"
+        android:layout_height="2dp"
+        android:layout_marginTop="4dp"
+        android:background="@color/um_divider"
+        android:visibility="gone" />
+
+</LinearLayout>

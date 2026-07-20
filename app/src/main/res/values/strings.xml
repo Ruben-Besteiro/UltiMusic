@@ -19,6 +19,7 @@
     <string name="shuffle_title">Escoger al azar</string>
     <string name="song_subtitle_format">%1$s | %2$s</string>
     <string name="song_more">Más opciones de la canción</string>
+    <string name="add_to_queue">Añadir a cola de reproducción inmediata</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
     <string name="no_songs">No se han encontrado canciones en ninguna de las carpetas seleccionadas.</string>
@@ -26,7 +27,16 @@
     <!-- Mini-reproductor -->
     <string name="expand_player">Expandir reproductor</string>
     <string name="play_pause">Reproducir o pausar</string>
-    <string name="nothing_playing">Nada en reproducción</string>
+    <string name="nothing_playing">Pincha en una canción para reproducirla</string>
+
+    <!-- Ventana del iPod -->
+    <string name="ipod_title">UltiMusicPod Nano</string>
+    <string name="ipod_close">Cerrar</string>
+    <string name="ipod_toggle_view">Alternar carátula y cola</string>
+    <string name="ipod_prev">Anterior</string>
+    <string name="ipod_next">Siguiente</string>
+    <string name="ipod_now_playing">Sonando ahora</string>
+    <string name="queue_subtitle_format">%1$s · %2$s</string>
 
     <!-- Permisos -->
     <string name="permission_needed_title">Permiso necesario</string>

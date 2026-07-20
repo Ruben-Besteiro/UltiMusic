@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menú del botón de 3 puntos de cada canción. De momento solo encolar. -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_add_to_queue"
+        android:title="@string/add_to_queue" />
+</menu>

@@ -3,6 +3,7 @@ package com.untarlamanteca.ultimusic.ui.songs
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
@@ -14,14 +15,12 @@ import com.untarlamanteca.ultimusic.util.CoverArt
 import com.untarlamanteca.ultimusic.util.CoverLoader
 
 /**
- * Lista de canciones con dos tipos de fila:
- *  - posición 0: cabecera "Escoger al azar"
- *  - resto: una canción con dos carátulas (álbum y canción), info y menú de 3 puntos.
+ * Lista de canciones simple.
  */
 class SongsAdapter(
-    private val onShuffle: () -> Unit,
-    private val onSongClick: (Song) -> Unit
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+    private val onSongClick: (Song) -> Unit,
+    private val onAddToQueue: (Song) -> Unit
+) : RecyclerView.Adapter<SongsAdapter.SongViewHolder>() {
 
     private var songs: List<Song> = emptyList()
 
@@ -30,36 +29,15 @@ class SongsAdapter(
         notifyDataSetChanged()
     }
 
-    private companion object {
-        const val VIEW_TYPE_HEADER = 0
-        const val VIEW_TYPE_SONG = 1
-    }
+    override fun getItemCount(): Int = songs.size
 
-    override fun getItemCount(): Int = songs.size + 1
-
-    override fun getItemViewType(position: Int): Int =
-        if (position == 0) VIEW_TYPE_HEADER else VIEW_TYPE_SONG
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {
         val inflater = LayoutInflater.from(parent.context)
-        return if (viewType == VIEW_TYPE_HEADER) {
-            HeaderViewHolder(inflater.inflate(R.layout.item_shuffle_header, parent, false))
-        } else {
-            SongViewHolder(inflater.inflate(R.layout.item_song, parent, false))
-        }
+        return SongViewHolder(inflater.inflate(R.layout.item_song, parent, false))
     }
 
-    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (holder) {
-            is HeaderViewHolder -> holder.bind(onShuffle)
-            is SongViewHolder -> holder.bind(songs[position - 1], onSongClick)
-        }
-    }
-
-    class HeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        fun bind(onShuffle: () -> Unit) {
-            itemView.setOnClickListener { onShuffle() }
-        }
+    override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
+        holder.bind(songs[position], onSongClick, onAddToQueue)
     }
 
     class SongViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -68,7 +46,7 @@ class SongsAdapter(
         private val subtitle: TextView = itemView.findViewById(R.id.songSubtitle)
         private val more: View = itemView.findViewById(R.id.btnSongMore)
 
-        fun bind(song: Song, onSongClick: (Song) -> Unit) {
+        fun bind(song: Song, onSongClick: (Song) -> Unit, onAddToQueue: (Song) -> Unit) {
             title.text = song.title
 
             val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
@@ -79,8 +57,19 @@ class SongsAdapter(
             cover.load(CoverArt.cover(song), loader)
 
             itemView.setOnClickListener { onSongClick(song) }
-            // El menú de 3 puntos no hace nada de momento.
-            more.setOnClickListener { }
+            // El menú de 3 puntos ofrece «Añadir a cola de reproducción».
+            more.setOnClickListener { anchor ->
+                PopupMenu(anchor.context, anchor).apply {
+                    menuInflater.inflate(R.menu.menu_song_item, menu)
+                    setOnMenuItemClickListener { item ->
+                        if (item.itemId == R.id.action_add_to_queue) {
+                            onAddToQueue(song)
+                            true
+                        } else false
+                    }
+                    show()
+                }
+            }
         }
     }
 }

@@ -16,7 +16,7 @@ import com.untarlamanteca.ultimusic.ui.PlayerViewModel
 import com.untarlamanteca.ultimusic.ui.SongsViewModel
 import kotlinx.coroutines.launch
 
-/** Primer fragmento: lista de canciones con cabecera "Escoger al azar". */
+/** Primer fragmento: lista de canciones. */
 class SongsFragment : Fragment(R.layout.fragment_songs) {
 
     private val songsViewModel: SongsViewModel by activityViewModels()
@@ -28,8 +28,8 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         val spinner = view.findViewById<ProgressBar>(R.id.loadingSpinner)
 
         val adapter = SongsAdapter(
-            onShuffle = { playerViewModel.playRandom(songsViewModel.songs.value) },
-            onSongClick = { song -> playerViewModel.play(song) }
+            onSongClick = { song -> playerViewModel.play(song, songsViewModel.songs.value) },
+            onAddToQueue = { song -> playerViewModel.addToQueue(song) }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter

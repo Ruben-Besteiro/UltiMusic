@@ -1,0 +1,228 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ventana a pantalla completa con forma de iPod Nano. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/ipodRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background">
+
+    <!-- Cuerpo del iPod -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="12dp"
+        android:background="@drawable/ipod_body"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Cabecera: X a la izquierda + título centrado -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageButton
+                android:id="@+id/btnClose"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="start|center_vertical"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_close"
+                android:src="@drawable/ic_close"
+                app:tint="@color/um_on_background" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="@string/ipod_title"
+                android:textColor="@color/um_on_background"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+        </FrameLayout>
+
+        <!-- Recuadro superior (cuadrado): carátula (por defecto) o cola -->
+        <com.untarlamanteca.ultimusic.ui.player.SquareFrameLayout
+            android:id="@+id/topBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/ipod_display"
+            android:padding="10dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/song_cover_desc"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/queueList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:visibility="gone" />
+        </com.untarlamanteca.ultimusic.ui.player.SquareFrameLayout>
+
+        <!-- Fila de progreso: transcurrido · barra · total -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvPosition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp" />
+
+            <SeekBar
+                android:id="@+id/ipodProgress"
+                android:layout_width="0dp"
+                android:layout_height="4dp"
+                android:paddingStart="5dp"
+                android:paddingEnd="5dp"
+                android:layout_marginHorizontal="4dp"
+                android:layout_weight="1"
+                android:max="1000"
+                android:progress="0"
+                android:progressDrawable="@drawable/seekbar_line"
+                android:progressBackgroundTint="@color/um_divider"
+                android:progressTint="@color/um_yellow"
+                android:thumb="@null"
+                android:splitTrack="false" />
+
+            <TextView
+                android:id="@+id/tvDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Un único recuadro con el título de la canción y, debajo, "Artista · Álbum · Año". -->
+        <LinearLayout
+            android:id="@+id/infoBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/ipod_info_box"
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="8dp">
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textColor="@color/um_on_background"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/tvMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- La rueda ocupa todo el espacio restante (weight=1) manteniéndose circular -->
+        <androidx.constraintlayout.widget.ConstraintLayout
+            android:id="@+id/wheelArea"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp">
+
+            <androidx.constraintlayout.widget.ConstraintLayout
+                android:id="@+id/clickWheel"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:background="@drawable/wheel_ring"
+                app:layout_constraintDimensionRatio="1:1"
+                app:layout_constraintTop_toTopOf="parent"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintEnd_toEndOf="parent">
+
+            <ImageButton
+                android:id="@+id/btnMenu"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginTop="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_toggle_view"
+                android:src="@drawable/ic_menu"
+                app:tint="@color/um_yellow"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageButton
+                android:id="@+id/btnPrev"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginStart="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_prev"
+                android:src="@drawable/ic_skip_previous"
+                app:tint="@color/um_yellow"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageButton
+                android:id="@+id/btnNext"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginEnd="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_next"
+                android:src="@drawable/ic_skip_next"
+                app:tint="@color/um_yellow"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <ImageButton
+                android:id="@+id/btnPlayPauseBig"
+                android:layout_width="44dp"
+                android:layout_height="44dp"
+                android:layout_marginBottom="16dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/play_pause"
+                android:src="@drawable/ic_play"
+                app:tint="@color/um_yellow"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent" />
+
+            <View
+                android:id="@+id/wheelCenter"
+                android:layout_width="0dp"
+                android:layout_height="0dp"
+                android:background="@drawable/wheel_center"
+                app:layout_constraintDimensionRatio="1:1"
+                app:layout_constraintWidth_percent="0.42"
+                app:layout_constraintBottom_toBottomOf="parent"
+                app:layout_constraintEnd_toEndOf="parent"
+                app:layout_constraintStart_toStartOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
+        </androidx.constraintlayout.widget.ConstraintLayout>
+
+    </LinearLayout>
+</FrameLayout>

@@ -8,7 +8,7 @@ import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
 import android.widget.ImageButton
-import android.widget.ProgressBar
+import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -18,6 +18,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.isVisible
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -28,12 +29,17 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.untarlamanteca.ultimusic.R
 import com.untarlamanteca.ultimusic.data.LibraryRepository
+import com.untarlamanteca.ultimusic.ui.player.IPodNanoDialogFragment
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
+
+    // La cola de reproducción vive en PlayerViewModel (ámbito de actividad), compartida por el
+    // mini-reproductor, SongsFragment y la ventana del iPod. Al pinchar una canción se inserta en
+    // la posición 0 y la reproducción siempre mira la posición actual de la cola.
 
     private val songsViewModel: SongsViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
@@ -158,17 +164,33 @@ class MainActivity : AppCompatActivity() {
         val title = findViewById<TextView>(R.id.miniTitle)
         val playPause = findViewById<ImageButton>(R.id.btnPlayPause)
         val expand = findViewById<ImageButton>(R.id.btnExpand)
-        val progress = findViewById<ProgressBar>(R.id.songProgress)
+        val progress = findViewById<SeekBar>(R.id.songProgress)
 
         playPause.setOnClickListener { playerViewModel.togglePlayPause() }
-        // La flecha de expandir no hace nada de momento
-        expand.setOnClickListener { }
+        // La flecha de expandir abre la ventana del iPod a pantalla completa.
+        expand.setOnClickListener {
+            IPodNanoDialogFragment().show(supportFragmentManager, "ipod")
+        }
+
+        // Arrastrar/tocar la barra mueve la reproducción. Mientras el usuario la toca, no dejamos
+        // que la actualización periódica pise su posición.
+        var userSeeking = false
+        progress.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(sb: SeekBar, p: Int, fromUser: Boolean) {}
+            override fun onStartTrackingTouch(sb: SeekBar) { userSeeking = true }
+            override fun onStopTrackingTouch(sb: SeekBar) {
+                userSeeking = false
+                playerViewModel.seekToFraction(sb.progress / 1000f)
+            }
+        })
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     playerViewModel.currentSong.collect { song ->
                         title.text = song?.title ?: getString(R.string.nothing_playing)
+                        // Sin nada en reproducción no hay reproductor que expandir: ocultamos la flecha.
+                        expand.isVisible = song != null
                     }
                 }
                 launch {
@@ -180,9 +202,11 @@ class MainActivity : AppCompatActivity() {
                 }
                 launch {
                     playerViewModel.progress.collect { p ->
-                        progress.progress =
-                            if (p.durationMs > 0) ((p.positionMs * 1000) / p.durationMs).toInt()
-                            else 0
+                        if (!userSeeking) {
+                            progress.progress =
+                                if (p.durationMs > 0) ((p.positionMs * 1000) / p.durationMs).toInt()
+                                else 0
+                        }
                     }
                 }
             }

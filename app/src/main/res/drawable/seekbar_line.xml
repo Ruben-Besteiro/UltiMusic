@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pista del SeekBar con grosor controlado (la del sistema es fija ~2dp y no crece con la altura).
+  Se pintan blancas y el color real lo dan progressBackgroundTint (fondo) y progressTint (progreso).
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background" android:gravity="center_vertical">
+        <shape android:shape="rectangle">
+            <size android:height="4dp" />
+            <corners android:radius="2dp" />
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress" android:gravity="center_vertical">
+        <clip android:clipOrientation="horizontal" android:gravity="left">
+            <shape android:shape="rectangle">
+                <size android:height="4dp" />
+                <corners android:radius="2dp" />
+                <solid android:color="@android:color/white" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

@@ -5,4 +5,10 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">8dp</item>
     </style>
+
+    <!-- Deslizamiento de la ventana del iPod: sube al abrir, baja al cerrar. -->
+    <style name="Animation.UltiMusic.SlideUp" parent="">
+        <item name="android:windowEnterAnimation">@anim/slide_in_up</item>
+        <item name="android:windowExitAnimation">@anim/slide_out_down</item>
+    </style>
 </resources>

@@ -41,15 +41,19 @@
         android:layout_height="0dp"
         android:layout_weight="1" />
 
-    <ProgressBar
+    <SeekBar
         android:id="@+id/songProgress"
-        style="?android:attr/progressBarStyleHorizontal"
         android:layout_width="match_parent"
         android:layout_height="4dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
         android:max="1000"
         android:progress="0"
+        android:progressDrawable="@drawable/seekbar_line"
+        android:progressBackgroundTint="@color/um_divider"
         android:progressTint="@color/um_yellow"
-        android:progressBackgroundTint="@color/um_divider" />
+        android:thumb="@null"
+        android:splitTrack="false" />
 
     <include
         android:id="@+id/miniPlayer"

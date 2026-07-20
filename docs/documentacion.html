@@ -218,7 +218,8 @@
 
     <h5>Capa de interfaz</h5>
     <a href="#ui">ui/ <code>· pantallas</code></a>
-    <a href="#util">util/ <code>· carátulas</code></a>
+    <a href="#ipod">ui/player/ <code>· iPod</code></a>
+    <a href="#util">util/ <code>· carátulas · tiempos</code></a>
 
     <h5>Referencia</h5>
     <a href="#esquema">Esquema de la BD</a>
@@ -547,7 +548,8 @@
           <li>Permiso «Acceso a todos los archivos» (API 30+) o <code>READ_EXTERNAL_STORAGE</code> (antiguos), con <code>registerForActivityResult</code>.</li>
           <li><code>onResume</code> — al volver a la app, recarga la lista si hay permiso.</li>
           <li><code>onStop</code> — al pasar a segundo plano, lanza <code>exportDatabaseCopy()</code> en un <code>appScope</code> propio (para que termine aunque la Activity muera).</li>
-          <li>El mini-reproductor observa el estado del <code>PlayerViewModel</code> con <code>repeatOnLifecycle</code>.</li>
+          <li>El mini-reproductor observa el estado del <code>PlayerViewModel</code> con <code>repeatOnLifecycle</code>. Su barra de progreso es un <code>SeekBar</code>: tocarla o arrastrarla llama a <code>seekToFraction</code> (con una bandera <code>userSeeking</code> para que la actualización periódica no pise la posición mientras el usuario la mueve). Se dibuja como una línea sin thumb, de borde a borde (con <code>paddingStart</code>/<code>paddingEnd</code> a 0 — el estilo del <code>SeekBar</code> los define y tienen prioridad sobre <code>android:padding</code>) y con grosor propio vía <code>seekbar_line</code> (la pista por defecto tiene altura fija y no engorda con <code>layout_height</code>).</li>
+          <li>La <b>flecha «expandir»</b> (abajo a la izquierda) abre la ventana del iPod: <code>IPodNanoDialogFragment().show(...)</code>. Se <b>oculta</b> (<code>isVisible = song != null</code>) cuando no hay nada en reproducción, porque no hay reproductor que expandir.</li>
         </ul>
         <aside class="concept">
           <span class="tag">Android · ciclo de vida y repeatOnLifecycle</span>
@@ -579,18 +581,31 @@
       </article>
 
       <article class="file" id="f-playervm">
-        <header><span class="path">ui/PlayerViewModel.kt</span><span class="role">AndroidViewModel · reproducción</span></header>
-        <p>Posee el reproductor y expone el estado (canción actual, si suena, progreso). Compartido por ámbito de Activity entre el mini-reproductor y la lista.</p>
+        <header><span class="path">ui/PlayerViewModel.kt</span><span class="role">AndroidViewModel · reproducción + dos colas</span></header>
+        <p>Posee el reproductor y un sistema de <b>dos colas</b>. Compartido por ámbito de Activity entre el mini-reproductor, la lista y la ventana del iPod. Expone <code>currentSong</code>, <code>isPlaying</code>, <code>progress</code>, <code>currentIndex</code>, <code>queue1</code> y <code>queue2</code> (el iPod muestra ambas concatenadas).</p>
+        <aside class="concept">
+          <span class="tag">Concepto · cola 1, cola 2 y la invariante</span>
+          <p><b>Cola 1</b> = lo que suena y su contexto: el historial ya reproducido, la canción actual (posición <code>currentIndex</code>) y lo que el usuario ha encolado a mano. <b>Cola 2</b> = todas las <i>demás</i> canciones, <b>mezcladas</b>. Nunca se reproduce directamente de la cola 2: cuando la cola 1 se agota, su elemento 0 pasa al final de la cola 1 y se reproduce. Invariante que se mantiene siempre: <code>cola2 = (todas) − (las de cola1)</code>, disjuntas.</p>
+        </aside>
         <ul class="tight">
-          <li><code>play(song)</code>, <code>playRandom(songs)</code>, <code>togglePlayPause()</code>.</li>
-          <li>Un bucle actualiza el progreso cada 500 ms.</li>
-          <li><code>onCleared()</code> libera el reproductor.</li>
+          <li><code>play(song, allSongs)</code> — <b>destruye y recrea</b> las colas: cola 1 = solo esa canción; cola 2 = las demás <code>.shuffled()</code>.</li>
+          <li><code>addToQueue(song)</code> — <b>mueve</b> la canción al final de la cola 1 (la parte que suena + lo encolado): la quita de donde estuviera (cola 1 o cola 2) para no duplicarla, ajustando el índice si hacía falta. No corta la reproducción.</li>
+          <li><code>next()</code> — avanza en la cola 1; si se agota, mueve <code>cola2[0]</code> al final de la cola 1 y lo reproduce. <code>previous()</code> retrocede en la cola 1.</li>
+          <li><code>jumpTo(d)</code> — salto desde la vista de cola del iPod, que muestra la lista <b>combinada</b> cola 1 + cola 2 (<code>d</code> es el índice combinado). Equivale a pulsar <b>siguiente/anterior</b> las veces necesarias: si la pinchada ya está en la cola 1 solo mueve el índice; si está en la cola 2, arrastra a la cola 1 todo lo que hay hasta ella (que pasa a ser historial), igual que ir pulsando «siguiente».</li>
+          <li><code>seekToFraction(f)</code> — salta a un punto de la canción actual (fracción 0..1 de su duración); lo usan las barras deslizables del mini-reproductor y del iPod.</li>
+          <li><code>playRandom(songs)</code> (pasa por <code>play</code>), <code>togglePlayPause()</code>, <code>seekToFraction(f)</code> (mueve la reproducción a la fracción 0..1 de la duración; lo usan las barras deslizables), y <code>playCurrent()</code> privada: <b>único</b> sitio que carga ExoPlayer.</li>
+          <li><b>Contrato:</b> el sistema de dos colas es la lógica de reproducción <b>exclusiva de «Canciones»</b> (<code>SongsFragment</code>). Solo desde ahí se construye la cola (<code>play</code>/<code>playRandom</code>/<code>addToQueue</code>); los demás fragmentos usarán otra lógica y no deben llamar a esos métodos.</li>
+          <li>Un bucle actualiza el progreso cada 500 ms; <code>onCleared()</code> libera el reproductor.</li>
         </ul>
         <aside class="concept">
-          <span class="tag">Android · ExoPlayer (Media3)</span>
-          <p><b>ExoPlayer</b> (de la librería Media3 de Google) es el motor de reproducción de audio/vídeo: más flexible que el reproductor básico del sistema. Aquí reproduce el archivo por su ruta y avisa de los cambios de estado mediante un <i>listener</i>.</p>
+          <span class="tag">Diseño · el sistema de colas es solo de «Canciones»</span>
+          <p>Los métodos que <b>crean o amplían</b> las colas (<code>play</code>, <code>playRandom</code>, <code>addToQueue</code>) son exclusivos del fragmento de Canciones: solo los llama <code>SongsFragment</code>. Los demás fragmentos (Álbumes, Artistas…) usarán en el futuro <b>otra lógica</b> de reproducción distinta, aún por definir. En cambio, los <i>controles</i> sobre la cola ya existente (<code>next</code>/<code>previous</code>/<code>jumpTo</code>/<code>seekToFraction</code>/<code>togglePlayPause</code>) sí los usa el reproductor global —mini-reproductor e iPod— porque operan sobre lo que ya suena.</p>
         </aside>
-        <div class="uses"><span class="chip">ExoPlayer</span><span class="chip">MediaItem</span><span class="chip">StateFlow</span></div>
+        <aside class="concept">
+          <span class="tag">Android · ExoPlayer (Media3) y auto-avance</span>
+          <p><b>ExoPlayer</b> (librería Media3 de Google) es el motor de reproducción. Su <i>listener</i> avisa de cambios de estado: cuando una canción termina (<code>STATE_ENDED</code>) llamamos a <code>next()</code> para <b>avanzar solos</b>. Ojo: dentro del bloque <code>apply</code> sobre el player hay que cualificar <code>this@PlayerViewModel.next()</code>, porque <code>next()</code> a secas se resolvería al método <i>deprecado</i> del propio ExoPlayer.</p>
+        </aside>
+        <div class="uses"><span class="chip">ExoPlayer</span><span class="chip">MediaItem</span><span class="chip">StateFlow</span><span class="chip">shuffled()</span></div>
       </article>
 
       <article class="file" id="f-songsfragment">
@@ -598,7 +613,7 @@
         <p>La pantalla de la lista. Crea el <code>RecyclerView</code> con su <code>SongsAdapter</code>, observa <code>songsViewModel.songs</code> y <code>loading</code>, y muestra la lista, el spinner o el mensaje de vacío según toque.</p>
         <ul class="tight">
           <li>Obtiene los ViewModels con <code>activityViewModels()</code> para compartirlos con la Activity.</li>
-          <li>Al pulsar «Escoger al azar» → <code>playerViewModel.playRandom(...)</code>; al pulsar una canción → <code>play(song)</code>.</li>
+          <li>Al pulsar «Escoger al azar» → <code>playerViewModel.playRandom(...)</code>; al pulsar una canción → <code>play(song, songs)</code> (crea las dos colas); en el menú de 3 puntos → <code>addToQueue(song)</code>.</li>
         </ul>
         <div class="uses"><span class="chip">Fragment</span><span class="chip">RecyclerView</span><span class="chip">activityViewModels()</span></div>
       </article>
@@ -609,6 +624,7 @@
         <ul class="tight">
           <li><code>getItemViewType</code> distingue cabecera de canción; <code>onCreateViewHolder</code> infla el layout adecuado.</li>
           <li><code>SongViewHolder.bind</code> pone título, subtítulo «artista | álbum» y la carátula (vía <code>CoverArt</code> + Coil).</li>
+          <li>El botón de <b>3 puntos</b> abre un <code>PopupMenu</code> (recurso <code>menu_song_item.xml</code>) con una única opción, «Añadir a cola de reproducción», que dispara el callback <code>onAddToQueue</code>.</li>
           <li><code>submit(list)</code> recibe la lista nueva y refresca.</li>
         </ul>
         <aside class="concept">
@@ -621,6 +637,47 @@
       <article class="file" id="f-placeholder">
         <header><span class="path">ui/common/PlaceholderFragment.kt</span><span class="role">Fragment temporal</span></header>
         <p>Marcador de posición para las pestañas aún sin implementar (Álbumes, Artistas, Géneros…): solo muestra el nombre de la pestaña.</p>
+      </article>
+
+      <h3 id="ipod">Ventana del iPod — <code>ui/player/</code></h3>
+      <p>Al pulsar la flecha del mini-reproductor sube desde abajo una ventana a pantalla completa con forma de <b>iPod Nano</b> que cubre la app. Muestra la carátula (o la cola), el progreso, el título/artista/álbum/año y una rueda «click-wheel» con los controles. Al pulsar la «X» baja y se destruye.</p>
+
+      <article class="file" id="f-ipoddialog">
+        <header><span class="path">ui/player/IPodNanoDialogFragment.kt</span><span class="role">DialogFragment · reproductor a pantalla completa</span></header>
+        <p>La ventana del iPod. Comparte el <code>PlayerViewModel</code> de la Activity con <code>activityViewModels()</code>, así que refleja siempre la misma reproducción que el mini-reproductor.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li><code>onCreate</code> aplica un <b>tema de diálogo a pantalla completa</b> (<code>setStyle(STYLE_NO_FRAME, …)</code>); <code>onStart</code> fuerza el tamaño a toda la pantalla.</li>
+          <li>Observa con <code>repeatOnLifecycle(STARTED)</code>: <code>currentSong</code> (carátula + <code>tvTitle</code>/<code>tvMeta</code>), <code>isPlaying</code> (icono play/pausa), <code>progress</code> (tiempos y barra) y <code>queue1 + queue2 + currentIndex</code> (con un <code>combine</code> de tres flujos concatena ambas colas y las pasa al adaptador). Tras cada actualización, <b>centra</b> la fila actual en el <code>RecyclerView</code> con <code>scrollToPositionWithOffset(index, altura/2)</code> dentro de un <code>post{}</code>.</li>
+          <li>El título y la línea «Artista · Álbum · Año» comparten <b>un único recuadro</b> (<code>infoBox</code>): dentro van dos <code>TextView</code>, el título arriba y la metainformación (más apagada) debajo.</li>
+          <li>El botón de las <b>3 rayas</b> alterna el recuadro superior (cuadrado) entre carátula y cola (cambiando la visibilidad de la imagen y el <code>RecyclerView</code>).</li>
+          <li>Anterior/Siguiente → <code>previous()</code>/<code>next()</code>; centro-abajo → <code>togglePlayPause()</code>; «X» → <code>dismiss()</code>; pinchar una fila de la cola → <code>jumpTo(posición)</code>. La barra de progreso es un <code>SeekBar</code>: al arrastrarla o tocarla llama a <code>seekToFraction</code> (mientras se toca, un flag evita que la actualización periódica pise la posición).</li>
+          <li>La barra de progreso es un <code>SeekBar</code>: al arrastrarla se muestra el tiempo destino en vivo y, al soltar, llama a <code>seekToFraction</code> para mover la reproducción.</li>
+          <li>La <b>rueda</b> ocupa todo el espacio que sobra (<code>layout_weight="1"</code>) pero se mantiene circular: es un <code>ConstraintLayout</code> con lados iguales (<code>layout_constraintDimensionRatio="1:1"</code>) centrado, así que crece hasta el mayor círculo que quepa; el círculo central escala con <code>layout_constraintWidth_percent</code>.</li>
+          <li><code>metaLine(song)</code> construye «Artista · Álbum · Año» <b>omitiendo el año si es nulo</b> (para no mostrar «· null»).</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · DialogFragment y animación de ventana</span>
+          <p>Un <b>DialogFragment</b> es un Fragment que se muestra como diálogo (una ventana propia encima de la pantalla). Dándole un tema con <code>windowAnimationStyle</code>, el sistema anima solo su <b>entrada</b> (sube) al mostrarlo y su <b>salida</b> (baja) al cerrarlo, sin tener que coordinar la animación a mano. Se usa <code>viewLifecycleOwner</code> al observar los Flows para no filtrar memoria al cerrar.</p>
+        </aside>
+        <div class="uses"><span class="chip">DialogFragment</span><span class="chip">activityViewModels()</span><span class="chip">repeatOnLifecycle</span><span class="chip">Coil</span></div>
+      </article>
+
+      <article class="file" id="f-ipodqueueadapter">
+        <header><span class="path">ui/player/IPodQueueAdapter.kt</span><span class="role">RecyclerView.Adapter · la cola</span></header>
+        <p>Pinta la lista <b>combinada cola 1 + cola 2</b> dentro de la pantalla del iPod. La fila que suena ahora enseña un <b>icono de altavoz</b>; el resto muestran su posición <b>relativa</b> a la actual (<code>position − currentIndex</code>): las ya reproducidas con número <b>negativo y en gris</b>, las próximas (encoladas a mano y luego las mezcladas de la cola 2) con número positivo. Pinchar una fila llama a <code>jumpTo</code>. <code>submit(list, current)</code> recibe la lista combinada y el índice actual.</p>
+        <p class="note">A diferencia de <code>SongsAdapter</code>, no hay cabecera sintética: <code>getItemCount()</code> es el tamaño de la lista y la propia fila del índice actual hace de «Sonando ahora». Recibe también el tamaño de la cola 1 y pinta un <b>divisor gris</b> tras su última fila para separar visualmente la cola 1 de la cola 2.</p>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">ViewHolder</span></div>
+      </article>
+
+      <article class="file" id="f-squareframe">
+        <header><span class="path">ui/player/SquareFrameLayout.kt</span><span class="role">View personalizada · recuadro cuadrado</span></header>
+        <p>Un <code>FrameLayout</code> que siempre es <b>cuadrado</b>: se usa para el recuadro de la carátula. En un <code>LinearLayout</code> no se puede pedir «alto = ancho» solo con XML, así que esta vista lo resuelve al medirse.</p>
+        <aside class="concept">
+          <span class="tag">Android · onMeasure y MeasureSpec</span>
+          <p>Antes de dibujarse, cada vista pasa por <code>onMeasure</code>, donde el padre le dice cuánto puede medir de ancho y de alto (dos <i>MeasureSpec</i>). Aquí reutilizamos la medida del <b>ancho</b> también como alto (<code>super.onMeasure(widthSpec, widthSpec)</code>), de modo que ambos lados acaban valiendo lo mismo y el recuadro sale cuadrado. Sin esto, el recuadro tomaba «todo el alto sobrante» (con <code>layout_weight</code>) y quedaba rectangular.</p>
+        </aside>
+        <div class="uses"><span class="chip">FrameLayout</span><span class="chip">onMeasure</span></div>
       </article>
     </section>
 
@@ -635,6 +692,11 @@
           <p><b>Coil</b> es una librería para cargar imágenes de forma asíncrona en un <code>ImageView</code> (descarga/decodifica en segundo plano y cachea). Un <b>Fetcher</b> personalizado le enseña a obtener imágenes de una fuente no estándar — aquí, el arte embebido dentro del MP3.</p>
         </aside>
         <div class="uses"><span class="chip">Coil</span><span class="chip">MediaMetadataRetriever</span><span class="chip">Fetcher</span></div>
+      </article>
+
+      <article class="file" id="f-timeformat">
+        <header><span class="path">util/TimeFormat.kt</span><span class="role">object · formateo de tiempos</span></header>
+        <p><code>mmss(ms)</code> convierte milisegundos a texto <code>m:ss</code> (p. ej. <code>204000 → "3:24"</code>). Lo usa la ventana del iPod para el tiempo transcurrido y la duración total.</p>
       </article>
     </section>
 
@@ -694,8 +756,11 @@
           <tr><td><code>app/build.gradle.kts</code></td><td>Dependencias y configuración del módulo: Room + KSP, Media3/ExoPlayer, Coil, RecyclerView, ViewPager2, lifecycle…</td></tr>
           <tr><td><code>gradle/libs.versions.toml</code></td><td>Catálogo central de versiones de todas las librerías (Room 2.7.1, Media3, etc.).</td></tr>
           <tr><td><code>AndroidManifest.xml</code></td><td>Declara la Activity y los permisos de almacenamiento (<code>MANAGE_EXTERNAL_STORAGE</code> y <code>READ_EXTERNAL_STORAGE</code> en API ≤29).</td></tr>
-          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>.</td></tr>
-          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: nombres de pestañas, mensajes de permiso…), colores y tema.</td></tr>
+          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>, y los del iPod: <code>dialog_ipod_nano</code>, <code>item_queue_song</code>.</td></tr>
+          <tr><td><code>res/anim/</code></td><td>Animaciones de la ventana del iPod: <code>slide_in_up</code> (sube al abrir) y <code>slide_out_down</code> (baja al cerrar).</td></tr>
+          <tr><td><code>res/menu/</code></td><td><code>menu_main</code> (barra superior) y <code>menu_song_item</code> (menú de 3 puntos de cada canción: «Añadir a cola de reproducción»).</td></tr>
+          <tr><td><code>res/drawable/</code></td><td>Formas e iconos: recuadros del iPod (<code>ipod_body</code>, <code>ipod_display</code>, <code>ipod_info_box</code>), rueda (<code>wheel_ring</code>, <code>wheel_center</code>), la pista de las barras de progreso (<code>seekbar_line</code>) e iconos (<code>ic_close</code>, <code>ic_speaker</code>, <code>ic_skip_previous</code>, <code>ic_skip_next</code>…).</td></tr>
+          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: pestañas, permisos, textos del iPod…), colores, y temas/estilos (<code>themes.xml</code> con el tema del diálogo <code>Theme.UltiMusic.IPodDialog</code>; <code>styles.xml</code> con la animación <code>Animation.UltiMusic.SlideUp</code>).</td></tr>
         </tbody>
       </table>
       <aside class="concept">
@@ -723,7 +788,7 @@
         <span class="tag">Importante</span>
         <p>Esta documentación debe <b>actualizarse cada vez que algo quede desactualizado</b>. El archivo fuente está en <code>docs/documentacion.html</code> (versionado en el repo). Tras cualquier cambio de arquitectura, archivos, flujo o dependencias, actualízalo en la misma tanda y vuelve a publicarlo.</p>
       </aside>
-      <p class="note">Estado actual: la capa de persistencia (Room + reconciliación + copia externa) está implementada y verificada en emulador. Pendiente: editor de metadatos, pestañas de Álbumes/Artistas/Géneros/Listas, e integraciones (YT-DLP, Last.fm, Musixmatch).</p>
+      <p class="note">Estado actual: la capa de persistencia (Room + reconciliación + copia externa), el mini-reproductor, la <b>ventana del iPod</b> y el <b>sistema de dos colas</b> (cola 1 activa + cola 2 mezclada, encolar desde el menú de 3 puntos, auto-avance, saltos con historial) están implementados y verificados en emulador. Pendiente: editor de metadatos, pestañas de Álbumes/Artistas/Géneros/Listas, e integraciones (YT-DLP, Last.fm, Musixmatch).</p>
     </section>
 
     <hr class="soft">

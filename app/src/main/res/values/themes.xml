@@ -15,4 +15,14 @@
     </style>
 
     <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />
+
+    <!-- Tema del diálogo del iPod: pantalla completa, fondo transparente y animación de deslizamiento. -->
+    <style name="Theme.UltiMusic.IPodDialog" parent="Theme.UltiMusic">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@style/Animation.UltiMusic.SlideUp</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/um_background</item>
+    </style>
 </resources>

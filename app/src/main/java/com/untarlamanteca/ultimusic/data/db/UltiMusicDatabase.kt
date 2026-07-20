@@ -16,6 +16,7 @@ import com.untarlamanteca.ultimusic.data.db.entities.SongEntity
  * Base de datos de la biblioteca de UltiMusic. Vive en el almacenamiento interno de la app
  * (`/data/data/<paquete>/databases/ultimusic.db`) y es la ÚNICA fuente de verdad de los modelos.
  */
+
 @Database(
     entities = [
         SongEntity::class,
