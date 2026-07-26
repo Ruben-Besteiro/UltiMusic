@@ -8,6 +8,9 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import com.untarlamanteca.ultimusic.model.Song
+import com.untarlamanteca.ultimusic.util.CoverArt
+import com.untarlamanteca.ultimusic.util.DynamicColor
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +55,31 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _progress = MutableStateFlow(PlaybackProgress())
     val progress = _progress.asStateFlow()
+
+    /**
+     * Color de acento de la aplicación, sacado de la carátula de lo que suena. Lo observan la
+     * actividad principal (pestañas, barra de progreso, mini-reproductor) y la ventana del iPod,
+     * que así dejan de ser amarillos y se tiñen con la canción. Mientras no hay nada sonando vale
+     * [DynamicColor.DEFAULT], es decir, el amarillo de toda la vida.
+     */
+    private val _accentColor = MutableStateFlow(DynamicColor.DEFAULT)
+    val accentColor = _accentColor.asStateFlow()
+
+    /**
+     * Nombre de la playlist cuya colección ocupa ahora mismo la cola 1, o null si lo que suena no
+     * viene de una playlist (canción suelta, álbum, artista, productor...). Sirve para que el iPod, al
+     * reabrir una playlist, sepa si ya es lo que está sonando y deba mostrar el modo normal en vez de
+     * entrar en modo navegación.
+     */
+    private val _currentPlaylistName = MutableStateFlow<String?>(null)
+    val currentPlaylistName = _currentPlaylistName.asStateFlow()
+
+    /**
+     * Cálculo del acento en curso. Se guarda para poder cancelarlo: si el usuario pasa canciones
+     * rápido, el análisis de una portada anterior podría terminar después que el de la actual y
+     * dejar el color equivocado.
+     */
+    private var accentJob: Job? = null
 
     private val player: ExoPlayer = ExoPlayer.Builder(app).build().apply {
         addListener(object : Player.Listener {
@@ -108,6 +136,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         _queue1.value = listOf(song)
         _currentIndex.value = 0
         _queue2.value = allSongs.filter { it.id != song.id }.shuffled()
+        _currentPlaylistName.value = null
         playCurrent()
     }
 
@@ -136,37 +165,77 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // Lógica de reproducción de las COLECCIONES (fichas de álbum, artista y productor).
+    //
+    // Es distinta de la de «Canciones»: allí se pincha un tema suelto y el resto de la biblioteca
+    // pasa a la cola 2 mezclada, porque no hay un "después" natural. Aquí sí lo hay —el álbum
+    // entero, en orden—, así que la colección ocupa la cola 1 completa y la cola 2 se queda vacía:
+    // al acabar el último tema, se para. Es lo que uno espera al poner un disco.
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Reproduce [collection] empezando por la canción en la posición [startIndex]. La colección pasa
+     * a ser la cola 1 al completo, conservando su orden.
+     *
+     * [playlistName] se pasa cuando la colección viene de una playlist (ver [currentPlaylistName});
+     * null para álbumes, artistas, productores, etc.
+     */
+    fun playCollection(collection: List<Song>, startIndex: Int, playlistName: String? = null) {
+        if (collection.isEmpty() || startIndex !in collection.indices) return
+        _queue1.value = collection
+        _currentIndex.value = startIndex
+        _queue2.value = emptyList()
+        _currentPlaylistName.value = playlistName
+        playCurrent()
+    }
+
+    /** Igual, pero barajando la colección antes (el botón de las flechas cruzadas de la ficha). */
+    fun shuffleCollection(collection: List<Song>, playlistName: String? = null) {
+        if (collection.isEmpty()) return
+        playCollection(collection.shuffled(), 0, playlistName)
+    }
+
     /**
      * Avanza a la siguiente canción. Si quedan canciones por delante en la cola 1, pasa a la
      * siguiente; si la cola 1 se ha agotado, mueve el elemento 0 de la cola 2 al final de la cola 1
      * y lo reproduce. Si no hay nada más, se queda parado.
+     *
+     * Si está pausada, solo carga la siguiente canción y la mantiene pausada.
      */
     fun next() {
         if (_currentIndex.value < _queue1.value.lastIndex) {
             _currentIndex.value += 1
-            playCurrent()
+            loadCurrent(shouldPlay = player.isPlaying)
         } else if (_queue2.value.isNotEmpty()) {
             val nextSong = _queue2.value.first()
             _queue2.value = _queue2.value.drop(1)
             _queue1.value = _queue1.value + nextSong
             _currentIndex.value = _queue1.value.lastIndex
-            playCurrent()
+            loadCurrent(shouldPlay = player.isPlaying)
         }
     }
 
-    /** Retrocede a la canción anterior de la cola 1 (si existe) y la reproduce. */
+    /**
+     * Retrocede a la canción anterior de la cola 1 (si existe) y la reproduce.
+     * Si está pausada, solo carga la anterior canción y la mantiene pausada.
+     */
     fun previous() {
         if (_currentIndex.value - 1 >= 0) {
             _currentIndex.value -= 1
-            playCurrent()
+            loadCurrent(shouldPlay = player.isPlaying)
         }
     }
 
     /**
      * Salto desde la vista de cola del iPod, que muestra la **lista combinada** cola 1 + cola 2.
      * [d] es el índice dentro de esa lista combinada.
-     * Al pinchar una canción, esta pasa a ser la **última de la cola 1** (lo que asegura que el divisor
-     * del iPod aparezca justo tras ella) y todo lo que hubiera después en la lista pasa a la cola 2.
+     *
+     * Si lo que suena es una playlist ([currentPlaylistName] no nulo), esta es de una sola cola:
+     * saltar solo cambia [currentIndex], sin tocar las colas. Si no, es el sistema de dos colas de
+     * «Canciones»: la canción pinchada pasa a ser la **última de la cola 1** (lo que asegura que el
+     * divisor del iPod aparezca justo tras ella) y todo lo que hubiera después en la lista pasa a la
+     * cola 2.
      */
     fun jumpTo(d: Int) {
         val combined = _queue1.value + _queue2.value
@@ -174,10 +243,14 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
         val oldIndex = _currentIndex.value
 
-        // La canción pinchada siempre pasa a ser el final de la cola 1.
-        _queue1.value = combined.subList(0, d + 1).toList()
-        _queue2.value = combined.subList(d + 1, combined.size).toList()
-        _currentIndex.value = d
+        if (_currentPlaylistName.value != null) {
+            _currentIndex.value = d
+        } else {
+            // La canción pinchada siempre pasa a ser el final de la cola 1.
+            _queue1.value = combined.subList(0, d + 1).toList()
+            _queue2.value = combined.subList(d + 1, combined.size).toList()
+            _currentIndex.value = d
+        }
 
         // Si hemos pinchado una canción distinta a la que sonaba, la reproducimos.
         if (d != oldIndex) {
@@ -187,11 +260,26 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Carga en ExoPlayer la canción en [currentIndex] de la cola 1 y la reproduce desde el principio. */
     private fun playCurrent() {
+        loadCurrent(shouldPlay = true)
+    }
+
+    /** Carga en ExoPlayer la canción en [currentIndex] de la cola 1. Si [shouldPlay] es true, reproduce; si no, mantiene pausa. */
+    private fun loadCurrent(shouldPlay: Boolean = true) {
         val song = _queue1.value.getOrNull(_currentIndex.value) ?: return
         _currentSong.value = song
         player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(song.filePath))))
         player.prepare()
-        player.play()
+        if (shouldPlay) player.play() else player.pause()
+        updateAccent(song)
+    }
+
+    /** Recalcula el acento a partir de la carátula de [song] (ver [DynamicColor]). */
+    private fun updateAccent(song: Song) {
+        accentJob?.cancel()
+        accentJob = viewModelScope.launch {
+            val app = getApplication<Application>()
+            _accentColor.value = DynamicColor.fromCover(app, CoverArt.cover(app, song))
+        }
     }
 
     /** Salta a un punto de la canción actual, indicado como fracción 0..1 de su duración. */

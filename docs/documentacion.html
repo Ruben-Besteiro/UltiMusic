@@ -215,11 +215,16 @@
     <a href="#relations">data/db/relations/</a>
     <a href="#db-core">data/db/ <code>· núcleo Room</code></a>
     <a href="#repository">data/ <code>· repositorio</code></a>
+    <a href="#playlists-data">data/playlist/ <code>· playlists en disco</code></a>
 
     <h5>Capa de interfaz</h5>
     <a href="#ui">ui/ <code>· pantallas</code></a>
     <a href="#ipod">ui/player/ <code>· iPod</code></a>
-    <a href="#util">util/ <code>· carátulas · tiempos</code></a>
+    <a href="#playlists">ui/playlists/ <code>· listas de reproducción</code></a>
+    <a href="#library">ui/library/ <code>· álbumes · artistas · productores</code></a>
+    <a href="#editor">ui/editor/ <code>· editor de metadatos</code></a>
+    <a href="#common">ui/common/ <code>· vistas compartidas</code></a>
+    <a href="#util">util/ <code>· carátulas · color · tiempos</code></a>
 
     <h5>Referencia</h5>
     <a href="#esquema">Esquema de la BD</a>
@@ -250,7 +255,7 @@
         <li><b>Descubrir canciones escaneando el sistema de archivos directamente</b> (recorriendo carpetas), no preguntando a MediaStore.</li>
         <li><b>Lo que el usuario edita dentro de la app manda.</b> Las ediciones se guardan en una base de datos propia y sobrescriben lo que hubiera. MediaStore solo se usaría como fuente inicial de etiquetas, nunca como verdad definitiva.</li>
       </ul>
-      <p>Funciones previstas: editor de metadatos de canciones/álbumes/artistas e integraciones con YT-DLP, Last.fm y Musixmatch. Esta documentación cubre el estado actual del código, centrado en la <b>persistencia</b> (guardar los modelos para que sobrevivan al cierre de la app) y la <b>interfaz</b> de la pestaña de canciones.</p>
+      <p>El <a href="#editor">editor de metadatos de canciones</a> ya está implementado, igual que las pestañas de <a href="#library">Álbumes, Artistas y Productores</a> con sus fichas de detalle y el <a href="#f-dynamiccolor">color dinámico</a> sacado de la carátula. La pestaña de <a href="#playlists">Listas de reproducción</a> también está implementada (playlists guardadas como archivos de texto, con reordenación por arrastre y navegación desde el iPod). Quedan los editores de álbum, artista y productor, la pestaña de Géneros y las integraciones con YT-DLP, Last.fm y Musixmatch. Esta documentación cubre el estado actual del código, centrado en la <b>persistencia</b> (guardar los modelos para que sobrevivan al cierre de la app) y la <b>interfaz</b>.</p>
     </section>
 
     <!-- ================= ARQUITECTURA ================= -->
@@ -285,7 +290,20 @@
       </div>
 
       <h3>Flujo 2 — Edición: instantánea y persistente</h3>
-      <p>Cuando exista el editor, guardará el cambio con <code>LibraryRepository.updateSong(...)</code> → Room actualiza la fila → el <b>Flow</b> vuelve a emitir automáticamente → la lista se refresca sola. Al reabrir la app, la reconciliación <b>respeta</b> las ediciones (ver <a href="#repository">repositorio</a>).</p>
+      <div class="flow">
+        <div class="step"><b>Editor</b><span>el usuario guarda</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>MetadataEditorViewModel</b><span>save(form)</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>LibraryRepository</b><span>saveSongEdits()</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>LibraryDao</b><span>una transacción</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>Flow</b><span>reemite</span></div>
+        <div class="arrow">→</div>
+        <div class="step"><b>SongsFragment</b><span>la lista se refresca sola</span></div>
+      </div>
+      <p>Nadie le dice a la lista que se repinte: como observa un <b>Flow</b> de Room, en cuanto la fila cambia en la base de datos el flujo emite otra vez y la pantalla se actualiza. Al reabrir la app, la reconciliación con el disco <b>respeta</b> las ediciones (ver <a href="#repository">repositorio</a>). Ver el <a href="#editor">editor de metadatos</a>.</p>
 
       <h3>Flujo 3 — Al cerrar: copia visible</h3>
       <p>Al pasar la app a segundo plano, se exporta una copia de la base de datos a <code>~/UltiMusic/databases</code> para poder inspeccionarla en móviles donde no se puede entrar en <code>/data/data</code>.</p>
@@ -343,11 +361,11 @@
         <h4>Estructura</h4>
         <ul class="tight">
           <li><code>id</code>, <code>filePath</code> (ruta del archivo), <code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>.</li>
-          <li><code>artists: List&lt;Artist&gt;</code> y <code>albums: List&lt;Album&gt;</code> — una canción puede tener varios de cada uno.</li>
-          <li><code>imageName</code>, <code>comment</code>, <code>producer</code> — metadatos editables.</li>
+          <li><code>artists: List&lt;Artist&gt;</code>, <code>albums: List&lt;Album&gt;</code> y <code>producers: List&lt;Producer&gt;</code> — una canción puede tener varios de cada uno.</li>
+          <li><code>imageName</code>, <code>comment</code>, <code>lyrics</code>, <code>language</code> — metadatos editables.</li>
           <li><code>ogTitle / ogArtist / ogAlbum / ogYear</code> — <b>info de la canción original de un remix</b> (el prefijo «og» = <i>original</i>). No son etiquetas del archivo: los rellena el usuario cuando la canción es un remix, y valen <code>null</code> mientras no lo sea.</li>
         </ul>
-        <div class="uses"><span class="chip">Artist</span><span class="chip">Album</span></div>
+        <div class="uses"><span class="chip">Artist</span><span class="chip">Album</span><span class="chip">Producer</span></div>
       </article>
 
       <article class="file" id="f-album">
@@ -359,6 +377,28 @@
       <article class="file" id="f-artist">
         <header><span class="path">model/Artist.kt</span><span class="role">data class · un artista</span></header>
         <p>Lo más simple: <code>id</code>, <code>name</code> e <code>imageName</code>.</p>
+      </article>
+
+      <article class="file" id="f-producer">
+        <header><span class="path">model/Producer.kt</span><span class="role">data class · un productor</span></header>
+        <p>Idéntico a <code>Artist</code>: <code>id</code>, <code>name</code> e <code>imageName</code>. <b>Artistas y productores se tratan exactamente igual</b> en todo el proyecto (tabla propia, pestaña propia, ficha propia); lo que se hace con uno se hace con el otro.</p>
+        <p class="note">¿Por qué dos clases en vez de una sola con un campo «rol»? Porque una misma persona puede aparecer como artista <i>y</i> como productor con nombre o imagen distintos, y porque así cada tabla se poda de forma independiente.</p>
+      </article>
+
+      <article class="file" id="f-summaries">
+        <header><span class="path">model/Summaries.kt</span><span class="role">data class · resúmenes de las pestañas</span></header>
+        <p>Los modelos que consumen las pestañas de Álbumes, Artistas y Productores y sus fichas de detalle. No son las entidades completas porque lo que se pinta ahí son datos <b>agregados</b>, que la entidad por sí sola no conoce.</p>
+        <ul class="tight">
+          <li><code>AlbumSummary</code> — <code>title</code>, <code>artistName</code>, <code>year</code>, <code>songCount</code>, <code>totalDuration</code> y un <code>CoverRef</code>.</li>
+          <li><code>PersonSummary</code> — <code>name</code>, <code>albumCount</code>, <code>songCount</code>, <code>totalDuration</code> y su <code>CoverRef</code>. <b>El mismo modelo vale para un artista y para un productor</b>, así que sus dos pestañas comparten adaptador y ficha.</li>
+          <li><code>AlbumTrack</code> — una canción más el <code>trackNumber</code> que ocupa en ese álbum (vive en la tabla de cruce, no en la canción).</li>
+        </ul>
+        <div class="uses"><span class="chip">CoverRef</span></div>
+      </article>
+
+      <article class="file" id="f-playlist">
+        <header><span class="path">model/Playlist.kt</span><span class="role">data class · resumen de una playlist</span></header>
+        <p><code>PlaylistSummary</code> — <code>name</code>, <code>songCount</code> y <code>totalDuration</code>. Es lo justo para pintar una fila en la pestaña de <a href="#playlists">Listas de reproducción</a>: el nombre y, debajo, «N canciones · duración». No lleva las canciones en sí; esas se resuelven al abrir la playlist (ver <a href="#f-playlistrepo">PlaylistRepository</a>).</p>
       </article>
     </section>
 
@@ -413,13 +453,19 @@
       <article class="file" id="f-songentity">
         <header><span class="path">data/db/entities/SongEntity.kt</span><span class="role">tabla <code>songs</code></span></header>
         <p>Una fila por canción. <code>filePath</code> tiene índice único: es el <b>ancla estable</b> que identifica la canción entre escaneos (aunque el <code>id</code> autogenerado cambie).</p>
-        <p>Guarda los campos editables (<code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>, <code>imageName</code>, <code>comment</code>, <code>producer</code>) y los <code>og*</code> de remix (a <code>null</code> al escanear).</p>
+        <p>Guarda los campos editables (<code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>, <code>lyrics</code>, <code>language</code>, <code>imageName</code>, <code>comment</code>) y los <code>og*</code> de remix (a <code>null</code> al escanear).</p>
+        <p class="note">El <b>productor ya no es una columna de aquí</b>: desde la v2 del esquema vive en su propia tabla, enlazada por una tabla de cruce, igual que los artistas.</p>
         <div class="uses"><span class="chip">@Entity</span><span class="chip">@PrimaryKey</span><span class="chip">@Index(unique)</span></div>
       </article>
 
       <article class="file" id="f-artistentity">
         <header><span class="path">data/db/entities/ArtistEntity.kt</span><span class="role">tabla <code>artists</code></span></header>
         <p><code>name</code> (nombre editable que se muestra) + <code>tagName</code> (nombre original de la etiqueta, índice único = clave de emparejamiento) + <code>imageName</code>.</p>
+      </article>
+
+      <article class="file" id="f-producerentity">
+        <header><span class="path">data/db/entities/ProducerEntity.kt</span><span class="role">tabla <code>producers</code></span></header>
+        <p>Copia exacta de <code>ArtistEntity</code>: <code>name</code> (editable) + <code>tagName</code> (índice único, clave de emparejamiento) + <code>imageName</code>. Su <code>tagName</code> sale del campo <b>compositor</b> del archivo, que es de donde el escáner deduce el productor.</p>
       </article>
 
       <article class="file" id="f-albumentity">
@@ -433,11 +479,12 @@
       </aside>
 
       <article class="file" id="f-crossrefs">
-        <header><span class="path">data/db/entities/SongArtistCrossRef.kt · SongAlbumCrossRef.kt · AlbumArtistCrossRef.kt</span><span class="role">tablas de cruce N:N</span></header>
+        <header><span class="path">data/db/entities/SongArtistCrossRef.kt · SongAlbumCrossRef.kt · AlbumArtistCrossRef.kt · SongProducerCrossRef.kt</span><span class="role">tablas de cruce N:N</span></header>
         <ul class="tight">
           <li><b>song_artist</b> — empareja <code>songId</code> ↔ <code>artistId</code>.</li>
           <li><b>song_album</b> — <code>songId</code> ↔ <code>albumId</code>, más <code>trackNumber</code> y <code>discNumber</code> propios de esa aparición.</li>
           <li><b>album_artist</b> — <code>albumId</code> ↔ <code>artistId</code>.</li>
+          <li><b>song_producer</b> — <code>songId</code> ↔ <code>producerId</code>. Gemela de <code>song_artist</code>.</li>
         </ul>
         <p class="note">Cada una tiene clave primaria compuesta, claves foráneas en cascada e índice en la columna secundaria (Room exige indexar las columnas foráneas).</p>
         <div class="uses"><span class="chip">@ForeignKey CASCADE</span><span class="chip">primaryKeys</span></div>
@@ -449,12 +496,23 @@
       <h2>Relaciones de lectura — <code>data/db/relations/</code></h2>
       <article class="file" id="f-songwithrelations">
         <header><span class="path">data/db/relations/SongWithRelations.kt</span><span class="role">POJO de relación</span></header>
-        <p>Junta en un solo objeto una <code>SongEntity</code> con sus listas de <code>ArtistEntity</code> y <code>AlbumEntity</code>, resueltas a través de las tablas de cruce. Es lo que Room devuelve al leer, y luego se convierte al modelo de dominio <code>Song</code>.</p>
+        <p>Junta en un solo objeto una <code>SongEntity</code> con sus listas de <code>ArtistEntity</code>, <code>AlbumEntity</code> y <code>ProducerEntity</code>, resueltas a través de las tablas de cruce. Es lo que Room devuelve al leer, y luego se convierte al modelo de dominio <code>Song</code>.</p>
         <aside class="concept">
           <span class="tag">Room · @Embedded, @Relation y @Junction</span>
           <p><code>@Embedded</code> mete las columnas de la canción «en plano» dentro del objeto. <code>@Relation</code> le dice a Room que rellene una lista con las entidades relacionadas, y <code>@Junction</code> indica la tabla de cruce por la que pasar. Room hace las consultas y el emparejamiento por ti.</p>
         </aside>
         <div class="uses"><span class="chip">@Embedded</span><span class="chip">@Relation</span><span class="chip">@Junction</span></div>
+      </article>
+
+      <article class="file" id="f-summaryrows">
+        <header><span class="path">data/db/relations/Summaries.kt</span><span class="role">POJOs de salida de consultas</span></header>
+        <p>Lo que devuelven las consultas de agregación que alimentan las pestañas de Álbumes, Artistas y Productores: <code>AlbumSummaryRow</code>, <code>PersonSummaryRow</code> y <code>TrackPosition</code>.</p>
+        <aside class="concept">
+          <span class="tag">Room · POJOs de salida</span>
+          <p>Una <code>@Query</code> no tiene por qué devolver una entidad: puede devolver <b>cualquier clase</b> cuyos campos coincidan con los nombres de las columnas del <code>SELECT</code>. Room hace el emparejamiento por nombre. Se usa aquí porque lo que se pinta son <b>cuentas y sumas</b> («4 canciones», «12:41»), y calcularlas en SQLite es muchísimo más barato que traerse todas las canciones a memoria para contarlas en Kotlin.</p>
+        </aside>
+        <p>El sufijo <code>Row</code> los distingue de los modelos de dominio del mismo nombre (<code>model/Summaries.kt</code>); los mappers convierten unos en otros.</p>
+        <p class="note">Los campos <code>sampleSongImage</code> / <code>sampleSongPath</code> sostienen la cadena de carátulas: un álbum o un artista no son un archivo de audio, así que si no tienen imagen propia se recurre a la de una de sus canciones (ver <a href="#f-coverart">CoverArt</a>).</p>
       </article>
     </section>
 
@@ -483,10 +541,19 @@
         <h4>Qué contiene</h4>
         <ul class="tight">
           <li><code>observeSongs(): Flow&lt;List&lt;SongWithRelations&gt;&gt;</code> — la lectura reactiva que observa la interfaz.</li>
-          <li>Consultas de apoyo: <code>allSongPaths()</code>, <code>findArtistByTag()</code>, <code>findAlbumByTag()</code>.</li>
-          <li>Inserciones, <code>updateSong/Artist/Album</code>, borrado por ruta y poda de huérfanos.</li>
-          <li><code>reconcile(scanned)</code> — dentro de una transacción: inserta lo nuevo, crea/enlaza artistas y álbumes, y borra lo que ya no está en disco.</li>
+          <li><b>Resúmenes de las pestañas</b>: <code>observeAlbumSummaries(id)</code>, <code>observeArtistSummaries(id)</code> y <code>observeProducerSummaries(id)</code>. Calculan con subconsultas el nº de canciones, la duración total, el artista del álbum y la carátula de reserva. El parámetro <code>id</code> hace doble uso: con <code>null</code> devuelven la <b>lista entera</b> (la rejilla) y con un id concreto, <b>una sola ficha</b> (el detalle) — así no hay que duplicar esos SELECT tan largos.</li>
+          <li><b>Canciones de una ficha</b>: <code>observeSongsOfAlbum(id)</code> (ordenadas por nº de pista), <code>observeTrackPositions(id)</code>, <code>observeSongsOfArtist(id)</code> y <code>observeSongsOfProducer(id)</code>.</li>
+          <li>Consultas de apoyo del <b>escaneo</b>: <code>allSongPaths()</code>, <code>findArtistByTag()</code>, <code>findAlbumByTag()</code> — buscan por el nombre de la <b>etiqueta</b> del archivo.</li>
+          <li>Consultas de apoyo del <b>editor</b>: <code>findArtistByName()</code> / <code>findAlbumByTitle()</code> / <code>findProducerByName()</code> (buscan por el nombre <b>visible</b>, el editable), <code>observeArtistNames()</code> / <code>observeAlbumTitles()</code> / <code>observeProducerNames()</code> para el autocompletado y <code>trackNumberOf()</code> / <code>discNumberOf()</code>.</li>
+          <li>Inserciones, <code>updateSong/Artist/Album/Producer</code>, desenlazado (<code>clearSongArtists/Albums/Producers</code>), borrado por ruta y poda de huérfanos (<code>pruneOrphanArtists/Albums/Producers</code>).</li>
+          <li><code>reconcile(scanned)</code> — dentro de una transacción: inserta lo nuevo, crea/enlaza artistas, álbumes y productores, y borra lo que ya no está en disco.</li>
+          <li><code>saveSongEdits(...)</code> — el guardado del editor, también en una transacción (ver abajo).</li>
         </ul>
+        <h4>Cómo guarda el editor: <code>saveSongEdits()</code></h4>
+        <p>Actualiza la fila de la canción y <b>rehace desde cero</b> sus enlaces con artistas y álbumes. Va todo en una sola <code>@Transaction</code> porque, si no, existiría un instante en el que la canción se ha quedado sin artistas — y como la interfaz observa la base de datos, lo pintaría.</p>
+        <p>Los nombres que escribe el usuario <b>reenlazan</b>: se busca la entidad con ese nombre y, si no existe, se crea. <b>Nunca se renombra</b> un artista o álbum existente, porque eso afectaría a todas las demás canciones que cuelgan de él (renombrar será cosa de sus propios editores). Por eso <code>resolveArtist()</code> busca primero por nombre visible y solo después por etiqueta: así un artista ya renombrado se reutiliza en vez de duplicarse.</p>
+        <p>Lo mismo vale para los <b>productores</b>, con una diferencia: si el usuario vacía el campo, la canción se queda sin ninguno. Al contrario que artista y álbum, aquí <b>no se inventa un «Productor desconocido»</b>, porque llenaría la pestaña de ruido; por eso el escáner tampoco crea uno cuando la etiqueta no trae compositor.</p>
+        <p class="note">Detalle fácil de olvidar: la pista y el disco viven en la tabla de cruce <code>song_album</code>, así que hay que volver a escribirlos al recrear los enlaces o se perderían. Al final se podan los artistas y álbumes de los que ya no cuelga nada.</p>
         <h4>La regla de oro de <code>reconcile()</code></h4>
         <pre><span class="c">// Si la canción ya existe, NO se toca: las ediciones del usuario mandan.</span>
 <span class="k">if</span> (s.filePath <span class="k">in</span> existing) <span class="k">continue</span></pre>
@@ -496,19 +563,21 @@
 
       <article class="file" id="f-database">
         <header><span class="path">data/db/UltiMusicDatabase.kt</span><span class="role">@Database · SQLite interna</span></header>
-        <p>Declara la base de datos: sus 6 tablas, la versión y los conversores. Vive en el almacenamiento interno (<code>/data/data/&lt;paquete&gt;/databases/ultimusic.db</code>) y es la <b>única fuente de verdad</b> de los modelos.</p>
+        <p>Declara la base de datos: sus <b>8 tablas</b>, la versión (<b>v2</b>) y los conversores. Vive en el almacenamiento interno (<code>/data/data/&lt;paquete&gt;/databases/ultimusic.db</code>) y es la <b>única fuente de verdad</b> de los modelos.</p>
         <p>Su <code>companion object</code> ofrece <code>get(context)</code>, que construye la base de datos <b>una sola vez</b> (patrón singleton con doble comprobación) y la reutiliza.</p>
         <aside class="concept">
           <span class="tag">Room · migraciones y fallbackToDestructiveMigration</span>
           <p>Cuando cambias la estructura de las tablas, subes la <code>version</code> y das una «migración» que transforma los datos viejos. Durante el desarrollo se usa <code>fallbackToDestructiveMigration</code>: si el esquema cambió, <b>recrea</b> la base de datos desde cero (se pierden los datos de prueba). Antes de publicar habrá que escribir migraciones reales.</p>
         </aside>
+        <p class="note">La <b>v2</b> es la que saca al productor de la tabla de canciones y le da tabla propia (<code>producers</code>) más su cruce (<code>song_producer</code>). Como todavía se usa <code>fallbackToDestructiveMigration</code>, al instalar esta versión la base de datos se recrea vacía y hay que dejar que reescanee.</p>
         <div class="uses"><span class="chip">@Database</span><span class="chip">RoomDatabase</span><span class="chip">@TypeConverters</span></div>
       </article>
 
       <article class="file" id="f-mappers">
         <header><span class="path">data/db/Mappers.kt</span><span class="role">funciones de conversión</span></header>
         <p>Traduce las entidades/relaciones de Room a los modelos de dominio (<code>SongWithRelations.toDomain()</code> → <code>Song</code>, etc.). Así la interfaz sigue hablando de <code>Song</code>/<code>Album</code>/<code>Artist</code> sin saber que por debajo hay Room.</p>
-        <p class="note">En la lista de canciones, los artistas del álbum se dejan vacíos a propósito (ahí solo se necesita el título); el flujo dedicado de álbumes los poblará.</p>
+        <p>También convierte los POJOs de agregación (<code>AlbumSummaryRow</code> / <code>PersonSummaryRow</code>) en sus modelos de dominio, agrupando de paso los tres campos de imagen en un <code>CoverRef</code>.</p>
+        <p class="note">En la lista de canciones, los artistas del álbum se dejan vacíos a propósito (ahí solo se necesita el título); la pestaña de Álbumes usa <code>AlbumSummary</code>, que ya trae el nombre del artista calculado por su propia consulta.</p>
       </article>
     </section>
 
@@ -522,7 +591,14 @@
         <ul class="tight">
           <li><code>songs: Flow&lt;List&lt;Song&gt;&gt;</code> — la lista reactiva ya en modelos de dominio.</li>
           <li><code>reconcile()</code> — escanea el disco (lento, fuera de transacción) y delega en el DAO la conciliación.</li>
-          <li><code>updateSong / updateArtist / updateAlbum</code> — ediciones que se reflejan al instante vía el Flow.</li>
+          <li><code>albums</code> / <code>artists</code> / <code>producers</code> — las tres listas reactivas de resúmenes que alimentan sus pestañas.</li>
+          <li><code>album(id)</code> / <code>artist(id)</code> / <code>producer(id)</code> — la ficha de uno solo, para la pantalla de detalle.</li>
+          <li><code>albumTracks(id)</code> — las canciones de un álbum <b>con su nº de pista</b>. Como el número vive en la tabla de cruce y la relación de la canción no lo arrastra, se pide en una segunda consulta y ambas se unen con <code>combine</code>: cada vez que cualquiera de los dos flujos emite, se recalcula la lista.</li>
+          <li><code>artistSongs(id)</code> / <code>producerSongs(id)</code> — sus canciones (aquí no hay nº de pista que enseñar: vienen de álbumes distintos).</li>
+          <li><code>updateSong / updateArtist / updateAlbum / updateProducer</code> — ediciones que se reflejan al instante vía el Flow.</li>
+          <li><code>saveSongEdits(...)</code> — el guardado completo del <a href="#editor">editor de metadatos</a> (fila + reenlazado de artistas, álbumes y productores).</li>
+          <li><code>artistNames</code> / <code>albumTitles</code> / <code>producerNames</code> — nombres existentes para el autocompletado; <code>trackAndDisc(songId)</code> para los campos de pista y disco.</li>
+          <li><code>importCoverImage(uri, songId)</code> / <code>deleteCoverImage(name)</code> — copia la portada elegida por el usuario a la carpeta privada de la app (<code>filesDir/covers/</code>) y devuelve su nombre, que es lo que se guarda en <code>imageName</code>. Se copia en vez de guardar la URI del sistema porque esa URI es un permiso temporal: la portada se rompería si el usuario mueve o borra la foto.</li>
           <li><code>exportDatabaseCopy()</code> — copia la base de datos a <code>~/UltiMusic/databases</code>.</li>
         </ul>
         <aside class="concept">
@@ -534,10 +610,37 @@
       </article>
     </section>
 
+    <!-- ================= PLAYLISTS EN DISCO ================= -->
+    <section id="playlists-data">
+      <h2>Playlists en disco — <code>data/playlist/</code></h2>
+      <p class="section-intro">Las listas de reproducción son la única parte de la biblioteca que <b>no</b> vive en Room, sino en <b>archivos de texto</b>. Se decidió así porque una playlist es, conceptualmente, un documento del usuario: debe poder verse y editarse desde fuera de la app y sobrevivir a reinstalaciones sin tocar la base de datos.</p>
+
+      <article class="file" id="f-playlistrepo">
+        <header><span class="path">data/playlist/PlaylistRepository.kt</span><span class="role">object · almacén de playlists</span></header>
+        <p>Guarda y lee las playlists de <code>~/UltiMusic/Playlists</code>. Cada playlist es un archivo <code>&lt;nombre&gt;.txt</code>: el <b>nombre del archivo</b> (sin la extensión) es el nombre de la lista, y su <b>contenido</b> es un nombre de archivo de canción por línea, en orden de reproducción (solo el «basename»: <code>cancion.mp3</code>, no la ruta entera).</p>
+        <h4>Qué ofrece</h4>
+        <ul class="tight">
+          <li><code>listPlaylistNames()</code> — los nombres de todas las playlists (archivos <code>.txt</code>), ordenados.</li>
+          <li><code>readFilenames(name)</code> / <code>setFilenames(name, list)</code> — leer y reescribir el archivo entero. Se reescribe completo (en vez de parchear líneas) porque es más simple y seguro; es lo que usa la reordenación por arrastre.</li>
+          <li><code>createPlaylist</code> / <code>deletePlaylist</code> / <code>renamePlaylist</code> — crear (archivo vacío), borrar y renombrar (renombra el archivo). Rechazan nombres con <code>/</code> o <code>\</code>, que romperían el mapeo nombre↔archivo.</li>
+          <li><code>addSong</code> / <code>removeSong</code> — añaden al final (si no estaba) o quitan una canción.</li>
+          <li><code>filenamesInAnyPlaylist()</code> — la unión de todas las líneas de todas las playlists; alimenta el <b>resaltado amarillo</b> de la pestaña de Canciones.</li>
+          <li><code>playlistsContaining(filename)</code> — en qué playlists está una canción; marca las casillas del diálogo de «Añadir a playlist».</li>
+          <li><code>resolveSongs(name, byFilename)</code> — convierte los nombres de archivo de una playlist en objetos <code>Song</code> reales, en orden, usando un índice <code>basename → Song</code> que arma quien llama (a partir de la biblioteca cargada). Las entradas cuyo archivo ya no existe se descartan.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Concepto · archivos no reactivos vs. Room</span>
+          <p>Room reemite un <code>Flow</code> solo cuando cambia una tabla; un <code>File</code> no avisa a nadie cuando se modifica. Por eso, quien observa las playlists (el <a href="#f-playlistsvm">PlaylistsViewModel</a>) debe <b>volver a leer</b> tras cada cambio: mantiene un contador («tick») que incrementa al mutar y que fuerza el recálculo.</p>
+        </aside>
+        <p class="note">Limitación asumida por diseño: como el modelo pide guardar «los nombres de los archivos», se casa por <b>basename</b>. Si dos archivos en carpetas distintas se llaman igual, gana el que esté en el índice.</p>
+        <div class="uses"><span class="chip">File</span><span class="chip">Environment</span><span class="chip">Dispatchers.IO</span><span class="chip">runCatching</span></div>
+      </article>
+    </section>
+
     <!-- ================= UI ================= -->
     <section id="ui">
       <h2>Interfaz — <code>ui/</code></h2>
-      <p class="section-intro">Las pantallas. La app tiene una Activity con pestañas; de momento solo la de Canciones está implementada y el resto son marcadores de posición.</p>
+      <p class="section-intro">Las pantallas. La app tiene una Activity con pestañas; están implementadas <b>Canciones, Álbumes, Artistas y Productores</b>, y Géneros y Listas siguen siendo marcadores de posición.</p>
 
       <article class="file" id="f-mainactivity">
         <header><span class="path">ui/MainActivity.kt</span><span class="role">Activity principal</span></header>
@@ -549,6 +652,7 @@
           <li><code>onResume</code> — al volver a la app, recarga la lista si hay permiso.</li>
           <li><code>onStop</code> — al pasar a segundo plano, lanza <code>exportDatabaseCopy()</code> en un <code>appScope</code> propio (para que termine aunque la Activity muera).</li>
           <li>El mini-reproductor observa el estado del <code>PlayerViewModel</code> con <code>repeatOnLifecycle</code>. Su barra de progreso es un <code>SeekBar</code>: tocarla o arrastrarla llama a <code>seekToFraction</code> (con una bandera <code>userSeeking</code> para que la actualización periódica no pise la posición mientras el usuario la mueve). Se dibuja como una línea sin thumb, de borde a borde (con <code>paddingStart</code>/<code>paddingEnd</code> a 0 — el estilo del <code>SeekBar</code> los define y tienen prioridad sobre <code>android:padding</code>) y con grosor propio vía <code>seekbar_line</code> (la pista por defecto tiene altura fija y no engorda con <code>layout_height</code>).</li>
+          <li><code>setupDynamicColor()</code> — observa <code>playerViewModel.accentColor</code> y tiñe con él <b>todo lo que antes era amarillo fijo</b>: el indicador y el texto de la pestaña activa, la barra de progreso y los botones del mini-reproductor. Mientras no suena nada, ese color <i>es</i> el amarillo de siempre, así que la app arranca igual que antes. Ver <a href="#f-dynamiccolor">DynamicColor</a>.</li>
           <li>La <b>flecha «expandir»</b> (abajo a la izquierda) abre la ventana del iPod: <code>IPodNanoDialogFragment().show(...)</code>. Se <b>oculta</b> (<code>isVisible = song != null</code>) cuando no hay nada en reproducción, porque no hay reproductor que expandir.</li>
         </ul>
         <aside class="concept">
@@ -560,7 +664,8 @@
 
       <article class="file" id="f-pager">
         <header><span class="path">ui/MainPagerAdapter.kt</span><span class="role">FragmentStateAdapter</span></header>
-        <p>Decide qué Fragment mostrar en cada pestaña: la posición 0 es <code>SongsFragment</code> (real); el resto, <code>PlaceholderFragment</code> con el nombre de la pestaña.</p>
+        <p>Decide qué Fragment mostrar en cada pestaña: <code>0 → SongsFragment</code>, <code>1 → AlbumsFragment</code>, <code>2 → PeopleFragment(ARTIST)</code>, <code>3 → PeopleFragment(PRODUCER)</code>; el resto (Géneros, Listas), <code>PlaceholderFragment</code> con el nombre de la pestaña.</p>
+        <p class="note">Artistas y Productores son <b>el mismo fragmento</b> con un argumento distinto, porque se tratan igual.</p>
         <div class="uses"><span class="chip">ViewPager2</span><span class="chip">FragmentStateAdapter</span></div>
       </article>
 
@@ -593,6 +698,9 @@
           <li><code>next()</code> — avanza en la cola 1; si se agota, mueve <code>cola2[0]</code> al final de la cola 1 y lo reproduce. <code>previous()</code> retrocede en la cola 1.</li>
           <li><code>jumpTo(d)</code> — salto desde la vista de cola del iPod, que muestra la lista <b>combinada</b> cola 1 + cola 2 (<code>d</code> es el índice combinado). Equivale a pulsar <b>siguiente/anterior</b> las veces necesarias: si la pinchada ya está en la cola 1 solo mueve el índice; si está en la cola 2, arrastra a la cola 1 todo lo que hay hasta ella (que pasa a ser historial), igual que ir pulsando «siguiente».</li>
           <li><code>seekToFraction(f)</code> — salta a un punto de la canción actual (fracción 0..1 de su duración); lo usan las barras deslizables del mini-reproductor y del iPod.</li>
+          <li><code>accentColor: StateFlow&lt;Int&gt;</code> — el <b>color de acento de toda la app</b>, sacado de la carátula de lo que suena (ver <a href="#f-dynamiccolor">DynamicColor</a>). Se recalcula en <code>playCurrent()</code>; el cálculo anterior se <b>cancela</b> (<code>accentJob</code>) para que, si el usuario pasa canciones rápido, el análisis de una portada vieja no termine después que el de la actual y deje el color equivocado.</li>
+          <li><b>Colecciones</b> (fichas de álbum/artista/productor, y playlists): <code>playCollection(collection, startIndex, playlistName = null)</code> y <code>shuffleCollection(collection, playlistName = null)</code>. Usan una lógica <b>distinta</b> a la de la pestaña de Canciones: allí se pincha un tema suelto y el resto de la biblioteca pasa a la cola 2 mezclada, porque no hay un «después» natural; aquí sí lo hay —el álbum entero, en orden—, así que la colección ocupa la <b>cola 1 completa</b> y la cola 2 se queda vacía. Al acabar el último tema, se para. Es lo que uno espera al poner un disco.</li>
+          <li><code>currentPlaylistName: StateFlow&lt;String?&gt;</code> — el nombre de la playlist cuya colección ocupa ahora la cola 1, o <code>null</code> si lo que suena no viene de una playlist (canción suelta, álbum, artista, productor…). Se fija al llamar a <code>playCollection</code>/<code>shuffleCollection</code> con el parámetro <code>playlistName</code> (solo lo pasa el <a href="#f-ipoddialog">iPod en modo navegación</a>) y se limpia a <code>null</code> en <code>play(song, allSongs)</code> (la reproducción de la pestaña Canciones). Sirve para que, al reabrir una playlist que ya es la que suena, el iPod entre directamente en modo normal en vez de en modo navegación.</li>
           <li><code>playRandom(songs)</code> (pasa por <code>play</code>), <code>togglePlayPause()</code>, <code>seekToFraction(f)</code> (mueve la reproducción a la fracción 0..1 de la duración; lo usan las barras deslizables), y <code>playCurrent()</code> privada: <b>único</b> sitio que carga ExoPlayer.</li>
           <li><b>Contrato:</b> el sistema de dos colas es la lógica de reproducción <b>exclusiva de «Canciones»</b> (<code>SongsFragment</code>). Solo desde ahí se construye la cola (<code>play</code>/<code>playRandom</code>/<code>addToQueue</code>); los demás fragmentos usarán otra lógica y no deben llamar a esos métodos.</li>
           <li>Un bucle actualiza el progreso cada 500 ms; <code>onCleared()</code> libera el reproductor.</li>
@@ -613,20 +721,24 @@
         <p>La pantalla de la lista. Crea el <code>RecyclerView</code> con su <code>SongsAdapter</code>, observa <code>songsViewModel.songs</code> y <code>loading</code>, y muestra la lista, el spinner o el mensaje de vacío según toque.</p>
         <ul class="tight">
           <li>Obtiene los ViewModels con <code>activityViewModels()</code> para compartirlos con la Activity.</li>
-          <li>Al pulsar «Escoger al azar» → <code>playerViewModel.playRandom(...)</code>; al pulsar una canción → <code>play(song, songs)</code> (crea las dos colas); en el menú de 3 puntos → <code>addToQueue(song)</code>.</li>
+          <li>Al pulsar una canción → <code>play(song, songs)</code> (crea las dos colas); en el menú de 3 puntos → <code>addToQueue(song)</code>, abrir el diálogo de <a href="#f-addtoplaylist">añadir a playlist</a>, o abrir el <a href="#editor">editor de metadatos</a> con <code>MetadataEditorDialogFragment.newInstance(song.id).show(...)</code>.</li>
+          <li>Observa <code>playlistsViewModel.songFilenamesInAnyPlaylist</code> (qué canciones ya están en alguna playlist) y <code>playerViewModel.accentColor</code>, y se los pasa al adaptador para el <b>resaltado amarillo</b> de los 3 puntos. Al pulsar «Añadir a playlist», lee en una corrutina qué playlists existen y en cuáles ya está la canción, y abre el diálogo con esos datos.</li>
         </ul>
-        <div class="uses"><span class="chip">Fragment</span><span class="chip">RecyclerView</span><span class="chip">activityViewModels()</span></div>
+        <div class="uses"><span class="chip">Fragment</span><span class="chip">RecyclerView</span><span class="chip">activityViewModels()</span><span class="chip">PlaylistRepository</span></div>
       </article>
 
       <article class="file" id="f-songsadapter">
         <header><span class="path">ui/songs/SongsAdapter.kt</span><span class="role">RecyclerView.Adapter</span></header>
-        <p>Dibuja la lista con dos tipos de fila: la cabecera «Escoger al azar» (posición 0) y una fila por canción.</p>
+        <p>Dibuja una fila por canción: título, subtítulo «artista | álbum» y la carátula (vía <code>CoverArt</code> + Coil).</p>
         <ul class="tight">
-          <li><code>getItemViewType</code> distingue cabecera de canción; <code>onCreateViewHolder</code> infla el layout adecuado.</li>
-          <li><code>SongViewHolder.bind</code> pone título, subtítulo «artista | álbum» y la carátula (vía <code>CoverArt</code> + Coil).</li>
-          <li>El botón de <b>3 puntos</b> abre un <code>PopupMenu</code> (recurso <code>menu_song_item.xml</code>) con una única opción, «Añadir a cola de reproducción», que dispara el callback <code>onAddToQueue</code>.</li>
+          <li><code>SongViewHolder.bind</code> rellena la fila. El botón de <b>3 puntos</b> abre un <code>PopupMenu</code> (recurso <code>menu_song_item.xml</code>) con tres opciones, en orden: «Añadir a cola de reproducción» (<code>onAddToQueue</code>), «Añadir a playlist» (<code>onAddToPlaylist</code>) y «Editar metadatos» (<code>onEditMetadata</code>). El adaptador no sabe qué hacen: solo avisa, y quien decide es <code>SongsFragment</code>.</li>
+          <li><b>Resaltado de recomendación</b>: si la canción no está en <b>ninguna</b> playlist, tanto los 3 puntos como la opción «Añadir a playlist» se pintan con el color de acento (el amarillo dinámico). El adaptador lo sabe por <code>setMembership(filenames)</code> (los basenames que sí están en alguna playlist) y <code>setAccent(color)</code>. El texto del menú se colorea con un <code>SpannableString</code> + <code>ForegroundColorSpan</code>, y los 3 puntos con <code>ImageViewCompat.setImageTintList</code>.</li>
           <li><code>submit(list)</code> recibe la lista nueva y refresca.</li>
         </ul>
+        <aside class="concept">
+          <span class="tag">Android · SpannableString</span>
+          <p>Un menú de Android no deja fijar el color de un ítem por atributo. Para colorear solo una opción se envuelve su texto en un <b>SpannableString</b> y se le aplica un <b>ForegroundColorSpan</b> sobre todo el rango: es texto «con formato» donde cada tramo puede llevar su color, negrita, etc.</p>
+        </aside>
         <aside class="concept">
           <span class="tag">Concepto · ViewHolder y tipos de vista</span>
           <p>Un <b>ViewHolder</b> guarda las referencias a las vistas de una fila para no buscarlas cada vez (caro). Cuando una lista mezcla filas distintas (cabecera vs. canción), <code>getItemViewType</code> permite crear y rellenar cada tipo por separado.</p>
@@ -636,11 +748,12 @@
 
       <article class="file" id="f-placeholder">
         <header><span class="path">ui/common/PlaceholderFragment.kt</span><span class="role">Fragment temporal</span></header>
-        <p>Marcador de posición para las pestañas aún sin implementar (Álbumes, Artistas, Géneros…): solo muestra el nombre de la pestaña.</p>
+        <p>Marcador de posición para la única pestaña aún sin implementar (Géneros): solo muestra el nombre de la pestaña.</p>
       </article>
 
       <h3 id="ipod">Ventana del iPod — <code>ui/player/</code></h3>
       <p>Al pulsar la flecha del mini-reproductor sube desde abajo una ventana a pantalla completa con forma de <b>iPod Nano</b> que cubre la app. Muestra la carátula (o la cola), el progreso, el título/artista/álbum/año y una rueda «click-wheel» con los controles. Al pulsar la «X» baja y se destruye.</p>
+      <p class="note">Tiene <b>dos modos</b>: el <b>normal</b> (expandido desde el mini-reproductor, refleja lo que suena) y el de <b>navegación de playlist</b> (abierto desde la pestaña de Listas, muestra el contenido de esa playlist para que el usuario elija qué sonará después). En ambos modos el recuadro de info, la carátula, el play/pausa, el progreso y el color de acento reflejan <b>siempre</b> lo que suena de verdad en la app, venga de donde venga; el modo navegación solo cambia qué lista se ve en el recuadro superior. Ver el modo navegación más abajo.</p>
 
       <article class="file" id="f-ipoddialog">
         <header><span class="path">ui/player/IPodNanoDialogFragment.kt</span><span class="role">DialogFragment · reproductor a pantalla completa</span></header>
@@ -656,6 +769,22 @@
           <li>La <b>rueda</b> ocupa todo el espacio que sobra (<code>layout_weight="1"</code>) pero se mantiene circular: es un <code>ConstraintLayout</code> con lados iguales (<code>layout_constraintDimensionRatio="1:1"</code>) centrado, así que crece hasta el mayor círculo que quepa; el círculo central escala con <code>layout_constraintWidth_percent</code>.</li>
           <li><code>metaLine(song)</code> construye «Artista · Álbum · Año» <b>omitiendo el año si es nulo</b> (para no mostrar «· null»).</li>
         </ul>
+        <h4>Modo navegación de playlist</h4>
+        <p>Se entra con <code>newInstance(nombrePlaylist)</code> (lo abre la pestaña de <a href="#playlists">Listas</a>), <b>salvo</b> que esa playlist ya sea la que suena ahora mismo (<code>PlayerViewModel.currentPlaylistName</code> coincide con el nombre): en ese caso se abre directamente en modo normal, porque no tiene sentido "elegir" algo que ya está sonando.</p>
+        <ul class="tight">
+          <li>Un flag <code>browsing</code> solo afecta al colector de la <b>cola combinada</b> (cola 1 + cola 2): se salta mientras se navega, porque el recuadro superior lo ocupa la lista de la playlist en vez de la cola real. El resto de colectores (<code>currentSong</code>, <code>isPlaying</code>, <code>progress</code>, <code>accentColor</code>) <b>no</b> se gobiernan por este flag: siguen pintando lo que suena de verdad aunque la ventana esté en modo navegación, para no fingir nunca que «no hay nada sonando» si en realidad sí suena algo (de esta playlist, de otra, o de una canción suelta reproducida desde Canciones/Álbumes/etc.).</li>
+          <li>El recuadro superior muestra la <b>lista</b> de la playlist (con <a href="#f-playlistqueueadapter">PlaylistQueueAdapter</a>) en lugar de la carátula, para poder hacer scroll y pinchar.</li>
+          <li>Las <b>3 rayas</b>, las <b>flechas</b> y el <b>cursor</b> dependen de si la canción que suena de verdad está en esta playlist (<code>PlaylistQueueAdapter.containsNowPlaying()</code>, revisado en la función local <code>refreshBrowseControls()</code> cada vez que cambia la canción real):
+            <ul class="tight">
+              <li><b>No</b> está → selección pura: 3 rayas es el icono de <b>aleatorio</b> (<code>ic_shuffle</code>, reproduce una canción al azar de la playlist) y las flechas mueven el <b>cursor</b> (<code>selectedIndex</code>) por la lista sin reproducir nada (solo resalta la fila).</li>
+              <li><b>Sí</b> está → no tiene sentido "elegir" nada, ya se está reflejando lo que realmente suena: 3 rayas alterna el recuadro superior entre carátula y lista (como en modo normal), y las flechas van a la canción anterior/siguiente <b>de esta playlist</b> (calculado con <code>nowPlayingIndex() ± 1</code>) — <b>no</b> a <code>previous()</code>/<code>next()</code> del <code>PlayerViewModel</code>, porque esos operan sobre la cola real genérica, que puede ser una colección totalmente distinta (p.ej. si sonaba una canción suelta desde Canciones, su "siguiente" real sería cualquier canción al azar de la biblioteca, no la de esta lista). Para ir a la fila de al lado se hace lo mismo que al pincharla: <code>playCollection(currentSongs(), índice, name)</code>, saliendo de la navegación. El cursor pasa a seguir siempre a la fila que suena.</li>
+            </ul>
+          </li>
+          <li>Al cargar la playlist, si la canción que suena de verdad está en ella, el cursor arranca en su fila (no siempre en la primera). El recuadro de info, la carátula, el play/pausa y la barra de progreso siempre son los de la reproducción real, nunca los de la fila del cursor.</li>
+          <li>Elegir una fila o pulsar play normalmente llama a <code>playCollection</code>/<code>shuffleCollection</code> del <code>PlayerViewModel</code> pasándole el <b>nombre de la playlist</b> (una playlist es una <b>cola única</b>: ocupa la cola 1 y la cola 2 queda vacía; el nombre se guarda en <code>currentPlaylistName</code>), <b>interrumpiendo lo que sonara antes</b>. Pone <code>browsing = false</code>, cancela la corrutina que mantenía el altavoz/menú al día (<code>browseJob</code>), restaura los controles normales y la ventana pasa a ser el reproductor de siempre. <b>Excepción</b>: si la fila pinchada (o la del cursor, al pulsar play) es justo la que ya suena de verdad (<code>isRowNowPlaying</code>/<code>isSelectedNowPlaying</code>), reiniciarla no tendría sentido, así que en su lugar solo se alterna pausa/reproducción (<code>togglePlayPause</code>) sin salir de la navegación.</li>
+          <li>La barra de progreso (arrastrar/soltar) también funciona en modo navegación: siempre controla la reproducción real, esté o no la ventana navegando una playlist.</li>
+          <li><b>Reordenar</b>: cada fila lleva un manejador de arrastre; un <code>ItemTouchHelper</code> (solo vertical, iniciado desde el manejador) reordena en memoria y, al soltar, persiste el nuevo orden en el archivo con <code>playlistsViewModel.reorder(name, ...)</code>.</li>
+        </ul>
         <aside class="concept">
           <span class="tag">Android · DialogFragment y animación de ventana</span>
           <p>Un <b>DialogFragment</b> es un Fragment que se muestra como diálogo (una ventana propia encima de la pantalla). Dándole un tema con <code>windowAnimationStyle</code>, el sistema anima solo su <b>entrada</b> (sube) al mostrarlo y su <b>salida</b> (baja) al cerrarlo, sin tener que coordinar la animación a mano. Se usa <code>viewLifecycleOwner</code> al observar los Flows para no filtrar memoria al cerrar.</p>
@@ -670,14 +799,216 @@
         <div class="uses"><span class="chip">RecyclerView</span><span class="chip">ViewHolder</span></div>
       </article>
 
+      <article class="file" id="f-playlistqueueadapter">
+        <header><span class="path">ui/player/PlaylistQueueAdapter.kt</span><span class="role">RecyclerView.Adapter · lista editable de la playlist</span></header>
+        <p>La lista que el iPod muestra en <b>modo navegación</b>: es una lista <b>elegible y editable</b>, con un <b>manejador de arrastre</b> (flecha arriba/abajo) y la fila del cursor resaltada con un fondo tenue. En la numeración de cada fila se comporta como <a href="#f-ipodqueueadapter">IPodQueueAdapter</a> cuando puede: si la canción que suena de verdad en la app (venga de esta playlist o de otro sitio) está entre estas, esa fila lleva el <b>icono de altavoz</b> y el resto se numeran <b>relativos</b> a ella (negativos y en gris los ya sonados); si no, cada fila muestra sencillamente su <b>posición absoluta</b> (1, 2, 3…). <code>setNowPlaying(filePath)</code> hace esa comprobación por ruta de archivo (recalculándose también tras reordenar, ya que el índice de la fila puede cambiar) y repinta.</p>
+        <ul class="tight">
+          <li><code>setSelected(index)</code> — mueve el resaltado (al cambiar el cursor con las flechas) repintando solo la fila vieja y la nueva, sin recargar toda la lista.</li>
+          <li><code>moveItem(from, to)</code> — reordena en memoria mientras se arrastra; <code>commitReorder()</code> avisa del orden final al soltar, para persistirlo.</li>
+          <li>Callbacks: <code>onItemClick</code> (reproducir esa fila), <code>onStartDrag</code> (arrancar el arrastre desde el manejador) y <code>onReordered</code> (guardar el nuevo orden).</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · ItemTouchHelper</span>
+          <p><b>ItemTouchHelper</b> es el ayudante estándar para arrastrar y deslizar filas de un <code>RecyclerView</code>. Se le da un <code>SimpleCallback</code> con las direcciones permitidas (aquí solo arriba/abajo) y avisa en <code>onMove</code> de cada paso del arrastre y en <code>clearView</code> cuando se suelta. Aquí el arrastre no se inicia con pulsación larga sino tocando el manejador, que llama a <code>startDrag</code>.</p>
+        </aside>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">ItemTouchHelper</span><span class="chip">ViewHolder</span></div>
+      </article>
+
+      <h3 id="playlists">Listas de reproducción — <code>ui/playlists/</code></h3>
+      <p>La pestaña de playlists y lo que la rodea. Una playlist es una <b>cola de reproducción de una sola cola</b> guardada en disco (ver <a href="#f-playlistrepo">PlaylistRepository</a>). La pestaña las lista; al abrir una se muestra el <a href="#f-ipoddialog">iPod en modo navegación</a>.</p>
+
+      <article class="file" id="f-playlistsvm">
+        <header><span class="path">ui/playlists/PlaylistsViewModel.kt</span><span class="role">AndroidViewModel · estado de las playlists</span></header>
+        <p>Vive en el ámbito de la <b>Activity</b> (<code>by activityViewModels()</code>) porque lo comparten la pestaña de Playlists, el diálogo de «añadir a playlist» y la pestaña de Canciones (que necesita saber qué canciones ya están en alguna playlist para el resaltado).</p>
+        <ul class="tight">
+          <li><code>playlists: StateFlow&lt;List&lt;PlaylistSummary&gt;&gt;</code> — combina un contador <b>tick</b> con la lista de canciones de la biblioteca (<code>library.songs</code>) para, por cada archivo de playlist, resolver sus canciones y calcular recuento y duración total.</li>
+          <li><code>songFilenamesInAnyPlaylist: StateFlow&lt;Set&lt;String&gt;&gt;</code> — los basenames presentes en cualquier playlist, para el resaltado amarillo de Canciones.</li>
+          <li><code>create / rename / delete / addSong / removeSong / reorder</code> — delegan en el repositorio en una corrutina y, al terminar, incrementan el <b>tick</b> para que los flujos derivados se recalculen. <code>refresh()</code> hace lo mismo (se llama al volver a la pestaña, por si se editó un archivo desde fuera).</li>
+          <li><code>songIndex()</code> — un índice <code>basename → Song</code> de la biblioteca actual, que el iPod usa para resolver una playlist al abrirla.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Kotlin · mapLatest y el «tick»</span>
+          <p>Como los archivos no reemiten solos, se usa un <code>MutableStateFlow&lt;Int&gt;</code> (el «tick») como <b>disparador</b>: cada cambio lo incrementa y los flujos que dependen de él (con <code>combine</code> + <code>mapLatest</code>) vuelven a leer disco. <code>mapLatest</code> cancela el cálculo anterior si llega otro antes de acabar.</p>
+        </aside>
+        <div class="uses"><span class="chip">AndroidViewModel</span><span class="chip">StateFlow</span><span class="chip">combine</span><span class="chip">mapLatest</span><span class="chip">PlaylistRepository</span></div>
+      </article>
+
+      <article class="file" id="f-playlistsfragment">
+        <header><span class="path">ui/playlists/PlaylistsFragment.kt</span><span class="role">Fragment · pestaña Listas</span></header>
+        <p>Lista las playlists (misma apariencia que Artistas/Productores pero <b>sin imágenes</b>) y las gestiona.</p>
+        <ul class="tight">
+          <li>Observa <code>viewModel.playlists</code> y las pinta con <a href="#f-playlistsadapter">PlaylistsAdapter</a>; muestra el mensaje de vacío si no hay ninguna.</li>
+          <li>El botón <b>«+»</b> flotante (<code>FloatingActionButton</code>) abre un diálogo con un campo de texto para crear una playlist vacía.</li>
+          <li>Al pinchar una fila → abre el iPod en modo navegación (<code>IPodNanoDialogFragment.newInstance(nombre)</code>). Desde el menú de 3 puntos de cada fila → renombrar (diálogo de texto) o borrar (diálogo de confirmación que aclara que no se tocan los archivos de audio).</li>
+          <li><code>showNameDialog(...)</code> es el diálogo de «escribe un nombre» reutilizable: desactiva el botón de aceptar mientras el campo esté vacío.</li>
+        </ul>
+        <div class="uses"><span class="chip">Fragment</span><span class="chip">FloatingActionButton</span><span class="chip">AlertDialog</span><span class="chip">activityViewModels()</span></div>
+      </article>
+
+      <article class="file" id="f-playlistsadapter">
+        <header><span class="path">ui/playlists/PlaylistsAdapter.kt</span><span class="role">RecyclerView.Adapter</span></header>
+        <p>Como <a href="#f-peoplefragment">PeopleAdapter</a> pero sin imagen, porque una playlist no tiene carátula propia. Cada fila enseña el nombre y, debajo, «N canciones · duración» (con <code>plurals/song_count</code> y <a href="#f-timeformat">TimeFormat</a>). El botón de 3 puntos abre el <code>PopupMenu</code> de renombrar/borrar (<code>menu_playlist_item.xml</code>).</p>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">PopupMenu</span><span class="chip">TimeFormat</span></div>
+      </article>
+
+      <article class="file" id="f-addtoplaylist">
+        <header><span class="path">ui/playlists/AddToPlaylistDialogFragment.kt</span><span class="role">DialogFragment · añadir a playlist</span></header>
+        <p>El diálogo de «Añadir a playlist» de una canción. Muestra todas las playlists con <b>casillas</b> (<code>setMultiChoiceItems</code>): marcar añade la canción a esa playlist y desmarcar la quita. Abajo, un botón «Nueva playlist…» pide un nombre, crea la lista y mete la canción en ella.</p>
+        <ul class="tight">
+          <li>La lista de playlists y qué casillas van marcadas se calculan <b>antes</b> de abrir el diálogo (en <a href="#f-songsfragment">SongsFragment</a>, que hace la lectura de disco en una corrutina) y llegan por argumentos. Así el diálogo se construye de forma síncrona y sobrevive a un giro de pantalla sin volver a tocar disco.</li>
+          <li>Las modificaciones se delegan en <a href="#f-playlistsvm">PlaylistsViewModel</a>, que refresca el estado compartido (y con él el resaltado de Canciones).</li>
+        </ul>
+        <div class="uses"><span class="chip">DialogFragment</span><span class="chip">AlertDialog</span><span class="chip">setMultiChoiceItems</span><span class="chip">activityViewModels()</span></div>
+      </article>
+
+      <h3 id="library">Álbumes, artistas y productores — <code>ui/library/</code></h3>
+      <p>Las tres pestañas de agrupación y su pantalla de detalle. <b>Álbumes</b> se ve como una rejilla de dos columnas con la carátula grande; <b>Artistas</b> y <b>Productores</b>, como una lista con la imagen circular, el nombre y cuántos álbumes y canciones tiene. Al pulsar cualquiera se abre su ficha: una cabecera <b>teñida con el color de su propia carátula</b> y, debajo, sus canciones.</p>
+      <p class="note">Regla del proyecto: <b>todo lo que se hace con los artistas se hace igual con los productores</b>. Por eso comparten fragmento, adaptador, consultas y ficha; lo único que cambia es de qué flujo leen.</p>
+
+      <article class="file" id="f-libraryvm">
+        <header><span class="path">ui/library/LibraryViewModel.kt</span><span class="role">AndroidViewModel · las tres listas</span></header>
+        <p>El equivalente de <code>SongsViewModel</code> para estas pestañas. Expone <code>albums</code>, <code>artists</code> y <code>producers</code> como <code>StateFlow</code>, sacados del repositorio con <code>stateIn</code>.</p>
+        <p>Vive en el ámbito de la <b>Activity</b> (<code>by activityViewModels()</code>): así los tres fragmentos comparten una única instancia y, sobre todo, las listas no se recalculan cada vez que el usuario desliza entre pestañas y el <code>ViewPager2</code> destruye y recrea los fragmentos.</p>
+        <p class="note">No dispara ningún escaneo: de eso se encarga <code>SongsViewModel.loadIfNeeded()</code>. Aquí solo se <i>observa</i> la base de datos, así que en cuanto la reconciliación o una edición cambian algo, las tres listas se repintan solas.</p>
+        <div class="uses"><span class="chip">StateFlow</span><span class="chip">stateIn</span><span class="chip">LibraryRepository</span></div>
+      </article>
+
+      <article class="file" id="f-albumsfragment">
+        <header><span class="path">ui/library/AlbumsFragment.kt</span><span class="role">Fragment · rejilla de álbumes</span></header>
+        <p>Pinta los álbumes en dos columnas y abre la ficha al pulsar uno.</p>
+        <aside class="concept">
+          <span class="tag">Android · GridLayoutManager</span>
+          <p>Un <code>RecyclerView</code> no sabe por sí solo si sus elementos van en lista o en cuadrícula: eso lo decide su <b>LayoutManager</b>. <code>LinearLayoutManager</code> los apila en una columna; <code>GridLayoutManager(context, 2)</code> los coloca en dos. Es el mismo RecyclerView y el mismo adaptador, solo cambia quién los coloca.</p>
+        </aside>
+        <div class="uses"><span class="chip">GridLayoutManager</span><span class="chip">activityViewModels()</span></div>
+      </article>
+
+      <article class="file" id="f-peoplefragment">
+        <header><span class="path">ui/library/PeopleFragment.kt</span><span class="role">Fragment · artistas Y productores</span></header>
+        <p><b>Un solo fragmento para las dos pestañas.</b> Cuál es se decide con un argumento (<code>PersonKind.ARTIST</code> o <code>PersonKind.PRODUCER</code>) que se pasa en el <code>Bundle</code> al crearlo con <code>newInstance(kind)</code>.</p>
+        <aside class="concept">
+          <span class="tag">Android · argumentos de un Fragment</span>
+          <p>Parametrizar un Fragment con un <code>Bundle</code> de argumentos (y no con una propiedad normal o un parámetro del constructor) es <b>obligatorio</b> en Android: cuando el sistema mata la app por falta de memoria y luego la recrea, reconstruye los fragmentos con su constructor vacío y les devuelve sus <code>arguments</code>. Una propiedad asignada a mano se habría perdido.</p>
+        </aside>
+        <p class="note">El <code>enum</code> se guarda por su <code>name</code> (texto) y no por su posición, para que reordenarlo algún día no cambie el significado de lo ya guardado.</p>
+        <div class="uses"><span class="chip">Bundle</span><span class="chip">LinearLayoutManager</span></div>
+      </article>
+
+      <article class="file" id="f-libraryadapters">
+        <header><span class="path">ui/library/AlbumsAdapter.kt · PeopleAdapter.kt</span><span class="role">RecyclerView.Adapter</span></header>
+        <ul class="tight">
+          <li><code>AlbumsAdapter</code> — carátula cuadrada + título + artista (<code>item_album_card</code>). El cuadrado lo garantiza <a href="#f-squareframe">SquareFrameLayout</a>: el ancho de la celda lo decide el <code>GridLayoutManager</code> en tiempo de ejecución, así que no se puede escribir una altura fija en el XML.</li>
+          <li><code>PeopleAdapter</code> — imagen circular + nombre + «3 álbumes | 27 canciones» (<code>item_person</code>). Lo usan <b>las dos</b> pestañas de personas. El círculo sale de un <code>ShapeAppearanceOverlay</code> con <code>cornerSize="50%"</code>, que siempre equivale a la mitad del lado sea cual sea el tamaño.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · plurales (&lt;plurals&gt;)</span>
+          <p>Para elegir entre «1 canción» y «5 canciones» no se usa un <code>if</code>, sino un recurso <code>&lt;plurals&gt;</code> y <code>getQuantityString(res, n, n)</code>. Android aplica las reglas de plural del idioma activo — importante porque no todos los idiomas tienen solo dos formas (el ruso tiene tres).</p>
+        </aside>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">Coil</span><span class="chip">plurals</span></div>
+      </article>
+
+      <article class="file" id="f-detailvm">
+        <header><span class="path">ui/library/DetailViewModel.kt</span><span class="role">AndroidViewModel · la ficha</span></header>
+        <p>Estado de la ficha de un álbum, un artista o un productor. Los tres comparten ViewModel porque la pantalla es la misma; lo único que cambia es de qué consulta salen los datos, y de eso se encargan sus <code>when (kind)</code>.</p>
+        <ul class="tight">
+          <li><code>setTarget(kind, id)</code> — fija qué se está mirando (una sola vez, al abrir).</li>
+          <li><code>header: StateFlow&lt;DetailHeader?&gt;</code> — título, carátula y las líneas de datos con su icono (<code>InfoLine</code>). Para un álbum: artista, nº de canciones, duración total y año; para una persona: nº de álbumes, nº de canciones y duración. <b>El año solo aparece si se conoce</b>: una línea con un hueco quedaría peor que ninguna.</li>
+          <li><code>tracks: StateFlow&lt;List&lt;AlbumTrack&gt;&gt;</code> — las canciones. Las de un artista o productor se envuelven con <code>trackNumber = null</code> para poder reutilizar el mismo adaptador.</li>
+          <li><code>accentColor</code> — el color de la ficha, calculado <b>una sola vez</b> con la primera carátula que llegue; recalcularlo en cada emisión haría parpadear la cabecera al editar cualquier canción del álbum.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Kotlin · flatMapLatest</span>
+          <p>Un flujo normal siempre lee de la misma fuente. <code>flatMapLatest</code> permite <b>cambiar de fuente sobre la marcha</b>: cuando <code>target</code> emite, este flujo se suscribe al del álbum concreto y se desengancha del anterior. Sin él tendríamos un «flujo de flujos» (<code>Flow&lt;Flow&lt;…&gt;&gt;</code>), que no se puede observar directamente.</p>
+        </aside>
+        <div class="uses"><span class="chip">flatMapLatest</span><span class="chip">StateFlow</span><span class="chip">DynamicColor</span></div>
+      </article>
+
+      <article class="file" id="f-detaildialog">
+        <header><span class="path">ui/library/DetailDialogFragment.kt</span><span class="role">DialogFragment · la ficha a pantalla completa</span></header>
+        <p>La pantalla de la ficha. Es un <code>DialogFragment</code> a pantalla completa por lo mismo que el iPod y el editor: se abre <b>encima</b> de la pantalla principal sin cambiar de Activity, así que el mini-reproductor de abajo sigue visible y funcionando.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li><code>showAlbum(fragment, id)</code> / <code>showPerson(fragment, kind, id)</code> lo abren, con una <b>guarda anti-duplicado</b> por tag: dos toques rápidos abrirían dos fichas apiladas.</li>
+          <li>Los <i>insets</i> de la barra de estado se le dan <b>solo a la toolbar</b> (que está dentro de la cabecera de color), de modo que ese color llega hasta detrás de la hora y la batería.</li>
+          <li>Las líneas de datos de la cabecera se <b>crean a mano</b> inflando <code>item_detail_info</code>: cuántas hay depende del tipo de ficha y de qué metadatos existan.</li>
+          <li>Pinchar una canción → <code>playCollection(canciones, posición)</code>. El botón de las flechas cruzadas de la barra → <code>shuffleCollection(...)</code>. El menú de 3 puntos ofrece encolar y abrir el editor de metadatos.</li>
+          <li><code>applyAccent()</code> tiñe la cabecera. Ojo: para el <b>fondo</b> no se usa el acento a plena intensidad (detrás de un texto sería ilegible) sino su versión apagada y oscura (<code>DynamicColor.asBackground</code>), y el color del texto y de los iconos se elige según lo claro que quede el fondo (<code>DynamicColor.onColor</code>).</li>
+        </ul>
+        <div class="uses"><span class="chip">DialogFragment</span><span class="chip">activityViewModels()</span><span class="chip">DynamicColor</span></div>
+      </article>
+
+      <article class="file" id="f-detailsongsadapter">
+        <header><span class="path">ui/library/DetailSongsAdapter.kt</span><span class="role">RecyclerView.Adapter · canciones de la ficha</span></header>
+        <p>Nº de pista a la izquierda, título y duración en el centro, menú de 3 puntos a la derecha. <b>No lleva carátula</b>, al contrario que <code>SongsAdapter</code>: dentro de un álbum todas serían la misma imagen repetida, y la carátula ya preside la cabecera.</p>
+        <p class="note">En las fichas de artista y productor no hay número de pista, así que esa columna se <b>oculta</b> en vez de dejar un hueco vacío que descuadraría los títulos. Al pulsar se pasa la <b>posición</b> en la lista (no el id), porque el reproductor necesita saber por dónde empezar dentro de la colección para poder seguir con las siguientes.</p>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">PopupMenu</span></div>
+      </article>
+
+      <h3 id="editor">Editor de metadatos — <code>ui/editor/</code></h3>
+      <p>Desde el menú de 3 puntos de cualquier canción, «Editar metadatos» abre una pantalla completa donde el usuario reescribe la información de esa canción. <b>Es la razón de ser del proyecto</b>: lo que se escribe aquí manda sobre lo que decían las etiquetas del archivo, se guarda en Room y sobrevive al cierre de la app (el escaneo del disco nunca lo pisa).</p>
+      <p>Arriba, la portada es <b>cuadrada</b> (envuelta en <code>SquareFrameLayout</code>, compartida con el iPod) y llega hasta arriba del todo, por detrás de la barra de estado; la toolbar (flecha «atrás», título y botón de guardar) se dibuja <b>encima</b> de la imagen, con un degradado oscuro detrás para que se lea sobre cualquier carátula. Tocar la propia imagen abre el selector de fotos; también hay un botón circular amarillo en la esquina inferior derecha como refuerzo visual. Debajo, Título y Álbum(es) van en un bloque con un color de fondo distinto al resto; luego Artista(s) y Productor(es) siempre visibles, y por último tres <b>secciones plegables</b> con los campos secundarios: «Detalles» (año, géneros, comentario), «Posición en el álbum» (pista y disco) y «Grabación original (remix)» (los campos <code>og*</code>).</p>
+
+      <article class="file" id="f-editorfragment">
+        <header><span class="path">ui/editor/MetadataEditorDialogFragment.kt</span><span class="role">DialogFragment · la pantalla del editor</span></header>
+        <p>La pantalla. Es un <code>DialogFragment</code> a pantalla completa por el mismo motivo que la ventana del iPod: se abre y se cierra sin salir de la principal. Usa el tema <code>Theme.UltiMusic.FullScreenDialog</code>, que reutiliza la animación de deslizamiento del iPod pero con fondo opaco.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li><code>newInstance(songId)</code> guarda el id en los <b>argumentos</b> del fragmento (un <code>Bundle</code>). Nunca se pasan datos por el constructor: Android puede recrear un fragmento al girar la pantalla y solo restaura los argumentos.</li>
+          <li>El formulario se rellena en <code>fillForm(song)</code> desde el <code>collect</code> del ViewModel, pero <b>solo la primera vez</b> (bandera <code>formLoaded</code>). Si no, cada emisión de Room borraría lo que el usuario está escribiendo.</li>
+          <li>Los campos multivalor se leen con <code>splitValues()</code> (parte por comas, recorta espacios, descarta vacíos) y los de texto con <code>textOrNull()</code>, que convierte «vacío» en <code>null</code> para que la columna quede a NULL en la base de datos en vez de guardar una cadena vacía.</li>
+          <li>Guardar valida que el título no esté vacío y llama a <code>viewModel.save(EditorForm(...), pickedImage)</code>. El diálogo se cierra al ver <code>saved = true</code>, no justo al pulsar: así solo desaparece cuando la escritura ha terminado de verdad.</li>
+          <li>Álbum(es) y Artista(s) usan <code>MaterialAutoCompleteTextView</code> con <code>setSimpleItems(...)</code>: la flechita «▾» despliega los nombres que <b>ya existen</b> en la biblioteca, para no crear «Rosalia» y «Rosalía» por una tilde. Al elegir uno, el widget sustituiría toda la línea, así que <code>setSuggestions</code> lo reescribe cambiando <b>solo</b> el valor posterior a la última coma.</li>
+          <li>La portada llega hasta detrás de la barra de estado con <code>WindowCompat.setDecorFitsSystemWindows(window, false)</code> (le dice al sistema que deje de reservar ese hueco solo) más <code>android:statusBarColor</code> transparente en el tema; el <code>ViewCompat.OnApplyWindowInsetsListener</code> reparte el hueco resultante: el margen izquierdo/derecho/inferior va a la pantalla entera y el superior <b>solo</b> a la toolbar (que crece con <code>layout_height="wrap_content"</code> para no tapar la hora ni la batería).</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · Photo Picker (PickVisualMedia)</span>
+          <p>Para elegir la portada se usa <code>ActivityResultContracts.PickVisualMedia</code>, el selector de fotos moderno de Android. <b>No hace falta pedir ningún permiso</b>: el usuario escoge la imagen en una pantalla del propio sistema y la app solo recibe esa. Lo que devuelve es una <b>URI</b>, no un archivo: una especie de dirección con permiso temporal de lectura. Por eso, al guardar, el archivo se <b>copia</b> a la carpeta privada de la app; si guardásemos la URI, la portada se rompería en cuanto el usuario moviese o borrase la foto.</p>
+        </aside>
+        <p class="note">La apertura está protegida contra doble-toque en <code>SongsFragment</code>: <code>onEditMetadata</code> solo llama a <code>.show(...)</code> si <code>parentFragmentManager.findFragmentByTag("metadataEditor")</code> es <code>null</code>. Sin esta guarda, un segundo toque (o un <code>PopupMenu</code> que dispara el clic dos veces) abre <b>dos</b> diálogos superpuestos a pantalla completa: se ven como un contenido «fantasma» duplicado, porque ambos comparten el mismo <code>Window</code> del sistema.</p>
+        <div class="uses"><span class="chip">DialogFragment</span><span class="chip">viewModels()</span><span class="chip">PickVisualMedia</span><span class="chip">MaterialAutoCompleteTextView</span><span class="chip">WindowInsetsCompat</span><span class="chip">Coil</span></div>
+      </article>
+
+      <article class="file" id="f-editorvm">
+        <header><span class="path">ui/editor/MetadataEditorViewModel.kt</span><span class="role">AndroidViewModel · estado y guardado</span></header>
+        <p>El cerebro del editor. A diferencia de <code>SongsViewModel</code>, vive en el ámbito del <b>propio diálogo</b> (<code>by viewModels()</code>, no <code>activityViewModels()</code>), así que se destruye al cerrarlo.</p>
+        <ul class="tight">
+          <li><code>song</code> — la canción, filtrada por id sobre el <b>mismo</b> flujo que alimenta la lista. Es <code>null</code> hasta que Room emite por primera vez.</li>
+          <li><code>artistNames</code> / <code>albumTitles</code> — los nombres existentes, para el autocompletado.</li>
+          <li><code>trackAndDisc</code> — la pista y el disco se piden aparte porque no viven en la fila de la canción, sino en la tabla de cruce con el álbum (y el modelo de dominio no los arrastra).</li>
+          <li><code>save(form, pickedImage)</code> — importa la imagen (y borra la anterior), construye el <code>SongEntity</code> completo y llama a <code>repository.saveSongEdits(...)</code>. La imagen se copia <b>aquí</b> y no al elegirla, para no dejar archivos huérfanos si el usuario cierra el editor sin guardar.</li>
+          <li><code>EditorForm</code> es una <code>data class</code> con los valores ya limpios: así el ViewModel no tiene que saber nada de <code>EditText</code>.</li>
+        </ul>
+        <div class="uses"><span class="chip">AndroidViewModel</span><span class="chip">StateFlow</span><span class="chip">viewModelScope</span></div>
+      </article>
+    </section>
+
+    <!-- ================= UI COMMON ================= -->
+    <section id="common">
+      <h2>Vistas compartidas — <code>ui/common/</code></h2>
+
       <article class="file" id="f-squareframe">
-        <header><span class="path">ui/player/SquareFrameLayout.kt</span><span class="role">View personalizada · recuadro cuadrado</span></header>
-        <p>Un <code>FrameLayout</code> que siempre es <b>cuadrado</b>: se usa para el recuadro de la carátula. En un <code>LinearLayout</code> no se puede pedir «alto = ancho» solo con XML, así que esta vista lo resuelve al medirse.</p>
+        <header><span class="path">ui/common/SquareFrameLayout.kt</span><span class="role">View personalizada · recuadro cuadrado</span></header>
+        <p>Un <code>FrameLayout</code> que siempre es <b>cuadrado</b>: lo usan el recuadro de la carátula de la ventana del iPod y el contenedor de la imagen del editor de metadatos. Vive en <code>ui/common/</code> por ser compartida entre ambas pantallas. En un <code>LinearLayout</code> no se puede pedir «alto = ancho» solo con XML, así que esta vista lo resuelve al medirse.</p>
         <aside class="concept">
           <span class="tag">Android · onMeasure y MeasureSpec</span>
           <p>Antes de dibujarse, cada vista pasa por <code>onMeasure</code>, donde el padre le dice cuánto puede medir de ancho y de alto (dos <i>MeasureSpec</i>). Aquí reutilizamos la medida del <b>ancho</b> también como alto (<code>super.onMeasure(widthSpec, widthSpec)</code>), de modo que ambos lados acaban valiendo lo mismo y el recuadro sale cuadrado. Sin esto, el recuadro tomaba «todo el alto sobrante» (con <code>layout_weight</code>) y quedaba rectangular.</p>
         </aside>
         <div class="uses"><span class="chip">FrameLayout</span><span class="chip">onMeasure</span></div>
+      </article>
+
+      <article class="file" id="f-collapsible">
+        <header><span class="path">ui/common/CollapsibleSection.kt</span><span class="role">object · secciones plegables</span></header>
+        <p>Las secciones «acordeón» de campos secundarios del editor: una cabecera con una flecha que gira 90° y, debajo, un bloque de campos que se despliega o se recoge. <code>setup(header, content)</code> enlaza las dos vistas.</p>
+        <aside class="concept">
+          <span class="tag">Android · ValueAnimator y por qué hay que medir</span>
+          <p>No se puede animar «de 0 a <code>wrap_content</code>» porque <code>wrap_content</code> no es un número: hay que <b>medir</b> antes cuánto ocuparía el bloque. Eso hace <code>content.measure(...)</code> con <code>MeasureSpec.UNSPECIFIED</code>, que significa «mídete como si tuvieras todo el alto del mundo». Con esa altura real ya se puede usar un <b>ValueAnimator</b>, que no es más que un contador que va de A a B durante unos milisegundos y en cada paso nos avisa para que apliquemos el valor (aquí, el alto del bloque). Al terminar de abrir se devuelve la altura a <code>WRAP_CONTENT</code>, para que la sección pueda crecer sola si un campo ocupa dos líneas.</p>
+        </aside>
+        <div class="uses"><span class="chip">ValueAnimator</span><span class="chip">measure/MeasureSpec</span><span class="chip">View.animate()</span></div>
+      </article>
+
+      <article class="file" id="f-placeholder2">
+        <header><span class="path">ui/common/PlaceholderFragment.kt</span><span class="role">Fragment temporal</span></header>
+        <p>Marcador de posición de las pestañas aún sin implementar. Descrito arriba, en <a href="#ui">la sección de interfaz</a>.</p>
       </article>
     </section>
 
@@ -687,6 +1018,8 @@
       <article class="file" id="f-coverart">
         <header><span class="path">util/CoverArt.kt</span><span class="role">carátulas con Coil</span></header>
         <p>Resuelve la carátula de cada canción con una cadena de reserva: <b>imagen personalizada → arte embebido en el archivo → recuadro negro</b>. Incluye un <i>Fetcher</i> propio para que Coil sepa extraer la imagen embebida de un archivo de audio, y un <code>ImageLoader</code> compartido (<code>CoverLoader</code>).</p>
+        <p>El primer eslabón lo rellena el <a href="#editor">editor de metadatos</a>: si <code>song.imageName</code> apunta a un archivo que existe dentro de <code>coversDir(context)</code> (<code>filesDir/covers/</code>), <code>cover(context, song)</code> devuelve ese archivo; si no, cae en el arte embebido. Por eso la función necesita un <code>Context</code>: sin él no se sabe dónde está la carpeta privada de la app.</p>
+        <p>Para un <b>álbum, artista o productor</b> la cadena tiene un eslabón más, porque ellos no son un archivo de audio: <b>imagen propia → imagen personalizada de una de sus canciones → arte embebido de una de sus canciones → recuadro negro</b>. Eso es lo que describe un <code>CoverRef(ownImage, songImage, songPath)</code>, que rellenan las consultas de resumen del DAO y resuelve la sobrecarga <code>cover(context, ref)</code>.</p>
         <aside class="concept">
           <span class="tag">Android · Coil</span>
           <p><b>Coil</b> es una librería para cargar imágenes de forma asíncrona en un <code>ImageView</code> (descarga/decodifica en segundo plano y cachea). Un <b>Fetcher</b> personalizado le enseña a obtener imágenes de una fuente no estándar — aquí, el arte embebido dentro del MP3.</p>
@@ -694,26 +1027,56 @@
         <div class="uses"><span class="chip">Coil</span><span class="chip">MediaMetadataRetriever</span><span class="chip">Fetcher</span></div>
       </article>
 
+      <article class="file" id="f-dynamiccolor">
+        <header><span class="path">util/DynamicColor.kt</span><span class="role">object · color a partir de la carátula</span></header>
+        <p>Saca un <b>color de acento</b> de una carátula para teñir con él la interfaz: las pestañas, las barras de progreso, la rueda del iPod y la cabecera de las fichas. Es lo que sustituye al amarillo fijo de UltiMusic cuando hay algo sonando o una ficha abierta.</p>
+        <aside class="concept">
+          <span class="tag">AndroidX · Palette</span>
+          <p><b>Palette</b> es una librería de AndroidX que analiza un <code>Bitmap</code> y devuelve un puñado de colores representativos («swatches») ya clasificados: vibrante, apagado, oscuro, claro… Aquí se prefieren los vivos, porque un gris sacado de una portada oscura no se distinguiría del fondo negro de la app.</p>
+        </aside>
+        <h4>Estructura</h4>
+        <ul class="tight">
+          <li><code>DEFAULT</code> — el amarillo de siempre, para cuando no hay carátula que analizar.</li>
+          <li><code>fromCover(context, data)</code> — carga la imagen con el mismo <code>ImageLoader</code> de Coil que usa toda la app (así también funciona con el arte embebido de un MP3), la analiza y devuelve el color. Es <code>suspend</code> porque decodificar y recorrer píxeles es trabajo pesado que no puede ir en el hilo principal.</li>
+          <li><code>readable(color)</code> (privada) — normaliza el color: le fuerza un mínimo de saturación y mete su luminosidad en una franja media-alta. Sin eso, una portada casi blanca daría un acento invisible y una casi negra, uno indistinguible del fondo.</li>
+          <li><code>asBackground(color)</code> — versión apagada y oscura, para usarla de <b>fondo</b> (la cabecera de una ficha). El acento a plena intensidad detrás de un texto sería ilegible.</li>
+          <li><code>onColor(fondo)</code> — el color de texto que se lee sobre ese fondo: blanco sobre fondos oscuros, negro sobre claros.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Gráficos · HSL y hardware bitmaps</span>
+          <p>Los ajustes se hacen en <b>HSL</b> (tono, saturación, luminosidad) y no en RGB, porque en HSL «más vivo» y «más claro» son literalmente subir un número, mientras que en RGB habría que tocar los tres canales a la vez sin cambiar el tono.</p>
+          <p>Y hay un detalle imprescindible: <code>allowHardware(false)</code> al pedirle la imagen a Coil. Por defecto Coil devuelve <i>hardware bitmaps</i>, que viven en la memoria de la GPU y cuyos píxeles <b>no</b> se pueden leer desde la CPU; Palette necesita leerlos uno a uno, así que hay que pedir un bitmap normal.</p>
+        </aside>
+        <div class="uses"><span class="chip">Palette</span><span class="chip">Coil</span><span class="chip">ColorUtils</span><span class="chip">Dispatchers.IO</span></div>
+      </article>
+
       <article class="file" id="f-timeformat">
         <header><span class="path">util/TimeFormat.kt</span><span class="role">object · formateo de tiempos</span></header>
-        <p><code>mmss(ms)</code> convierte milisegundos a texto <code>m:ss</code> (p. ej. <code>204000 → "3:24"</code>). Lo usa la ventana del iPod para el tiempo transcurrido y la duración total.</p>
+        <p><code>mmss(ms)</code> convierte milisegundos a texto <code>m:ss</code> (p. ej. <code>204000 → "3:24"</code>). Lo usa la ventana del iPod para el tiempo transcurrido y la duración total, y las listas de canciones de las fichas.</p>
+        <p><code>hhmmss(ms)</code> hace lo mismo pero añadiendo las horas cuando las hay (<code>1:04:22</code>). Se usa para duraciones <b>acumuladas</b> —lo que dura un álbum entero o toda la discografía de un artista—, donde pasar de una hora es lo normal y «78:15» no se entendería de un vistazo.</p>
       </article>
     </section>
 
     <!-- ================= ESQUEMA ================= -->
     <section id="esquema">
       <h2>Esquema de la base de datos</h2>
-      <p class="section-intro">Las 6 tablas y cómo se relacionan. Las tablas de cruce (en el centro) son las que permiten las relaciones muchos-a-muchos.</p>
+      <p class="section-intro">Las 8 tablas y cómo se relacionan. Las tablas de cruce (en el centro) son las que permiten las relaciones muchos-a-muchos.</p>
       <div class="schema">
         <div class="tbl"><div class="th">songs</div><ul>
           <li><span class="pk">id</span> <span class="muted">PK</span></li>
           <li>filePath <span class="muted">único</span></li>
           <li>title, duration, year</li>
           <li>genres, imageName</li>
-          <li>comment, producer</li>
+          <li>lyrics, language, comment</li>
           <li class="muted">og* (remix)</li>
         </ul></div>
         <div class="tbl"><div class="th">artists</div><ul>
+          <li><span class="pk">id</span> <span class="muted">PK</span></li>
+          <li>name <span class="muted">(editable)</span></li>
+          <li>tagName <span class="muted">único</span></li>
+          <li>imageName</li>
+        </ul></div>
+        <div class="tbl"><div class="th">producers</div><ul>
           <li><span class="pk">id</span> <span class="muted">PK</span></li>
           <li>name <span class="muted">(editable)</span></li>
           <li>tagName <span class="muted">único</span></li>
@@ -729,6 +1092,10 @@
           <li><span class="fk">songId</span> → songs</li>
           <li><span class="fk">artistId</span> → artists</li>
         </ul></div>
+        <div class="tbl"><div class="th">song_producer</div><ul>
+          <li><span class="fk">songId</span> → songs</li>
+          <li><span class="fk">producerId</span> → producers</li>
+        </ul></div>
         <div class="tbl"><div class="th">song_album</div><ul>
           <li><span class="fk">songId</span> → songs</li>
           <li><span class="fk">albumId</span> → albums</li>
@@ -741,6 +1108,7 @@
       </div>
       <ul class="rels tight">
         <li><b>canción ↔ artista</b> (N:N) vía <code>song_artist</code></li>
+        <li><b>canción ↔ productor</b> (N:N) vía <code>song_producer</code></li>
         <li><b>canción ↔ álbum</b> (N:N) vía <code>song_album</code></li>
         <li><b>álbum ↔ artista</b> (N:N) vía <code>album_artist</code></li>
       </ul>
@@ -753,14 +1121,14 @@
       <table class="grid">
         <thead><tr><th>Archivo</th><th>Para qué sirve</th></tr></thead>
         <tbody>
-          <tr><td><code>app/build.gradle.kts</code></td><td>Dependencias y configuración del módulo: Room + KSP, Media3/ExoPlayer, Coil, RecyclerView, ViewPager2, lifecycle…</td></tr>
-          <tr><td><code>gradle/libs.versions.toml</code></td><td>Catálogo central de versiones de todas las librerías (Room 2.7.1, Media3, etc.).</td></tr>
+          <tr><td><code>app/build.gradle.kts</code></td><td>Dependencias y configuración del módulo: Room + KSP, Media3/ExoPlayer, Coil, <b>Palette</b> (color dinámico), RecyclerView, ViewPager2, lifecycle…</td></tr>
+          <tr><td><code>gradle/libs.versions.toml</code></td><td>Catálogo central de versiones de todas las librerías (Room 2.7.1, Media3, Coil 2.7.0, Palette 1.0.0, etc.).</td></tr>
           <tr><td><code>AndroidManifest.xml</code></td><td>Declara la Activity y los permisos de almacenamiento (<code>MANAGE_EXTERNAL_STORAGE</code> y <code>READ_EXTERNAL_STORAGE</code> en API ≤29).</td></tr>
-          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>, y los del iPod: <code>dialog_ipod_nano</code>, <code>item_queue_song</code>.</td></tr>
-          <tr><td><code>res/anim/</code></td><td>Animaciones de la ventana del iPod: <code>slide_in_up</code> (sube al abrir) y <code>slide_out_down</code> (baja al cerrar).</td></tr>
-          <tr><td><code>res/menu/</code></td><td><code>menu_main</code> (barra superior) y <code>menu_song_item</code> (menú de 3 puntos de cada canción: «Añadir a cola de reproducción»).</td></tr>
-          <tr><td><code>res/drawable/</code></td><td>Formas e iconos: recuadros del iPod (<code>ipod_body</code>, <code>ipod_display</code>, <code>ipod_info_box</code>), rueda (<code>wheel_ring</code>, <code>wheel_center</code>), la pista de las barras de progreso (<code>seekbar_line</code>) e iconos (<code>ic_close</code>, <code>ic_speaker</code>, <code>ic_skip_previous</code>, <code>ic_skip_next</code>…).</td></tr>
-          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: pestañas, permisos, textos del iPod…), colores, y temas/estilos (<code>themes.xml</code> con el tema del diálogo <code>Theme.UltiMusic.IPodDialog</code>; <code>styles.xml</code> con la animación <code>Animation.UltiMusic.SlideUp</code>).</td></tr>
+          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>, los del iPod (<code>dialog_ipod_nano</code>, <code>item_queue_song</code>), el del editor (<code>dialog_metadata_editor</code>) y los de las nuevas pestañas: <code>fragment_library_grid</code> y <code>fragment_library_list</code> (Álbumes / Artistas y Productores), <code>item_album_card</code>, <code>item_person</code>, y los de la ficha de detalle (<code>dialog_library_detail</code>, <code>item_detail_info</code>, <code>item_detail_song</code>).</td></tr>
+          <tr><td><code>res/anim/</code></td><td>Animaciones de deslizamiento que comparten la ventana del iPod y el editor: <code>slide_in_up</code> (sube al abrir) y <code>slide_out_down</code> (baja al cerrar).</td></tr>
+          <tr><td><code>res/menu/</code></td><td><code>menu_main</code> (barra superior), <code>menu_song_item</code> (menú de 3 puntos de cada canción: «Añadir a cola de reproducción» y «Editar metadatos») y <code>menu_metadata_editor</code> (el botón de guardar del editor), <code>menu_library_detail</code> (el botón de orden aleatorio de la ficha).</td></tr>
+          <tr><td><code>res/drawable/</code></td><td>Formas e iconos: recuadros del iPod (<code>ipod_body</code>, <code>ipod_display</code>, <code>ipod_info_box</code>), rueda (<code>wheel_ring</code>, <code>wheel_center</code>), la pista de las barras de progreso (<code>seekbar_line</code>), el degradado tras la toolbar del editor (<code>bg_toolbar_scrim</code>) e iconos (<code>ic_close</code>, <code>ic_arrow_back</code>, <code>ic_speaker</code>, <code>ic_skip_previous</code>, <code>ic_skip_next</code>, <code>ic_check</code>, <code>ic_chevron_right</code>, y los de las líneas de datos de una ficha: <code>ic_person</code>, <code>ic_music_note</code>, <code>ic_timer</code>, <code>ic_calendar</code>, <code>ic_album</code>…).</td></tr>
+          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: pestañas, permisos, textos del iPod, campos del editor…), colores, y temas/estilos: <code>themes.xml</code> con los temas de diálogo <code>Theme.UltiMusic.IPodDialog</code> y <code>Theme.UltiMusic.FullScreenDialog</code>; <code>styles.xml</code> con la animación <code>Animation.UltiMusic.SlideUp</code>, los estilos del editor (<code>Widget.UltiMusic.TextField</code>, <code>.Dropdown</code>, <code>SectionHeader</code>, <code>SectionTitle</code>) y las formas de imagen (<code>ShapeAppearanceOverlay.UltiMusic.Cover</code> para carátulas y <code>.Circle</code> para artistas y productores). En <code>strings.xml</code> hay además <code>&lt;plurals&gt;</code> para «N canciones» y «N álbumes».</td></tr>
         </tbody>
       </table>
       <aside class="concept">
@@ -788,7 +1156,7 @@
         <span class="tag">Importante</span>
         <p>Esta documentación debe <b>actualizarse cada vez que algo quede desactualizado</b>. El archivo fuente está en <code>docs/documentacion.html</code> (versionado en el repo). Tras cualquier cambio de arquitectura, archivos, flujo o dependencias, actualízalo en la misma tanda y vuelve a publicarlo.</p>
       </aside>
-      <p class="note">Estado actual: la capa de persistencia (Room + reconciliación + copia externa), el mini-reproductor, la <b>ventana del iPod</b> y el <b>sistema de dos colas</b> (cola 1 activa + cola 2 mezclada, encolar desde el menú de 3 puntos, auto-avance, saltos con historial) están implementados y verificados en emulador. Pendiente: editor de metadatos, pestañas de Álbumes/Artistas/Géneros/Listas, e integraciones (YT-DLP, Last.fm, Musixmatch).</p>
+      <p class="note">Estado actual: la capa de persistencia (Room + reconciliación + copia externa), el mini-reproductor, la <b>ventana del iPod</b>, el <b>sistema de dos colas</b> (cola 1 activa + cola 2 mezclada, encolar desde el menú de 3 puntos, auto-avance, saltos con historial) y el <b>editor de metadatos de canciones</b> (con portada personalizada) están implementados. Pendiente: editores de álbum y artista, pestañas de Álbumes/Artistas/Géneros/Listas, e integraciones (YT-DLP, Last.fm, Musixmatch).</p>
     </section>
 
     <hr class="soft">

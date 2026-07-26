@@ -11,6 +11,9 @@ import androidx.room.PrimaryKey
  * Los campos `og*` guardan la info de la canción ORIGINAL cuando esta es un remix (título, artista,
  * álbum y año del tema original). No provienen de la etiqueta del archivo: los rellena el usuario
  * desde el editor y quedan a null mientras la canción no se marque como remix.
+ *
+ * El productor NO está aquí: vive en su propia tabla ([ProducerEntity]) enlazada por
+ * [SongProducerCrossRef], igual que los artistas, porque tiene pestaña y ficha propias.
  */
 @Entity(
     tableName = "songs",
@@ -23,9 +26,10 @@ data class SongEntity(
     val duration: Long,
     val year: Int?,
     val genres: List<String>,
+    val lyrics: String?,
+    val language: String?,
     val imageName: String?,
     val comment: String?,
-    val producer: String?,
 
     val ogTitle: String?,
     val ogArtist: String?,

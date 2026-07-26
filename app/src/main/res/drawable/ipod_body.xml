@@ -5,6 +5,6 @@
     <solid android:color="@color/um_surface" />
     <corners android:radius="28dp" />
     <stroke
-        android:width="2dp"
+        android:width="4dp"
         android:color="@color/um_yellow" />
 </shape>

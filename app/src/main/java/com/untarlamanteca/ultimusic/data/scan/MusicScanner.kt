@@ -26,24 +26,27 @@ object MusicScanner {            // OBJECT = SINGLETON
 
     /**
      * El listado de carpetas en las que se buscan canciones.
-     * Podríamos hacer que el usuario pueda modificar esta lista.
+     * Solo se reconoce la carpeta UltiMusic, para que el usuario tenga un único
+     * sitio claro donde guardar su música (y evitar duplicados con otras apps).
      */
     private fun scanRoots(): List<File> {
-        val downloads = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
-        val music = File(Environment.getExternalStorageDirectory(), "Music")
         val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
-        return listOf(downloads, music, ultiMusic)
+        return listOf(ultiMusic)
     }
 
     /** Escanea las carpetas configuradas y devuelve las etiquetas crudas de cada archivo. */
-    suspend fun scan(): List<ScannedSong> = withContext(Dispatchers.IO) {
+    suspend fun scan(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }): List<ScannedSong> = withContext(Dispatchers.IO) {
         val files = LinkedHashSet<File>()
         for (root in scanRoots()) {
             if (root.exists() && root.isDirectory) {
                 collectAudioFiles(root, files)
             }
         }
-        files.mapNotNull { file -> readSong(file) }
+        val total = files.size
+        return@withContext files.mapIndexed { index, file ->
+            onProgress(index + 1, total)
+            readSong(file)
+        }.filterNotNull()
     }
 
     /** Recorre recursivamente [dir] añadiendo los archivos de audio a [out]. */

@@ -5,11 +5,13 @@ import androidx.room.Junction
 import androidx.room.Relation
 import com.untarlamanteca.ultimusic.data.db.entities.AlbumEntity
 import com.untarlamanteca.ultimusic.data.db.entities.ArtistEntity
+import com.untarlamanteca.ultimusic.data.db.entities.ProducerEntity
 import com.untarlamanteca.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untarlamanteca.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untarlamanteca.ultimusic.data.db.entities.SongEntity
+import com.untarlamanteca.ultimusic.data.db.entities.SongProducerCrossRef
 
-/** Canción con sus artistas y álbumes resueltos a través de las tablas de cruce. */
+/** Canción con sus artistas, álbumes y productores resueltos a través de las tablas de cruce. */
 data class SongWithRelations(
     @Embedded val song: SongEntity,
     @Relation(
@@ -31,5 +33,15 @@ data class SongWithRelations(
             entityColumn = "albumId"
         )
     )
-    val albums: List<AlbumEntity>
+    val albums: List<AlbumEntity>,
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "id",
+        associateBy = Junction(
+            value = SongProducerCrossRef::class,
+            parentColumn = "songId",
+            entityColumn = "producerId"
+        )
+    )
+    val producers: List<ProducerEntity>
 )

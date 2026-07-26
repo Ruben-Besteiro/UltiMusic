@@ -4,6 +4,6 @@
     android:shape="oval">
     <solid android:color="@color/um_surface" />
     <stroke
-        android:width="2dp"
+        android:width="4dp"
         android:color="@color/um_yellow" />
 </shape>

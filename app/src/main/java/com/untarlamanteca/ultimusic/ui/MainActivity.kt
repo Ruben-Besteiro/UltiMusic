@@ -2,6 +2,7 @@ package com.untarlamanteca.ultimusic.ui
 
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.res.ColorStateList
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -20,6 +21,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.widget.ImageViewCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -74,6 +76,7 @@ class MainActivity : AppCompatActivity() {
         setupToolbar()
         setupPager()
         setupMiniPlayer()
+        setupDynamicColor()
         checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
     }
 
@@ -208,6 +211,36 @@ class MainActivity : AppCompatActivity() {
                                 else 0
                         }
                     }
+                }
+            }
+        }
+    }
+
+    /**
+     * Tiñe con el color de la canción que suena todo lo que antes era amarillo fijo: el indicador y
+     * el texto de la pestaña activa, la barra de progreso y los botones del mini-reproductor.
+     *
+     * El color lo calcula [PlayerViewModel] a partir de la carátula (ver
+     * [com.untarlamanteca.ultimusic.util.DynamicColor]); aquí solo se aplica. Mientras no suena
+     * nada vale el amarillo de siempre, así que la app arranca igual que antes.
+     */
+    private fun setupDynamicColor() {
+        val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
+        val progress = findViewById<SeekBar>(R.id.songProgress)
+        val playPause = findViewById<ImageButton>(R.id.btnPlayPause)
+        val expand = findViewById<ImageButton>(R.id.btnExpand)
+        val mutedText = ContextCompat.getColor(this, R.color.um_on_surface_muted)
+
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                playerViewModel.accentColor.collect { accent ->
+                    val tint = ColorStateList.valueOf(accent)
+                    tabLayout.setSelectedTabIndicatorColor(accent)
+                    // Dos colores: el de las pestañas inactivas (gris) y el de la activa (acento).
+                    tabLayout.setTabTextColors(mutedText, accent)
+                    progress.progressTintList = tint
+                    ImageViewCompat.setImageTintList(playPause, tint)
+                    ImageViewCompat.setImageTintList(expand, tint)
                 }
             }
         }

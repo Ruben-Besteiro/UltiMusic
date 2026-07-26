@@ -12,3 +12,11 @@ Los campos og\* del modelo de canciones son para remixes, donde estos campos gua
 
 La documentación del proyecto está disponible en file:///C:/Users/siuni/UltiMusic/docs/documentacion.html. Quiero que como mínimo expliques cada script individualmente, la estructura de éste, el flujo, qué cosas utiliza (solamente he tenido una asignatura de Android en la universidad así que cualquier cosa que sospeches que no sabré explica qué es y por qué está ahí), etc. La documentación se deberá actualizar cada vez que algo quede desactualizado.
 
+
+
+No hagas verificaciones automáticas después de hacer cambios. Solo dime qué debo hacer y lo haré yo. Así iremos más rápido y consumiremos menos tokens.
+
+
+
+Todo lo referente a los artistas y a los productores se hará de la misma manera, puesto que son cosas similares. Cuando se toque uno de los dos, se debe intentar evitar inconsistencias.
+

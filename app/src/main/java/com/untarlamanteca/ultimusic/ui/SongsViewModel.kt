@@ -28,6 +28,9 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
     private val _loading = MutableStateFlow(false)
     val loading = _loading.asStateFlow()
 
+    private val _progress = MutableStateFlow(0)
+    val progress = _progress.asStateFlow()
+
     private var reconciled = false
 
     /** Reconcilia solo la primera vez (p. ej. al conceder el permiso). */
@@ -40,7 +43,12 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
     fun reload() {
         viewModelScope.launch {
             _loading.value = true
-            runCatching { repository.reconcile() }
+            _progress.value = 0
+            runCatching {
+                repository.reconcile { current, total ->
+                    _progress.value = if (total > 0) (current * 100) / total else 0
+                }
+            }
             reconciled = true
             _loading.value = false
         }

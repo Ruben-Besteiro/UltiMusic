@@ -8,9 +8,11 @@ import androidx.room.TypeConverters
 import com.untarlamanteca.ultimusic.data.db.entities.AlbumArtistCrossRef
 import com.untarlamanteca.ultimusic.data.db.entities.AlbumEntity
 import com.untarlamanteca.ultimusic.data.db.entities.ArtistEntity
+import com.untarlamanteca.ultimusic.data.db.entities.ProducerEntity
 import com.untarlamanteca.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untarlamanteca.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untarlamanteca.ultimusic.data.db.entities.SongEntity
+import com.untarlamanteca.ultimusic.data.db.entities.SongProducerCrossRef
 
 /**
  * Base de datos de la biblioteca de UltiMusic. Vive en el almacenamiento interno de la app
@@ -22,11 +24,14 @@ import com.untarlamanteca.ultimusic.data.db.entities.SongEntity
         SongEntity::class,
         ArtistEntity::class,
         AlbumEntity::class,
+        ProducerEntity::class,
         SongArtistCrossRef::class,
         SongAlbumCrossRef::class,
-        AlbumArtistCrossRef::class
+        AlbumArtistCrossRef::class,
+        SongProducerCrossRef::class
     ],
-    version = 1,
+    // v2: el productor deja de ser una columna de texto de la canción y pasa a tener tabla propia.
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
