@@ -1,16 +1,51 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- UltiMusic es siempre oscuro; night hereda del mismo base para no cambiar de aspecto. -->
+    <!-- Tema base de UltiMusic: siempre oscuro (negro) con acento amarillo. -->
     <style name="Base.Theme.UltiMusic" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/um_yellow</item>
-        <item name="colorOnPrimary">@color/black</item>
+        <item name="colorOnPrimary">#404040</item>
         <item name="colorSecondary">@color/um_yellow</item>
-        <item name="colorOnSecondary">@color/black</item>
-        <item name="android:colorBackground">@color/um_background</item>
-        <item name="colorSurface">@color/um_surface</item>
+        <item name="colorOnSecondary">#404040</item>
+        <item name="android:colorBackground">#404040</item>
+        <item name="colorSurface">#404040</item>
         <item name="colorSurfaceVariant">@color/um_surface_variant</item>
-        <item name="colorOnBackground">@color/um_on_background</item>
+        <item name="colorOnBackground">#404040</item>
         <item name="colorOnSurface">@color/um_on_background</item>
-        <item name="android:statusBarColor">@color/um_background</item>
+        <item name="android:statusBarColor">#404040</item>
+        <item name="android:navigationBarColor">#404040</item>
+        <!-- En Android < 10 el cursor de texto (rayita y gota) no se puede recolorear en tiempo
+             real (ver MetadataEditorDialogFragment), así que se fijan en blanco en vez de en el
+             amarillo que les daría colorPrimary por defecto. -->
+        <item name="android:textCursorDrawable">@drawable/cursor_white</item>
+        <item name="android:textSelectHandle">@drawable/handle_teardrop</item>
+        <item name="android:textSelectHandleLeft">@drawable/handle_teardrop</item>
+        <item name="android:textSelectHandleRight">@drawable/handle_teardrop</item>
+    </style>
+
+    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />
+
+    <!-- Tema del diálogo del iPod: pantalla completa, fondo transparente y animación de deslizamiento. -->
+    <style name="Theme.UltiMusic.IPodDialog" parent="Theme.UltiMusic">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@style/Animation.UltiMusic.SlideUp</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/um_background</item>
+    </style>
+
+    <!--
+      Tema del editor de metadatos: mismo diálogo a pantalla completa que el iPod (sube deslizándose
+      desde abajo), con fondo opaco porque aquí sí se dibuja una pantalla entera de contenido. La barra
+      de estado es transparente para que la portada de la canción llegue hasta arriba del todo, por
+      detrás de la hora/batería; el fragmento se encarga de rellenar ese hueco con padding en la
+      toolbar en vez de en la pantalla entera.
+    -->
+    <style name="Theme.UltiMusic.FullScreenDialog" parent="Theme.UltiMusic">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@color/um_background</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowAnimationStyle">@style/Animation.UltiMusic.SlideUp</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/um_background</item>
     </style>
 </resources>

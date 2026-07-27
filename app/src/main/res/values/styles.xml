@@ -6,9 +6,52 @@
         <item name="cornerSize">8dp</item>
     </style>
 
+    <!--
+      Imagen totalmente circular (artistas y productores). Un "cornerSize" del 50% siempre equivale
+      a la mitad del lado, así que redondea del todo sea cual sea el tamaño de la vista.
+    -->
+    <style name="ShapeAppearanceOverlay.UltiMusic.Circle" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
+
     <!-- Deslizamiento de la ventana del iPod: sube al abrir, baja al cerrar. -->
     <style name="Animation.UltiMusic.SlideUp" parent="">
         <item name="android:windowEnterAnimation">@anim/slide_in_up</item>
         <item name="android:windowExitAnimation">@anim/slide_out_down</item>
+    </style>
+
+    <!--
+      Campos del editor de metadatos. El estilo "Filled" de Material es el de la línea inferior
+      subrayada del boceto: etiqueta encima y raya debajo.
+    -->
+    <style name="Widget.UltiMusic.TextField" parent="Widget.Material3.TextInputLayout.FilledBox">
+        <item name="android:layout_marginBottom">4dp</item>
+        <item name="boxBackgroundColor">@android:color/transparent</item>
+    </style>
+
+    <!-- Igual, pero desplegando las sugerencias de nombres ya existentes al escribir (sin la
+         flechita "▾" del estilo original: no aporta nada aquí y su ripple no seguía el acento). -->
+    <style name="Widget.UltiMusic.TextField.Dropdown" parent="Widget.Material3.TextInputLayout.FilledBox.ExposedDropdownMenu">
+        <item name="android:layout_marginBottom">4dp</item>
+        <item name="boxBackgroundColor">@android:color/transparent</item>
+        <item name="endIconMode">none</item>
+    </style>
+
+    <!-- Cabecera clicable de una sección plegable de campos secundarios. -->
+    <style name="Widget.UltiMusic.SectionHeader" parent="">
+        <item name="android:orientation">horizontal</item>
+        <item name="android:gravity">center_vertical</item>
+        <item name="android:layout_marginTop">4dp</item>
+        <item name="android:background">?android:attr/selectableItemBackground</item>
+        <item name="android:clickable">true</item>
+        <item name="android:focusable">true</item>
+    </style>
+
+    <style name="Widget.UltiMusic.SectionTitle" parent="">
+        <item name="android:layout_marginStart">12dp</item>
+        <item name="android:textColor">@color/um_on_surface_muted</item>
+        <item name="android:textSize">14sp</item>
+        <item name="android:textStyle">bold</item>
     </style>
 </resources>

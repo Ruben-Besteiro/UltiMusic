@@ -10,16 +10,20 @@ import com.untarlamanteca.ultimusic.data.db.entities.ArtistEntity
 import com.untarlamanteca.ultimusic.data.db.entities.ProducerEntity
 import com.untarlamanteca.ultimusic.data.db.entities.SongEntity
 import com.untarlamanteca.ultimusic.data.db.toDomain
+import com.untarlamanteca.ultimusic.data.scan.MusicLibraryObserver
 import com.untarlamanteca.ultimusic.data.scan.MusicScanner
 import com.untarlamanteca.ultimusic.model.AlbumSummary
 import com.untarlamanteca.ultimusic.model.AlbumTrack
 import com.untarlamanteca.ultimusic.model.PersonSummary
 import com.untarlamanteca.ultimusic.model.Song
 import com.untarlamanteca.ultimusic.util.CoverArt
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -32,6 +36,8 @@ class LibraryRepository private constructor(
     private val dao: LibraryDao,
     private val appContext: Context
 ) {
+    private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var libraryObserver: MusicLibraryObserver? = null
 
     /** Canciones persistidas, reactivas: cualquier edición reemite la lista. */
     val songs: Flow<List<Song>> =
@@ -98,6 +104,57 @@ class LibraryRepository private constructor(
         val scanned = MusicScanner.scan(onProgress)
         dao.reconcile(scanned)
     }
+
+    fun startWatchingLibraryChanges() {
+        if (libraryObserver != null) return
+
+        val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
+        if (!ultiMusic.exists() || !ultiMusic.isDirectory) return
+
+        libraryObserver = MusicLibraryObserver(ultiMusic, observerScope) {
+            observerScope.launch {
+                reconcile()
+            }
+        }.apply {
+            startWatching()
+        }
+    }
+
+    fun stopWatchingLibraryChanges() {
+        libraryObserver?.stopWatching()
+        libraryObserver = null
+    }
+
+    /**
+     * Devuelve una ruta que se puede reproducir para [song], o null si el archivo ya no está en
+     * ninguna parte de la fonoteca.
+     *
+     * Existe porque la ruta guardada puede quedarse obsoleta: [reconcile] escanea leyendo las
+     * etiquetas de todos los archivos, tarda segundos y no escribe en la base de datos hasta el
+     * final, así que entre que el usuario mueve un archivo y termina la siguiente reconciliación hay
+     * una ventana en la que la biblioteca sigue apuntando a la carpeta antigua. Reproducir esa ruta
+     * hacía que ExoPlayer fallara en silencio y se quedara clavado en 0:00.
+     *
+     * Si el archivo no está donde decía la base de datos, se busca por nombre con
+     * [MusicScanner.findByFilename] (un recorrido de carpetas, sin leer etiquetas: barato) y, si
+     * aparece, se corrige la fila de paso para no tener que volver a buscarlo nunca más.
+     */
+    suspend fun resolvePlayablePath(song: Song): String? = withContext(Dispatchers.IO) {
+        val stored = File(song.filePath)
+        if (stored.exists()) return@withContext song.filePath
+
+        val relocated = MusicScanner.findByFilename(stored.name) ?: return@withContext null
+        // Best-effort: si la reconciliación se nos ha adelantado, la fila antigua ya no existe y el
+        // UPDATE no afecta a nadie. La ruta encontrada sigue siendo válida para reproducir.
+        runCatching { dao.updateSongPath(song.filePath, relocated.absolutePath) }
+        relocated.absolutePath
+    }
+
+    /**
+     * ¿Se puede leer la carpeta de la fonoteca? Lo consulta quien vaya a dar una canción por
+     * perdida (ver [MusicScanner.libraryFolderReadable]).
+     */
+    suspend fun libraryFolderReadable(): Boolean = MusicScanner.libraryFolderReadable()
 
     // --- Ediciones (se reflejan al instante en el Flow [songs]) ---
 

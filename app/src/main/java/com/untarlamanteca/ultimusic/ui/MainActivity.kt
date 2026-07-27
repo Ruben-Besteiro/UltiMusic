@@ -8,6 +8,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Environment
 import android.provider.Settings
+import android.view.View
 import android.widget.ImageButton
 import android.widget.SeekBar
 import android.widget.TextView
@@ -21,7 +22,6 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.isVisible
 import androidx.core.view.WindowInsetsCompat
-import androidx.core.widget.ImageViewCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -32,10 +32,13 @@ import com.google.android.material.tabs.TabLayoutMediator
 import com.untarlamanteca.ultimusic.R
 import com.untarlamanteca.ultimusic.data.LibraryRepository
 import com.untarlamanteca.ultimusic.ui.player.IPodNanoDialogFragment
+import com.untarlamanteca.ultimusic.ui.playlists.PlaylistsViewModel
+import com.untarlamanteca.ultimusic.util.AccentTint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 
 class MainActivity : AppCompatActivity() {
 
@@ -45,6 +48,11 @@ class MainActivity : AppCompatActivity() {
 
     private val songsViewModel: SongsViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by viewModels()
+
+    // Ámbito de actividad, así que es la MISMA instancia que obtienen los fragmentos con
+    // activityViewModels(). Aquí solo se usa para sacar de las playlists las canciones cuyo archivo
+    // ha desaparecido; al pasar por el ViewModel, su `tick` se encarga de repintar las pestañas.
+    private val playlistsViewModel: PlaylistsViewModel by viewModels()
 
     private val tabTitles: List<String> by lazy {
         listOf(
@@ -138,11 +146,12 @@ class MainActivity : AppCompatActivity() {
     /**
      * Al pasar a segundo plano, exportamos una copia visible de la base de datos a
      * ~/UltiMusic/databases (best-effort, prioridad baja). El scope de la app garantiza que
-     * termine aunque la Activity se destruya.
+     * termine aunque la Activity se destruya. También detenemos el monitor de cambios del filesystem.
      */
     override fun onStop() {
         super.onStop()
         val repository = LibraryRepository.get(this)
+        repository.stopWatchingLibraryChanges()
         appScope.launch { repository.exportDatabaseCopy() }
     }
 
@@ -212,6 +221,20 @@ class MainActivity : AppCompatActivity() {
                         }
                     }
                 }
+                // Si al ir a reproducir resulta que el archivo ya no está, lo decimos (antes el
+                // reproductor se quedaba mudo en 0:00 sin explicar por qué) y además sacamos la
+                // canción de todas las playlists: dejarla ahí solo serviría para que reapareciera
+                // en la lista y volviera a fallar en cuanto se pulsara.
+                launch {
+                    playerViewModel.missingFile.collect { song ->
+                        Toast.makeText(
+                            this@MainActivity,
+                            getString(R.string.song_file_missing, song.title),
+                            Toast.LENGTH_LONG
+                        ).show()
+                        playlistsViewModel.forgetSong(File(song.filePath).name)
+                    }
+                }
             }
         }
     }
@@ -225,10 +248,9 @@ class MainActivity : AppCompatActivity() {
      * nada vale el amarillo de siempre, así que la app arranca igual que antes.
      */
     private fun setupDynamicColor() {
+        val root = findViewById<View>(android.R.id.content)
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
         val progress = findViewById<SeekBar>(R.id.songProgress)
-        val playPause = findViewById<ImageButton>(R.id.btnPlayPause)
-        val expand = findViewById<ImageButton>(R.id.btnExpand)
         val mutedText = ContextCompat.getColor(this, R.color.um_on_surface_muted)
 
         lifecycleScope.launch {
@@ -238,9 +260,11 @@ class MainActivity : AppCompatActivity() {
                     tabLayout.setSelectedTabIndicatorColor(accent)
                     // Dos colores: el de las pestañas inactivas (gris) y el de la activa (acento).
                     tabLayout.setTabTextColors(mutedText, accent)
+                    // Sin esto, el ripple al tocar una pestaña se queda con el colorPrimary del
+                    // tema (amarillo fijo) en vez de seguir el acento.
+                    tabLayout.tabRippleColor = tint
                     progress.progressTintList = tint
-                    ImageViewCompat.setImageTintList(playPause, tint)
-                    ImageViewCompat.setImageTintList(expand, tint)
+                    AccentTint.icons(root, accent, R.id.btnPlayPause, R.id.btnExpand)
                 }
             }
         }
@@ -261,6 +285,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadIfPermitted() {
         if (hasStoragePermission()) {
             songsViewModel.loadIfNeeded()
+            LibraryRepository.get(this).startWatchingLibraryChanges()
         } else if (!permissionDialogPending) {
             Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
         }

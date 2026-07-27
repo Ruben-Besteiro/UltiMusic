@@ -7,8 +7,11 @@
     <color name="um_background">#FF202020</color>
     <color name="um_surface">#FF141414</color>
     <color name="um_surface_variant">#FF1F1F1F</color>
-    <color name="um_yellow">#FFFFD200</color>
-    <color name="um_yellow_dark">#FFC9A600</color>
+    <!-- El oscuro es el claro con cada canal RGB dividido entre 3 (ver DynamicColor.dim). Esa
+         relación no es decorativa: es la regla que aplica AccentTint al teñir con el color de la
+         carátula, así que si se cambia um_yellow hay que recalcular este a un tercio. -->
+    <color name="um_yellow">#FFFFD000</color>
+    <color name="um_yellow_dark">#FF534300</color>
     <color name="um_on_background">#FFF2F2F2</color>
     <color name="um_on_surface_muted">#FFB0B0B0</color>
     <color name="um_divider">#FF404040</color>

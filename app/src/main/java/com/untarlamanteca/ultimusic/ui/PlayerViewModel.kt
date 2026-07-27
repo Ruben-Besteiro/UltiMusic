@@ -7,12 +7,15 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import com.untarlamanteca.ultimusic.data.LibraryRepository
 import com.untarlamanteca.ultimusic.model.Song
 import com.untarlamanteca.ultimusic.util.CoverArt
 import com.untarlamanteca.ultimusic.util.DynamicColor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -26,6 +29,9 @@ data class PlaybackProgress(val positionMs: Long = 0L, val durationMs: Long = 0L
  * comparten el mini-reproductor de la actividad y el fragmento de canciones.
  */
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
+
+    /** Solo para resolver rutas obsoletas antes de reproducir (ver [loadCurrent]). */
+    private val library = LibraryRepository.get(app)
 
     /**
      * Cola 1: lo que suena y su contexto (historial ya reproducido + canción actual + lo que el
@@ -75,11 +81,29 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val currentPlaylistName = _currentPlaylistName.asStateFlow()
 
     /**
+     * Avisa de que el archivo de una canción no aparece por ningún lado. `MainActivity` lo usa para
+     * dos cosas: enseñar un aviso y sacar la canción de todas las playlists (por eso emite la
+     * canción entera y no solo el título: hace falta su `filePath` para saber qué línea quitar).
+     *
+     * Es un evento de una sola vez, no un estado: por eso es un SharedFlow y no un StateFlow —un
+     * estado se reemitiría al girar la pantalla y el aviso saldría otra vez—.
+     */
+    private val _missingFile = MutableSharedFlow<Song>(extraBufferCapacity = 1)
+    val missingFile = _missingFile.asSharedFlow()
+
+    /**
      * Cálculo del acento en curso. Se guarda para poder cancelarlo: si el usuario pasa canciones
      * rápido, el análisis de una portada anterior podría terminar después que el de la actual y
      * dejar el color equivocado.
      */
     private var accentJob: Job? = null
+
+    /**
+     * Carga en curso. Como [loadCurrent] tiene que tocar disco para validar la ruta, se guarda para
+     * poder cancelarla: si el usuario pasa canciones rápido, una carga anterior podría terminar
+     * después que la actual y dejar sonando la canción equivocada.
+     */
+    private var loadJob: Job? = null
 
     private val player: ExoPlayer = ExoPlayer.Builder(app).build().apply {
         addListener(object : Player.Listener {
@@ -146,21 +170,25 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Mueve la canción al **final de la cola 1** (la parte que suena y lo encolado a mano). Se quita
-     * de donde estuviera —cola 1 o cola 2— para que sea un movimiento y no una duplicación. No corta
-     * la reproducción. Si es la canción que suena ahora, no hace nada.
+     * Pone la canción justo **a continuación de la que suena ahora**. Se quita de donde estuviera
+     * —cola 1 o cola 2— para que sea un movimiento y no una duplicación. No corta la reproducción.
+     * Si es la canción que suena ahora, no hace nada.
      */
     fun addToQueue(song: Song) {
         val q1 = _queue1.value
         val idx = q1.indexOfFirst { it.id == song.id }
         if (idx == _currentIndex.value) return
         if (idx >= 0) {
-            // Ya estaba en la cola 1: la quitamos de su sitio y la reponemos al final.
-            _queue1.value = q1.filterIndexed { i, _ -> i != idx } + song
-            if (idx < _currentIndex.value) _currentIndex.value -= 1
+            // Ya estaba en la cola 1: la quitamos de su sitio y la reponemos justo tras la actual.
+            val withoutSong = q1.filterIndexed { i, _ -> i != idx }
+            val current = if (idx < _currentIndex.value) _currentIndex.value - 1 else _currentIndex.value
+            _currentIndex.value = current
+            _queue1.value = withoutSong.subList(0, current + 1) + song +
+                withoutSong.subList(current + 1, withoutSong.size)
         } else {
-            // Estaba en la cola 2 (o no estaba): la sacamos de la 2 y la añadimos al final de la 1.
-            _queue1.value = q1 + song
+            // Estaba en la cola 2 (o no estaba): la sacamos de la 2 y la ponemos tras la actual.
+            _queue1.value = q1.subList(0, _currentIndex.value + 1) + song +
+                q1.subList(_currentIndex.value + 1, q1.size)
             _queue2.value = _queue2.value.filter { it.id != song.id }
         }
     }
@@ -263,14 +291,53 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         loadCurrent(shouldPlay = true)
     }
 
-    /** Carga en ExoPlayer la canción en [currentIndex] de la cola 1. Si [shouldPlay] es true, reproduce; si no, mantiene pausa. */
+    /**
+     * Carga en ExoPlayer la canción en [currentIndex] de la cola 1. Si [shouldPlay] es true,
+     * reproduce; si no, mantiene pausa.
+     *
+     * La ruta NO se le pasa a ExoPlayer tal cual: antes se valida con
+     * [LibraryRepository.resolvePlayablePath], porque puede haberse quedado obsoleta si el usuario
+     * movió el archivo de carpeta y la biblioteca aún no se ha vuelto a reconciliar. Dársela sin
+     * comprobar hacía que el reproductor fallara sin decir nada y se quedara clavado en 0:00.
+     *
+     * Como esa comprobación toca disco, va en una corrutina; lo que sí se hace de inmediato es
+     * publicar la canción y su color de acento, para que la interfaz responda al momento.
+     */
     private fun loadCurrent(shouldPlay: Boolean = true) {
-        val song = _queue1.value.getOrNull(_currentIndex.value) ?: return
+        val index = _currentIndex.value
+        val song = _queue1.value.getOrNull(index) ?: return
         _currentSong.value = song
-        player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(song.filePath))))
-        player.prepare()
-        if (shouldPlay) player.play() else player.pause()
         updateAccent(song)
+
+        loadJob?.cancel()
+        loadJob = viewModelScope.launch {
+            val path = library.resolvePlayablePath(song)
+            if (path == null) {
+                // El archivo ya no está en la fonoteca: paramos (si no, seguiría sonando la canción
+                // anterior) y que la actividad avise.
+                player.stop()
+                _missingFile.emit(song)
+                return@launch
+            }
+            if (path != song.filePath) rewritePath(index, song, path)
+            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(path))))
+            player.prepare()
+            if (shouldPlay) player.play() else player.pause()
+        }
+    }
+
+    /**
+     * Sustituye la ruta obsoleta de una canción por la buena en la cola y en lo que se está
+     * mostrando, para que el resto de la interfaz —que compara canciones por su `filePath`, como el
+     * resaltado de "sonando ahora" en la lista de una playlist— siga cuadrando.
+     */
+    private fun rewritePath(index: Int, song: Song, path: String) {
+        val fixed = song.copy(filePath = path)
+        val queue = _queue1.value
+        if (queue.getOrNull(index)?.id == song.id) {
+            _queue1.value = queue.toMutableList().also { it[index] = fixed }
+        }
+        if (_currentSong.value?.id == song.id) _currentSong.value = fixed
     }
 
     /** Recalcula el acento a partir de la carátula de [song] (ver [DynamicColor]). */

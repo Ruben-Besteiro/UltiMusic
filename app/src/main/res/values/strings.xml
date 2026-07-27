@@ -20,14 +20,71 @@
     <string name="song_subtitle_format">%1$s | %2$s</string>
     <string name="song_more">Más opciones de la canción</string>
     <string name="add_to_queue">Añadir a cola de reproducción inmediata</string>
+    <string name="add_to_playlist">Añadir a playlist</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
-    <string name="no_songs">No se han encontrado canciones en ninguna de las carpetas seleccionadas.</string>
+    <string name="no_songs">Guarda tus archivos de audio en la carpeta UltiMusic</string>
+    <string name="song_file_missing">No se encuentra el archivo de «%1$s»</string>
+
+    <!-- Álbumes, artistas y productores -->
+    <string name="person_image_desc">Imagen del artista o productor</string>
+    <string name="shuffle_collection">Reproducir en orden aleatorio</string>
+    <string name="no_albums">Todavía no hay ningún álbum.</string>
+    <string name="no_artists">Todavía no hay ningún artista.</string>
+    <string name="no_producers">Ninguna canción tiene productor asignado.</string>
+    <string name="no_songs_here">Aquí no hay ninguna canción.</string>
+
+    <!--
+      Los <plurals> son la forma en que Android elige automáticamente entre "1 canción" y
+      "5 canciones" según la cantidad. Se usan en vez de un if en el código porque cada idioma
+      tiene sus propias reglas de plural (el ruso tiene tres formas, por ejemplo).
+    -->
+    <plurals name="song_count">
+        <item quantity="one">%d canción</item>
+        <item quantity="other">%d canciones</item>
+    </plurals>
+    <plurals name="album_count">
+        <item quantity="one">%d álbum</item>
+        <item quantity="other">%d álbumes</item>
+    </plurals>
+
+    <!-- Editor de metadatos -->
+    <string name="edit_metadata">Editar metadatos</string>
+    <string name="metadata_editor_title">Editor de metadatos</string>
+    <string name="editor_close">Cerrar el editor</string>
+    <string name="editor_save">Guardar</string>
+    <string name="editor_pick_cover">Elegir portada</string>
+    <string name="editor_saved">Cambios guardados</string>
+    <string name="editor_title_required">El título no puede quedar vacío.</string>
+    <string name="language_auto_fill">Este campo se rellenará automáticamente al introducir la letra</string>
+
+    <string name="field_title">Título</string>
+    <string name="field_albums">Álbum(es)</string>
+    <string name="field_artists">Artista(s)</string>
+    <string name="field_producers">Productor(es)</string>
+    <string name="field_year">Año</string>
+    <string name="field_genres">Género(s)</string>
+    <string name="field_lyrics">Letra</string>
+    <string name="field_language">Idioma</string>
+    <string name="field_comment">Comentario</string>
+    <string name="field_track_number">Nº de pista</string>
+    <string name="field_disc_number">Nº de disco</string>
+    <string name="field_og_title">Título original</string>
+    <string name="field_og_artist">Artista original</string>
+    <string name="field_og_album">Álbum original</string>
+    <string name="field_og_year">Año original</string>
+
+    <string name="section_details">Detalles</string>
+    <string name="section_album_position">Posición en el álbum</string>
+    <string name="section_original">Grabación original (remix)</string>
+    <string name="multi_value_hint">Separa varios valores con comas</string>
 
     <!-- Mini-reproductor -->
     <string name="expand_player">Expandir reproductor</string>
     <string name="play_pause">Reproducir o pausar</string>
     <string name="nothing_playing">Pincha en una canción para reproducirla</string>
+    <string name="updating_database">Actualizando base de datos local…</string>
+    <string name="updating_database_percent">Actualizando base de datos local… %d%%</string>
 
     <!-- Ventana del iPod -->
     <string name="ipod_title">UltiMusicPod Nano</string>
@@ -37,6 +94,25 @@
     <string name="ipod_next">Siguiente</string>
     <string name="ipod_now_playing">Sonando ahora</string>
     <string name="queue_subtitle_format">%1$s · %2$s</string>
+
+    <!-- Playlists -->
+    <string name="no_playlists">Todavía no hay ninguna playlist. Usa el botón + o añade una canción a una playlist nueva.</string>
+    <string name="playlist_subtitle_format">%1$s · %2$s</string>
+    <string name="playlist_more">Más opciones de la playlist</string>
+    <string name="playlist_create">Nueva playlist</string>
+    <string name="playlist_new_option">Nueva playlist…</string>
+    <string name="playlist_name_hint">Nombre de la playlist</string>
+    <string name="playlist_rename">Renombrar</string>
+    <string name="playlist_delete">Borrar</string>
+    <string name="playlist_delete_confirm">¿Borrar la playlist «%1$s»? Los archivos de audio no se tocan.</string>
+    <string name="playlist_add_button">Crear playlist</string>
+    <string name="playlist_reorder_desc">Arrastrar para reordenar</string>
+    <string name="playlist_name_taken">Ya existe una playlist con ese nombre.</string>
+    <string name="playlist_empty">Esta playlist está vacía.</string>
+    <string name="add_to_playlist_title">Añadir a playlist</string>
+    <string name="ipod_shuffle_random">Reproducir una canción al azar</string>
+    <string name="dialog_cancel">Cancelar</string>
+    <string name="dialog_ok">Aceptar</string>
 
     <!-- Permisos -->
     <string name="permission_needed_title">Permiso necesario</string>

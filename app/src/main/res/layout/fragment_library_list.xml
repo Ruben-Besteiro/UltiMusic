@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pestaña en lista (Artistas y Productores: las dos usan este mismo layout). -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerLibrary"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingTop="10dp"
+        android:scrollbars="vertical"
+        android:scrollbarSize="16dp"
+        android:scrollbarThumbVertical="@drawable/scrollbar_thumb"
+        android:scrollbarTrackVertical="@drawable/scrollbar_track"
+        android:fadeScrollbars="false"
+        tools:listitem="@layout/item_person" />
+
+    <TextView
+        android:id="@+id/emptyView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="24dp"
+        android:gravity="center"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+</FrameLayout>

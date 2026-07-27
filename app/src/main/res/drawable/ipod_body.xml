@@ -2,9 +2,9 @@
 <!-- Cuerpo del iPod Nano: rectángulo muy redondeado, relleno oscuro y contorno amarillo. -->
 <shape xmlns:android="http://schemas.android.com/apk/res/android"
     android:shape="rectangle">
-    <solid android:color="@color/um_surface" />
+    <solid android:color="@color/um_yellow_dark" />
     <corners android:radius="28dp" />
     <stroke
-        android:width="4dp"
+        android:width="@dimen/ipod_stroke_body"
         android:color="@color/um_yellow" />
 </shape>

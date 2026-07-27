@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Reutiliza el atributo público android:width para leer el ancho de un <stroke> de shape
+         directamente del XML del drawable, sin depender de getters de GradientDrawable (que no
+         existen en minSdk 24). -->
+    <declare-styleable name="GradientStrokeWidth">
+        <attr name="android:width" />
+    </declare-styleable>
+</resources>

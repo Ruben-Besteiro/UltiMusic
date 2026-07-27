@@ -76,6 +76,18 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     fun removeSong(name: String, filename: String) = mutate { repository.removeSong(name, filename) }
     fun reorder(name: String, filenames: List<String>) = mutate { repository.setFilenames(name, filenames) }
 
+    /**
+     * Saca una canción de TODAS las playlists porque su archivo ya no existe. Lo dispara
+     * `MainActivity` cuando el reproductor no encuentra el archivo (ver `PlayerViewModel.missingFile`).
+     *
+     * Antes de tocar nada se comprueba que la carpeta de música sea legible: si no lo fuera, todas
+     * las canciones parecerían perdidas y vaciaríamos las playlists del usuario, que son archivos
+     * suyos y no se pueden deshacer.
+     */
+    fun forgetSong(filename: String) = mutate {
+        if (library.libraryFolderReadable()) repository.removeSongFromAll(filename)
+    }
+
     /** Fuerza una relectura (p. ej. al volver a la pestaña, por si se editó el archivo desde fuera). */
     fun refresh() { tick.value++ }
 

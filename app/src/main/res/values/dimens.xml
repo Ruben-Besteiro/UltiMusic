@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Anchos de contorno del iPod Nano: los usan tanto los drawables (res/drawable/ipod_*, wheel_*)
+     como IPodNanoDialogFragment.tintIPod, que repinta esos contornos con el color de acento cada
+     vez que cambia la carátula. Antes ese repintado llevaba los anchos repetidos como números
+     sueltos en Kotlin, desincronizados de los que de verdad había en los XML; al compartir el
+     mismo recurso, cambiar aquí el ancho de un contorno se ve reflejado en ambos sitios. -->
+<resources>
+    <dimen name="ipod_stroke_body">6dp</dimen>
+    <dimen name="ipod_stroke_display">4dp</dimen>
+    <dimen name="ipod_stroke_info_box">2dp</dimen>
+    <dimen name="ipod_stroke_wheel_ring">4dp</dimen>
+    <dimen name="ipod_stroke_wheel_center">4dp</dimen>
+</resources>

@@ -1,9 +1,11 @@
 package com.untarlamanteca.ultimusic.ui.songs
 
+import android.content.res.ColorStateList
 import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
 import android.view.MotionEvent
 import android.view.View
+import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -35,6 +37,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerSongs)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
+        val loadingSpinner = view.findViewById<ProgressBar>(R.id.loadingSpinner)
 
         val adapter = SongsAdapter(
             onSongClick = { song -> playerViewModel.play(song, songsViewModel.songs.value) },
@@ -125,6 +128,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                     playerViewModel.accentColor.collect { accent ->
                         adapter.setAccent(accent)
                         updateScrollbarColor(recycler, accent)
+                        loadingSpinner.indeterminateTintList = ColorStateList.valueOf(accent)
                     }
                 }
             }

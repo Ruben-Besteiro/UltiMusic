@@ -49,6 +49,35 @@ object MusicScanner {            // OBJECT = SINGLETON
         }.filterNotNull()
     }
 
+    /**
+     * ¿Se puede leer ahora mismo la carpeta de la fonoteca?
+     *
+     * Sirve para no sacar conclusiones precipitadas: si la carpeta no es accesible (permiso
+     * revocado, almacenamiento no montado…), TODAS las canciones parecerían haber desaparecido.
+     * Antes de dar una por perdida —y borrarla de las playlists, que son archivos del usuario y no
+     * se pueden recuperar— hay que comprobar que el problema es de la canción y no de la carpeta.
+     */
+    suspend fun libraryFolderReadable(): Boolean = withContext(Dispatchers.IO) {
+        scanRoots().any { it.isDirectory && it.canRead() }
+    }
+
+    /**
+     * Busca un archivo de audio por su NOMBRE (sin carpetas) dentro de las rutas escaneadas.
+     *
+     * A diferencia de [scan], solo recorre directorios: no abre ningún archivo ni lee etiquetas,
+     * así que es muy rápido. Sirve para relocalizar al vuelo una canción cuyo archivo el usuario ha
+     * movido de carpeta y cuya ruta guardada, por tanto, ya no vale.
+     */
+    suspend fun findByFilename(filename: String): File? = withContext(Dispatchers.IO) {
+        val files = LinkedHashSet<File>()
+        for (root in scanRoots()) {
+            if (root.exists() && root.isDirectory) {
+                collectAudioFiles(root, files)
+            }
+        }
+        files.firstOrNull { it.name == filename }
+    }
+
     /** Recorre recursivamente [dir] añadiendo los archivos de audio a [out]. */
     private fun collectAudioFiles(dir: File, out: MutableSet<File>) {
         val children = dir.listFiles() ?: return

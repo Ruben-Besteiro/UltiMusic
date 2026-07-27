@@ -1,5 +1,6 @@
 package com.untarlamanteca.ultimusic.ui.playlists
 
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
 import android.widget.EditText
@@ -16,6 +17,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untarlamanteca.ultimusic.R
 import com.untarlamanteca.ultimusic.model.PlaylistSummary
+import com.untarlamanteca.ultimusic.ui.PlayerViewModel
 import com.untarlamanteca.ultimusic.ui.player.IPodNanoDialogFragment
 import kotlinx.coroutines.launch
 
@@ -27,6 +29,7 @@ import kotlinx.coroutines.launch
 class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
 
     private val viewModel: PlaylistsViewModel by activityViewModels()
+    private val playerViewModel: PlayerViewModel by activityViewModels()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerPlaylists)
@@ -50,9 +53,17 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                viewModel.playlists.collect { list ->
-                    adapter.submit(list)
-                    emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                launch {
+                    viewModel.playlists.collect { list ->
+                        adapter.submit(list)
+                        emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                    }
+                }
+                // El amarillo dinámico del botón "+" sigue el color de lo que suena.
+                launch {
+                    playerViewModel.accentColor.collect { accent ->
+                        createButton.backgroundTintList = ColorStateList.valueOf(accent)
+                    }
                 }
             }
         }

@@ -25,8 +25,8 @@ import kotlinx.coroutines.flow.Flow
 /**
  * Único DAO de la biblioteca. Además de las operaciones sueltas, expone [reconcile], que en una
  * sola transacción concilia el resultado de un escaneo con lo ya guardado: inserta canciones
- * nuevas (creando/enlazando sus artistas y álbumes) y borra las que ya no existen en disco,
- * SIN tocar nunca lo que el usuario haya editado.
+ * nuevas (creando/enlazando sus artistas y álbumes), reapunta las que se hayan movido de carpeta y
+ * borra las que ya no existen en disco, SIN tocar nunca lo que el usuario haya editado.
  */
 @Dao
 abstract class LibraryDao {
@@ -274,6 +274,10 @@ abstract class LibraryDao {
     @Query("DELETE FROM songs WHERE filePath IN (:paths)")
     abstract suspend fun deleteSongsByPath(paths: List<String>)
 
+    /** Reapunta una canción a su nueva ruta cuando el usuario ha movido el archivo (ver [reconcile]). */
+    @Query("UPDATE songs SET filePath = :newPath WHERE filePath = :oldPath")
+    abstract suspend fun updateSongPath(oldPath: String, newPath: String)
+
     @Query("DELETE FROM artists WHERE id NOT IN (SELECT artistId FROM song_artist)")
     abstract suspend fun pruneOrphanArtists()
 
@@ -288,17 +292,50 @@ abstract class LibraryDao {
     /**
      * Concilia un escaneo con lo persistido. Debe recibir el resultado del escaneo ya hecho
      * (el escaneo es lento y va fuera de la transacción); aquí solo se toca la base de datos.
+     *
+     * Se hace en tres fases, y el orden importa:
+     *
+     *  1. Se separan las rutas que han DESAPARECIDO del disco de las que han APARECIDO.
+     *  2. Se emparejan por nombre de archivo: una ruta que desaparece y otra que aparece con el
+     *     mismo nombre es, casi con total seguridad, el mismo archivo MOVIDO de carpeta. En ese
+     *     caso solo se reapunta el `filePath` de la fila ([updateSongPath]), y así la canción
+     *     conserva su id, sus ediciones del editor de metadatos, su carátula importada y sus
+     *     enlaces con artistas, álbumes y productores. Si en vez de esto se borrara y se volviera
+     *     a insertar, mover un archivo equivaldría a perder todo lo que el usuario hubiera puesto.
+     *  3. Lo que queda sin emparejar sí son altas y bajas de verdad: se insertan y se borran.
+     *
+     * El emparejamiento por nombre asume que no hay dos archivos con el mismo nombre en carpetas
+     * distintas, que es la misma suposición que ya hacen las playlists (ver `PlaylistRepository`).
      */
     @Transaction
     open suspend fun reconcile(scanned: List<ScannedSong>) {
         val existing = allSongPaths().toHashSet()
         val scannedPaths = HashSet<String>(scanned.size)
+        for (s in scanned) scannedPaths.add(s.filePath)
 
-        for (s in scanned) {
-            scannedPaths.add(s.filePath)
-            // Ya existe -> no se toca: las ediciones del usuario mandan.
-            if (s.filePath in existing) continue
+        // Fase 1: bajas y altas candidatas.
+        val gone = existing.filter { it !in scannedPaths }
+        val appeared = scanned.filter { it.filePath !in existing }
 
+        // Fase 2: las que casan por nombre de archivo son movimientos, no altas/bajas.
+        // El valor del índice es una lista porque, aunque no debería, puede haber nombres repetidos:
+        // se van consumiendo de uno en uno para no reapuntar dos canciones a la misma ruta.
+        val goneByName = gone.groupByTo(HashMap()) { it.substringAfterLast('/') }
+        val moved = HashSet<String>(gone.size)
+        val inserted = ArrayList<ScannedSong>(appeared.size)
+
+        for (s in appeared) {
+            val oldPath = goneByName[s.filePath.substringAfterLast('/')]?.removeFirstOrNull()
+            if (oldPath != null) {
+                updateSongPath(oldPath, s.filePath)
+                moved.add(oldPath)
+            } else {
+                inserted.add(s)
+            }
+        }
+
+        // Fase 3: altas reales.
+        for (s in inserted) {
             val songId = insertSong(s.toEntity())
 
             val artistName = s.artist ?: MusicScanner.UNKNOWN_ARTIST
@@ -325,7 +362,8 @@ abstract class LibraryDao {
             )
         }
 
-        val removed = existing.filter { it !in scannedPaths }
+        // Fase 3 (bis): bajas reales, es decir, las que han desaparecido sin reaparecer en otra carpeta.
+        val removed = gone.filter { it !in moved }
         if (removed.isNotEmpty()) {
             deleteSongsByPath(removed)
             pruneOrphanArtists()

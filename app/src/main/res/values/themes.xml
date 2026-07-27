@@ -12,6 +12,13 @@
         <item name="colorOnSurface">@color/um_on_background</item>
         <item name="android:statusBarColor">@color/um_background</item>
         <item name="android:navigationBarColor">@color/um_background</item>
+        <!-- En Android < 10 el cursor de texto (rayita y gota) no se puede recolorear en tiempo
+             real (ver MetadataEditorDialogFragment), así que se fijan en blanco en vez de en el
+             amarillo que les daría colorPrimary por defecto. -->
+        <item name="android:textCursorDrawable">@drawable/cursor_white</item>
+        <item name="android:textSelectHandle">@drawable/handle_teardrop</item>
+        <item name="android:textSelectHandleLeft">@drawable/handle_teardrop</item>
+        <item name="android:textSelectHandleRight">@drawable/handle_teardrop</item>
     </style>
 
     <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />

@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Celda de la rejilla de álbumes: carátula cuadrada + título + artista. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:orientation="vertical"
+    android:padding="8dp">
+
+    <!--
+      SquareFrameLayout fuerza que el alto sea igual al ancho. Hace falta porque el ancho de la
+      celda lo decide el GridLayoutManager en tiempo de ejecución (depende de las columnas y de la
+      pantalla), así que no se puede escribir una altura fija en el XML.
+    -->
+    <com.untarlamanteca.ultimusic.ui.common.SquareFrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/albumCover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/cover_placeholder"
+            android:contentDescription="@string/album_cover_desc"
+            android:scaleType="centerCrop"
+            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
+    </com.untarlamanteca.ultimusic.ui.common.SquareFrameLayout>
+
+    <TextView
+        android:id="@+id/albumTitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/um_on_background"
+        android:textSize="15sp"
+        android:textStyle="italic"
+        tools:text="Meteora" />
+
+    <TextView
+        android:id="@+id/albumSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="13sp"
+        tools:text="Linkin Park" />
+
+</LinearLayout>

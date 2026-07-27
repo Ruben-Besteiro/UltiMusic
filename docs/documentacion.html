@@ -420,10 +420,12 @@
         <ul class="tight">
           <li><code>AUDIO_EXTENSIONS</code> — extensiones reconocidas (mp3, flac, m4a, opus…).</li>
           <li>Constantes <code>UNKNOWN_ARTIST</code> / <code>UNKNOWN_ALBUM</code> («Artista/Álbum desconocido»).</li>
-          <li><code>scanRoots()</code> — carpetas donde busca: Descargas, <code>Music</code> y <code>UltiMusic</code>.</li>
+          <li><code>scanRoots()</code> — carpetas donde busca: solo <code>UltiMusic</code>, para que el usuario tenga un único sitio claro donde guardar su música y no se dupliquen canciones con otras apps.</li>
+          <li><code>libraryFolderReadable()</code> — ¿se puede leer ahora mismo esa carpeta? Lo consulta quien vaya a dar una canción por perdida, para no confundir «la canción ya no está» con «la carpeta no se puede leer».</li>
           <li><code>collectAudioFiles(...)</code> — recorre carpetas <i>recursivamente</i> juntando archivos de audio.</li>
           <li><code>readSong(file)</code> — abre el archivo y lee sus etiquetas.</li>
           <li><code>scan(): List&lt;ScannedSong&gt;</code> — la función pública; junta todo en segundo plano.</li>
+          <li><code>findByFilename(name): File?</code> — busca un archivo de audio por su <b>nombre</b> (sin carpetas) dentro de las mismas raíces. A diferencia de <code>scan()</code>, solo recorre directorios: <b>no abre ningún archivo ni lee etiquetas</b>, así que es muy rápido. Sirve para relocalizar al vuelo una canción que el usuario ha movido de carpeta (ver <code>LibraryRepository.resolvePlayablePath()</code>).</li>
         </ul>
         <h4>Flujo / por qué</h4>
         <p><code>scan()</code> corre en <code>Dispatchers.IO</code> (leer disco es lento; no debe bloquear la interfaz). Usa un <code>LinkedHashSet</code> para evitar archivos duplicados manteniendo el orden.</p>
@@ -546,7 +548,8 @@
           <li>Consultas de apoyo del <b>escaneo</b>: <code>allSongPaths()</code>, <code>findArtistByTag()</code>, <code>findAlbumByTag()</code> — buscan por el nombre de la <b>etiqueta</b> del archivo.</li>
           <li>Consultas de apoyo del <b>editor</b>: <code>findArtistByName()</code> / <code>findAlbumByTitle()</code> / <code>findProducerByName()</code> (buscan por el nombre <b>visible</b>, el editable), <code>observeArtistNames()</code> / <code>observeAlbumTitles()</code> / <code>observeProducerNames()</code> para el autocompletado y <code>trackNumberOf()</code> / <code>discNumberOf()</code>.</li>
           <li>Inserciones, <code>updateSong/Artist/Album/Producer</code>, desenlazado (<code>clearSongArtists/Albums/Producers</code>), borrado por ruta y poda de huérfanos (<code>pruneOrphanArtists/Albums/Producers</code>).</li>
-          <li><code>reconcile(scanned)</code> — dentro de una transacción: inserta lo nuevo, crea/enlaza artistas, álbumes y productores, y borra lo que ya no está en disco.</li>
+          <li><code>reconcile(scanned)</code> — dentro de una transacción: inserta lo nuevo, crea/enlaza artistas, álbumes y productores, <b>reapunta lo que se haya movido de carpeta</b> y borra lo que ya no está en disco.</li>
+          <li><code>updateSongPath(oldPath, newPath)</code> — reapunta una canción a su nueva ruta cuando el archivo se ha movido.</li>
           <li><code>saveSongEdits(...)</code> — el guardado del editor, también en una transacción (ver abajo).</li>
         </ul>
         <h4>Cómo guarda el editor: <code>saveSongEdits()</code></h4>
@@ -555,9 +558,19 @@
         <p>Lo mismo vale para los <b>productores</b>, con una diferencia: si el usuario vacía el campo, la canción se queda sin ninguno. Al contrario que artista y álbum, aquí <b>no se inventa un «Productor desconocido»</b>, porque llenaría la pestaña de ruido; por eso el escáner tampoco crea uno cuando la etiqueta no trae compositor.</p>
         <p class="note">Detalle fácil de olvidar: la pista y el disco viven en la tabla de cruce <code>song_album</code>, así que hay que volver a escribirlos al recrear los enlaces o se perderían. Al final se podan los artistas y álbumes de los que ya no cuelga nada.</p>
         <h4>La regla de oro de <code>reconcile()</code></h4>
-        <pre><span class="c">// Si la canción ya existe, NO se toca: las ediciones del usuario mandan.</span>
-<span class="k">if</span> (s.filePath <span class="k">in</span> existing) <span class="k">continue</span></pre>
-        <p>Esa línea es la que garantiza que las ediciones sobrevivan a reabrir la app: una canción ya guardada se salta por completo, así que ningún reescaneo puede pisar lo que editaste.</p>
+        <p>Una canción cuya ruta ya está guardada <b>no se toca</b> (<code>appeared</code> solo recoge las rutas que <i>no</i> estaban): así ningún reescaneo puede pisar lo que editaste, y las ediciones sobreviven a reabrir la app.</p>
+        <h4>Las tres fases de <code>reconcile()</code>, y por qué mover un archivo no rompe nada</h4>
+        <p>La reconciliación no compara canción a canción, sino <b>conjuntos de rutas</b>, en tres fases:</p>
+        <ol class="tight">
+          <li>Se separan las rutas que han <b>desaparecido</b> del disco (<code>gone</code>) de las que han <b>aparecido</b> (<code>appeared</code>).</li>
+          <li>Se <b>emparejan por nombre de archivo</b>: una ruta que desaparece y otra que aparece con el mismo nombre son, casi con total seguridad, el mismo archivo <b>movido de carpeta</b>. En ese caso no se borra ni se inserta nada: solo se reapunta la fila con <code>updateSongPath()</code>.</li>
+          <li>Lo que queda sin emparejar sí son altas y bajas de verdad: se insertan (creando/enlazando artistas, álbumes y productores) y se borran (podando después los huérfanos).</li>
+        </ol>
+        <aside class="concept">
+          <span class="tag">Diseño · por qué detectar movimientos y no borrar+insertar</span>
+          <p>La fila de una canción guarda mucho más que su ruta: su <code>id</code>, todo lo que hayas escrito en el <a href="#editor">editor de metadatos</a>, la carátula que hayas importado y sus enlaces con artistas, álbumes y productores. Si mover un archivo se tratara como «se ha borrado uno y ha aparecido otro», <b>todo eso se perdería en cada movimiento</b> y la canción volvería a nacer con las etiquetas crudas del archivo. Emparejar por nombre lo evita.</p>
+          <p>El emparejamiento asume que no hay <b>dos archivos con el mismo nombre</b> en carpetas distintas — exactamente la misma suposición que ya hacen las <a href="#f-playlistrepo">playlists</a>, que guardan solo el nombre del archivo.</p>
+        </aside>
         <div class="uses"><span class="chip">@Dao</span><span class="chip">@Query</span><span class="chip">@Transaction</span><span class="chip">Flow</span></div>
       </article>
 
@@ -591,6 +604,8 @@
         <ul class="tight">
           <li><code>songs: Flow&lt;List&lt;Song&gt;&gt;</code> — la lista reactiva ya en modelos de dominio.</li>
           <li><code>reconcile()</code> — escanea el disco (lento, fuera de transacción) y delega en el DAO la conciliación.</li>
+          <li><code>resolvePlayablePath(song)</code> — devuelve una ruta que <b>de verdad se puede reproducir</b>, o <code>null</code> si el archivo ya no está en la fonoteca (ver el recuadro de abajo).</li>
+          <li><code>libraryFolderReadable()</code> — reexpone la comprobación del escáner, para quien vaya a dar una canción por perdida.</li>
           <li><code>albums</code> / <code>artists</code> / <code>producers</code> — las tres listas reactivas de resúmenes que alimentan sus pestañas.</li>
           <li><code>album(id)</code> / <code>artist(id)</code> / <code>producer(id)</code> — la ficha de uno solo, para la pantalla de detalle.</li>
           <li><code>albumTracks(id)</code> — las canciones de un álbum <b>con su nº de pista</b>. Como el número vive en la tabla de cruce y la relación de la canción no lo arrastra, se pide en una segunda consulta y ambas se unen con <code>combine</code>: cada vez que cualquiera de los dos flujos emite, se recalcula la lista.</li>
@@ -606,6 +621,12 @@
           <p>Room usa el modo <b>WAL</b> (<i>Write-Ahead Log</i>): los cambios se escriben primero en un archivo aparte (<code>.db-wal</code>) y más tarde se «consolidan» en el <code>.db</code> principal. Por eso, para hacer una copia consistente, primero se ejecuta un <b>checkpoint</b> (<code>PRAGMA wal_checkpoint</code>) que vuelca el WAL al archivo principal.</p>
         </aside>
         <p>La copia es <b>unidireccional</b> (solo para inspección; la base interna sigue mandando) y <b>best-effort</b> (si algo falla, se ignora con <code>runCatching</code>). Se hace porque en algunos móviles no se puede entrar en <code>/data/data</code>.</p>
+        <aside class="concept">
+          <span class="tag">Diseño · la ventana en la que una ruta guardada miente</span>
+          <p>La reconciliación <b>no es instantánea</b>: <code>MusicScanner.scan()</code> abre y lee las etiquetas de todos los archivos (tarda segundos) y el DAO no escribe nada hasta el final, en una sola transacción. Durante todo ese rato la base de datos sigue apuntando a la carpeta <b>antigua</b> de cualquier archivo que hayas movido. Y como la reconciliación solo se dispara una vez por ejecución (<code>SongsViewModel.loadIfNeeded()</code>), la ventana puede durar bastante más.</p>
+          <p>Antes, esa ruta obsoleta se le pasaba tal cual a ExoPlayer: el archivo no existía, el reproductor fallaba <b>sin decir nada</b> y se quedaba clavado en 0:00. Se notaba sobre todo al abrir una <a href="#f-playlistrepo">playlist</a> recién movido un archivo, porque las playlists casan por nombre y la canción <i>seguía apareciendo</i> en la lista.</p>
+          <p><code>resolvePlayablePath()</code> cierra esa ventana: si el archivo no está donde decía la base de datos, lo busca por nombre con <code>MusicScanner.findByFilename()</code> (recorrido de carpetas, sin leer etiquetas: barato) y, si aparece, <b>corrige la fila de paso</b> para no tener que volver a buscarlo nunca más.</p>
+        </aside>
         <div class="uses"><span class="chip">MusicScanner</span><span class="chip">LibraryDao</span><span class="chip">Flow.map</span><span class="chip">Dispatchers.IO</span></div>
       </article>
     </section>
@@ -627,6 +648,7 @@
           <li><code>filenamesInAnyPlaylist()</code> — la unión de todas las líneas de todas las playlists; alimenta el <b>resaltado amarillo</b> de la pestaña de Canciones.</li>
           <li><code>playlistsContaining(filename)</code> — en qué playlists está una canción; marca las casillas del diálogo de «Añadir a playlist».</li>
           <li><code>resolveSongs(name, byFilename)</code> — convierte los nombres de archivo de una playlist en objetos <code>Song</code> reales, en orden, usando un índice <code>basename → Song</code> que arma quien llama (a partir de la biblioteca cargada). Las entradas cuyo archivo ya no existe se descartan.</li>
+          <li><code>removeSongFromAll(filename)</code> — quita una canción de <b>todas</b> las playlists que la contengan y devuelve cuáles se han tocado. Se usa cuando el archivo ha desaparecido de verdad: dejar la línea solo serviría para que la canción siguiera saliendo en la lista y volviera a fallar cada vez que se pulsara.</li>
         </ul>
         <aside class="concept">
           <span class="tag">Concepto · archivos no reactivos vs. Room</span>
@@ -652,7 +674,7 @@
           <li><code>onResume</code> — al volver a la app, recarga la lista si hay permiso.</li>
           <li><code>onStop</code> — al pasar a segundo plano, lanza <code>exportDatabaseCopy()</code> en un <code>appScope</code> propio (para que termine aunque la Activity muera).</li>
           <li>El mini-reproductor observa el estado del <code>PlayerViewModel</code> con <code>repeatOnLifecycle</code>. Su barra de progreso es un <code>SeekBar</code>: tocarla o arrastrarla llama a <code>seekToFraction</code> (con una bandera <code>userSeeking</code> para que la actualización periódica no pise la posición mientras el usuario la mueve). Se dibuja como una línea sin thumb, de borde a borde (con <code>paddingStart</code>/<code>paddingEnd</code> a 0 — el estilo del <code>SeekBar</code> los define y tienen prioridad sobre <code>android:padding</code>) y con grosor propio vía <code>seekbar_line</code> (la pista por defecto tiene altura fija y no engorda con <code>layout_height</code>).</li>
-          <li><code>setupDynamicColor()</code> — observa <code>playerViewModel.accentColor</code> y tiñe con él <b>todo lo que antes era amarillo fijo</b>: el indicador y el texto de la pestaña activa, la barra de progreso y los botones del mini-reproductor. Mientras no suena nada, ese color <i>es</i> el amarillo de siempre, así que la app arranca igual que antes. Ver <a href="#f-dynamiccolor">DynamicColor</a>.</li>
+          <li><code>setupDynamicColor()</code> — observa <code>playerViewModel.accentColor</code> y tiñe con él <b>todo lo que antes era amarillo fijo</b>: el indicador y el texto de la pestaña activa, la barra de progreso y los botones del mini-reproductor (estos últimos con <a href="#f-accenttint">AccentTint</a>). Mientras no suena nada, ese color <i>es</i> el amarillo de siempre, así que la app arranca igual que antes. El <code>tabRippleColor</code> se pone también a mano: sin eso el destello al tocar una pestaña se quedaría con el <code>colorPrimary</code> del tema, que sigue siendo amarillo fijo. Ver <a href="#f-dynamiccolor">DynamicColor</a>.</li>
           <li>La <b>flecha «expandir»</b> (abajo a la izquierda) abre la ventana del iPod: <code>IPodNanoDialogFragment().show(...)</code>. Se <b>oculta</b> (<code>isVisible = song != null</code>) cuando no hay nada en reproducción, porque no hay reproductor que expandir.</li>
         </ul>
         <aside class="concept">
@@ -694,17 +716,24 @@
         </aside>
         <ul class="tight">
           <li><code>play(song, allSongs)</code> — <b>destruye y recrea</b> las colas: cola 1 = solo esa canción; cola 2 = las demás <code>.shuffled()</code>.</li>
-          <li><code>addToQueue(song)</code> — <b>mueve</b> la canción al final de la cola 1 (la parte que suena + lo encolado): la quita de donde estuviera (cola 1 o cola 2) para no duplicarla, ajustando el índice si hacía falta. No corta la reproducción.</li>
+          <li><code>addToQueue(song)</code> — «añadir a cola de reproducción inmediata»: <b>mueve</b> la canción a la posición <b>justo detrás de la que suena</b> (<code>currentIndex + 1</code>), quitándola de donde estuviera (cola 1 o cola 2) para no duplicarla y ajustando el índice si hacía falta. No corta la reproducción. Se inserta tras la actual —y no al final de la cola 1— para que siga sonando a continuación aunque hayas retrocedido con «anterior» y queden canciones por delante en la cola.</li>
           <li><code>next()</code> — avanza en la cola 1; si se agota, mueve <code>cola2[0]</code> al final de la cola 1 y lo reproduce. <code>previous()</code> retrocede en la cola 1.</li>
           <li><code>jumpTo(d)</code> — salto desde la vista de cola del iPod, que muestra la lista <b>combinada</b> cola 1 + cola 2 (<code>d</code> es el índice combinado). Equivale a pulsar <b>siguiente/anterior</b> las veces necesarias: si la pinchada ya está en la cola 1 solo mueve el índice; si está en la cola 2, arrastra a la cola 1 todo lo que hay hasta ella (que pasa a ser historial), igual que ir pulsando «siguiente».</li>
           <li><code>seekToFraction(f)</code> — salta a un punto de la canción actual (fracción 0..1 de su duración); lo usan las barras deslizables del mini-reproductor y del iPod.</li>
-          <li><code>accentColor: StateFlow&lt;Int&gt;</code> — el <b>color de acento de toda la app</b>, sacado de la carátula de lo que suena (ver <a href="#f-dynamiccolor">DynamicColor</a>). Se recalcula en <code>playCurrent()</code>; el cálculo anterior se <b>cancela</b> (<code>accentJob</code>) para que, si el usuario pasa canciones rápido, el análisis de una portada vieja no termine después que el de la actual y deje el color equivocado.</li>
+          <li><code>accentColor: StateFlow&lt;Int&gt;</code> — el <b>color de acento de toda la app</b>, sacado de la carátula de lo que suena (ver <a href="#f-dynamiccolor">DynamicColor</a>). Se recalcula en <code>loadCurrent()</code>; el cálculo anterior se <b>cancela</b> (<code>accentJob</code>) para que, si el usuario pasa canciones rápido, el análisis de una portada vieja no termine después que el de la actual y deje el color equivocado.</li>
           <li><b>Colecciones</b> (fichas de álbum/artista/productor, y playlists): <code>playCollection(collection, startIndex, playlistName = null)</code> y <code>shuffleCollection(collection, playlistName = null)</code>. Usan una lógica <b>distinta</b> a la de la pestaña de Canciones: allí se pincha un tema suelto y el resto de la biblioteca pasa a la cola 2 mezclada, porque no hay un «después» natural; aquí sí lo hay —el álbum entero, en orden—, así que la colección ocupa la <b>cola 1 completa</b> y la cola 2 se queda vacía. Al acabar el último tema, se para. Es lo que uno espera al poner un disco.</li>
           <li><code>currentPlaylistName: StateFlow&lt;String?&gt;</code> — el nombre de la playlist cuya colección ocupa ahora la cola 1, o <code>null</code> si lo que suena no viene de una playlist (canción suelta, álbum, artista, productor…). Se fija al llamar a <code>playCollection</code>/<code>shuffleCollection</code> con el parámetro <code>playlistName</code> (solo lo pasa el <a href="#f-ipoddialog">iPod en modo navegación</a>) y se limpia a <code>null</code> en <code>play(song, allSongs)</code> (la reproducción de la pestaña Canciones). Sirve para que, al reabrir una playlist que ya es la que suena, el iPod entre directamente en modo normal en vez de en modo navegación.</li>
           <li><code>playRandom(songs)</code> (pasa por <code>play</code>), <code>togglePlayPause()</code>, <code>seekToFraction(f)</code> (mueve la reproducción a la fracción 0..1 de la duración; lo usan las barras deslizables), y <code>playCurrent()</code> privada: <b>único</b> sitio que carga ExoPlayer.</li>
           <li><b>Contrato:</b> el sistema de dos colas es la lógica de reproducción <b>exclusiva de «Canciones»</b> (<code>SongsFragment</code>). Solo desde ahí se construye la cola (<code>play</code>/<code>playRandom</code>/<code>addToQueue</code>); los demás fragmentos usarán otra lógica y no deben llamar a esos métodos.</li>
+          <li><code>missingFile: SharedFlow&lt;Song&gt;</code> — avisa de que el archivo de una canción no aparece por ningún lado. <code>MainActivity</code> lo usa para <b>dos</b> cosas: enseñar un aviso y sacar la canción de <b>todas las playlists</b> (por eso emite la canción entera y no solo el título: hace falta su <code>filePath</code> para saber qué línea quitar). Es un <b>SharedFlow y no un StateFlow</b> porque es un <i>evento</i> de una sola vez: un estado se reemitiría al girar la pantalla y el aviso volvería a salir.</li>
           <li>Un bucle actualiza el progreso cada 500 ms; <code>onCleared()</code> libera el reproductor.</li>
         </ul>
+        <aside class="concept">
+          <span class="tag">Diseño · <code>loadCurrent()</code> valida la ruta antes de reproducir</span>
+          <p><code>loadCurrent()</code> es el único sitio que carga ExoPlayer, y <b>no</b> le pasa <code>song.filePath</code> tal cual: primero lo valida con <a href="#f-repository"><code>LibraryRepository.resolvePlayablePath()</code></a>, porque la ruta guardada puede haberse quedado obsoleta si moviste el archivo de carpeta y la biblioteca aún no se ha vuelto a reconciliar. Sin esa comprobación el reproductor se quedaba mudo en 0:00.</p>
+          <p>Como validar toca disco, va en una <b>corrutina</b>; lo que sí se publica de inmediato es la canción y su color de acento, para que la interfaz responda al momento. Esa corrutina se guarda en <code>loadJob</code> y se <b>cancela</b> en cada carga nueva: si el usuario pasa canciones rápido, una carga anterior podría terminar después que la actual y dejar sonando la canción equivocada (misma precaución que <code>accentJob</code>).</p>
+          <p>Si la ruta se corrige, <code>rewritePath()</code> sustituye también la canción en la cola y en <code>currentSong</code>, para que el resto de la interfaz —que compara canciones por su <code>filePath</code>, como el resaltado de «sonando ahora» en la lista de una playlist— siga cuadrando.</p>
+        </aside>
         <aside class="concept">
           <span class="tag">Diseño · el sistema de colas es solo de «Canciones»</span>
           <p>Los métodos que <b>crean o amplían</b> las colas (<code>play</code>, <code>playRandom</code>, <code>addToQueue</code>) son exclusivos del fragmento de Canciones: solo los llama <code>SongsFragment</code>. Los demás fragmentos (Álbumes, Artistas…) usarán en el futuro <b>otra lógica</b> de reproducción distinta, aún por definir. En cambio, los <i>controles</i> sobre la cola ya existente (<code>next</code>/<code>previous</code>/<code>jumpTo</code>/<code>seekToFraction</code>/<code>togglePlayPause</code>) sí los usa el reproductor global —mini-reproductor e iPod— porque operan sobre lo que ya suena.</p>
@@ -768,6 +797,7 @@
           <li>La barra de progreso es un <code>SeekBar</code>: al arrastrarla se muestra el tiempo destino en vivo y, al soltar, llama a <code>seekToFraction</code> para mover la reproducción.</li>
           <li>La <b>rueda</b> ocupa todo el espacio que sobra (<code>layout_weight="1"</code>) pero se mantiene circular: es un <code>ConstraintLayout</code> con lados iguales (<code>layout_constraintDimensionRatio="1:1"</code>) centrado, así que crece hasta el mayor círculo que quepa; el círculo central escala con <code>layout_constraintWidth_percent</code>.</li>
           <li><code>metaLine(song)</code> construye «Artista · Álbum · Año» <b>omitiendo el año si es nulo</b> (para no mostrar «· null»).</li>
+          <li><code>tintIPod(view, accent)</code> es donde mejor se ve la <b>regla de los dos amarillos</b> (ver <a href="#f-accenttint">AccentTint</a>): los botones, la barra de progreso y los cinco contornos (cuerpo, pantalla, recuadro de info, anillo y centro de la rueda) llevan el acento tal cual, y los <b>rellenos del cuerpo y del centro de la rueda</b> lo llevan <b>a un tercio</b> con <code>DynamicColor.dim</code>. Esos dos rellenos son los únicos sitios de toda la app pintados con <code>@color/um_yellow_dark</code>.</li>
         </ul>
         <h4>Modo navegación de playlist</h4>
         <p>Se entra con <code>newInstance(nombrePlaylist)</code> (lo abre la pestaña de <a href="#playlists">Listas</a>), <b>salvo</b> que esa playlist ya sea la que suena ahora mismo (<code>PlayerViewModel.currentPlaylistName</code> coincide con el nombre): en ese caso se abre directamente en modo normal, porque no tiene sentido "elegir" algo que ya está sonando.</p>
@@ -795,7 +825,7 @@
       <article class="file" id="f-ipodqueueadapter">
         <header><span class="path">ui/player/IPodQueueAdapter.kt</span><span class="role">RecyclerView.Adapter · la cola</span></header>
         <p>Pinta la lista <b>combinada cola 1 + cola 2</b> dentro de la pantalla del iPod. La fila que suena ahora enseña un <b>icono de altavoz</b>; el resto muestran su posición <b>relativa</b> a la actual (<code>position − currentIndex</code>): las ya reproducidas con número <b>negativo y en gris</b>, las próximas (encoladas a mano y luego las mezcladas de la cola 2) con número positivo. Pinchar una fila llama a <code>jumpTo</code>. <code>submit(list, current)</code> recibe la lista combinada y el índice actual.</p>
-        <p class="note">A diferencia de <code>SongsAdapter</code>, no hay cabecera sintética: <code>getItemCount()</code> es el tamaño de la lista y la propia fila del índice actual hace de «Sonando ahora». Recibe también el tamaño de la cola 1 y pinta un <b>divisor gris</b> tras su última fila para separar visualmente la cola 1 de la cola 2.</p>
+        <p class="note">A diferencia de <code>SongsAdapter</code>, no hay cabecera sintética: <code>getItemCount()</code> es el tamaño de la lista y la propia fila del índice actual hace de «Sonando ahora». Pinta además un <b>divisor gris</b> justo <b>tras la fila que suena</b>, separando lo ya reproducido de lo que viene. Antes el divisor se anclaba al tamaño de la cola 1, y eso hacía que <b>no se moviera al pulsar «anterior»</b>: <code>previous()</code> es la única de las tres acciones (pinchar una fila, siguiente, anterior) que solo cambia el índice sin tocar las colas, así que el divisor se quedaba clavado donde estaba.</p>
         <div class="uses"><span class="chip">RecyclerView</span><span class="chip">ViewHolder</span></div>
       </article>
 
@@ -825,7 +855,12 @@
           <li><code>songFilenamesInAnyPlaylist: StateFlow&lt;Set&lt;String&gt;&gt;</code> — los basenames presentes en cualquier playlist, para el resaltado amarillo de Canciones.</li>
           <li><code>create / rename / delete / addSong / removeSong / reorder</code> — delegan en el repositorio en una corrutina y, al terminar, incrementan el <b>tick</b> para que los flujos derivados se recalculen. <code>refresh()</code> hace lo mismo (se llama al volver a la pestaña, por si se editó un archivo desde fuera).</li>
           <li><code>songIndex()</code> — un índice <code>basename → Song</code> de la biblioteca actual, que el iPod usa para resolver una playlist al abrirla.</li>
+          <li><code>forgetSong(filename)</code> — saca una canción de <b>todas</b> las playlists porque su archivo ya no existe. Lo dispara <code>MainActivity</code> al recibir <code>PlayerViewModel.missingFile</code>. Pasa por el ViewModel (y no directamente por el repositorio) precisamente para que el <b>tick</b> se incremente y las pestañas se repinten solas.</li>
         </ul>
+        <aside class="concept">
+          <span class="tag">Diseño · por qué <code>forgetSong</code> mira si la carpeta se puede leer</span>
+          <p>Antes de tocar nada, <code>forgetSong</code> comprueba <code>library.libraryFolderReadable()</code>. Si la carpeta de música no fuera accesible (permiso revocado, almacenamiento no montado…), <b>todas</b> las canciones parecerían perdidas y, pasando canciones, se irían vaciando las playlists una a una. Y una playlist es un <b>archivo del usuario</b>: al contrario que la base de datos, no se puede reconstruir volviendo a escanear. Por eso la comprobación va justo al lado de la acción destructiva.</p>
+        </aside>
         <aside class="concept">
           <span class="tag">Kotlin · mapLatest y el «tick»</span>
           <p>Como los archivos no reemiten solos, se usa un <code>MutableStateFlow&lt;Int&gt;</code> (el «tick») como <b>disparador</b>: cada cambio lo incrementa y los flujos que dependen de él (con <code>combine</code> + <code>mapLatest</code>) vuelven a leer disco. <code>mapLatest</code> cancela el cálculo anterior si llega otro antes de acabar.</p>
@@ -857,7 +892,13 @@
         <ul class="tight">
           <li>La lista de playlists y qué casillas van marcadas se calculan <b>antes</b> de abrir el diálogo (en <a href="#f-songsfragment">SongsFragment</a>, que hace la lectura de disco en una corrutina) y llegan por argumentos. Así el diálogo se construye de forma síncrona y sobrevive a un giro de pantalla sin volver a tocar disco.</li>
           <li>Las modificaciones se delegan en <a href="#f-playlistsvm">PlaylistsViewModel</a>, que refresca el estado compartido (y con él el resaltado de Canciones).</li>
+          <li>Las casillas y los botones también siguen el <b>acento</b> de lo que suena, igual que el <a href="#f-editorfragment">editor de metadatos</a>. Aquí no se colecta el <code>StateFlow</code> en vivo (basta con <code>playerViewModel.accentColor.value</code> al abrir cada diálogo): es una interacción corta y no compensa suscribirse a cambios mientras está abierto.</li>
         </ul>
+        <aside class="concept">
+          <span class="tag">Android · un <code>AlertDialog</code> con casillas no es un RecyclerView</span>
+          <p><code>setMultiChoiceItems</code> monta internamente un <code>ListView</code> (no un <code>RecyclerView</code>), y un <code>ListView</code> también <b>recicla</b> sus filas al hacer scroll. Teñir solo las filas visibles al abrir el diálogo dejaría sin color cualquier playlist que apareciera después, al bajar. <code>tintChecklist()</code> lo resuelve enganchando un <code>OnHierarchyChangeListener</code> al <code>ListView</code>: repite el tintado cada vez que una fila —nueva o reciclada— entra en la jerarquía visible, sin depender de cuándo ni cuántas veces Android decida reutilizarla.</p>
+          <p>El botón «Añadir» del diálogo de «Nueva playlist…» se deshabilita mientras el campo está vacío; por eso su tinte no es un color plano, sino un <code>ColorStateList</code> con dos estados (gris cuando está deshabilitado, acento cuando no) — el mismo patrón que ya usa el contorno de los campos en el editor de metadatos.</p>
+        </aside>
         <div class="uses"><span class="chip">DialogFragment</span><span class="chip">AlertDialog</span><span class="chip">setMultiChoiceItems</span><span class="chip">activityViewModels()</span></div>
       </article>
 
@@ -1036,18 +1077,51 @@
         </aside>
         <h4>Estructura</h4>
         <ul class="tight">
-          <li><code>DEFAULT</code> — el amarillo de siempre, para cuando no hay carátula que analizar.</li>
+          <li><code>DEFAULT</code> — el amarillo de siempre, para cuando no hay carátula que analizar. Tiene que valer lo mismo que <code>@color/um_yellow</code>; está repetido como constante en Kotlin porque hace falta como valor inicial en sitios sin <code>Context</code> a mano (los campos <code>accent</code> de los adaptadores).</li>
           <li><code>fromCover(context, data)</code> — carga la imagen con el mismo <code>ImageLoader</code> de Coil que usa toda la app (así también funciona con el arte embebido de un MP3), la analiza y devuelve el color. Es <code>suspend</code> porque decodificar y recorrer píxeles es trabajo pesado que no puede ir en el hilo principal.</li>
           <li><code>readable(color)</code> (privada) — normaliza el color: le fuerza un mínimo de saturación y mete su luminosidad en una franja media-alta. Sin eso, una portada casi blanca daría un acento invisible y una casi negra, uno indistinguible del fondo.</li>
+          <li><code>dim(color)</code> — el acento <b>a un tercio</b>: los tres canales RGB divididos entre 3, dejando la opacidad intacta. Es lo que sustituye a <code>@color/um_yellow_dark</code>, que guarda esa misma relación con <code>@color/um_yellow</code>. Ver <a href="#f-accenttint">AccentTint</a>.</li>
           <li><code>asBackground(color)</code> — versión apagada y oscura, para usarla de <b>fondo</b> (la cabecera de una ficha). El acento a plena intensidad detrás de un texto sería ilegible.</li>
           <li><code>onColor(fondo)</code> — el color de texto que se lee sobre ese fondo: blanco sobre fondos oscuros, negro sobre claros.</li>
         </ul>
+        <aside class="concept">
+          <span class="tag">Ojo · <code>dim</code> no es <code>asBackground</code></span>
+          <p>Las dos oscurecen, pero no sirven para lo mismo. <code>dim</code> solo baja la luz y <b>conserva el tono y la viveza</b>: es la regla de los dos amarillos de la app. <code>asBackground</code> además <b>desatura</b> y fija una luminosidad concreta, para que el resultado sea un fondo neutro sobre el que se lea el texto, venga de donde venga el acento. Solo la usa la cabecera de las fichas.</p>
+        </aside>
         <aside class="concept">
           <span class="tag">Gráficos · HSL y hardware bitmaps</span>
           <p>Los ajustes se hacen en <b>HSL</b> (tono, saturación, luminosidad) y no en RGB, porque en HSL «más vivo» y «más claro» son literalmente subir un número, mientras que en RGB habría que tocar los tres canales a la vez sin cambiar el tono.</p>
           <p>Y hay un detalle imprescindible: <code>allowHardware(false)</code> al pedirle la imagen a Coil. Por defecto Coil devuelve <i>hardware bitmaps</i>, que viven en la memoria de la GPU y cuyos píxeles <b>no</b> se pueden leer desde la CPU; Palette necesita leerlos uno a uno, así que hay que pedir un bitmap normal.</p>
         </aside>
         <div class="uses"><span class="chip">Palette</span><span class="chip">Coil</span><span class="chip">ColorUtils</span><span class="chip">Dispatchers.IO</span></div>
+      </article>
+
+      <article class="file" id="f-accenttint">
+        <header><span class="path">util/AccentTint.kt</span><span class="role">object · aplicar el acento a las vistas</span></header>
+        <p><a href="#f-dynamiccolor">DynamicColor</a> <i>calcula</i> el color; este objeto es el que lo <i>pinta</i>. Recoge los tres gestos que se repiten en todas las pantallas al repintar con el acento, y sobre todo deja escrita en un solo sitio la <b>regla de los dos amarillos</b> de UltiMusic:</p>
+        <ul class="tight">
+          <li>Lo que en el XML sea <code>@color/um_yellow</code> se repinta con el <b>acento</b> de la canción que suena.</li>
+          <li>Lo que sea <code>@color/um_yellow_dark</code> se repinta con ese mismo acento <b>a un tercio</b> (<code>DynamicColor.dim</code>).</li>
+        </ul>
+        <p>Los dos amarillos fijos cumplen esa misma relación, así que mientras no suena nada la app se ve exactamente igual que siempre: la regla no cambia el diseño, solo lo formaliza.</p>
+        <h4>Estructura</h4>
+        <ul class="tight">
+          <li><code>icons(root, accent, vararg ids)</code> — tiñe iconos buscándolos por id dentro de <code>root</code>. Usa <code>ImageViewCompat.setImageTintList</code> y no <code>setColorFilter</code>, porque un <i>tinte</i> respeta el estado de la vista (pulsada, deshabilitada) y un filtro de color no.</li>
+          <li><code>fill(root, id, color)</code> — cambia el <b>relleno</b> del shape que hace de fondo de una vista (el <code>&lt;solid&gt;</code> de su XML).</li>
+          <li><code>stroke(root, id, color, widthDimen)</code> — cambia su <b>contorno</b> (el <code>&lt;stroke&gt;</code>). Hay que volver a pasarle el ancho porque <code>setStroke</code> lo reescribe entero y no hay forma de preguntarle a un <code>GradientDrawable</code> cuál tenía; por eso los anchos viven en <code>res/values/dimens.xml</code> (<code>ipod_stroke_*</code>) y los comparten el XML del drawable y esta llamada.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · <code>mutate()</code> y drawables compartidos</span>
+          <p>Tanto <code>fill</code> como <code>stroke</code> llaman a <code>mutate()</code> antes de tocar nada, y es imprescindible. Android <b>cachea los drawables por recurso</b>: dos vistas que usen el mismo <code>@drawable/…</code> comparten el mismo objeto en memoria. Sin mutar, repintar una repintaría también la otra (y cualquier otra que se infle después). <code>mutate()</code> le da a esa vista una copia propia sobre la que escribir.</p>
+        </aside>
+        <aside class="concept">
+          <span class="tag">Por qué no se detecta solo</span>
+          <p>Aquí no hay ninguna magia que recorra el árbol de vistas buscando lo que sea amarillo: <b>cada pantalla enumera las suyas</b> en su <code>collect</code> de <code>accentColor</code>. Es a propósito. Android deja <i>escribir</i> colores sin problema pero casi no deja <i>leerlos</i>: el color de un <code>&lt;stroke&gt;</code> de un shape no se puede consultar desde código a ningún nivel de API, y los cinco contornos del iPod son justo eso. Detectarlos automáticamente obligaría a re-parsear los XML de los drawables y a llevar un registro de qué era cada superficie antes del primer repintado. Enumerarlas es más tonto, pero se entiende de un vistazo y no se rompe.</p>
+          <p><b>Consecuencia práctica:</b> quien añada una vista amarilla nueva tiene que acordarse de darla de alta en su pantalla.</p>
+        </aside>
+        <h4>Qué queda fuera</h4>
+        <p><code>colorPrimary</code> y <code>colorSecondary</code> del tema siguen siendo el amarillo fijo, así que lo que Material pinta por su cuenta desde ahí no sigue al acento automáticamente. Cambiar un color del tema de verdad exige <b>recrear la Activity</b>, que con un color que cambia en cada canción daría un parpadeo constante. Donde molestaba se ha compensado a mano: el <code>tabRippleColor</code> de las pestañas en <a href="#f-mainactivity">MainActivity</a>, los contornos y el cursor del <a href="#f-editorfragment">editor de metadatos</a>, y las casillas y botones del diálogo <a href="#f-addtoplaylist">«Añadir a playlist»</a>.</p>
+        <div class="uses"><span class="chip">ImageViewCompat</span><span class="chip">GradientDrawable</span><span class="chip">ColorStateList</span><span class="chip">DynamicColor</span></div>
       </article>
 
       <article class="file" id="f-timeformat">

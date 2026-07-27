@@ -1,6 +1,7 @@
 package com.untarlamanteca.ultimusic.ui.player
 
 import android.annotation.SuppressLint
+import android.content.res.ColorStateList
 import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
@@ -9,10 +10,12 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.ImageViewCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.untarlamanteca.ultimusic.R
 import com.untarlamanteca.ultimusic.data.scan.MusicScanner
 import com.untarlamanteca.ultimusic.model.Song
+import com.untarlamanteca.ultimusic.util.DynamicColor
 import java.util.Collections
 
 /**
@@ -40,6 +43,15 @@ class PlaylistQueueAdapter(
     /** Índice dentro de [songs] de [nowPlayingFilePath], o -1 si no está aquí. Se recalcula por ruta
      * (no por posición fija) para seguir siendo correcto tras reordenar con arrastre. */
     private var nowPlayingIndex: Int = -1
+
+    /** Color de acento actual (icono de altavoz); por defecto el amarillo de la app. */
+    private var accent: Int = DynamicColor.DEFAULT
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun setAccent(color: Int) {
+        accent = color
+        notifyDataSetChanged()
+    }
 
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>, selected: Int) {
@@ -109,7 +121,7 @@ class PlaylistQueueAdapter(
     }
 
     override fun onBindViewHolder(holder: RowViewHolder, position: Int) {
-        holder.bind(songs[position], position, position == selectedIndex, nowPlayingIndex)
+        holder.bind(songs[position], position, position == selectedIndex, nowPlayingIndex, accent)
     }
 
     class RowViewHolder(
@@ -130,11 +142,12 @@ class PlaylistQueueAdapter(
          * cada fila muestra sencillamente su posición absoluta.
          */
         @SuppressLint("ClickableViewAccessibility")
-        fun bind(song: Song, position: Int, selected: Boolean, nowPlayingIndex: Int) {
+        fun bind(song: Song, position: Int, selected: Boolean, nowPlayingIndex: Int, accent: Int) {
             val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
             subtitle.text = itemView.context.getString(
                 R.string.queue_subtitle_format, song.title, artist
             )
+            ImageViewCompat.setImageTintList(speaker, ColorStateList.valueOf(accent))
 
             if (nowPlayingIndex >= 0) {
                 val offset = position - nowPlayingIndex

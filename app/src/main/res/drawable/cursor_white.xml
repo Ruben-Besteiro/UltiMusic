@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cursor de texto para Android &lt; 10 (API &lt; 29): ahí no hay forma de recolorearlo en tiempo
+     real (ver MetadataEditorDialogFragment), así que se deja fijo en blanco en vez de en el
+     amarillo del tema. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@android:color/white" />
+    <size android:width="2dp" />
+</shape>

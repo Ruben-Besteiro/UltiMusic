@@ -94,6 +94,22 @@ class PlaylistRepository private constructor() {
         if (filename in current) setFilenames(name, current.filter { it != filename })
     }
 
+    /**
+     * Quita [filename] de TODAS las playlists que lo contengan, y devuelve cuáles se han tocado.
+     *
+     * Se usa cuando el archivo ha desaparecido de verdad de la fonoteca. Dejar la línea no serviría
+     * de nada: la canción seguiría apareciendo en la lista y volvería a fallar cada vez que se
+     * pulsara, porque `resolveSongs` ya no la encuentra en la biblioteca.
+     */
+    suspend fun removeSongFromAll(filename: String): List<String> = withContext(Dispatchers.IO) {
+        listPlaylistNames().filter { name ->
+            val current = readFilenames(name)
+            if (filename !in current) return@filter false
+            setFilenames(name, current.filter { it != filename })
+            true
+        }
+    }
+
     /** Unión de los nombres de archivo presentes en CUALQUIER playlist (para el resaltado amarillo). */
     suspend fun filenamesInAnyPlaylist(): Set<String> = withContext(Dispatchers.IO) {
         listPlaylistNames().flatMap { readFilenames(it) }.toSet()

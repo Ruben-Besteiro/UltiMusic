@@ -1,6 +1,9 @@
 package com.untarlamanteca.ultimusic.ui.editor
 
+import android.content.res.ColorStateList
+import android.graphics.drawable.Drawable
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
@@ -14,11 +17,16 @@ import android.widget.ImageView
 import android.widget.Toast
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.content.res.AppCompatResources
+import androidx.core.content.ContextCompat
+import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.children
 import androidx.core.view.updatePadding
 import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -26,9 +34,12 @@ import androidx.lifecycle.repeatOnLifecycle
 import coil.load
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
+import com.google.android.material.textfield.TextInputLayout
 import com.untarlamanteca.ultimusic.R
 import com.untarlamanteca.ultimusic.model.Song
+import com.untarlamanteca.ultimusic.ui.PlayerViewModel
 import com.untarlamanteca.ultimusic.ui.common.CollapsibleSection
+import com.untarlamanteca.ultimusic.util.AccentTint
 import com.untarlamanteca.ultimusic.util.CoverArt
 import com.untarlamanteca.ultimusic.util.CoverLoader
 import kotlinx.coroutines.launch
@@ -48,6 +59,7 @@ import kotlinx.coroutines.launch
 class MetadataEditorDialogFragment : DialogFragment() {
 
     private val viewModel: MetadataEditorViewModel by viewModels()
+    private val playerViewModel: PlayerViewModel by activityViewModels()
 
     /** Imagen elegida en esta sesión de edición; no se copia a disco hasta que se guarda. */
     private var pickedImage: Uri? = null
@@ -124,6 +136,11 @@ class MetadataEditorDialogFragment : DialogFragment() {
         setupToolbar(view)
         setupSections(view)
 
+        val textFields = mutableListOf<TextInputLayout>()
+        collectTextInputLayouts(view, textFields)
+        val editTexts = mutableListOf<EditText>()
+        collectEditTexts(view, editTexts)
+
         val openPicker = {
             pickImage.launch(
                 PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
@@ -163,8 +180,67 @@ class MetadataEditorDialogFragment : DialogFragment() {
                         }
                     }
                 }
+                // El amarillo dinámico del botón de portada, del contorno de los campos al
+                // enfocarlos y del cursor de texto sigue el color de lo que suena: por defecto
+                // Material usa colorPrimary (amarillo fijo) para las tres cosas.
+                launch {
+                    val defaultStroke = ContextCompat.getColor(requireContext(), R.color.um_divider)
+                    playerViewModel.accentColor.collect { accent ->
+                        AccentTint.fill(view, R.id.btnPickCover, accent)
+                        val strokeColors = ColorStateList(
+                            arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
+                            intArrayOf(accent, defaultStroke)
+                        )
+                        textFields.forEach { field ->
+                            field.setBoxStrokeColorStateList(strokeColors)
+                            field.setHintTextColor(ColorStateList.valueOf(accent))
+                        }
+                        // La rayita del cursor (setCursorColor, vía TextInputLayout) y la gota para
+                        // arrastrarlo (setTextSelectHandle*, API de View) son dos dibujos aparte, y
+                        // la gota solo tiene API pública para recolorearse desde Android 10 (API
+                        // 29). Por debajo de esa versión NO tocamos ninguna de las dos, para que no
+                        // quede una en el acento y la otra en el blanco fijo del tema (themes.xml):
+                        // las dos se quedan blancas.
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            val cursorTint = ColorStateList.valueOf(accent)
+                            textFields.forEach { it.setCursorColor(cursorTint) }
+                            editTexts.forEach { field ->
+                                // Instancia nueva por cada llamada: si una selección muestra la
+                                // gota izquierda y la derecha a la vez y comparten Drawable, cada
+                                // una pisaría los bounds de la otra al posicionarse.
+                                field.setTextSelectHandle(handleDrawable(accent))
+                                field.setTextSelectHandleLeft(handleDrawable(accent))
+                                field.setTextSelectHandleRight(handleDrawable(accent))
+                            }
+                        }
+                    }
+                }
             }
         }
+    }
+
+    /** Recorre el árbol de vistas recogiendo todos los [TextInputLayout] (visibles o no: los de las
+     * secciones plegables siguen inflados aunque estén ocultos). */
+    private fun collectTextInputLayouts(view: View, into: MutableList<TextInputLayout>) {
+        if (view is TextInputLayout) into.add(view)
+        if (view is ViewGroup) view.children.forEach { collectTextInputLayouts(it, into) }
+    }
+
+    /** Igual que [collectTextInputLayouts] pero para los campos de texto en sí (incluye los
+     * [MaterialAutoCompleteTextView], que también son EditText). */
+    private fun collectEditTexts(view: View, into: MutableList<EditText>) {
+        if (view is EditText) into.add(view)
+        if (view is ViewGroup) view.children.forEach { collectEditTexts(it, into) }
+    }
+
+    /** "Gota" que se arrastra para mover el cursor o seleccionar texto, del color [color]. Sustituye
+     * al dibujo nativo del sistema (que no se puede recolorear) por nuestra propia forma de gota
+     * (ver drawable/handle_teardrop), retiñéndola con el acento. */
+    private fun handleDrawable(color: Int): Drawable {
+        val drawable = AppCompatResources.getDrawable(requireContext(), R.drawable.handle_teardrop)!!
+            .mutate()
+        DrawableCompat.setTint(drawable, color)
+        return drawable
     }
 
     private fun bindViews(view: View) {

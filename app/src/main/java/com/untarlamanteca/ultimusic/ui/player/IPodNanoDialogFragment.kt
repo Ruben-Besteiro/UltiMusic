@@ -1,9 +1,7 @@
 package com.untarlamanteca.ultimusic.ui.player
 
 import android.content.res.ColorStateList
-import android.graphics.drawable.GradientDrawable
 import android.os.Bundle
-import android.util.TypedValue
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -15,7 +13,6 @@ import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
-import androidx.core.widget.ImageViewCompat
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -32,8 +29,10 @@ import com.untarlamanteca.ultimusic.data.scan.MusicScanner
 import com.untarlamanteca.ultimusic.model.Song
 import com.untarlamanteca.ultimusic.ui.PlayerViewModel
 import com.untarlamanteca.ultimusic.ui.playlists.PlaylistsViewModel
+import com.untarlamanteca.ultimusic.util.AccentTint
 import com.untarlamanteca.ultimusic.util.CoverArt
 import com.untarlamanteca.ultimusic.util.CoverLoader
+import com.untarlamanteca.ultimusic.util.DynamicColor
 import com.untarlamanteca.ultimusic.util.TimeFormat
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
@@ -134,6 +133,7 @@ class IPodNanoDialogFragment : DialogFragment() {
 
         // Adaptador de la cola en reproducción (modo normal).
         val queueAdapter = IPodQueueAdapter { position -> playerViewModel.jumpTo(position) }
+        queueAdapter.setAccent(playerViewModel.accentColor.value)
         val queueLayoutManager = LinearLayoutManager(requireContext())
         queueList.layoutManager = queueLayoutManager
         queueList.adapter = queueAdapter
@@ -228,10 +228,10 @@ class IPodNanoDialogFragment : DialogFragment() {
                         playerViewModel.queue1,
                         playerViewModel.queue2,
                         playerViewModel.currentIndex
-                    ) { q1, q2, i -> Triple(q1 + q2, i, q1.size) }
-                        .collect { (combined, index, queue1Size) ->
+                    ) { q1, q2, i -> Pair(q1 + q2, i) }
+                        .collect { (combined, index) ->
                             if (browsing) return@collect
-                            queueAdapter.submit(combined, index, queue1Size)
+                            queueAdapter.submit(combined, index)
                             // Centrar la fila actual (la altura ya está disponible en post{}).
                             queueList.post {
                                 queueLayoutManager.scrollToPositionWithOffset(
@@ -305,6 +305,7 @@ class IPodNanoDialogFragment : DialogFragment() {
                 playlistsViewModel.reorder(name, newList.map { File(it.filePath).name })
             }
         )
+        playlistAdapter.setAccent(playerViewModel.accentColor.value)
         queueList.adapter = playlistAdapter
 
         // Arrastre solo vertical, iniciado desde el manejador (no por pulsación larga).
@@ -453,43 +454,53 @@ class IPodNanoDialogFragment : DialogFragment() {
         browseJob = null
         itemTouchHelper?.attachToRecyclerView(null)
         itemTouchHelper = null
+        queueAdapter.setAccent(playerViewModel.accentColor.value)
         queueList.adapter = queueAdapter
         setupNormalControls()
         play(playlistAdapter)
     }
 
     /**
-     * Repinta de [accent] todos los contornos y botones del iPod.
+     * Aplica el color [accent] a los botones, la barra de progreso, los contornos del iPod (cuerpo,
+     * pantalla, recuadro de info, anillo y centro de la rueda), los rellenos del cuerpo y del centro
+     * de la rueda, y el icono de altavoz de la fila "sonando ahora" de la cola.
      *
-     * Los contornos están definidos en XML como `<shape>` con un `<stroke>` amarillo. En tiempo de
-     * ejecución un `<shape>` es un [GradientDrawable], cuyo contorno se puede cambiar con
-     * `setStroke`. Hace falta `mutate()` antes: por defecto, todas las vistas que usan el mismo
-     * drawable comparten su estado interno, así que sin mutarlo cambiaríamos el color de golpe a
-     * todos los sitios donde se use ese archivo (y de forma persistente durante toda la ejecución).
-     * `mutate()` le da a esta vista una copia propia.
+     * Es el sitio donde se ve mejor la regla de los dos amarillos (ver [AccentTint]): todo lo que en
+     * el XML era `um_yellow` lleva el acento tal cual, y lo que era `um_yellow_dark` lo lleva
+     * atenuado ([DynamicColor.dim]).
      */
     private fun tintIPod(view: View, accent: Int) {
-        fun stroke(id: Int, widthDp: Float) {
-            val drawable = view.findViewById<View>(id)?.background?.mutate() as? GradientDrawable
-            drawable?.setStroke(dpToPx(widthDp), accent)
-        }
-        stroke(R.id.ipodBody, 2f)
-        stroke(R.id.topBox, 2f)
-        stroke(R.id.infoBox, 1f)
-        stroke(R.id.clickWheel, 2f)
-        stroke(R.id.wheelCenter, 2f)
+        AccentTint.icons(view, accent, R.id.btnMenu, R.id.btnPrev, R.id.btnNext, R.id.btnPlayPauseBig)
+        view.findViewById<SeekBar>(R.id.ipodProgress).progressTintList =
+            ColorStateList.valueOf(accent)
 
-        val tint = ColorStateList.valueOf(accent)
-        for (id in listOf(R.id.btnMenu, R.id.btnPrev, R.id.btnNext, R.id.btnPlayPauseBig)) {
-            ImageViewCompat.setImageTintList(view.findViewById(id), tint)
+        val strokeWidths = listOf(
+            R.id.ipodBody to R.dimen.ipod_stroke_body,
+            R.id.topBox to R.dimen.ipod_stroke_display,
+            R.id.infoBox to R.dimen.ipod_stroke_info_box,
+            R.id.clickWheel to R.dimen.ipod_stroke_wheel_ring,
+            R.id.wheelCenter to R.dimen.ipod_stroke_wheel_center
+        )
+        for ((id, widthDimen) in strokeWidths) {
+            AccentTint.stroke(view, id, accent, widthDimen)
         }
-        view.findViewById<SeekBar>(R.id.ipodProgress).progressTintList = tint
+
+        // El cuerpo y el centro de la rueda son los dos sitios de la app pintados con
+        // `@color/um_yellow_dark`, así que son los dos que llevan el acento atenuado. Antes se
+        // quedaban con el amarillo oscuro fijo del XML aunque sonara una canción azul, porque aquí
+        // solo se repintaban los contornos.
+        val dimAccent = DynamicColor.dim(accent)
+        AccentTint.fill(view, R.id.ipodBody, dimAccent)
+        AccentTint.fill(view, R.id.wheelCenter, dimAccent)
+
+        // El icono de altavoz de la fila "sonando ahora" también sigue el acento, tanto en la cola
+        // real (IPodQueueAdapter) como en la lista de una playlist en modo navegación
+        // (PlaylistQueueAdapter): solo uno de los dos es el adaptador activo en cada momento.
+        when (val adapter = view.findViewById<RecyclerView>(R.id.queueList).adapter) {
+            is IPodQueueAdapter -> adapter.setAccent(accent)
+            is PlaylistQueueAdapter -> adapter.setAccent(accent)
+        }
     }
-
-    /** Los grosores de contorno del XML están en dp; [GradientDrawable.setStroke] los quiere en px. */
-    private fun dpToPx(dp: Float): Int = TypedValue.applyDimension(
-        TypedValue.COMPLEX_UNIT_DIP, dp, resources.displayMetrics
-    ).toInt()
 
     /** Construye la línea "Artista · Álbum · Año" omitiendo el año si no existe. */
     private fun metaLine(song: Song): String {

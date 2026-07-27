@@ -27,8 +27,15 @@ import kotlinx.coroutines.withContext
  */
 object DynamicColor {
 
-    /** El amarillo de siempre: se usa mientras no hay carátula de la que sacar nada. */
-    const val DEFAULT = 0xFFFFD200.toInt()
+    /**
+     * El amarillo de siempre: se usa mientras no hay carátula de la que sacar nada.
+     *
+     * Tiene que valer lo mismo que `@color/um_yellow` (res/values/colors.xml). Está repetido aquí
+     * como constante, y no leído del recurso, porque hace falta como valor inicial en sitios que no
+     * tienen un `Context` a mano (los campos `accent` de los adaptadores, por ejemplo). Si se cambia
+     * el amarillo de la app hay que cambiarlo en los dos sitios.
+     */
+    const val DEFAULT = 0xFFFFD000.toInt()
 
     /**
      * Carga la imagen indicada (cualquier dato que entienda Coil: un [java.io.File], un
@@ -94,8 +101,28 @@ object DynamicColor {
     }
 
     /**
+     * El acento "al N-ésimo de intensidad": cada canal de color dividido entre N, dejando la opacidad
+     * intacta. Es lo que sustituye a `@color/um_yellow_dark`, que guarda esa misma relación con
+     * `@color/um_yellow`.
+     *
+     * Se hace en RGB y no en HSL a propósito: dividir los tres canales es literalmente "un N-ésimo de
+     * luz", que es la relación que ya había entre los dos amarillos fijos. Cuidado con no confundirla
+     * con [asBackground], que es otra cosa (ver ahí).
+     */
+    fun dim(color: Int): Int = Color.argb(
+        Color.alpha(color),
+        Color.red(color) / 5,
+        Color.green(color) / 5,
+        Color.blue(color) / 5
+    )
+
+    /**
      * Versión apagada y oscura del acento, para usarla de FONDO (la cabecera de la ficha de un
      * álbum). Un acento a plena intensidad detrás de un texto sería ilegible.
+     *
+     * No es lo mismo que [dim]: aquí además se **desatura** y se fija una luminosidad concreta, para
+     * que el resultado sea un fondo neutro sobre el que se lea el texto, salga de donde salga el
+     * acento. [dim] conserva el tono y la viveza; solo baja la luz.
      */
     fun asBackground(color: Int): Int {
         val hsl = FloatArray(3)
