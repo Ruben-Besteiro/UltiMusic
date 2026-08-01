@@ -15,12 +15,21 @@
     <string name="action_search">Buscar</string>
     <string name="action_more">Más opciones</string>
 
+    <!-- Buscador -->
+    <string name="search_hint">Buscar</string>
+    <string name="search_back">Cerrar la búsqueda</string>
+    <string name="search_clear">Borrar lo escrito</string>
+    <string name="search_prompt">Escribe para buscar canciones, álbumes, artistas y productores.</string>
+    <string name="search_no_results">No se ha encontrado nada para «%1$s».</string>
+
     <!-- Canciones -->
     <string name="shuffle_title">Escoger al azar</string>
     <string name="song_subtitle_format">%1$s | %2$s</string>
     <string name="song_more">Más opciones de la canción</string>
     <string name="add_to_queue">Añadir a cola de reproducción inmediata</string>
     <string name="add_to_playlist">Añadir a playlist</string>
+    <string name="delete_song">Eliminar</string>
+    <string name="delete_song_confirm">¿Eliminar «%1$s»? Se borrará el archivo del dispositivo y no se puede deshacer.</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
     <string name="no_songs">Guarda tus archivos de audio en la carpeta UltiMusic</string>
@@ -31,7 +40,7 @@
     <string name="shuffle_collection">Reproducir en orden aleatorio</string>
     <string name="no_albums">Todavía no hay ningún álbum.</string>
     <string name="no_artists">Todavía no hay ningún artista.</string>
-    <string name="no_producers">Ninguna canción tiene productor asignado.</string>
+    <string name="no_producers">Todavía no hay ningún productor</string>
     <string name="no_songs_here">Aquí no hay ninguna canción.</string>
 
     <!--
@@ -67,6 +76,8 @@
     <string name="field_lyrics">Letra</string>
     <string name="field_language">Idioma</string>
     <string name="field_comment">Comentario</string>
+    <string name="field_video_url">URL del vídeo</string>
+    <string name="field_video_url_hint">Toca para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo.</string>
     <string name="field_track_number">Nº de pista</string>
     <string name="field_disc_number">Nº de disco</string>
     <string name="field_og_title">Título original</string>
@@ -87,12 +98,23 @@
     <string name="updating_database_percent">Actualizando base de datos local… %d%%</string>
 
     <!-- Ventana del iPod -->
-    <string name="ipod_title">UltiMusicPod Nano</string>
+    <string name="ipod_title">UltiMusicPod</string>
     <string name="ipod_close">Cerrar</string>
     <string name="ipod_toggle_view">Alternar carátula y cola</string>
     <string name="ipod_prev">Anterior</string>
     <string name="ipod_next">Siguiente</string>
     <string name="ipod_now_playing">Sonando ahora</string>
+    <string name="ipod_toggle_video">Alternar audio y vídeo</string>
+
+    <!-- Modo vídeo del iPod -->
+    <string name="video_picker_title">Elige el vídeo</string>
+    <string name="video_picker_saved">Vídeo guardado para «%1$s»</string>
+    <string name="video_no_song">No hay ninguna canción sonando</string>
+    <string name="video_bad_url">El enlace del vídeo no es válido. Corrígelo en el editor de metadatos.</string>
+    <string name="video_thumbnail_desc">Miniatura del vídeo</string>
+    <string name="video_settings_title">Ajustes del reproductor de vídeo</string>
+    <string name="video_settings_option_frame">Fotograma actual</string>
+    <string name="video_settings_option_thumbnail">Miniatura</string>
     <string name="queue_subtitle_format">%1$s · %2$s</string>
 
     <!-- Playlists -->

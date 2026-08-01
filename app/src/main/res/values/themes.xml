@@ -23,13 +23,46 @@
 
     <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />
 
-    <!-- Tema del diálogo del iPod: pantalla completa, fondo transparente y animación de deslizamiento. -->
+    <!--
+      Tema del diálogo del iPod: pantalla completa y fondo transparente. Sin
+      android:windowAnimationStyle a propósito: la animación de ventana la fija en código
+      IPodNanoDialogFragment.onStart(), porque varía según cómo se haya abierto (ver
+      Animation.UltiMusic.IPodEnterOnly).
+    -->
     <style name="Theme.UltiMusic.IPodDialog" parent="Theme.UltiMusic">
         <item name="android:windowIsFloating">false</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowContentOverlay">@null</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/um_background</item>
+    </style>
+
+    <!--
+      Tema de las ventanas a pantalla completa que se abren encima de la principal: el editor de
+      metadatos, la ficha de álbum/artista/productor y el buscador. Mismo diálogo deslizante que el
+      iPod, pero con fondo opaco porque aquí sí se dibuja una pantalla entera de contenido. La barra
+      de estado es transparente para que el color de la cabecera llegue hasta arriba del todo, por
+      detrás de la hora y la batería; cada fragmento rellena ese hueco con padding en su toolbar.
+
+      Este estilo estaba definido SOLO en values-night/, así que con el móvil en modo claro no
+      existía y abrir cualquiera de esas ventanas reventaba. Aquí está su versión por defecto.
+    -->
+    <style name="Theme.UltiMusic.FullScreenDialog" parent="Theme.UltiMusic">
+        <item name="android:windowIsFloating">false</item>
+        <item name="android:windowBackground">@color/um_background</item>
+        <item name="android:windowContentOverlay">@null</item>
         <item name="android:windowAnimationStyle">@style/Animation.UltiMusic.SlideUp</item>
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/um_background</item>
+    </style>
+
+    <!--
+      El buscador es una ventana a pantalla completa como las anteriores, pero con su propia
+      animación de entrada y salida (ver Animation.UltiMusic.SearchSlide). Hereda todo lo demás del
+      tema del que cuelga, así que en modo noche recoge automáticamente la versión de values-night/
+      de ese padre: no hace falta duplicar este estilo allí.
+    -->
+    <style name="Theme.UltiMusic.SearchDialog" parent="Theme.UltiMusic.FullScreenDialog">
+        <item name="android:windowAnimationStyle">@style/Animation.UltiMusic.SearchSlide</item>
     </style>
 </resources>

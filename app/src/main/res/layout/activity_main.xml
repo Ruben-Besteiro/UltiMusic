@@ -44,7 +44,7 @@
     <SeekBar
         android:id="@+id/songProgress"
         android:layout_width="match_parent"
-        android:layout_height="8dp"
+        android:layout_height="10dp"
         android:paddingStart="0dp"
         android:paddingEnd="0dp"
         android:max="1000"
@@ -54,6 +54,7 @@
         android:progressTint="@color/um_yellow"
         android:thumb="@null"
         android:splitTrack="false"
+        android:background="@null"
         android:foreground="@android:color/transparent" />
 
     <include

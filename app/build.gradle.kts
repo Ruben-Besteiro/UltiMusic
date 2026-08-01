@@ -4,13 +4,13 @@ plugins {
 }
 
 android {
-    namespace = "com.untarlamanteca.ultimusic"
+    namespace = "com.untar.ultimusic"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.untarlamanteca.ultimusic"
+        applicationId = "com.untar.ultimusic"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
@@ -47,6 +47,11 @@ dependencies {
     implementation(libs.androidx.recyclerview)
     implementation(libs.coil)
     implementation(libs.androidx.palette)
+    // Envoltorio del IFrame Player API de YouTube: expone el reproductor oficial como una View de
+    // Android y nos da callbacks de posición/estado en Kotlin (ver VideoScreenController).
+    // Mínimo la 13.0.0: desde julio de 2025 YouTube exige que el embebido se identifique con un
+    // `origin`, y las versiones 12.x (que no lo mandan) fallan con el error 152.
+    implementation(libs.youtube.player)
     implementation(libs.androidx.media3.exoplayer)
     implementation(libs.androidx.media3.ui)
     implementation(libs.androidx.media3.session)

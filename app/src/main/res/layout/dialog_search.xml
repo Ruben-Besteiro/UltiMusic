@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Buscador de la biblioteca. La caja de texto va DENTRO de la MaterialToolbar (una toolbar admite
+  vistas hijas además de su título y su menú), así que la barra superior se convierte en el campo de
+  búsqueda sin cambiar de pantalla: flecha para volver a la izquierda y aspa para borrar a la derecha.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/searchRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/searchToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_surface"
+        app:contentInsetStartWithNavigation="0dp"
+        app:navigationContentDescription="@string/search_back"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationIconTint="@color/um_on_background">
+
+        <!--
+          background="@null" quita el subrayado que Android dibuja por defecto bajo un EditText: aquí
+          el "campo" es la barra entera, y la rayita quedaría fuera de sitio.
+          imeOptions="actionSearch" pone la lupa en la tecla de acción del teclado en vez del salto
+          de línea; el fragmento la usa para cerrar el teclado sin cerrar la búsqueda.
+        -->
+        <EditText
+            android:id="@+id/searchInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@null"
+            android:hint="@string/search_hint"
+            android:imeOptions="actionSearch"
+            android:importantForAutofill="no"
+            android:inputType="text"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textColorHint="@color/um_on_surface_muted"
+            android:textSize="18sp"
+            tools:ignore="LabelFor" />
+
+    </com.google.android.material.appbar.MaterialToolbar>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerSearch"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:scrollbars="none"
+            tools:listitem="@layout/item_song" />
+
+        <!-- Mismo hueco para las dos situaciones: "aún no has escrito nada" y "no hay resultados". -->
+        <TextView
+            android:id="@+id/emptyView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:gravity="center"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="16sp"
+            tools:text="Escribe para buscar…" />
+
+    </FrameLayout>
+
+</LinearLayout>

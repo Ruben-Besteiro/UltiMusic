@@ -6,16 +6,16 @@
 <layer-list xmlns:android="http://schemas.android.com/apk/res/android">
     <item android:id="@android:id/background" android:gravity="center_vertical">
         <shape android:shape="rectangle">
-            <size android:height="4dp" />
-            <corners android:radius="2dp" />
+            <size android:height="8dp" />
+            <corners android:radius="4dp" />
             <solid android:color="@android:color/white" />
         </shape>
     </item>
     <item android:id="@android:id/progress" android:gravity="center_vertical">
         <clip android:clipOrientation="horizontal" android:gravity="left">
             <shape android:shape="rectangle">
-                <size android:height="4dp" />
-                <corners android:radius="2dp" />
+                <size android:height="8dp" />
+                <corners android:radius="4dp" />
                 <solid android:color="@android:color/white" />
             </shape>
         </clip>

@@ -14,7 +14,7 @@
       celda lo decide el GridLayoutManager en tiempo de ejecución (depende de las columnas y de la
       pantalla), así que no se puede escribir una altura fija en el XML.
     -->
-    <com.untarlamanteca.ultimusic.ui.common.SquareFrameLayout
+    <com.untar.ultimusic.ui.common.SquareFrameLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content">
 
@@ -24,9 +24,8 @@
             android:layout_height="match_parent"
             android:background="@drawable/cover_placeholder"
             android:contentDescription="@string/album_cover_desc"
-            android:scaleType="centerCrop"
-            app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
-    </com.untarlamanteca.ultimusic.ui.common.SquareFrameLayout>
+            android:scaleType="centerCrop" />
+    </com.untar.ultimusic.ui.common.SquareFrameLayout>
 
     <TextView
         android:id="@+id/albumTitle"

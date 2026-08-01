@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Trozo de manifiesto que sólo se fusiona en la compilación `debug`: declara la Activity vacía que
+  usan los tests instrumentados como escenario. En `release` no existe ni la clase ni esta entrada.
+
+  Tiene que vivir aquí (en la app) y no en el source set `androidTest`, porque la instrumentación
+  corre dentro del proceso de la app y no puede lanzar Activities del APK de pruebas.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <application>
+        <activity
+            android:name="com.untar.ultimusic.ui.common.ScrollbarHostActivity"
+            android:exported="false" />
+    </application>
+
+</manifest>

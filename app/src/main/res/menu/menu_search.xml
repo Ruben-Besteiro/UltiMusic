@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Único botón de la barra del buscador: el aspa que vacía lo escrito. -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_clear_search"
+        android:icon="@drawable/ic_close"
+        android:title="@string/search_clear"
+        app:showAsAction="always" />
+</menu>

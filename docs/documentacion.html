@@ -220,15 +220,18 @@
     <h5>Capa de interfaz</h5>
     <a href="#ui">ui/ <code>· pantallas</code></a>
     <a href="#ipod">ui/player/ <code>· iPod</code></a>
+    <a href="#video">ui/player/ <code>· modo vídeo</code></a>
     <a href="#playlists">ui/playlists/ <code>· listas de reproducción</code></a>
     <a href="#library">ui/library/ <code>· álbumes · artistas · productores</code></a>
     <a href="#editor">ui/editor/ <code>· editor de metadatos</code></a>
+    <a href="#search">ui/search/ <code>· buscador</code></a>
     <a href="#common">ui/common/ <code>· vistas compartidas</code></a>
-    <a href="#util">util/ <code>· carátulas · color · tiempos</code></a>
+    <a href="#util">util/ <code>· carátulas · color · tiempos · YouTube</code></a>
 
     <h5>Referencia</h5>
     <a href="#esquema">Esquema de la BD</a>
     <a href="#config">Config y recursos</a>
+    <a href="#tests">Tests instrumentados</a>
     <a href="#inspeccionar">Inspeccionar la BD</a>
     <a href="#mantenimiento">Mantenimiento</a>
   </aside>
@@ -363,6 +366,7 @@
           <li><code>id</code>, <code>filePath</code> (ruta del archivo), <code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>.</li>
           <li><code>artists: List&lt;Artist&gt;</code>, <code>albums: List&lt;Album&gt;</code> y <code>producers: List&lt;Producer&gt;</code> — una canción puede tener varios de cada uno.</li>
           <li><code>imageName</code>, <code>comment</code>, <code>lyrics</code>, <code>language</code> — metadatos editables.</li>
+          <li><code>videoUrl</code> — enlace de YouTube del <b>videoclip</b>, para el <a href="#video">modo vídeo</a> del iPod. Lo pone <b>siempre el usuario</b> (a mano en el editor, o eligiéndolo en el buscador que abre el propio iPod); vale <code>null</code> mientras la canción no tenga vídeo asignado.</li>
           <li><code>ogTitle / ogArtist / ogAlbum / ogYear</code> — <b>info de la canción original de un remix</b> (el prefijo «og» = <i>original</i>). No son etiquetas del archivo: los rellena el usuario cuando la canción es un remix, y valen <code>null</code> mientras no lo sea.</li>
         </ul>
         <div class="uses"><span class="chip">Artist</span><span class="chip">Album</span><span class="chip">Producer</span></div>
@@ -455,8 +459,9 @@
       <article class="file" id="f-songentity">
         <header><span class="path">data/db/entities/SongEntity.kt</span><span class="role">tabla <code>songs</code></span></header>
         <p>Una fila por canción. <code>filePath</code> tiene índice único: es el <b>ancla estable</b> que identifica la canción entre escaneos (aunque el <code>id</code> autogenerado cambie).</p>
-        <p>Guarda los campos editables (<code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>, <code>lyrics</code>, <code>language</code>, <code>imageName</code>, <code>comment</code>) y los <code>og*</code> de remix (a <code>null</code> al escanear).</p>
-        <p class="note">El <b>productor ya no es una columna de aquí</b>: desde la v2 del esquema vive en su propia tabla, enlazada por una tabla de cruce, igual que los artistas.</p>
+        <p>Guarda los campos editables (<code>title</code>, <code>duration</code>, <code>year</code>, <code>genres</code>, <code>lyrics</code>, <code>language</code>, <code>imageName</code>, <code>comment</code>, <code>videoUrl</code>) y los <code>og*</code> de remix (a <code>null</code> al escanear).</p>
+        <p class="note">El <b>productor ya no es una columna de aquí</b>: desde la v2 del esquema vive en su propia tabla, enlazada por una tabla de cruce, igual que los artistas. Desde la <b>v3</b> hay una columna más, <code>videoUrl</code>.</p>
+        <p class="note"><b>Por qué <code>videoUrl</code> lo pone siempre el usuario.</b> Las <i>Developer Policies</i> de YouTube obligan a <b>borrar o refrescar cada 30 días</b> cualquier dato obtenido de su API, así que un identificador de vídeo sacado de <code>search.list</code> <b>no se podría guardar aquí de forma permanente</b>. Un enlace que teclea o elige el usuario no es dato de la API: es dato nuestro, y se puede conservar indefinidamente. Ver el <a href="#video">modo vídeo</a>.</p>
         <div class="uses"><span class="chip">@Entity</span><span class="chip">@PrimaryKey</span><span class="chip">@Index(unique)</span></div>
       </article>
 
@@ -548,6 +553,7 @@
           <li>Consultas de apoyo del <b>escaneo</b>: <code>allSongPaths()</code>, <code>findArtistByTag()</code>, <code>findAlbumByTag()</code> — buscan por el nombre de la <b>etiqueta</b> del archivo.</li>
           <li>Consultas de apoyo del <b>editor</b>: <code>findArtistByName()</code> / <code>findAlbumByTitle()</code> / <code>findProducerByName()</code> (buscan por el nombre <b>visible</b>, el editable), <code>observeArtistNames()</code> / <code>observeAlbumTitles()</code> / <code>observeProducerNames()</code> para el autocompletado y <code>trackNumberOf()</code> / <code>discNumberOf()</code>.</li>
           <li>Inserciones, <code>updateSong/Artist/Album/Producer</code>, desenlazado (<code>clearSongArtists/Albums/Producers</code>), borrado por ruta y poda de huérfanos (<code>pruneOrphanArtists/Albums/Producers</code>).</li>
+          <li><code>deleteSong(songId)</code> — borra una única fila por su <code>id</code> (a diferencia de <code>deleteSongsByPath</code>, que es para lotes) y poda huérfanos, en una <code>@Transaction</code>. La usa la opción «Eliminar» del menú de 3 puntos de la canción.</li>
           <li><code>reconcile(scanned)</code> — dentro de una transacción: inserta lo nuevo, crea/enlaza artistas, álbumes y productores, <b>reapunta lo que se haya movido de carpeta</b> y borra lo que ya no está en disco.</li>
           <li><code>updateSongPath(oldPath, newPath)</code> — reapunta una canción a su nueva ruta cuando el archivo se ha movido.</li>
           <li><code>saveSongEdits(...)</code> — el guardado del editor, también en una transacción (ver abajo).</li>
@@ -614,6 +620,7 @@
           <li><code>saveSongEdits(...)</code> — el guardado completo del <a href="#editor">editor de metadatos</a> (fila + reenlazado de artistas, álbumes y productores).</li>
           <li><code>artistNames</code> / <code>albumTitles</code> / <code>producerNames</code> — nombres existentes para el autocompletado; <code>trackAndDisc(songId)</code> para los campos de pista y disco.</li>
           <li><code>importCoverImage(uri, songId)</code> / <code>deleteCoverImage(name)</code> — copia la portada elegida por el usuario a la carpeta privada de la app (<code>filesDir/covers/</code>) y devuelve su nombre, que es lo que se guarda en <code>imageName</code>. Se copia en vez de guardar la URI del sistema porque esa URI es un permiso temporal: la portada se rompería si el usuario mueve o borra la foto.</li>
+          <li><code>deleteSong(song)</code> — borra la canción <b>de verdad</b>: su archivo en disco (<code>File.delete()</code>), su carátula importada si tenía (<code>deleteCoverImage</code>) y su fila en Room (<code>dao.deleteSong</code>, que también poda artistas/álbumes/productores huérfanos). No toca las playlists: quien llame también debe sacarla de ahí con <code>PlaylistRepository.removeSongFromAll</code>, tal como ya se hacía cuando un archivo desaparecía solo.</li>
           <li><code>exportDatabaseCopy()</code> — copia la base de datos a <code>~/UltiMusic/databases</code>.</li>
         </ul>
         <aside class="concept">
@@ -644,12 +651,16 @@
           <li><code>listPlaylistNames()</code> — los nombres de todas las playlists (archivos <code>.txt</code>), ordenados.</li>
           <li><code>readFilenames(name)</code> / <code>setFilenames(name, list)</code> — leer y reescribir el archivo entero. Se reescribe completo (en vez de parchear líneas) porque es más simple y seguro; es lo que usa la reordenación por arrastre.</li>
           <li><code>createPlaylist</code> / <code>deletePlaylist</code> / <code>renamePlaylist</code> — crear (archivo vacío), borrar y renombrar (renombra el archivo). Rechazan nombres con <code>/</code> o <code>\</code>, que romperían el mapeo nombre↔archivo.</li>
-          <li><code>addSong</code> / <code>removeSong</code> — añaden al final (si no estaba) o quitan una canción.</li>
+          <li><code>addSong</code> / <code>removeSong</code> — añaden al final (si no estaba) o quitan una canción. Si <code>removeSong</code> deja la playlist a <b>0 canciones</b>, borra el archivo entero en vez de dejarlo vacío (ver más abajo).</li>
           <li><code>filenamesInAnyPlaylist()</code> — la unión de todas las líneas de todas las playlists; alimenta el <b>resaltado amarillo</b> de la pestaña de Canciones.</li>
           <li><code>playlistsContaining(filename)</code> — en qué playlists está una canción; marca las casillas del diálogo de «Añadir a playlist».</li>
           <li><code>resolveSongs(name, byFilename)</code> — convierte los nombres de archivo de una playlist en objetos <code>Song</code> reales, en orden, usando un índice <code>basename → Song</code> que arma quien llama (a partir de la biblioteca cargada). Las entradas cuyo archivo ya no existe se descartan.</li>
-          <li><code>removeSongFromAll(filename)</code> — quita una canción de <b>todas</b> las playlists que la contengan y devuelve cuáles se han tocado. Se usa cuando el archivo ha desaparecido de verdad: dejar la línea solo serviría para que la canción siguiera saliendo en la lista y volviera a fallar cada vez que se pulsara.</li>
+          <li><code>removeSongFromAll(filename)</code> — quita una canción de <b>todas</b> las playlists que la contengan y devuelve cuáles se han tocado. Se usa cuando el archivo ha desaparecido de verdad (por sí solo, o porque el usuario lo ha borrado con «Eliminar» en el menú de 3 puntos): dejar la línea solo serviría para que la canción siguiera saliendo en la lista y volviera a fallar cada vez que se pulsara. Igual que <code>removeSong</code>, si alguna playlist se queda sin canciones, esa playlist se borra.</li>
         </ul>
+        <aside class="concept">
+          <span class="tag">Diseño · las playlists no se quedan vacías</span>
+          <p><code>writeRemaining(name, remaining)</code> es el punto único por el que pasan <code>removeSong</code> y <code>removeSongFromAll</code> tras quitar una línea: si la lista resultante está vacía, llama a <code>deletePlaylist(name)</code> en vez de escribir un archivo a 0 canciones. Una playlist sin ninguna canción no aporta nada y solo ensuciaría la pestaña de Listas con una fila fantasma. La excepción a propósito es <code>createPlaylist</code>: esa sí crea un archivo vacío, porque ahí el usuario la acaba de pedir y todavía no le ha dado tiempo a meter nada.</p>
+        </aside>
         <aside class="concept">
           <span class="tag">Concepto · archivos no reactivos vs. Room</span>
           <p>Room reemite un <code>Flow</code> solo cuando cambia una tabla; un <code>File</code> no avisa a nadie cuando se modifica. Por eso, quien observa las playlists (el <a href="#f-playlistsvm">PlaylistsViewModel</a>) debe <b>volver a leer</b> tras cada cambio: mantiene un contador («tick») que incrementa al mutar y que fuerza el recálculo.</p>
@@ -675,7 +686,9 @@
           <li><code>onStop</code> — al pasar a segundo plano, lanza <code>exportDatabaseCopy()</code> en un <code>appScope</code> propio (para que termine aunque la Activity muera).</li>
           <li>El mini-reproductor observa el estado del <code>PlayerViewModel</code> con <code>repeatOnLifecycle</code>. Su barra de progreso es un <code>SeekBar</code>: tocarla o arrastrarla llama a <code>seekToFraction</code> (con una bandera <code>userSeeking</code> para que la actualización periódica no pise la posición mientras el usuario la mueve). Se dibuja como una línea sin thumb, de borde a borde (con <code>paddingStart</code>/<code>paddingEnd</code> a 0 — el estilo del <code>SeekBar</code> los define y tienen prioridad sobre <code>android:padding</code>) y con grosor propio vía <code>seekbar_line</code> (la pista por defecto tiene altura fija y no engorda con <code>layout_height</code>).</li>
           <li><code>setupDynamicColor()</code> — observa <code>playerViewModel.accentColor</code> y tiñe con él <b>todo lo que antes era amarillo fijo</b>: el indicador y el texto de la pestaña activa, la barra de progreso y los botones del mini-reproductor (estos últimos con <a href="#f-accenttint">AccentTint</a>). Mientras no suena nada, ese color <i>es</i> el amarillo de siempre, así que la app arranca igual que antes. El <code>tabRippleColor</code> se pone también a mano: sin eso el destello al tocar una pestaña se quedaría con el <code>colorPrimary</code> del tema, que sigue siendo amarillo fijo. Ver <a href="#f-dynamiccolor">DynamicColor</a>.</li>
-          <li>La <b>flecha «expandir»</b> (abajo a la izquierda) abre la ventana del iPod: <code>IPodNanoDialogFragment().show(...)</code>. Se <b>oculta</b> (<code>isVisible = song != null</code>) cuando no hay nada en reproducción, porque no hay reproductor que expandir.</li>
+          <li>La <b>flecha «expandir»</b> (abajo a la izquierda) abre la ventana del iPod de un tirón: <code>IPodNanoDialogFragment().show(...)</code>, con su animación de ventana normal (sube deslizándose desde abajo).</li>
+          <li><code>setupMiniPlayerDrag()</code> — el mini-reproductor entero también se abre <b>arrastrándolo hacia arriba</b> con el dedo (no hace falta acertar en la flecha), pero en vivo: la ventana del iPod se crea ya en el primer milímetro de arrastre, escondida bajo la pantalla, y <code>IPodNanoDialogFragment.followOpenDrag(fraction)</code> la va destapando según se mueve el dedo — a mitad de arrastre se ve la mitad del iPod. Al soltar, <code>finishOpenDrag(committed)</code> decide si se completa la apertura (se ha superado el 40&nbsp;% de la altura de pantalla) o si vuelve a esconderse. No usa <a href="#f-verticaldrag">VerticalDrag.kt</a> porque esa utilidad traslada la propia vista enganchada, y aquí hay que trasladar una ventana distinta (la del iPod) que ni existe hasta que empieza el gesto; por eso tiene su propio manejador de toques.</li>
+          <li><code>setupToolbar()</code> — de los tres botones de la barra superior, por ahora <b>solo la lupa</b> hace algo: abre el <a href="#search">buscador</a> (<code>SearchDialogFragment</code>), con la misma guarda anti-doble-toque que la ficha de detalle. Los otros dos (ayuda y «más opciones») siguen sin acción.</li>
         </ul>
         <aside class="concept">
           <span class="tag">Android · ciclo de vida y repeatOnLifecycle</span>
@@ -699,6 +712,7 @@
           <li><code>songs: StateFlow&lt;List&lt;Song&gt;&gt;</code> — la lista, obtenida con <code>repository.songs.stateIn(...)</code>.</li>
           <li><code>loading</code> — indicador de carga durante la reconciliación.</li>
           <li><code>loadIfNeeded()</code> reconcilia una vez; <code>reload()</code> reconcilia siempre.</li>
+          <li><code>delete(song)</code> — llama a <code>repository.deleteSong(song)</code> desde una corrutina propia. La usa <code>SongsFragment</code> tras la confirmación de «Eliminar».</li>
         </ul>
         <aside class="concept">
           <span class="tag">Kotlin · stateIn</span>
@@ -727,6 +741,7 @@
           <li><b>Contrato:</b> el sistema de dos colas es la lógica de reproducción <b>exclusiva de «Canciones»</b> (<code>SongsFragment</code>). Solo desde ahí se construye la cola (<code>play</code>/<code>playRandom</code>/<code>addToQueue</code>); los demás fragmentos usarán otra lógica y no deben llamar a esos métodos.</li>
           <li><code>missingFile: SharedFlow&lt;Song&gt;</code> — avisa de que el archivo de una canción no aparece por ningún lado. <code>MainActivity</code> lo usa para <b>dos</b> cosas: enseñar un aviso y sacar la canción de <b>todas las playlists</b> (por eso emite la canción entera y no solo el título: hace falta su <code>filePath</code> para saber qué línea quitar). Es un <b>SharedFlow y no un StateFlow</b> porque es un <i>evento</i> de una sola vez: un estado se reemitiría al girar la pantalla y el aviso volvería a salir.</li>
           <li>Un bucle actualiza el progreso cada 500 ms; <code>onCleared()</code> libera el reproductor.</li>
+          <li><b>Traspaso al modo vídeo</b> (ver <a href="#video">modo vídeo</a> del iPod): <code>currentPositionMs()</code>, <code>pauseForVideo()</code> y <code>resumeFromVideo(posición, reanudar)</code>. Son los tres puntos por donde el sonido cambia de manos entre este ExoPlayer y el reproductor de YouTube. <code>currentPositionMs()</code> lee la posición <b>directamente del reproductor</b> en vez de usar <code>progress</code>, porque ese flujo solo se refresca cada 500 ms y el traspaso heredaría ese desfase.</li>
         </ul>
         <aside class="concept">
           <span class="tag">Diseño · <code>loadCurrent()</code> valida la ruta antes de reproducir</span>
@@ -750,8 +765,10 @@
         <p>La pantalla de la lista. Crea el <code>RecyclerView</code> con su <code>SongsAdapter</code>, observa <code>songsViewModel.songs</code> y <code>loading</code>, y muestra la lista, el spinner o el mensaje de vacío según toque.</p>
         <ul class="tight">
           <li>Obtiene los ViewModels con <code>activityViewModels()</code> para compartirlos con la Activity.</li>
-          <li>Al pulsar una canción → <code>play(song, songs)</code> (crea las dos colas); en el menú de 3 puntos → <code>addToQueue(song)</code>, abrir el diálogo de <a href="#f-addtoplaylist">añadir a playlist</a>, o abrir el <a href="#editor">editor de metadatos</a> con <code>MetadataEditorDialogFragment.newInstance(song.id).show(...)</code>.</li>
+          <li>Al pulsar una canción → <code>play(song, songs)</code> (crea las dos colas); en el menú de 3 puntos → <code>addToQueue(song)</code>, abrir el diálogo de <a href="#f-addtoplaylist">añadir a playlist</a>, abrir el <a href="#editor">editor de metadatos</a> con <code>MetadataEditorDialogFragment.newInstance(song.id).show(...)</code>, o <code>showDeleteDialog(song)</code> para «Eliminar».</li>
+          <li><code>showDeleteDialog(song)</code> — un <code>AlertDialog</code> de confirmación (mismo patrón que borrar una playlist); al aceptar llama a <code>songsViewModel.delete(song)</code> y a <code>playlistsViewModel.forgetSong(filename)</code> para que la canción borrada tampoco se quede colgada en ninguna playlist.</li>
           <li>Observa <code>playlistsViewModel.songFilenamesInAnyPlaylist</code> (qué canciones ya están en alguna playlist) y <code>playerViewModel.accentColor</code>, y se los pasa al adaptador para el <b>resaltado amarillo</b> de los 3 puntos. Al pulsar «Añadir a playlist», lee en una corrutina qué playlists existen y en cuáles ya está la canción, y abre el diálogo con esos datos.</li>
+          <li><code>recycler.attachScrollbarDrag { posición -&gt; ... }</code> (ver <a href="#f-scrollbardrag">ScrollbarDrag.kt</a>) pone la barra de scroll propia; la lambda saca la letra del título de la canción en esa posición. Se guarda el <code>ScrollbarController</code> que devuelve para llamar a <code>scrollbar.setAccentColor(accent)</code> junto al resto de acentos, de modo que la barra sigue el amarillo dinámico de lo que suena — igual que en las demás pestañas.</li>
         </ul>
         <div class="uses"><span class="chip">Fragment</span><span class="chip">RecyclerView</span><span class="chip">activityViewModels()</span><span class="chip">PlaylistRepository</span></div>
       </article>
@@ -760,7 +777,7 @@
         <header><span class="path">ui/songs/SongsAdapter.kt</span><span class="role">RecyclerView.Adapter</span></header>
         <p>Dibuja una fila por canción: título, subtítulo «artista | álbum» y la carátula (vía <code>CoverArt</code> + Coil).</p>
         <ul class="tight">
-          <li><code>SongViewHolder.bind</code> rellena la fila. El botón de <b>3 puntos</b> abre un <code>PopupMenu</code> (recurso <code>menu_song_item.xml</code>) con tres opciones, en orden: «Añadir a cola de reproducción» (<code>onAddToQueue</code>), «Añadir a playlist» (<code>onAddToPlaylist</code>) y «Editar metadatos» (<code>onEditMetadata</code>). El adaptador no sabe qué hacen: solo avisa, y quien decide es <code>SongsFragment</code>.</li>
+          <li><code>SongViewHolder.bind</code> rellena la fila. El botón de <b>3 puntos</b> abre un <code>PopupMenu</code> (recurso <code>menu_song_item.xml</code>) con cuatro opciones, en orden: «Añadir a cola de reproducción» (<code>onAddToQueue</code>), «Añadir a playlist» (<code>onAddToPlaylist</code>), «Editar metadatos» (<code>onEditMetadata</code>) y «Eliminar» (<code>onDeleteSong</code>), que borra el archivo del dispositivo y su fila de la base de datos. El adaptador no sabe qué hacen: solo avisa, y quien decide es <code>SongsFragment</code> (o el fragmento que lo use).</li>
           <li><b>Resaltado de recomendación</b>: si la canción no está en <b>ninguna</b> playlist, tanto los 3 puntos como la opción «Añadir a playlist» se pintan con el color de acento (el amarillo dinámico). El adaptador lo sabe por <code>setMembership(filenames)</code> (los basenames que sí están en alguna playlist) y <code>setAccent(color)</code>. El texto del menú se colorea con un <code>SpannableString</code> + <code>ForegroundColorSpan</code>, y los 3 puntos con <code>ImageViewCompat.setImageTintList</code>.</li>
           <li><code>submit(list)</code> recibe la lista nueva y refresca.</li>
         </ul>
@@ -781,19 +798,22 @@
       </article>
 
       <h3 id="ipod">Ventana del iPod — <code>ui/player/</code></h3>
-      <p>Al pulsar la flecha del mini-reproductor sube desde abajo una ventana a pantalla completa con forma de <b>iPod Nano</b> que cubre la app. Muestra la carátula (o la cola), el progreso, el título/artista/álbum/año y una rueda «click-wheel» con los controles. Al pulsar la «X» baja y se destruye.</p>
+      <p>Al pulsar la flecha del mini-reproductor sube desde abajo, de un tirón, una ventana a pantalla completa con forma de <b>iPod Nano</b> que cubre la app. Arrastrando el mini-reproductor hacia arriba en vez de pulsar la flecha, esta misma ventana sube <b>en vivo con el dedo</b> (ver <code>MainActivity.setupMiniPlayerDrag</code>): a mitad de arrastre se ve la mitad del iPod. Muestra la carátula (o la cola), el progreso, el título/artista/álbum/año y una rueda «click-wheel» con los controles. Se cierra siempre igual, venga de donde venga la apertura: pulsando la «X», con el botón atrás del sistema o <b>arrastrando la pantalla hacia abajo</b> desde una zona sin ningún control encima (<code>ipodRoot.attachVerticalDrag(upward = false, ...) { animateClose(root) }</code>, ver <a href="#f-verticaldrag">VerticalDrag.kt</a>); las tres vías pasan por <code>animateClose()</code>, que traslada la ventana hasta salir por abajo <b>desde donde esté</b> (0 si estaba abierta del todo, o a medio camino si viene de soltar un arrastre a medias) y solo entonces la destruye, para que el gesto se vea siempre continuo. Como sobre botones, la barra de progreso y la cola el arrastre de cierre no llega —lo consumen ellos primero—, hay que soltar ese gesto en la carátula, los márgenes o los textos.</p>
       <p class="note">Tiene <b>dos modos</b>: el <b>normal</b> (expandido desde el mini-reproductor, refleja lo que suena) y el de <b>navegación de playlist</b> (abierto desde la pestaña de Listas, muestra el contenido de esa playlist para que el usuario elija qué sonará después). En ambos modos el recuadro de info, la carátula, el play/pausa, el progreso y el color de acento reflejan <b>siempre</b> lo que suena de verdad en la app, venga de donde venga; el modo navegación solo cambia qué lista se ve en el recuadro superior. Ver el modo navegación más abajo.</p>
+      <p class="note">Aparte de esos dos modos, el botón de la <b>derecha de la cabecera</b> activa el <a href="#video"><b>modo vídeo</b></a>: la pantalla del iPod pasa a mostrar el <b>videoclip</b> de la canción y el sonido viene de YouTube en vez del archivo local. Pulsándolo otra vez se vuelve exactamente a como estaba.</p>
 
       <article class="file" id="f-ipoddialog">
         <header><span class="path">ui/player/IPodNanoDialogFragment.kt</span><span class="role">DialogFragment · reproductor a pantalla completa</span></header>
         <p>La ventana del iPod. Comparte el <code>PlayerViewModel</code> de la Activity con <code>activityViewModels()</code>, así que refleja siempre la misma reproducción que el mini-reproductor.</p>
         <h4>Estructura / flujo</h4>
         <ul class="tight">
-          <li><code>onCreate</code> aplica un <b>tema de diálogo a pantalla completa</b> (<code>setStyle(STYLE_NO_FRAME, …)</code>); <code>onStart</code> fuerza el tamaño a toda la pantalla.</li>
+          <li><code>onCreate</code> aplica un <b>tema de diálogo a pantalla completa</b> (<code>setStyle(STYLE_NO_FRAME, …)</code>); <code>onStart</code> fija a mano la animación de ventana (sin salida propia nunca; sin entrada tampoco si se abrió arrastrando, ver más abajo) <b>antes</b> de mostrar el diálogo, y fuerza el tamaño a toda la pantalla.</li>
+          <li><code>onCreateDialog</code> devuelve un <code>ComponentDialog</code> con <code>onBackPressed()</code> sobrescrito para que el botón atrás pase también por <code>animateClose()</code> en vez de cerrar de golpe.</li>
+          <li>Apertura en vivo por arrastre: <code>forDrag()</code> crea una instancia marcada para no llevar animación de ventana propia; <code>followOpenDrag(fraction)</code> traslada la ventana según el arrastre del mini-reproductor (la llama <code>MainActivity.setupMiniPlayerDrag</code> en cada movimiento) y <code>finishOpenDrag(committed)</code>, al soltar, termina de abrirla o la cierra con <code>animateClose()</code>.</li>
           <li>Observa con <code>repeatOnLifecycle(STARTED)</code>: <code>currentSong</code> (carátula + <code>tvTitle</code>/<code>tvMeta</code>), <code>isPlaying</code> (icono play/pausa), <code>progress</code> (tiempos y barra) y <code>queue1 + queue2 + currentIndex</code> (con un <code>combine</code> de tres flujos concatena ambas colas y las pasa al adaptador). Tras cada actualización, <b>centra</b> la fila actual en el <code>RecyclerView</code> con <code>scrollToPositionWithOffset(index, altura/2)</code> dentro de un <code>post{}</code>.</li>
           <li>El título y la línea «Artista · Álbum · Año» comparten <b>un único recuadro</b> (<code>infoBox</code>): dentro van dos <code>TextView</code>, el título arriba y la metainformación (más apagada) debajo.</li>
           <li>El botón de las <b>3 rayas</b> alterna el recuadro superior (cuadrado) entre carátula y cola (cambiando la visibilidad de la imagen y el <code>RecyclerView</code>).</li>
-          <li>Anterior/Siguiente → <code>previous()</code>/<code>next()</code>; centro-abajo → <code>togglePlayPause()</code>; «X» → <code>dismiss()</code>; pinchar una fila de la cola → <code>jumpTo(posición)</code>. La barra de progreso es un <code>SeekBar</code>: al arrastrarla o tocarla llama a <code>seekToFraction</code> (mientras se toca, un flag evita que la actualización periódica pise la posición).</li>
+          <li>Anterior/Siguiente → <code>previous()</code>/<code>next()</code>; centro-abajo → <code>togglePlayPause()</code>; «X» → <code>animateClose(root)</code>; pinchar una fila de la cola → <code>jumpTo(posición)</code>. La barra de progreso es un <code>SeekBar</code>: al arrastrarla o tocarla llama a <code>seekToFraction</code> (mientras se toca, un flag evita que la actualización periódica pise la posición).</li>
           <li>La barra de progreso es un <code>SeekBar</code>: al arrastrarla se muestra el tiempo destino en vivo y, al soltar, llama a <code>seekToFraction</code> para mover la reproducción.</li>
           <li>La <b>rueda</b> ocupa todo el espacio que sobra (<code>layout_weight="1"</code>) pero se mantiene circular: es un <code>ConstraintLayout</code> con lados iguales (<code>layout_constraintDimensionRatio="1:1"</code>) centrado, así que crece hasta el mayor círculo que quepa; el círculo central escala con <code>layout_constraintWidth_percent</code>.</li>
           <li><code>metaLine(song)</code> construye «Artista · Álbum · Año» <b>omitiendo el año si es nulo</b> (para no mostrar «· null»).</li>
@@ -815,11 +835,88 @@
           <li>La barra de progreso (arrastrar/soltar) también funciona en modo navegación: siempre controla la reproducción real, esté o no la ventana navegando una playlist.</li>
           <li><b>Reordenar</b>: cada fila lleva un manejador de arrastre; un <code>ItemTouchHelper</code> (solo vertical, iniciado desde el manejador) reordena en memoria y, al soltar, persiste el nuevo orden en el archivo con <code>playlistsViewModel.reorder(name, ...)</code>.</li>
         </ul>
+        <h4 id="video">Modo vídeo</h4>
+        <p>El botón de la <b>derecha de la cabecera</b> (a la altura del título «UltiMusicPod Nano») cambia la pantalla del iPod por el <b>videoclip</b> de la canción, y el sonido pasa a venir de YouTube en lugar del archivo local. Pulsándolo otra vez se vuelve <b>exactamente a como estaba</b>. El icono alterna entre una claqueta (<code>ic_video</code>) y una nota musical (<code>ic_music_note</code>) para indicar a qué se va a cambiar.</p>
+        <ul class="tight">
+          <li><b>Los dos reproductores nunca suenan a la vez ni se sincronizan de forma continua.</b> En cada cambio se hace <b>un único traspaso</b> de la posición: al entrar, se lee <code>PlayerViewModel.currentPositionMs()</code>, se pausa el audio con <code>pauseForVideo()</code> y el vídeo empieza justo en ese milisegundo; al salir, se lee la posición del vídeo y se le pasa a <code>resumeFromVideo(posición, seguíaSonando)</code>. Mientras uno suena, el otro está pausado: no hay nada que mantener al día, y el que está parado <b>no gasta datos</b>.</li>
+          <li><b>El traspaso incluye el estado de reproducción, no solo la posición.</b> Cambiar de modo no es darle al play: si la canción estaba en pausa, el vídeo se queda en pausa. Por eso <code>VideoScreenController.load()</code> recibe un <code>autoPlay</code> y elige entre las dos formas que tiene la librería de cargar un vídeo: <code>loadVideo</code> lo deja <b>sonando</b> y <code>cueVideo</code> solo lo <b>prepara</b>. En ambos sentidos ese dato se lee <b>antes</b> de pausar el reproductor que cede el turno; leerlo después daría siempre «en pausa» y el traspaso saldría mal.</li>
+          <li>Mientras el modo vídeo está activo, los colectores de <code>isPlaying</code> y <code>progress</code> del <code>PlayerViewModel</code> se <b>saltan</b> (un <code>if (videoMode)</code>): la barra, los tiempos y el icono de play/pausa los pinta el vídeo, que es lo que se oye. El audio local está pausado a propósito y pintaría un estado que no corresponde. El play/pausa y la barra de progreso también <b>gobiernan el vídeo</b> mientras dura.</li>
+          <li>La duración que usa la barra es la del <b>videoclip</b> (<code>videoDurationMs</code>), no la del archivo: rara vez coinciden (intros, outros, versiones extendidas).</li>
+          <li><b>Si cambia la canción, se sale solo del modo vídeo</b> (comparando <code>song.id</code> con <code>videoSongId</code> en el colector de <code>currentSong</code>). El vídeo pertenece a <i>una</i> canción concreta: la siguiente puede no tener ninguno asignado todavía, y es el audio local el que sabe seguir la cola.</li>
+          <li>Al <b>cerrar la ventana</b> con el vídeo puesto (<code>onDestroyView</code>), el sonido vuelve al archivo local por donde iba el vídeo; si no, el mini-reproductor se quedaría mudo y clavado. Ahí mismo se libera el reproductor de YouTube.</li>
+          <li>Los vídeos elegidos en el buscador se recuerdan también en un mapa en memoria (<code>pickedVideoIds</code>), además de guardarse en Room. Hace falta porque <code>PlayerViewModel</code> guarda una <b>copia en memoria</b> de las canciones de la cola y <b>no observa la base de datos</b>: el <code>videoUrl</code> recién escrito no aparece en <code>currentSong</code> hasta que la cola se reconstruye. Sin ese mapa, apagar y volver a encender el modo vídeo en la misma sesión abriría <b>otra vez</b> el buscador para una canción a la que ya se le había elegido vídeo.</li>
+          <li>El enlace sale de <code>Song.videoUrl</code>. Si está <b>vacío</b>, se abre el <a href="#f-videopicker">buscador</a> para que el usuario elija el vídeo; al volver, se guarda en la canción con <code>LibraryRepository.setVideoUrl</code> y <b>ya no se vuelve a preguntar</b>. Si el enlace guardado no se puede interpretar, se avisa con un <i>toast</i> que remite al editor de metadatos.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Por qué no hay búsqueda automática del vídeo</span>
+          <p>La idea inicial era buscar el vídeo solo, por título y artista, y quedarse con el primer resultado. No se ha hecho, y el motivo no es técnico sino de la propia API de YouTube:</p>
+          <ul class="tight">
+            <li>La <b>cuota es por proyecto, no por usuario</b>: 10.000 unidades diarias, y cada <code>search.list</code> cuesta <b>100</b>. Son unas <b>100 búsquedas al día repartidas entre todos</b> los que instalen la app. Ampliarla exige pasar una <b>auditoría de conformidad</b> de Google.</li>
+            <li>Los datos obtenidos de la API hay que <b>borrarlos o refrescarlos cada 30 días</b>, así que el identificador ni siquiera se podría guardar de forma permanente: habría que volver a gastar 100 unidades por canción <b>cada mes</b>.</li>
+            <li>Un enlace <b>elegido por el usuario</b> no tiene ninguna de las dos limitaciones (no es dato de la API) y además <b>acierta más</b>: el primer resultado de una búsqueda es muchas veces un <i>lyric video</i>, un directo o una versión que no es la buena.</li>
+          </ul>
+          <p>De paso, esto encaja con la filosofía del proyecto: <b>el usuario controla el dato</b>, igual que con el resto de metadatos.</p>
+        </aside>
         <aside class="concept">
           <span class="tag">Android · DialogFragment y animación de ventana</span>
           <p>Un <b>DialogFragment</b> es un Fragment que se muestra como diálogo (una ventana propia encima de la pantalla). Dándole un tema con <code>windowAnimationStyle</code>, el sistema anima solo su <b>entrada</b> (sube) al mostrarlo y su <b>salida</b> (baja) al cerrarlo, sin tener que coordinar la animación a mano. Se usa <code>viewLifecycleOwner</code> al observar los Flows para no filtrar memoria al cerrar.</p>
         </aside>
         <div class="uses"><span class="chip">DialogFragment</span><span class="chip">activityViewModels()</span><span class="chip">repeatOnLifecycle</span><span class="chip">Coil</span></div>
+      </article>
+
+      <article class="file" id="f-videocontroller">
+        <header><span class="path">ui/player/VideoScreenController.kt</span><span class="role">envoltorio del reproductor de YouTube</span></header>
+        <p>Encierra toda la conversación con la librería de YouTube para que el iPod no tenga que saber nada de ella: le pide «carga este vídeo desde este milisegundo» y recibe tres avisos de vuelta (progreso, play/pausa y error). Existe como clase aparte porque <code>IPodNanoDialogFragment</code> ya es largo de por sí.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li><b>Inicialización perezosa.</b> En el XML el reproductor lleva <code>enableAutomaticInitialization="false"</code>, que desactiva el arranque automático de la librería. Sin eso, el <code>WebView</code> interno se prepararía y <b>descargaría el reproductor de YouTube nada más abrir el iPod</b>, aunque el usuario nunca pulsara el botón de vídeo: gastaría datos para nada. Así solo se inicializa la primera vez que hace falta de verdad.</li>
+          <li><b>Todo pasa por <code>onReady</code>.</b> La librería no acepta órdenes hasta que su <code>WebView</code> ha cargado el reproductor, y eso tarda. Por eso <code>load()</code> guarda el vídeo en un campo <code>pending</code> si aún no ha llegado ese momento, y lo lanza en cuanto llega.</li>
+          <li><b>Sin los mandos de YouTube.</b> El reproductor se arranca con <code>IFramePlayerOptions.Builder(contexto).controls(0)</code>, que <b>oculta la barra de controles propia de YouTube</b> (play, progreso, título, compartir…). Sin eso, cada toque sobre el vídeo la hacía aparecer encima, y estorba: el iPod ya tiene sus propios mandos y son <i>esos</i> los que gobiernan el vídeo. Ojo con construir estas opciones: el <code>Builder</code> pide el contexto porque él solo rellena el <code>origin</code> con el paquete de la app, y si se pierde vuelve el <a href="#video">error 152</a>.</li>
+          <li><b>Arrancar sonando o solo preparado.</b> <code>load()</code> recibe un <code>autoPlay</code> y de ahí elige entre <code>loadVideo</code> (empieza a sonar) y <code>cueVideo</code> (queda listo, en pausa), para que el vídeo herede lo que estuviera haciendo el audio local. Como el vídeo puede pedirse antes de que el reproductor esté listo, ese dato viaja junto al id y la posición en el campo <code>pending</code>.</li>
+          <li><b><code>cueVideo</code> no descarga vídeo, solo la miniatura genérica.</b> Así lo dice la propia documentación de la API: <i>«the player does not request the FLV until <code>playVideo()</code> or <code>seekTo()</code> is called»</i>. El <code>startSeconds</code> que se le pasa queda anotado, pero <b>no se ve</b>: sin nada más, volver a entrar en pausa mostraría la miniatura del vídeo en vez del fotograma que le toca. Por eso, después de <code>cueVideo</code>, se llama también a <code>seekTo(startSeconds)</code>: fuerza esa descarga hasta el punto exacto sin arrancar el sonido, porque <code>seekTo</code> respeta la pausa (<i>«if the player is paused when the function is called, it will remain paused»</i>).</li>
+          <li>Expone <code>positionMs</code> e <code>isPlaying</code>, que son justo los dos datos que el iPod necesita al salir del modo vídeo para devolverle el sonido al archivo local.</li>
+          <li>La librería trabaja en <b>segundos con decimales</b> y el resto de la app en milisegundos, así que aquí se hacen todas las conversiones (<code>/ 1000f</code> y <code>* 1000</code>).</li>
+          <li><code>release()</code> es <b>obligatorio</b> y lo llama el iPod en <code>onDestroyView</code>: al desactivar la inicialización automática, la librería tampoco libera sola su <code>WebView</code>, que seguiría vivo consumiendo batería y datos.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Lo que YouTube deja y no deja hacer con su reproductor</span>
+          <p>Las condiciones de la API (<i>Required Minimum Functionality</i>) marcan dos límites que condicionan este archivo: <b>«no debes mostrar superposiciones, marcos u otros elementos visuales delante de ninguna parte de un reproductor incrustado de YouTube, incluidos sus controles»</b> y <b>«no debes hacer cambios en el reproductor de YouTube que no estén descritos explícitamente en la documentación de la API»</b>.</p>
+          <p>De ahí salen las dos decisiones sobre la interfaz del reproductor. Los <b>mandos</b> se quitan con el parámetro <code>controls=0</code>, que <b>sí</b> está en la documentación y por tanto es un cambio permitido. Y los <b>toques</b> se bloquean con un contenedor que no los reparte a sus hijos (<code>TouchBlockerFrameLayout</code>), no tapando el vídeo con una vista transparente: eso último sería «un elemento visual delante del reproductor» y está <b>prohibido</b> aunque no se vea.</p>
+          <p>Nada en esas condiciones obliga a que el reproductor sea interactivo, así que dejarlo inerte y controlarlo desde los botones del iPod es correcto. La única regla sobre toques va en sentido contrario: prohíbe <b>aprovecharlos para hacer algo en nombre del usuario</b> (abrir ventanas, suscribirle a un canal…), que no es el caso.</p>
+          <p><b>Lo que no se puede quitar.</b> Además de los mandos, el reproductor pinta una <b>capa de marca</b> con el avatar del canal, el título, el botón de compartir y el logo de YouTube. No hay ningún parámetro que la oculte: la documentación dice que «el avatar del canal y el título del vídeo <b>siempre</b> se mostrarán antes de que empiece la reproducción, cuando esté en pausa y cuando termine», y el antiguo <code>modestbranding</code> está <b>obsoleto y no hace nada</b>. Por eso esa capa se ve al entrar en el modo vídeo, hasta que arranca la reproducción, y <b>se asume</b>: se probó a retrasar la aparición del reproductor hasta que el vídeo estuviera rodando, pero eso dejaba la pantalla congelada varios segundos sin explicación, que se percibe como que la app se ha colgado. Ver la capa un momento es el mal menor. Lo que sí se evita es que <b>reaparezca a mitad del vídeo</b>, porque bloquear los toques impide pausarlo sin querer.</p>
+        </aside>
+        <aside class="concept">
+          <span class="tag">Los errores del reproductor: dos familias distintas</span>
+          <p>Cuando un vídeo no se reproduce, el motivo puede llegar por <b>dos caminos</b> que no hay que confundir:</p>
+          <ul class="tight">
+            <li><b>Errores de la API</b>, que llegan al <i>callback</i> <code>onError</code> y por tanto a nuestro <code>onPlaybackError</code>. Son solo seis, y la librería los traduce a la enumeración <code>PlayerConstants.PlayerError</code>: <code>INVALID_PARAMETER_IN_REQUEST</code> (código 2, identificador mal formado), <code>HTML_5_PLAYER</code> (5), <code>VIDEO_NOT_FOUND</code> (100, borrado o privado), <code>VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER</code> (101 y 150 — <b>el autor ha desactivado la reproducción embebida</b>, habitual en videoclips de discográficas) y <code>REQUEST_MISSING_HTTP_REFERER</code> (153).</li>
+            <li><b>Errores internos del propio reproductor</b>, que se pintan <i>dentro</i> del <code>WebView</code> como «Este vídeo no está disponible» con un código de dos partes tipo <b>152-4</b> o <b>152-15</b>. Estos <b>no</b> pasan por <code>onError</code>: la app no se entera, el usuario solo ve el mensaje. La familia <b>152</b> significa que el reproductor no ha conseguido arrancar.</li>
+          </ul>
+          <p>La causa típica del 152 es la <b>identidad del incrustador</b>: desde julio de 2025 YouTube exige que el reproductor embebido diga desde dónde se le está usando (<code>origin</code> / cabecera <code>Referer</code>), y un <code>WebView</code> de Android no lo manda por su cuenta. Por eso la app fija <b>como mínimo la versión 13.0.0</b> de la librería, cuyo cambio principal es precisamente <i>usar el paquete de la app como <code>origin</code></i>. Las versiones 12.x son anteriores a ese requisito y fallan con 152. Aun así el 152 puede seguir apareciendo en vídeos con <b>restricciones de región</b>, y contra eso lo único que se puede hacer es elegir otro vídeo.</p>
+        </aside>
+        <aside class="concept">
+          <span class="tag">Android · qué es el IFrame Player API</span>
+          <p>YouTube no permite reproducir sus vídeos con un reproductor propio: hay que usar el suyo. La forma oficial en Android es cargar su <b>reproductor web</b> (el mismo que ves incrustado en cualquier página) dentro de un <code>WebView</code>, y hablarle por JavaScript. La librería <code>android-youtube-player</code> hace justo eso y nos lo presenta como una <code>View</code> de Android normal con <i>callbacks</i> en Kotlin, para no tener que escribir ese puente a mano.</p>
+        </aside>
+        <div class="uses"><span class="chip">android-youtube-player</span><span class="chip">WebView</span><span class="chip">AbstractYouTubePlayerListener</span></div>
+      </article>
+
+      <article class="file" id="f-videopicker">
+        <header><span class="path">ui/player/VideoPickerDialogFragment.kt</span><span class="role">DialogFragment · elegir el videoclip</span></header>
+        <p>Se abre encima del iPod la <b>primera vez</b> que se activa el modo vídeo de una canción que aún no tiene enlace. Carga la web de YouTube <b>dentro de la app</b> (en un <code>WebView</code>) con la búsqueda «Título Artista» ya escrita y espera a que el usuario pinche un vídeo.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li>Se activan <code>javaScriptEnabled</code> y <code>domStorageEnabled</code>: YouTube es una web hecha entera con JavaScript y sin eso no llega ni a pintarse.</li>
+          <li><b>Se detecta el vídeo elegido con dos <i>callbacks</i>, no con uno.</b> <code>shouldOverrideUrlLoading</code> cubre las navegaciones normales, pero la web móvil de YouTube es una <b>SPA</b>: al tocar un vídeo <b>no navega de verdad</b>, solo reescribe la barra de direcciones con <code>history.pushState</code> y cambia el contenido por JavaScript. Eso <b>no</b> dispara ese <i>callback</i>, así que hace falta también <code>doUpdateVisitedHistory</code>, que sí salta con los cambios de historial. Sin el segundo, los toques del usuario pasarían desapercibidos.</li>
+          <li>En cuanto reconoce una URL de vídeo (con <a href="#f-youtubeurl">YouTubeUrl</a>) llama a <code>stopLoading()</code> —si no, el vídeo empezaría a sonar aquí dentro mientras la ventana se cierra—, devuelve el identificador y se cierra. Un flag <code>resultSent</code> evita mandarlo dos veces si el <code>WebView</code> notifica la misma URL más de una vez.</li>
+          <li>El <b>«atrás»</b> retrocede dentro de la web y solo cierra la ventana cuando ya no queda historial. El despachador es el del <b>diálogo</b> (<code>ComponentDialog</code>), no el de la Activity: un <code>DialogFragment</code> se dibuja en su propia ventana y es esa la que recibe el «atrás».</li>
+          <li><code>onDestroyView</code> para y <b>destruye</b> el <code>WebView</code> a mano: un <code>WebView</code> sigue vivo (ejecutando JavaScript, y sonando) aunque se quite de la pantalla.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · resultados entre fragmentos</span>
+          <p>El vídeo elegido se devuelve con <code>setFragmentResult</code> / <code>setFragmentResultListener</code>, la forma recomendada de que dos fragmentos se comuniquen. La alternativa —que uno guarde una <b>referencia directa</b> al otro— se rompe en cuanto el sistema recrea la ventana (al girar la pantalla, por ejemplo): la referencia apuntaría a un fragmento que ya no existe.</p>
+        </aside>
+        <div class="uses"><span class="chip">WebView</span><span class="chip">DialogFragment</span><span class="chip">setFragmentResult</span><span class="chip">OnBackPressedDispatcher</span></div>
       </article>
 
       <article class="file" id="f-ipodqueueadapter">
@@ -876,6 +973,7 @@
           <li>El botón <b>«+»</b> flotante (<code>FloatingActionButton</code>) abre un diálogo con un campo de texto para crear una playlist vacía.</li>
           <li>Al pinchar una fila → abre el iPod en modo navegación (<code>IPodNanoDialogFragment.newInstance(nombre)</code>). Desde el menú de 3 puntos de cada fila → renombrar (diálogo de texto) o borrar (diálogo de confirmación que aclara que no se tocan los archivos de audio).</li>
           <li><code>showNameDialog(...)</code> es el diálogo de «escribe un nombre» reutilizable: desactiva el botón de aceptar mientras el campo esté vacío.</li>
+          <li><code>recycler.attachScrollbarDrag { posición -&gt; ... }</code> (ver <a href="#f-scrollbardrag">ScrollbarDrag.kt</a>) pone la barra de scroll propia; la lambda saca la letra de sección del nombre de la playlist en esa posición. El <code>ScrollbarController</code> que devuelve se tiñe con <code>setAccentColor(accent)</code> en el mismo bloque que el botón «+», así que barra y botón siguen los dos el color de lo que suena.</li>
         </ul>
         <div class="uses"><span class="chip">Fragment</span><span class="chip">FloatingActionButton</span><span class="chip">AlertDialog</span><span class="chip">activityViewModels()</span></div>
       </article>
@@ -921,6 +1019,7 @@
           <span class="tag">Android · GridLayoutManager</span>
           <p>Un <code>RecyclerView</code> no sabe por sí solo si sus elementos van en lista o en cuadrícula: eso lo decide su <b>LayoutManager</b>. <code>LinearLayoutManager</code> los apila en una columna; <code>GridLayoutManager(context, 2)</code> los coloca en dos. Es el mismo RecyclerView y el mismo adaptador, solo cambia quién los coloca.</p>
         </aside>
+        <p class="note"><code>recycler.attachScrollbarDrag { posición -&gt; ... }</code> (ver <a href="#f-scrollbardrag">ScrollbarDrag.kt</a>) pone la barra de scroll propia (la lambda saca la letra del título del álbum), teñida con <code>setAccentColor(accent)</code> desde <code>playerViewModel.accentColor</code> como en el resto de pestañas; funciona igual con <code>GridLayoutManager</code> porque es subclase de <code>LinearLayoutManager</code>.</p>
         <div class="uses"><span class="chip">GridLayoutManager</span><span class="chip">activityViewModels()</span></div>
       </article>
 
@@ -932,6 +1031,7 @@
           <p>Parametrizar un Fragment con un <code>Bundle</code> de argumentos (y no con una propiedad normal o un parámetro del constructor) es <b>obligatorio</b> en Android: cuando el sistema mata la app por falta de memoria y luego la recrea, reconstruye los fragmentos con su constructor vacío y les devuelve sus <code>arguments</code>. Una propiedad asignada a mano se habría perdido.</p>
         </aside>
         <p class="note">El <code>enum</code> se guarda por su <code>name</code> (texto) y no por su posición, para que reordenarlo algún día no cambie el significado de lo ya guardado.</p>
+        <p class="note"><code>recycler.attachScrollbarDrag { posición -&gt; ... }</code> (ver <a href="#f-scrollbardrag">ScrollbarDrag.kt</a>) pone la barra de scroll propia; la lambda saca la letra del nombre de la persona en esa posición, y se tiñe con <code>setAccentColor(accent)</code> desde <code>playerViewModel.accentColor</code> como en el resto de pestañas.</p>
         <div class="uses"><span class="chip">Bundle</span><span class="chip">LinearLayoutManager</span></div>
       </article>
 
@@ -956,6 +1056,7 @@
           <li><code>header: StateFlow&lt;DetailHeader?&gt;</code> — título, carátula y las líneas de datos con su icono (<code>InfoLine</code>). Para un álbum: artista, nº de canciones, duración total y año; para una persona: nº de álbumes, nº de canciones y duración. <b>El año solo aparece si se conoce</b>: una línea con un hueco quedaría peor que ninguna.</li>
           <li><code>tracks: StateFlow&lt;List&lt;AlbumTrack&gt;&gt;</code> — las canciones. Las de un artista o productor se envuelven con <code>trackNumber = null</code> para poder reutilizar el mismo adaptador.</li>
           <li><code>accentColor</code> — el color de la ficha, calculado <b>una sola vez</b> con la primera carátula que llegue; recalcularlo en cada emisión haría parpadear la cabecera al editar cualquier canción del álbum.</li>
+          <li><code>deleteSong(song)</code> — igual que en <code>SongsViewModel</code>: llama a <code>repository.deleteSong(song)</code> desde una corrutina propia.</li>
         </ul>
         <aside class="concept">
           <span class="tag">Kotlin · flatMapLatest</span>
@@ -972,15 +1073,16 @@
           <li><code>showAlbum(fragment, id)</code> / <code>showPerson(fragment, kind, id)</code> lo abren, con una <b>guarda anti-duplicado</b> por tag: dos toques rápidos abrirían dos fichas apiladas.</li>
           <li>Los <i>insets</i> de la barra de estado se le dan <b>solo a la toolbar</b> (que está dentro de la cabecera de color), de modo que ese color llega hasta detrás de la hora y la batería.</li>
           <li>Las líneas de datos de la cabecera se <b>crean a mano</b> inflando <code>item_detail_info</code>: cuántas hay depende del tipo de ficha y de qué metadatos existan.</li>
-          <li>Pinchar una canción → <code>playCollection(canciones, posición)</code>. El botón de las flechas cruzadas de la barra → <code>shuffleCollection(...)</code>. El menú de 3 puntos ofrece encolar y abrir el editor de metadatos.</li>
+          <li>Pinchar una canción → <code>playCollection(canciones, posición)</code>. El botón de las flechas cruzadas de la barra → <code>shuffleCollection(...)</code>. El menú de 3 puntos ofrece encolar, abrir el editor de metadatos y «Eliminar» (con confirmación, igual que en <a href="#f-songsfragment">SongsFragment</a>; al aceptar también se saca la canción de las playlists que la contuvieran con <code>PlaylistRepository.removeSongFromAll</code>). No ofrece «Añadir a playlist»: esa opción es exclusiva de la pestaña de Canciones.</li>
           <li><code>applyAccent()</code> tiñe la cabecera. Ojo: para el <b>fondo</b> no se usa el acento a plena intensidad (detrás de un texto sería ilegible) sino su versión apagada y oscura (<code>DynamicColor.asBackground</code>), y el color del texto y de los iconos se elige según lo claro que quede el fondo (<code>DynamicColor.onColor</code>).</li>
+          <li><code>recycler.attachScrollbarDrag { posición -&gt; ... }</code> (ver <a href="#f-scrollbardrag">ScrollbarDrag.kt</a>) pone la barra de scroll propia de las canciones de la ficha; la lambda saca la letra del título de la canción en esa posición. Aquí <code>setAccentColor</code> recibe el acento <b>de la propia ficha</b> (<code>viewModel.accentColor</code>, el de su carátula) y no el de lo que suena, porque es el color que lleva toda esta ventana.</li>
         </ul>
         <div class="uses"><span class="chip">DialogFragment</span><span class="chip">activityViewModels()</span><span class="chip">DynamicColor</span></div>
       </article>
 
       <article class="file" id="f-detailsongsadapter">
         <header><span class="path">ui/library/DetailSongsAdapter.kt</span><span class="role">RecyclerView.Adapter · canciones de la ficha</span></header>
-        <p>Nº de pista a la izquierda, título y duración en el centro, menú de 3 puntos a la derecha. <b>No lleva carátula</b>, al contrario que <code>SongsAdapter</code>: dentro de un álbum todas serían la misma imagen repetida, y la carátula ya preside la cabecera.</p>
+        <p>Nº de pista a la izquierda, título y duración en el centro, menú de 3 puntos a la derecha. <b>No lleva carátula</b>, al contrario que <code>SongsAdapter</code>: dentro de un álbum todas serían la misma imagen repetida, y la carátula ya preside la cabecera. El menú reutiliza <code>menu_song_item.xml</code> pero oculta «Añadir a playlist» (<code>menu.findItem(R.id.action_add_to_playlist)?.isVisible = false</code>); «Eliminar» sí se muestra.</p>
         <p class="note">En las fichas de artista y productor no hay número de pista, así que esa columna se <b>oculta</b> en vez de dejar un hueco vacío que descuadraría los títulos. Al pulsar se pasa la <b>posición</b> en la lista (no el id), porque el reproductor necesita saber por dónde empezar dentro de la colección para poder seguir con las siguientes.</p>
         <div class="uses"><span class="chip">RecyclerView</span><span class="chip">PopupMenu</span></div>
       </article>
@@ -997,6 +1099,7 @@
           <li><code>newInstance(songId)</code> guarda el id en los <b>argumentos</b> del fragmento (un <code>Bundle</code>). Nunca se pasan datos por el constructor: Android puede recrear un fragmento al girar la pantalla y solo restaura los argumentos.</li>
           <li>El formulario se rellena en <code>fillForm(song)</code> desde el <code>collect</code> del ViewModel, pero <b>solo la primera vez</b> (bandera <code>formLoaded</code>). Si no, cada emisión de Room borraría lo que el usuario está escribiendo.</li>
           <li>Los campos multivalor se leen con <code>splitValues()</code> (parte por comas, recorta espacios, descarta vacíos) y los de texto con <code>textOrNull()</code>, que convierte «vacío» en <code>null</code> para que la columna quede a NULL en la base de datos en vez de guardar una cadena vacía.</li>
+          <li>Dentro de la sección plegable <b>Detalles</b> está <b>«URL del vídeo»</b> (<code>inputVideoUrl</code>), el enlace de YouTube del videoclip que usa el <a href="#video">modo vídeo</a> del iPod. Se puede dejar vacío: la primera vez que se active ese modo, el iPod abre un <a href="#f-videopicker">buscador</a> y lo rellena con el que elija el usuario. También sirve para <b>corregirlo</b> si en su día se eligió el vídeo equivocado.</li>
           <li>Guardar valida que el título no esté vacío y llama a <code>viewModel.save(EditorForm(...), pickedImage)</code>. El diálogo se cierra al ver <code>saved = true</code>, no justo al pulsar: así solo desaparece cuando la escritura ha terminado de verdad.</li>
           <li>Álbum(es) y Artista(s) usan <code>MaterialAutoCompleteTextView</code> con <code>setSimpleItems(...)</code>: la flechita «▾» despliega los nombres que <b>ya existen</b> en la biblioteca, para no crear «Rosalia» y «Rosalía» por una tilde. Al elegir uno, el widget sustituiría toda la línea, así que <code>setSuggestions</code> lo reescribe cambiando <b>solo</b> el valor posterior a la última coma.</li>
           <li>La portada llega hasta detrás de la barra de estado con <code>WindowCompat.setDecorFitsSystemWindows(window, false)</code> (le dice al sistema que deje de reservar ese hueco solo) más <code>android:statusBarColor</code> transparente en el tema; el <code>ViewCompat.OnApplyWindowInsetsListener</code> reparte el hueco resultante: el margen izquierdo/derecho/inferior va a la pantalla entera y el superior <b>solo</b> a la toolbar (que crece con <code>layout_height="wrap_content"</code> para no tapar la hora ni la batería).</li>
@@ -1021,6 +1124,79 @@
         </ul>
         <div class="uses"><span class="chip">AndroidViewModel</span><span class="chip">StateFlow</span><span class="chip">viewModelScope</span></div>
       </article>
+
+      <h3 id="search">Buscador — <code>ui/search/</code></h3>
+      <p>La <b>lupa</b> de la barra superior abre una pantalla de búsqueda: se escribe un texto y aparecen, <b>en este orden</b>, las <b>canciones</b>, los <b>álbumes</b>, los <b>artistas</b> y los <b>productores</b> cuyo nombre lo contiene, cada grupo bajo su propia cabecera de sección. Un grupo sin resultados no enseña ni su cabecera.</p>
+      <p>Los resultados se recalculan <b>letra a letra</b>, sin botón de «buscar». La comparación ignora mayúsculas <b>y tildes</b> (ver <a href="#f-textsearch">TextSearch.kt</a>), así que <code>cancion</code> encuentra «Canción» y <code>bjork</code> encuentra «Björk».</p>
+      <p class="note">Se busca por el nombre <b>visible</b> de cada cosa: el título de la canción, el del álbum, el nombre del artista o del productor. Una canción <b>no</b> sale por el nombre de su artista, porque para eso está la sección de artistas: su ficha ya lista todas sus canciones. Así cada resultado significa una única cosa y la lista no se llena de repeticiones.</p>
+
+      <article class="file" id="f-searchvm">
+        <header><span class="path">ui/search/SearchViewModel.kt</span><span class="role">AndroidViewModel · consulta y resultados</span></header>
+        <p>El cerebro del buscador. Vive en el ámbito del <b>propio diálogo</b> (<code>by viewModels()</code>), así que al cerrarlo la búsqueda se olvida.</p>
+        <ul class="tight">
+          <li><code>query</code> — lo que hay escrito en la caja, tal cual. Solo se usa para los mensajes («No se ha encontrado nada para «X»»).</li>
+          <li><code>results</code> — la lista mezclada de cabeceras y filas. Sale de <code>combine</code> sobre <b>cinco</b> flujos: la consulta y las cuatro listas del repositorio (canciones, álbumes, artistas, productores). <code>combine</code> vuelve a ejecutar su bloque cada vez que <b>cualquiera</b> de ellos emite, con el último valor de todos.</li>
+          <li><code>matchedSongs</code> — solo las canciones encontradas, en el mismo orden en que se ven. Es lo que se le pasa al reproductor al pulsar una.</li>
+          <li><code>build(...)</code> monta la lista; <code>addSection(...)</code> añade cabecera + filas de un grupo, o nada si el grupo está vacío.</li>
+          <li><code>deleteSong(song)</code> — igual que en <code>SongsViewModel</code> y <code>DetailViewModel</code>: llama a <code>repository.deleteSong(song)</code> desde una corrutina propia.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Kotlin · sealed interface (jerarquía cerrada)</span>
+          <p><code>SearchResult</code> es una <code>sealed interface</code>: una familia de tipos <b>cerrada</b>, de la que solo pueden existir los cuatro que se declaran ahí mismo (<code>Header</code>, <code>SongRow</code>, <code>AlbumRow</code>, <code>PersonRow</code>). Eso permite meter cosas de naturaleza distinta en <b>una sola lista</b> y que el adaptador decida qué pintar con un <code>when</code> que el compilador <b>comprueba que está completo</b>: si mañana se añade una quinta sección, el código que la olvide no compila. La alternativa —cuatro listas y cuatro <code>RecyclerView</code>— rompería el scroll continuo de la pantalla.</p>
+        </aside>
+        <aside class="concept">
+          <span class="tag">¿Por qué filtrar en Kotlin y no con SQL?</span>
+          <p>Por dos razones. La primera es que el <code>LIKE</code> de SQLite solo ignora mayúsculas en el alfabeto <b>inglés</b> (no sabe que «Á» y «á» son la misma letra) y no tiene ninguna noción de tildes. La segunda es que la biblioteca <b>ya está entera en memoria</b> para pintar las pestañas, así que recorrerla es cuestión de milisegundos y no hace falta ir al disco. Aun así, el filtrado se manda a un hilo de cómputo con <code>flowOn(Dispatchers.Default)</code>, para que teclear deprisa no atasque la interfaz.</p>
+        </aside>
+        <p class="note">Como los cuatro flujos son reactivos, los resultados <b>se corrigen solos</b>: si con el buscador abierto se edita el título de una canción o termina una reconciliación, la lista se repinta sin volver a escribir nada.</p>
+        <div class="uses"><span class="chip">AndroidViewModel</span><span class="chip">combine</span><span class="chip">flowOn</span><span class="chip">StateFlow</span><span class="chip">sealed interface</span></div>
+      </article>
+
+      <article class="file" id="f-searchdialog">
+        <header><span class="path">ui/search/SearchDialogFragment.kt</span><span class="role">DialogFragment · la pantalla del buscador</span></header>
+        <p>La pantalla. Es un <code>DialogFragment</code> a pantalla completa que usa <code>Theme.UltiMusic.SearchDialog</code> — el mismo tema que el editor y la ficha de detalle, pero con animación propia (ver más abajo): se abre encima de la principal sin cambiar de Activity, así que el mini-reproductor sigue sonando y el botón «atrás» del sistema devuelve al usuario justo a la pestaña en la que estaba.</p>
+        <h4>Estructura / flujo</h4>
+        <ul class="tight">
+          <li>La caja de texto va <b>dentro</b> de la <code>MaterialToolbar</code> (una toolbar admite vistas hijas además del título y el menú): la barra superior <i>se convierte</i> en el campo de búsqueda, con la flecha «atrás» a la izquierda y el aspa de borrar a la derecha (<code>menu_search</code>). El aspa <b>vacía</b> lo escrito; para salir está la flecha.</li>
+          <li><code>doAfterTextChanged</code> manda cada pulsación al ViewModel. No hay botón de buscar: la lupa del teclado (<code>imeOptions="actionSearch"</code>) solo <b>recoge el teclado</b> para dejar ver la lista entera.</li>
+          <li>El teclado se abre solo al entrar (<code>SOFT_INPUT_STATE_ALWAYS_VISIBLE</code> + <code>requestFocus()</code>), porque quien pulsa la lupa viene a escribir.</li>
+          <li>Al pulsar una <b>canción</b> se llama a <code>playCollection(matchedSongs, índice)</code>: suena esa y las demás encontradas quedan detrás, en el orden en que se ven. Se usa la lógica de <b>colecciones</b> (la de álbumes y playlists) y no la de la pestaña «Canciones», porque una búsqueda es una selección deliberada: no tendría sentido llenar la cola con toda la biblioteca mezclada.</li>
+          <li>Al pulsar un <b>álbum, artista o productor</b> se abre su <a href="#f-detaildialog">ficha de detalle</a> <b>encima</b> del buscador, así que al cerrarla se vuelve a los resultados sin haberlos perdido. Antes se recoge el teclado: si no, se quedaría levantado sobre una pantalla en la que ya no hay dónde escribir.</li>
+          <li>El menú de 3 puntos de cada canción es el mismo de siempre (encolar, añadir a playlist, editar metadatos, eliminar), con las mismas guardas anti-doble-toque. «Eliminar» pide confirmación y, al aceptar, saca también la canción de las playlists que la contuvieran (<code>PlaylistRepository.removeSongFromAll</code>).</li>
+          <li>El hueco de las barras del sistema se reparte como en las demás ventanas a pantalla completa, pero descontando además el del <b>teclado</b> (<code>WindowInsetsCompat.Type.ime()</code>): sin eso los últimos resultados quedarían tapados por él.</li>
+          <li><code>recycler.attachScrollbarDrag()</code> (ver <a href="#f-scrollbardrag">ScrollbarDrag.kt</a>) pone la misma barra de scroll arrastrable que el resto de listas de la app, pero <b>sin la burbuja de la letra</b>: se llama <i>sin</i> pasarle la lambda <code>sectionFor</code>, y entonces la función ni siquiera crea el círculo. El motivo es que aquí los resultados no van en orden alfabético sino agrupados por secciones (canciones, álbumes, artistas, productores), así que una letra no diría nada útil. El <code>ScrollbarController</code> que devuelve se tiñe con <code>setAccentColor(accent)</code> en el mismo bloque que los títulos de sección, así que barra y cabeceras siguen los dos el amarillo de lo que suena.</li>
+        </ul>
+        <h4>La animación de entrada y salida</h4>
+        <p>Está copiada de <b>~/Phonograph</b>, pero pasada al eje vertical. En Phonograph la búsqueda es una <code>Activity</code> aparte que <i>no declara ninguna animación propia</i>: se queda con la que Android pone por defecto al abrir una pantalla encima de otra, que es un deslizamiento <b>horizontal</b> (entra desde el borde derecho) acompañado de un fundido rápido. Aquí la búsqueda no es una Activity sino un diálogo, y todo lo que se abre encima de la pantalla principal en UltiMusic sube desde abajo, así que se hace lo mismo por el eje <b>vertical</b>.</p>
+        <ul class="tight">
+          <li><code>search_enter</code>: el desplazamiento va de <code>100%p</code> (una pantalla entera por debajo; la <i>p</i> es de <i>parent</i>) hasta su sitio, en 350 ms con la curva <code>emphasized_decelerate</code>. El fundido, en cambio, se despacha en 120 ms: si durase lo mismo que el movimiento, la ventana se vería medio traslúcida demasiado rato y parecería un fantasma.</li>
+          <li><code>search_exit</code>: lo contrario, en 300 ms (menos que la entrada, la norma en interfaces: al abrir interesa ver llegar la pantalla, al cerrar interesa quitarla de en medio, porque el usuario ya ha decidido irse). El fundido lleva <code>startOffset="80"</code>, o sea que no empieza hasta 80 ms después, para que la ventana se vea arrancar sólida y solo se difumine cuando ya está a medio salir.</li>
+          <li>Ambas son un <code>&lt;set&gt;</code>, que agrupa varias animaciones que corren <b>a la vez</b>; con <code>shareInterpolator="false"</code> cada una lleva su propia curva de velocidad, que es justo lo que hace falta aquí, porque el desplazamiento y el fundido no duran lo mismo.</li>
+          <li>Van en un estilo aparte (<code>Animation.UltiMusic.SearchSlide</code>) y un tema aparte (<code>Theme.UltiMusic.SearchDialog</code>) para <b>no</b> cambiar de rebote la animación del iPod ni la del editor de metadatos, que siguen con la de siempre.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · pathInterpolator y las curvas «emphasized»</span>
+          <p>Un <i>interpolador</i> decide cómo se reparte el avance de una animación en el tiempo: sin él, el movimiento sería a velocidad constante y se notaría robótico. Un <code>&lt;pathInterpolator&gt;</code> lo describe con una curva de Bézier en la que el eje X es el tiempo (de 0 a 1) y el eje Y el progreso (de 0 a 1).</p>
+          <p>Las dos que usa el buscador son las «emphasized» de Material 3: <code>emphasized_decelerate</code> arranca disparada y frena mucho al final (da la sensación de algo con peso que llega y se posa) y <code>emphasized_accelerate</code> hace lo contrario. Es lo que diferencia esta animación de la del iPod, que usa los interpoladores simples de Android (<code>decelerate_interpolator</code> / <code>accelerate_interpolator</code>).</p>
+        </aside>
+        <div class="uses"><span class="chip">DialogFragment</span><span class="chip">viewModels()</span><span class="chip">MaterialToolbar</span><span class="chip">WindowInsetsCompat · ime</span><span class="chip">InputMethodManager</span><span class="chip">windowAnimationStyle</span></div>
+      </article>
+
+      <article class="file" id="f-searchadapter">
+        <header><span class="path">ui/search/SearchAdapter.kt</span><span class="role">RecyclerView.Adapter · lista mezclada</span></header>
+        <p>El único adaptador de la app cuyas filas <b>no son todas iguales</b>: conviven cabeceras de sección, canciones, álbumes y personas en una sola lista.</p>
+        <aside class="concept">
+          <span class="tag">Android · tipos de vista del RecyclerView</span>
+          <p><code>getItemViewType(position)</code> devuelve un número que dice «de qué clase» es cada fila, y <code>onCreateViewHolder</code> infla el layout que corresponda a ese número. El <code>RecyclerView</code> guarda las vistas usadas <b>en un montón por cada tipo</b>, así que al desplazarse nunca intenta reaprovechar la fila de un álbum para pintar un artista.</p>
+        </aside>
+        <ul class="tight">
+          <li>Las filas <b>reutilizan los layouts que ya existen</b> (<code>item_song</code> para canciones, <code>item_person</code> para artistas y productores), de modo que una canción se ve exactamente igual aquí que en su pestaña.</li>
+          <li>Los álbumes son la excepción: su pestaña los pinta como tarjetas grandes en una rejilla, y aquí conviven con filas, así que tienen un layout propio en forma de fila (<code>item_album_row</code>).</li>
+          <li>Los títulos de sección (<code>item_search_header</code>) se pintan con el <b>amarillo dinámico</b> de la canción que suena, igual que las pestañas y la barra de progreso (ver <a href="#f-dynamiccolor">DynamicColor</a>).</li>
+        </ul>
+        <p class="note">La fila de canción no lleva el resaltado en amarillo de «esta canción no está en ninguna playlist» que sí tiene en su pestaña: aquí el usuario ha venido a buscar algo concreto, no a repasar su biblioteca.</p>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">getItemViewType</span><span class="chip">PopupMenu</span><span class="chip">Coil</span></div>
+      </article>
     </section>
 
     <!-- ================= UI COMMON ================= -->
@@ -1037,6 +1213,17 @@
         <div class="uses"><span class="chip">FrameLayout</span><span class="chip">onMeasure</span></div>
       </article>
 
+      <article class="file" id="f-touchblocker">
+        <header><span class="path">ui/common/TouchBlockerFrameLayout.kt</span><span class="role">View personalizada · se traga los toques</span></header>
+        <p>Un <code>FrameLayout</code> que <b>no deja pasar ningún toque</b> a lo que tiene dentro. Envuelve al reproductor de YouTube en la ventana del iPod: tocar el vídeo lo pausaría, y en pausa YouTube saca siempre su capa de marca (título, compartir, logo), que no se puede ocultar de ninguna otra forma. Los mandos del iPod están <i>fuera</i> de esta vista, así que siguen gobernando el vídeo con normalidad.</p>
+        <aside class="concept">
+          <span class="tag">Android · cómo viaja un toque entre vistas</span>
+          <p>Un toque no llega directamente a la vista tocada: <b>baja</b> desde la de más arriba hacia sus hijos, y cada contenedor puede quedárselo por el camino. Devolver <code>true</code> en <code>onInterceptTouchEvent</code> corta ese reparto, así que el evento nunca baja al hijo; devolver <code>true</code> además en <code>onTouchEvent</code> significa «me lo quedo yo», para que tampoco vuelva a subir y active por accidente algo que haya detrás. Con esas dos líneas el reproductor deja de enterarse de que le han tocado.</p>
+          <p>Es importante que sea <b>así</b> y no una vista transparente puesta encima: las condiciones de la API de YouTube prohíben poner elementos visuales delante del reproductor. Aquí no se dibuja nada encima; solo se decide no repartir los eventos.</p>
+        </aside>
+        <div class="uses"><span class="chip">FrameLayout</span><span class="chip">onInterceptTouchEvent</span><span class="chip">MotionEvent</span></div>
+      </article>
+
       <article class="file" id="f-collapsible">
         <header><span class="path">ui/common/CollapsibleSection.kt</span><span class="role">object · secciones plegables</span></header>
         <p>Las secciones «acordeón» de campos secundarios del editor: una cabecera con una flecha que gira 90° y, debajo, un bloque de campos que se despliega o se recoge. <code>setup(header, content)</code> enlaza las dos vistas.</p>
@@ -1050,6 +1237,51 @@
       <article class="file" id="f-placeholder2">
         <header><span class="path">ui/common/PlaceholderFragment.kt</span><span class="role">Fragment temporal</span></header>
         <p>Marcador de posición de las pestañas aún sin implementar. Descrito arriba, en <a href="#ui">la sección de interfaz</a>.</p>
+      </article>
+
+      <article class="file" id="f-verticaldrag">
+        <header><span class="path">ui/common/VerticalDrag.kt</span><span class="role">función de extensión · arrastre vertical de un sentido</span></header>
+        <p>Función suelta (no una clase) que engancha a cualquier <code>View</code> un arrastre vertical de <b>un solo sentido</b>: <code>view.attachVerticalDrag(upward, triggerDistancePx) { onTrigger() }</code>. La vista sigue al dedo con <code>translationY</code> y, al soltar, si se ha arrastrado más de <code>triggerDistancePx</code> llama a <code>onTrigger</code>; si no, vuelve a su sitio animada. Hoy solo la usa <a href="#f-ipoddialog">IPodNanoDialogFragment</a>, para el arrastre hacia <b>abajo</b> que cierra la ventana; el arrastre hacia <b>arriba</b> que la abre desde el mini-reproductor no la reutiliza (ver <code>MainActivity.setupMiniPlayerDrag</code>), porque ahí hay que trasladar una ventana distinta de la que se engancha (la del iPod, que ni existe hasta que empieza el gesto).</p>
+        <ul class="tight">
+          <li><code>upward</code> fija el sentido permitido: si es <code>true</code> solo deja mover la vista hacia arriba (<code>translationY</code> negativo); si es <code>false</code>, solo hacia abajo. El sentido contrario no mueve nada, para no robarle el gesto a algo que sepa hacer mejor uso de él (por ejemplo, un scroll hacia abajo dentro de la cola del iPod).</li>
+          <li>Al superar el <b>touch slop</b> (el umbral estándar de Android para distinguir un toque de un arrastre) en el sentido correcto, se marca <code>dragging = true</code> y se llama a <code>requestDisallowInterceptTouchEvent(true)</code> para que un padre (o un <code>ViewPager2</code>, si lo hubiera) no se quede con el gesto a mitad de camino.</li>
+          <li>Al soltar sin llegar al umbral, se anima de vuelta a <code>translationY = 0</code>. Al superarlo, en cambio, se llama a <code>onTrigger</code> <b>sin tocar</b> la <code>translationY</code> actual: se deja la vista donde la soltó el dedo, para que quien reciba el aviso (<code>IPodNanoDialogFragment.animateClose</code>) pueda seguir animándola desde ahí mismo y el gesto se vea continuo en vez de dar un salto.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · por qué <code>setOnTouchListener</code> en el padre no rompe los botones</span>
+          <p>Cuando ningún hijo «clicable» de la vista (un botón, la barra de progreso, la lista) se queda con el toque, este acaba subiendo hasta el <code>onTouchEvent</code> del propio contenedor — que es justo donde escucha esta función. Por eso el arrastre funciona sobre zonas «vacías» (la carátula, los márgenes, un texto) sin desmontar los controles que ya estaban ahí.</p>
+        </aside>
+        <div class="uses"><span class="chip">View.setOnTouchListener</span><span class="chip">MotionEvent</span><span class="chip">ViewConfiguration.scaledTouchSlop</span></div>
+      </article>
+
+      <article class="file" id="f-scrollbardrag">
+        <header><span class="path">ui/common/ScrollbarDrag.kt</span><span class="role">función de extensión · barra de scroll propia (estilo Phonograph)</span></header>
+        <p>Función de extensión para <code>RecyclerView</code>: <code>recycler.attachScrollbarDrag { posición -&gt; letra }</code>, o <code>recycler.attachScrollbarDrag()</code> a secas si no se quiere la burbuja de la letra. La barra de scroll <b>nativa</b> de Android tiene dos problemas para lo que se quería aquí: solo se deja agarrar con el dedo si la lista ya estaba en movimiento, y su grosor es <i>proporcional</i> a cuánto ocupa lo visible sobre el total (en una lista larga se vuelve un hilo). Por eso esta función no usa la barra nativa en absoluto — los XML de las listas afectadas llevan <code>android:scrollbars="none"</code> — y la sustituye por una vista propia, calcada del comportamiento de <b>~/Phonograph</b> (que a su vez usa una librería de terceros para esto; aquí se reimplementó a mano para no añadir esa dependencia).</p>
+        <ul class="tight">
+          <li>El "pulgar" (<code>thumb</code>) y la burbuja de letra (<code>bubble</code>) son dos <code>View</code>/<code>TextView</code> que la función crea por código y añade como hermanas del <code>RecyclerView</code> dentro de su <code>ViewGroup</code> padre (por eso los seis layouts que la usan meten el <code>RecyclerView</code> en un <code>FrameLayout</code> propio: hace falta un padre donde colgar estas dos vistas). Se posicionan con <code>translationY</code>, no con <i>layout</i>, porque se mueven en cada evento de scroll o de arrastre y recolocar con <i>layout</i> a esa frecuencia sería mucho más caro.</li>
+          <li><b>Tamaño fijo:</b> el pulgar mide siempre 8dp de ancho por 48dp de alto (<code>THUMB_WIDTH_DP</code> / <code>THUMB_HEIGHT_DP</code>), sea cual sea la longitud de la lista — al contrario que la barra nativa, aquí no depende de la proporción visible/total. Los 8dp son a propósito los mismos que la pista del <code>SeekBar</code> de las canciones (<code>res/drawable/seekbar_line.xml</code>), para que las dos barras de la app tengan el mismo grosor.</li>
+          <li><b>La burbuja es un cuadrado fijo de 80dp</b> (<code>BUBBLE_SIZE_DP</code>) con radio de esquina de media anchura, que es lo que la convierte en círculo perfecto; la letra va a 32sp. No es <code>WRAP_CONTENT</code> justamente para que su altura no cambie según la letra que toque, porque de esa altura depende la alineación con el pulgar.</li>
+          <li><b>Pulgar y burbuja comparten centro.</b> Miden distinto (48dp y 80dp), así que si cada uno se colocara por su borde superior acabarían descuadrados en los extremos — que era el fallo que se veía: al llegar abajo del todo el círculo quedaba por debajo del pulgar, y arriba por encima. Ahora <code>moveThumbTo(fracción)</code> calcula <b>un solo centro</b> y de él cuelga a los dos (<code>centro − altura/2</code> cada uno). El recorrido de ese centro deja de margen arriba y abajo media altura del más alto de los dos (<code>halfTallestPx</code>), así que ninguno se sale de la lista jamás.</li>
+          <li><b>No siempre visible:</b> el pulgar nace con <code>alpha = 0f</code> y solo se enseña (<code>showThumb()</code>) al hacer scroll o al empezar a arrastrar; al cabo de un segundo sin actividad (<code>AUTO_HIDE_DELAY_MS</code>) se vuelve a ocultar solo, con un <code>Handler</code> que se reprograma (<code>scheduleHide()</code>) cada vez que hay actividad nueva.</li>
+          <li><b>Hitbox siempre activo:</b> en el <code>ACTION_DOWN</code> se comprueba si el toque cae en la franja de la derecha (<code>event.x &gt;= width - hitboxWidthPx</code>) <i>sin mirar si el pulgar está visible en ese instante</i> — por eso se puede empezar a arrastrar aunque la barra esté oculta. Sí se comprueba <code>isScrollable()</code> (que haya algo que desplazar): si la lista es tan corta que no hace falta scroll, el toque no se intercepta y llega normal a los elementos de debajo.</li>
+          <li><b>Se escucha con <code>addOnItemTouchListener</code>, no con <code>setOnTouchListener</code></b> (ver el recuadro de abajo): con lo segundo la barra <i>solo</i> agarraba si la lista ya venía moviéndose, que era exactamente el fallo que se arrastraba. Al quedarse el gesto también se llama a <code>parent.requestDisallowInterceptTouchEvent(true)</code>, para que un temblor horizontal del dedo no le haga cambiar de pestaña al <a href="#f-mainactivity">ViewPager2</a> que hay por encima.</li>
+          <li>Un toque suelto en la franja (sin arrastrar) <b>no</b> mueve la lista: el salto solo se calcula en los <code>ACTION_MOVE</code>. Lo que sí hace el <code>DOWN</code> es quedarse el gesto, así que ese toque tampoco reproduce la canción que hubiera debajo.</li>
+          <li><code>hitboxWidthDp</code> (24dp por defecto) es deliberadamente más ancho que el pulgar visible (6dp): la zona donde "se nota" que hay barra para agarrar es mayor que lo que se ve, para no obligar a apuntar con precisión de píxel.</li>
+          <li>En <code>ACTION_MOVE</code>, la fracción vertical del toque (<code>event.y / height</code>) se traduce a una posición del adaptador (<code>itemCount * fracción</code>) y se llama a <code>layoutManager.scrollToPositionWithOffset(posición, 0)</code>. Sirve igual para una lista (<code>LinearLayoutManager</code>) que para una rejilla (<code>GridLayoutManager</code>, que es subclase de aquel), porque el cálculo es por fracción de altura, no por filas.</li>
+          <li><b>Letra al arrastrar:</b> en cada <code>ACTION_MOVE</code> se rellena la burbuja con <code>sectionFor(posición)</code> — la lambda que pasa cada pantalla — y se coloca pegada al pulgar (no a la altura exacta del dedo). <code>sectionFor</code> vive en cada <i>fragment</i> porque solo él sabe qué campo mostrar (el título de la canción/álbum, el nombre de la persona o de la playlist); la función <code>sectionLetter(texto)</code> de este mismo archivo hace el trabajo común (primera letra, en mayúscula, o <code>"#"</code> si no hay texto).</li>
+          <li><b>La burbuja es opcional.</b> <code>sectionFor</code> tiene valor por defecto <code>null</code>, y si no se pasa, el <code>TextView</code> del círculo <b>ni se crea ni se añade</b> al layout: queda solo el pulgar arrastrable. Es lo que hace el <a href="#f-searchdialog">buscador</a>, donde los resultados no están en orden alfabético sino agrupados por secciones y una letra no significaría nada. Como efecto secundario, sin burbuja el margen que la barra deja arriba y abajo (<code>halfTallestPx</code>, media altura del más alto de los dos) se reduce de 40dp a 24dp, así que el pulgar recorre algo más de pantalla.</li>
+          <li>Devuelve un <code>ScrollbarController</code> con <code>setAccentColor(color)</code> para que el pulgar y la burbuja (si la hay) sigan el <b>color dinámico</b> (ver <a href="#f-dynamiccolor">DynamicColor</a>). <b>Lo llaman las seis pantallas</b>, para que no haya una barra de un color en una pestaña y de otro en la siguiente: las cuatro pestañas (<a href="#f-songsfragment">Canciones</a>, <a href="#f-albumsfragment">Álbumes</a>, <a href="#f-peoplefragment">Artistas/Productores</a> y <a href="#f-playlistsfragment">Listas</a>) y el <a href="#f-searchdialog">buscador</a> siguen <code>playerViewModel.accentColor</code>, el color de lo que suena; la <a href="#f-detaildialog">ficha de detalle</a> sigue el suyo propio (<code>viewModel.accentColor</code>, sacado de su carátula), que es el que lleva toda esa ventana.</li>
+          <li>Se usa el acento <b>a plena intensidad</b>, como las pestañas o la barra de progreso, y no la versión apagada <code>DynamicColor.asBackground(...)</code>: esa es solo para fondos que llevan texto encima (la cabecera de la ficha), no para un elemento de primer plano.</li>
+          <li>La usan <a href="#f-songsfragment">SongsFragment</a>, <a href="#f-albumsfragment">AlbumsFragment</a>, <a href="#f-peoplefragment">PeopleFragment</a>, <a href="#f-playlistsfragment">PlaylistsFragment</a>, <a href="#f-detaildialog">DetailDialogFragment</a> y <a href="#f-searchdialog">SearchDialogFragment</a> (esta última sin burbuja): las seis listas de la app.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Android · quién se queda el toque</span>
+          <p>Un <code>ViewGroup</code> (y un <code>RecyclerView</code> lo es) reparte cada toque en este orden: primero se pregunta a sí mismo si quiere quedárselo (<code>onInterceptTouchEvent</code>), y si dice que no, se lo pasa a sus <b>hijos</b>. El <code>OnTouchListener</code> del contenedor solo entra en juego <i>al final</i>, cuando ningún hijo se lo quedó.</p>
+          <p>Ahí estaba el fallo original de esta barra: escuchaba con <code>setOnTouchListener</code>, y como las filas son clicables (tocar una canción la reproduce), la fila se quedaba el <code>ACTION_DOWN</code> y la barra nunca se enteraba de que empezaba un arrastre. Solo funcionaba si la lista <b>ya venía moviéndose</b>, porque en ese caso el <code>RecyclerView</code> intercepta el toque de entrada (para frenar el scroll) y entonces sí llegaba al listener.</p>
+          <p>La solución es <code>addOnItemTouchListener</code>: es el mecanismo que ofrece el propio <code>RecyclerView</code> para mirar el toque <b>antes que los hijos</b> (se consulta dentro de su <code>onInterceptTouchEvent</code>). Si el listener devuelve <code>true</code> en el <code>DOWN</code>, el <code>RecyclerView</code> le adjudica el gesto entero — manda un <code>ACTION_CANCEL</code> a la fila que lo estuviera recibiendo, para que no se quede «pulsada» ni dispare su click — y el resto del gesto llega por su <code>onTouchEvent</code>.</p>
+        </aside>
+        <p class="note">Este comportamiento está cubierto por un <a href="#tests">test instrumentado</a> (<code>ScrollbarDragTest</code>), que arrastra la barra con la lista parada y comprueba que la lista salta a donde toca.</p>
+        <div class="uses"><span class="chip">RecyclerView</span><span class="chip">RecyclerView.OnItemTouchListener</span><span class="chip">LinearLayoutManager</span><span class="chip">MotionEvent</span><span class="chip">GradientDrawable</span><span class="chip">Handler/Looper</span></div>
       </article>
     </section>
 
@@ -1129,6 +1361,35 @@
         <p><code>mmss(ms)</code> convierte milisegundos a texto <code>m:ss</code> (p. ej. <code>204000 → "3:24"</code>). Lo usa la ventana del iPod para el tiempo transcurrido y la duración total, y las listas de canciones de las fichas.</p>
         <p><code>hhmmss(ms)</code> hace lo mismo pero añadiendo las horas cuando las hay (<code>1:04:22</code>). Se usa para duraciones <b>acumuladas</b> —lo que dura un álbum entero o toda la discografía de un artista—, donde pasar de una hora es lo normal y «78:15» no se entendería de un vistazo.</p>
       </article>
+
+      <article class="file" id="f-textsearch">
+        <header><span class="path">util/TextSearch.kt</span><span class="role">object · comparación de texto del buscador</span></header>
+        <p>Comparación de texto «a lo humano» para el <a href="#search">buscador</a>: sin distinguir mayúsculas ni tildes, de modo que escribir <code>cancion</code> encuentre «Canción» y <code>bjork</code> encuentre «Björk».</p>
+        <ul class="tight">
+          <li><code>normalize(texto)</code> — devuelve el texto en minúsculas y sin tildes. Es lo que se compara.</li>
+          <li><code>contains(texto, aguja)</code> — ¿contiene ese texto lo buscado? La aguja tiene que venir <b>ya normalizada</b>: se normaliza una vez y se compara contra miles de títulos, así que hacerlo en cada comparación sería tirar trabajo a la basura.</li>
+        </ul>
+        <aside class="concept">
+          <span class="tag">Java · Normalizer y las tildes de Unicode</span>
+          <p>Unicode permite escribir «á» de <b>dos</b> maneras: como un único carácter, o como una «a» seguida de una marca de acento invisible. <code>Normalizer.Form.NFD</code> pasa todo a la segunda forma (<i>descomponer</i>), y entonces las marcas se pueden borrar con una expresión regular, porque Unicode las agrupa en la categoría <code>\p{Mn}</code> («<i>Mark, nonspacing</i>»: signos que no ocupan sitio propio y se dibujan sobre la letra anterior). Lo que queda es la letra pelada.</p>
+        </aside>
+      </article>
+
+      <article class="file" id="f-youtubeurl">
+        <header><span class="path">util/YouTubeUrl.kt</span><span class="role">object · enlaces de YouTube</span></header>
+        <p>Traduce cualquier enlace de YouTube al <b>identificador de 11 caracteres</b> que necesita el reproductor. Existe porque <code>loadVideo()</code> <b>no acepta una URL</b>, quiere solo el ID, y porque el mismo vídeo se escribe de muchas maneras según de dónde se copie el enlace.</p>
+        <h4>Formatos que reconoce</h4>
+        <ul class="tight">
+          <li><code>youtube.com/watch?v=ID</code> (con cualquier parámetro extra detrás: <code>&amp;t=42s</code>, <code>&amp;list=…</code>).</li>
+          <li><code>youtu.be/ID</code> — lo que da el botón de compartir, normalmente con un <code>?si=…</code> detrás.</li>
+          <li><code>/embed/ID</code>, <code>/shorts/ID</code>, <code>/live/ID</code> y <code>/v/ID</code>.</li>
+          <li>El <b>ID pelado</b>, por si el usuario pega solo eso.</li>
+          <li>Da igual el protocolo y el subdominio: se quitan <code>https://</code>, <code>www.</code>, <code>m.</code> y <code>music.</code> antes de mirar nada, así que también funciona con lo que el usuario escriba a medias.</li>
+        </ul>
+        <p class="note">Comprobar que el resultado son <b>exactamente 11 caracteres</b> de <code>A-Z a-z 0-9 - _</code> hace de <b>validación</b>: si lo que se pegó no encaja, devuelve <code>null</code> y quien llama avisa en vez de intentar reproducir algo que no existe. Es también lo que permite al <a href="#f-videopicker">buscador</a> distinguir la página de resultados (que no es un vídeo) de la de un vídeo concreto.</p>
+        <p>Ofrece además <code>searchUrl(consulta)</code> (la página de resultados con la búsqueda ya escrita) y <code>watchUrl(id)</code> (el enlace canónico, que es lo que se guarda en <code>Song.videoUrl</code>).</p>
+        <p class="note">Se analiza <b>a mano</b> en vez de con <code>Uri.parse</code> a propósito: así la función <b>no depende de Android</b> y se puede probar sin emulador.</p>
+      </article>
     </section>
 
     <!-- ================= ESQUEMA ================= -->
@@ -1142,6 +1403,7 @@
           <li>title, duration, year</li>
           <li>genres, imageName</li>
           <li>lyrics, language, comment</li>
+          <li>videoUrl <span class="muted">(videoclip)</span></li>
           <li class="muted">og* (remix)</li>
         </ul></div>
         <div class="tbl"><div class="th">artists</div><ul>
@@ -1195,19 +1457,41 @@
       <table class="grid">
         <thead><tr><th>Archivo</th><th>Para qué sirve</th></tr></thead>
         <tbody>
-          <tr><td><code>app/build.gradle.kts</code></td><td>Dependencias y configuración del módulo: Room + KSP, Media3/ExoPlayer, Coil, <b>Palette</b> (color dinámico), RecyclerView, ViewPager2, lifecycle…</td></tr>
-          <tr><td><code>gradle/libs.versions.toml</code></td><td>Catálogo central de versiones de todas las librerías (Room 2.7.1, Media3, Coil 2.7.0, Palette 1.0.0, etc.).</td></tr>
-          <tr><td><code>AndroidManifest.xml</code></td><td>Declara la Activity y los permisos de almacenamiento (<code>MANAGE_EXTERNAL_STORAGE</code> y <code>READ_EXTERNAL_STORAGE</code> en API ≤29).</td></tr>
-          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>, los del iPod (<code>dialog_ipod_nano</code>, <code>item_queue_song</code>), el del editor (<code>dialog_metadata_editor</code>) y los de las nuevas pestañas: <code>fragment_library_grid</code> y <code>fragment_library_list</code> (Álbumes / Artistas y Productores), <code>item_album_card</code>, <code>item_person</code>, y los de la ficha de detalle (<code>dialog_library_detail</code>, <code>item_detail_info</code>, <code>item_detail_song</code>).</td></tr>
-          <tr><td><code>res/anim/</code></td><td>Animaciones de deslizamiento que comparten la ventana del iPod y el editor: <code>slide_in_up</code> (sube al abrir) y <code>slide_out_down</code> (baja al cerrar).</td></tr>
-          <tr><td><code>res/menu/</code></td><td><code>menu_main</code> (barra superior), <code>menu_song_item</code> (menú de 3 puntos de cada canción: «Añadir a cola de reproducción» y «Editar metadatos») y <code>menu_metadata_editor</code> (el botón de guardar del editor), <code>menu_library_detail</code> (el botón de orden aleatorio de la ficha).</td></tr>
-          <tr><td><code>res/drawable/</code></td><td>Formas e iconos: recuadros del iPod (<code>ipod_body</code>, <code>ipod_display</code>, <code>ipod_info_box</code>), rueda (<code>wheel_ring</code>, <code>wheel_center</code>), la pista de las barras de progreso (<code>seekbar_line</code>), el degradado tras la toolbar del editor (<code>bg_toolbar_scrim</code>) e iconos (<code>ic_close</code>, <code>ic_arrow_back</code>, <code>ic_speaker</code>, <code>ic_skip_previous</code>, <code>ic_skip_next</code>, <code>ic_check</code>, <code>ic_chevron_right</code>, y los de las líneas de datos de una ficha: <code>ic_person</code>, <code>ic_music_note</code>, <code>ic_timer</code>, <code>ic_calendar</code>, <code>ic_album</code>…).</td></tr>
-          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: pestañas, permisos, textos del iPod, campos del editor…), colores, y temas/estilos: <code>themes.xml</code> con los temas de diálogo <code>Theme.UltiMusic.IPodDialog</code> y <code>Theme.UltiMusic.FullScreenDialog</code>; <code>styles.xml</code> con la animación <code>Animation.UltiMusic.SlideUp</code>, los estilos del editor (<code>Widget.UltiMusic.TextField</code>, <code>.Dropdown</code>, <code>SectionHeader</code>, <code>SectionTitle</code>) y las formas de imagen (<code>ShapeAppearanceOverlay.UltiMusic.Cover</code> para carátulas y <code>.Circle</code> para artistas y productores). En <code>strings.xml</code> hay además <code>&lt;plurals&gt;</code> para «N canciones» y «N álbumes».</td></tr>
+          <tr><td><code>app/build.gradle.kts</code></td><td>Dependencias y configuración del módulo: Room + KSP, Media3/ExoPlayer, Coil, <b>Palette</b> (color dinámico), RecyclerView, ViewPager2, lifecycle y <b>android-youtube-player</b> (el reproductor del <a href="#video">modo vídeo</a>)…</td></tr>
+          <tr><td><code>gradle/libs.versions.toml</code></td><td>Catálogo central de versiones de todas las librerías (Room 2.7.1, Media3, Coil 2.7.0, Palette 1.0.0, android-youtube-player 13.0.0, etc.).</td></tr>
+          <tr><td><code>AndroidManifest.xml</code></td><td>Declara la Activity y los permisos de almacenamiento (<code>MANAGE_EXTERNAL_STORAGE</code> y <code>READ_EXTERNAL_STORAGE</code> en API ≤29) y los de red (<code>INTERNET</code> y <code>ACCESS_NETWORK_STATE</code>), que <b>solo</b> usa el modo vídeo: el audio de la biblioteca nunca sale a la red.</td></tr>
+          <tr><td><code>res/layout/</code></td><td>Diseños XML de las pantallas: <code>activity_main</code>, <code>fragment_songs</code>, <code>item_song</code>, <code>item_shuffle_header</code>, <code>view_mini_player</code>, <code>fragment_placeholder</code>, los del iPod (<code>dialog_ipod_nano</code>, <code>item_queue_song</code>, <code>dialog_video_picker</code>), el del editor (<code>dialog_metadata_editor</code>) y los de las nuevas pestañas: <code>fragment_library_grid</code> y <code>fragment_library_list</code> (Álbumes / Artistas y Productores), <code>item_album_card</code>, <code>item_person</code>, y los de la ficha de detalle (<code>dialog_library_detail</code>, <code>item_detail_info</code>, <code>item_detail_song</code>). Los del <a href="#search">buscador</a> son <code>dialog_search</code>, <code>item_search_header</code> (la franja con el nombre de cada sección) e <code>item_album_row</code> (el álbum en forma de fila, porque ahí convive con canciones y artistas).</td></tr>
+          <tr><td><code>res/anim/</code></td><td>Animaciones de deslizamiento. Las que comparten la ventana del iPod y el editor: <code>slide_in_up</code> (sube al abrir) y <code>slide_out_down</code> (baja al cerrar). Y las del <a href="#search">buscador</a>: <code>search_enter</code> y <code>search_exit</code>, que además del desplazamiento llevan un fundido, copiando la transición de ~/Phonograph pasada al eje vertical.</td></tr>
+          <tr><td><code>res/interpolator/</code></td><td>Curvas de velocidad de las animaciones del buscador: <code>emphasized_decelerate</code> (entra disparado y frena mucho al final) y <code>emphasized_accelerate</code> (arranca suave y sale acelerando). Son las curvas «emphasized» de Material 3, escritas como <code>&lt;pathInterpolator&gt;</code>: una Bézier donde el eje X es el tiempo y el eje Y el progreso.</td></tr>
+          <tr><td><code>res/menu/</code></td><td><code>menu_main</code> (barra superior), <code>menu_song_item</code> (menú de 3 puntos de cada canción: «Añadir a cola de reproducción», «Añadir a playlist», «Editar metadatos» y «Eliminar») y <code>menu_metadata_editor</code> (el botón de guardar del editor), <code>menu_library_detail</code> (el botón de orden aleatorio de la ficha) y <code>menu_search</code> (el aspa que vacía lo escrito en el <a href="#search">buscador</a>).</td></tr>
+          <tr><td><code>res/drawable/</code></td><td>Formas e iconos: recuadros del iPod (<code>ipod_body</code>, <code>ipod_display</code>, <code>ipod_info_box</code>), rueda (<code>wheel_ring</code>, <code>wheel_center</code>), la pista de las barras de progreso (<code>seekbar_line</code>), el degradado tras la toolbar del editor (<code>bg_toolbar_scrim</code>) e iconos (<code>ic_close</code>, <code>ic_arrow_back</code>, <code>ic_speaker</code>, <code>ic_skip_previous</code>, <code>ic_skip_next</code>, <code>ic_check</code>, <code>ic_chevron_right</code>, y los de las líneas de datos de una ficha: <code>ic_person</code>, <code>ic_music_note</code>, <code>ic_timer</code>, <code>ic_calendar</code>, <code>ic_album</code>… y <code>ic_video</code>, la claqueta que activa el <a href="#video">modo vídeo</a>).</td></tr>
+          <tr><td><code>res/values/</code></td><td>Textos (<code>strings.xml</code>: pestañas, permisos, textos del iPod, campos del editor…), colores, y temas/estilos: <code>themes.xml</code> con los temas de diálogo <code>Theme.UltiMusic.IPodDialog</code> y <code>Theme.UltiMusic.FullScreenDialog</code> (este último estaba definido <b>solo</b> en <code>values-night/</code>, así que con el móvil en modo claro no existía y abrir el editor, una ficha o el buscador reventaba; ahora está en los dos), más <code>Theme.UltiMusic.SearchDialog</code>, que cuelga del anterior y solo le cambia la animación de entrada y salida; <code>styles.xml</code> con las animaciones <code>Animation.UltiMusic.SlideUp</code> y <code>Animation.UltiMusic.SearchSlide</code>, los estilos del editor (<code>Widget.UltiMusic.TextField</code>, <code>.Dropdown</code>, <code>SectionHeader</code>, <code>SectionTitle</code>) y las formas de imagen (<code>ShapeAppearanceOverlay.UltiMusic.Cover</code> para carátulas y <code>.Circle</code> para artistas y productores). En <code>strings.xml</code> hay además <code>&lt;plurals&gt;</code> para «N canciones» y «N álbumes».</td></tr>
         </tbody>
       </table>
       <aside class="concept">
         <span class="tag">Android · KSP</span>
         <p><b>KSP</b> (<i>Kotlin Symbol Processing</i>) es el sistema que, al compilar, lee las anotaciones de Room (<code>@Entity</code>, <code>@Dao</code>…) y <b>genera el código SQL</b> necesario. Si escribes una consulta mal, KSP lo detecta al compilar, no en ejecución.</p>
+      </aside>
+    </section>
+
+    <!-- ================= TESTS ================= -->
+    <section id="tests">
+      <h2>Tests instrumentados</h2>
+      <p class="section-intro">Pruebas que se ejecutan <b>dentro de un Android</b> (emulador o móvil enchufado), no en el PC. Hacen falta así porque lo que se comprueba es cómo el sistema reparte los toques entre las vistas, y eso solo existe de verdad en un Android.</p>
+      <table class="grid">
+        <thead><tr><th>Archivo</th><th>Para qué sirve</th></tr></thead>
+        <tbody>
+          <tr><td><code>androidTest/…/ui/common/ScrollbarDragTest.kt</code></td><td>Prueba la <a href="#f-scrollbardrag">barra de scroll propia</a>. Monta a mano la misma jerarquía que usan los fragmentos (un <code>FrameLayout</code> con un <code>RecyclerView</code> dentro, con 500 filas <b>clicables</b> como las de la app) y le manda <code>MotionEvent</code>s de verdad. Cinco casos: arrastrar la barra <b>con la lista parada</b> (el fallo que se arregló), arrastrarla con la lista ya en movimiento (el caso que <i>sí</i> funcionaba, sirve de diagnóstico), que se pida la letra de la burbuja, que un arrastre normal por el centro siga haciendo scroll, y que un arrastre fuera de la franja no provoque el salto.</td></tr>
+          <tr><td><code>androidTest/…/ExampleInstrumentedTest.kt</code></td><td>El test de ejemplo de la plantilla: solo comprueba que el paquete de la app es <code>com.untar.ultimusic</code>.</td></tr>
+          <tr><td><code>src/debug/…/ui/common/ScrollbarHostActivity.kt</code><br><code>src/debug/AndroidManifest.xml</code></td><td>Activity vacía que hace de escenario para el test anterior: le da una <b>ventana real</b> donde colgar las vistas (sin estar «attached» a una ventana, el <code>RecyclerView</code> no recibe frames de animación ni relayouts). Vive en el source set <code>debug</code>, así que <b>no existe en la compilación de release</b>. Tiene que estar en la app y no en el propio <code>androidTest</code> porque la instrumentación corre dentro del proceso de la app y no puede lanzar Activities del APK de pruebas.</td></tr>
+        </tbody>
+      </table>
+      <p class="note"><b>Cómo lanzarlos:</b> con un emulador arrancado (<code>emulator -avd &lt;nombre&gt;</code>) o el móvil conectado por USB con depuración activada, <code>gradlew connectedDebugAndroidTest</code>. Para uno solo: <code>gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.untar.ultimusic.ui.common.ScrollbarDragTest</code>. El informe en HTML queda en <code>app/build/reports/androidTests/connected/debug/index.html</code>.</p>
+      <p class="note"><b>Ojo:</b> <code>connectedDebugAndroidTest</code> instala los dos APKs, ejecuta y al terminar <b>los desinstala</b>. Si quieres seguir probando a mano en el emulador, instala la app aparte con <code>gradlew installDebug</code>; si no, lo que queda en el dispositivo es la última versión que hubiera instalada a mano — y si es de antes del cambio de paquete (<code>com.untarlamanteca.ultimusic</code>) parece la app pero es código viejo.</p>
+      <aside class="concept">
+        <span class="tag">Android · dos APKs</span>
+        <p>Un test instrumentado no se ejecuta «sobre» la app: se instalan <b>dos APKs</b> (el de la app y el de pruebas, <code>com.untar.ultimusic.test</code>) y el <i>runner</i> (<code>AndroidJUnitRunner</code>, declarado en <code>build.gradle.kts</code>) corre el código de pruebas dentro del proceso de la app. Por eso el test puede tocar clases internas de la app… pero no puede abrir Activities declaradas en el APK de pruebas.</p>
+        <p><code>ActivityScenario</code> es el ayudante de AndroidX que abre esa Activity, la lleva a un estado del ciclo de vida y la cierra al terminar; <code>scenario.onActivity { }</code> ejecuta un bloque en el <b>hilo principal</b>, que es el único desde el que se pueden tocar vistas.</p>
       </aside>
     </section>
 
@@ -1234,6 +1518,6 @@
     </section>
 
     <hr class="soft">
-    <p class="note">UltiMusic · documentación generada del código actual. Paquete raíz: <code>com.untarlamanteca.ultimusic</code>.</p>
+    <p class="note">UltiMusic · documentación generada del código actual. Paquete raíz: <code>com.untar.ultimusic</code>.</p>
   </main>
 </div>

@@ -17,7 +17,7 @@
         android:orientation="vertical"
         android:padding="16dp">
 
-        <!-- Cabecera: X a la izquierda + título centrado -->
+        <!-- Cabecera: X a la izquierda + título centrado + alternar audio/vídeo a la derecha -->
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content">
@@ -40,10 +40,20 @@
                 android:textColor="@color/um_on_background"
                 android:textSize="18sp"
                 android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnVideo"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="end|center_vertical"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_toggle_video"
+                android:src="@drawable/ic_video"
+                app:tint="@color/um_on_background" />
         </FrameLayout>
 
-        <!-- Recuadro superior (cuadrado): carátula (por defecto) o cola -->
-        <com.untarlamanteca.ultimusic.ui.common.SquareFrameLayout
+        <!-- Recuadro superior (cuadrado): carátula (por defecto), cola o videoclip -->
+        <com.untar.ultimusic.ui.common.SquareFrameLayout
             android:id="@+id/topBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -65,7 +75,42 @@
                 android:layout_height="match_parent"
                 android:clipToPadding="false"
                 android:visibility="gone" />
-        </com.untarlamanteca.ultimusic.ui.common.SquareFrameLayout>
+
+            <!-- Reproductor de YouTube. Va centrado y no estirado: el vídeo es 16:9 y la pantalla
+                 del iPod es cuadrada, así que se deja a lo ancho con bandas arriba y abajo en vez
+                 de deformarlo. Empieza oculto; solo aparece en modo vídeo.
+
+                 El envoltorio impide que los toques lleguen al reproductor: tocarlo lo pausaría, y
+                 en pausa YouTube saca siempre su capa de marca (título, compartir, logo), que no se
+                 puede ocultar de ninguna otra forma. Los mandos del iPod están fuera y siguen
+                 gobernando el vídeo. -->
+            <com.untar.ultimusic.ui.common.TouchBlockerFrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical">
+
+                <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+                    android:id="@+id/youtubePlayer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:visibility="gone"
+                    app:autoPlay="false"
+                    app:enableAutomaticInitialization="false" />
+            </com.untar.ultimusic.ui.common.TouchBlockerFrameLayout>
+
+            <!-- Miniatura oficial del vídeo (la que sirve YouTube en img.youtube.com), para taparlo
+                 mientras el audio local está en pausa: pausado, el WebView de YouTube muestra su
+                 propia capa de marca (título, botón de reanudar, logo) que no se puede quitar por
+                 API, así que se tapa con esta imagen estática en vez de dejarla a la vista. Empieza
+                 oculta; solo se ve en modo vídeo y con la reproducción pausada. -->
+            <ImageView
+                android:id="@+id/videoThumbnail"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/video_thumbnail_desc"
+                android:scaleType="centerCrop"
+                android:visibility="gone" />
+        </com.untar.ultimusic.ui.common.SquareFrameLayout>
 
         <!-- Fila de progreso: transcurrido · barra · total -->
         <LinearLayout
@@ -85,9 +130,9 @@
             <SeekBar
                 android:id="@+id/ipodProgress"
                 android:layout_width="0dp"
-                android:layout_height="8dp"
-                android:paddingStart="5dp"
-                android:paddingEnd="5dp"
+                android:layout_height="16dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
                 android:layout_marginHorizontal="4dp"
                 android:layout_weight="1"
                 android:max="1000"

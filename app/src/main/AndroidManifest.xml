@@ -9,6 +9,12 @@
         android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
+    <!-- Solo para el modo vídeo del iPod: el reproductor de YouTube y el buscador para elegir el
+         vídeo de una canción. El audio de la biblioteca NUNCA sale a la red: sigue leyéndose del
+         almacenamiento local. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"

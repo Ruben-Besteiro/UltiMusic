@@ -10,4 +10,9 @@
     <dimen name="ipod_stroke_info_box">2dp</dimen>
     <dimen name="ipod_stroke_wheel_ring">4dp</dimen>
     <dimen name="ipod_stroke_wheel_center">4dp</dimen>
+
+    <!-- Radio de esquina del recuadro superior del iPod (pantalla). Lo comparte la carátula
+         (ShapeAppearanceOverlay.UltiMusic.Cover, en styles.xml) y VideoScreenController, que
+         recorta el vídeo a este mismo redondeo para que sus esquinas no sobresalgan del marco. -->
+    <dimen name="ipod_display_corner_radius">8dp</dimen>
 </resources>

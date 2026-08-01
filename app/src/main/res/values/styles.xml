@@ -3,7 +3,7 @@
     <!-- Esquinas redondeadas para las carátulas (recuadros del wireframe). -->
     <style name="ShapeAppearanceOverlay.UltiMusic.Cover" parent="">
         <item name="cornerFamily">rounded</item>
-        <item name="cornerSize">8dp</item>
+        <item name="cornerSize">@dimen/ipod_display_corner_radius</item>
     </style>
 
     <!--
@@ -19,6 +19,30 @@
     <style name="Animation.UltiMusic.SlideUp" parent="">
         <item name="android:windowEnterAnimation">@anim/slide_in_up</item>
         <item name="android:windowExitAnimation">@anim/slide_out_down</item>
+    </style>
+
+    <!--
+      Solo para IPodNanoDialogFragment: igual que Animation.UltiMusic.SlideUp pero sin animación de
+      salida, porque esa ventana siempre se cierra a mano con una traslación (ver
+      [IPodNanoDialogFragment.animateClose]) para poder arrancarla desde una posición a medio camino
+      cuando el cierre viene de un arrastre, en vez de dar un salto. Se aplica en código
+      ([IPodNanoDialogFragment.onStart]), no desde el tema, porque además al abrir arrastrando el
+      mini-reproductor tampoco debe llevar NINGUNA animación de ventana propia (ver
+      [MainActivity.setupMiniPlayerDrag]).
+    -->
+    <style name="Animation.UltiMusic.IPodEnterOnly" parent="">
+        <item name="android:windowEnterAnimation">@anim/slide_in_up</item>
+    </style>
+
+    <!--
+      Deslizamiento del buscador. Es el mismo movimiento que el del iPod (sube al abrir, baja al
+      cerrar), pero copiando la transición de ~/Phonograph: además del desplazamiento hay un fundido,
+      y las curvas de velocidad son las "emphasized" de Material en vez de la aceleración simple.
+      Va en un estilo aparte para no tocar de rebote al iPod ni al editor de metadatos.
+    -->
+    <style name="Animation.UltiMusic.SearchSlide" parent="">
+        <item name="android:windowEnterAnimation">@anim/search_enter</item>
+        <item name="android:windowExitAnimation">@anim/search_exit</item>
     </style>
 
     <!--

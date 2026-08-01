@@ -10,4 +10,7 @@
     <item
         android:id="@+id/action_edit_metadata"
         android:title="@string/edit_metadata" />
+    <item
+        android:id="@+id/action_delete_song"
+        android:title="@string/delete_song" />
 </menu>
