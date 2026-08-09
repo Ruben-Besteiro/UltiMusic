@@ -1,0 +1,551 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pantalla de ajustes de UltiMusic. Se abre desde el engranaje de la barra superior de la actividad
+  principal. Tiene el amplificador de volumen, la lista gris de subcarpetas y el ecualizador, uno
+  detrás de otro dentro de un único ScrollView (montada como una lista vertical para que ir
+  añadiendo ajustes debajo no obligue a rehacerla).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/settingsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/settingsToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_surface"
+        app:navigationContentDescription="@string/settings_back"
+        app:navigationIcon="@drawable/ic_arrow_back_toolbar"
+        app:title="@string/settings_title"
+        app:titleTextColor="@color/um_on_background" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingStart="20dp"
+            android:paddingTop="16dp"
+            android:paddingEnd="20dp"
+            android:paddingBottom="16dp">
+
+            <!-- ===== Ajuste: amplificador de volumen ===== -->
+
+            <TextView
+                android:id="@+id/boostTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_boost_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_boost_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <!--
+              Fila del control: a la izquierda el mando (slider o regla, se intercambian) y a la
+              derecha el número exacto, editable a mano por si alguien quiere clavar un valor sin
+              pelearse con el dedo.
+            -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <!--
+                  Los dos mandos comparten sitio: solo uno está visible a la vez. El FrameLayout los
+                  apila y el fragmento enseña el que toque según el estado de "Desactivar límite".
+                -->
+                <FrameLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1">
+
+                    <com.google.android.material.slider.Slider
+                        android:id="@+id/boostSlider"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:contentDescription="@string/settings_boost_title"
+                        android:stepSize="1"
+                        android:valueFrom="100"
+                        android:valueTo="150"
+                        app:labelBehavior="gone" />
+
+                    <com.untar.ultimusic.ui.common.ValueRuler
+                        android:id="@+id/boostRuler"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:contentDescription="@string/settings_boost_title"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <!--
+                  inputType="number" saca el teclado numérico. imeOptions="actionDone" cambia la
+                  tecla de salto de línea por un "hecho", que el fragmento usa para cerrar el teclado
+                  y normalizar lo escrito.
+                -->
+                <EditText
+                    android:id="@+id/boostValue"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:background="@null"
+                    android:gravity="end"
+                    android:imeOptions="actionDone"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="4"
+                    android:maxLines="1"
+                    android:minWidth="56dp"
+                    android:textColor="@color/um_on_background"
+                    android:textSize="18sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="%"
+                    android:textColor="@color/um_on_background"
+                    android:textSize="18sp" />
+
+            </LinearLayout>
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/boostNoLimit"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="@string/settings_boost_no_limit"
+                android:textColor="@color/um_on_background"
+                android:textSize="15sp"
+                app:rippleColor="@color/um_ripple_white" />
+
+            <!-- ===== Ajuste: lista gris ===== -->
+
+            <TextView
+                android:id="@+id/greylistTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:text="@string/settings_greylist_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_greylist_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <!--
+              nestedScrollingEnabled=false porque ya vive dentro del ScrollView de fuera: la lista es
+              corta (subcarpetas añadidas a mano) y no necesita su propio scroll independiente.
+            -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/greylistRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:nestedScrollingEnabled="false" />
+
+            <TextView
+                android:id="@+id/btnAddGreylistFolder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_greylist_add"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold" />
+
+            <!-- ===== Ajuste: ecualizador ===== -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/eqTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:gravity="center_vertical"
+                    android:text="@string/settings_eq_title"
+                    android:textColor="@color/um_yellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <com.google.android.material.materialswitch.MaterialSwitch
+                    android:id="@+id/eqSwitch"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginEnd="15dp"
+                    android:contentDescription="@string/settings_eq_switch_desc"
+                    android:theme="@style/ThemeOverlay.UltiMusic.SwitchRippleWhite" />
+
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_eq_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/eqUnavailable"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/settings_eq_unavailable"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp"
+                android:visibility="gone" />
+
+            <!--
+              Todo lo que va aquí abajo son "opciones" del ecualizador propiamente dichas (presets,
+              bandas, refuerzos...). Con el interruptor apagado este contenedor entero se oculta:
+              es la primera de las dos capas de ocultación (la segunda es additionalOptionsContainer,
+              gobernada por la casilla "Opciones adicionales" de más abajo).
+            -->
+            <LinearLayout
+                android:id="@+id/eqOptionsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <Spinner
+                    android:id="@+id/eqPresetsSpinner"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:contentDescription="@string/settings_eq_presets"
+                    android:minWidth="120dp" />
+
+                <TextView
+                    android:id="@+id/btnSavePreset"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:paddingVertical="8dp"
+                    android:text="@string/settings_eq_save_preset"
+                    android:textColor="@color/um_on_background"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnDeletePreset"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:paddingVertical="8dp"
+                    android:text="@string/settings_eq_delete_preset"
+                    android:textColor="@color/um_on_background"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_eq_pre_gain"
+                android:textColor="@color/um_on_background"
+                android:textSize="15sp" />
+
+            <com.google.android.material.slider.Slider
+                android:id="@+id/preGainSlider"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:contentDescription="@string/settings_eq_pre_gain"
+                android:stepSize="1"
+                android:valueFrom="0"
+                android:valueTo="100"
+                app:labelBehavior="gone" />
+
+            <!--
+              Vacío a propósito: SettingsDialogFragment infla aquí un item_eq_band.xml por cada
+              banda que reporte el ecualizador del dispositivo (el número y su rango no son fijos).
+            -->
+            <LinearLayout
+                android:id="@+id/eqBandsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:orientation="horizontal" />
+
+            <TextView
+                android:id="@+id/btnResetEq"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_eq_reset"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold" />
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/additionalOptionsCheck"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_eq_additional_options"
+                android:textColor="@color/um_on_background"
+                android:textSize="15sp"
+                app:rippleColor="@color/um_ripple_white" />
+
+            <!--
+              Refuerzo de graves, sonido envolvente, reverberación y compresor de rango dinámico:
+              cuatro efectos que no son bandas del ecualizador (ver el bloque "Ecualizador" de
+              PlayerViewModel). Van agrupados y ocultos por defecto para no abrumar con controles
+              menos habituales, y cada uno lleva un botón de ayuda porque hace algo que ningún
+              slider vertical puede replicar.
+            -->
+            <LinearLayout
+                android:id="@+id/additionalOptionsContainer"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_eq_bass_boost"
+                        android:textColor="@color/um_on_background"
+                        android:textSize="15sp" />
+
+                    <ImageButton
+                        android:id="@+id/btnHelpBassBoost"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginStart="6dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings_eq_bass_boost_help_desc"
+                        android:src="@drawable/ic_help"
+                        app:tint="@color/um_on_surface_muted" />
+
+                </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/bassBoostSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:contentDescription="@string/settings_eq_bass_boost"
+                    android:stepSize="1"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    app:labelBehavior="gone" />
+
+                <TextView
+                    android:id="@+id/bassBoostUnsupported"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_eq_bass_unsupported"
+                    android:textColor="@color/um_on_surface_muted"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_eq_virtualizer"
+                        android:textColor="@color/um_on_background"
+                        android:textSize="15sp" />
+
+                    <ImageButton
+                        android:id="@+id/btnHelpVirtualizer"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginStart="6dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings_eq_virtualizer_help_desc"
+                        android:src="@drawable/ic_help"
+                        app:tint="@color/um_on_surface_muted" />
+
+                </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/virtualizerSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:contentDescription="@string/settings_eq_virtualizer"
+                    android:stepSize="1"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    app:labelBehavior="gone" />
+
+                <TextView
+                    android:id="@+id/virtualizerUnsupported"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_eq_virtualizer_unsupported"
+                    android:textColor="@color/um_on_surface_muted"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_eq_reverb_title"
+                        android:textColor="@color/um_on_background"
+                        android:textSize="15sp" />
+
+                    <ImageButton
+                        android:id="@+id/btnHelpReverb"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginStart="6dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings_eq_reverb_help_desc"
+                        android:src="@drawable/ic_help"
+                        app:tint="@color/um_on_surface_muted" />
+
+                </LinearLayout>
+
+                <!--
+                  A diferencia de los otros tres, la reverberación no tiene una "fuerza" continua:
+                  el efecto solo admite elegir entre unas cuantas salas predefinidas (ver
+                  PlayerViewModel.reverbPresetNames), así que aquí va un desplegable y no un slider.
+                -->
+                <Spinner
+                    android:id="@+id/reverbSpinner"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:contentDescription="@string/settings_eq_reverb_title" />
+
+                <TextView
+                    android:id="@+id/reverbUnsupported"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_eq_reverb_unsupported"
+                    android:textColor="@color/um_on_surface_muted"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="@string/settings_eq_dynamics_title"
+                        android:textColor="@color/um_on_background"
+                        android:textSize="15sp" />
+
+                    <ImageButton
+                        android:id="@+id/btnHelpDynamics"
+                        android:layout_width="20dp"
+                        android:layout_height="20dp"
+                        android:layout_marginStart="6dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:contentDescription="@string/settings_eq_dynamics_help_desc"
+                        android:src="@drawable/ic_help"
+                        app:tint="@color/um_on_surface_muted" />
+
+                </LinearLayout>
+
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/dynamicsSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:contentDescription="@string/settings_eq_dynamics_title"
+                    android:stepSize="1"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    app:labelBehavior="gone" />
+
+                <TextView
+                    android:id="@+id/dynamicsUnsupported"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="@string/settings_eq_dynamics_unsupported"
+                    android:textColor="@color/um_on_surface_muted"
+                    android:textSize="13sp"
+                    android:visibility="gone" />
+
+            </LinearLayout>
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

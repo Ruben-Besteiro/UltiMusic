@@ -11,8 +11,9 @@ package com.untar.ultimusic.data.db.relations
  * muchísimo más barato que traerse todas las canciones a memoria para contarlas en Kotlin.
  *
  * Los campos `sample*` sostienen la cadena de failsafe de la carátula: si el álbum/artista/productor
- * no tiene imagen propia, se usa la de una de sus canciones; y si esa tampoco la tiene, se extrae el
- * arte embebido del archivo de audio (`sampleSongPath`). Ver `CoverArt.cover(...)`.
+ * no tiene imagen propia, se usa la de una de sus canciones; si esa tampoco la tiene, se extrae el
+ * arte embebido del archivo de audio (`sampleSongPath`); y si tampoco hay, se usa la miniatura de
+ * YouTube de una de sus canciones (`sampleSongVideoThumbnail`). Ver `CoverArt.cover(...)`.
  *
  * El sufijo `Row` los distingue de los modelos de DOMINIO del mismo nombre (`model/Summaries.kt`),
  * que son los que consume la interfaz; los mappers convierten unos en otros.
@@ -27,7 +28,8 @@ data class AlbumSummaryRow(
     val songCount: Int,
     val totalDuration: Long,
     val sampleSongImage: String?,
-    val sampleSongPath: String?
+    val sampleSongPath: String?,
+    val sampleSongVideoThumbnail: String?
 )
 
 /**
@@ -42,7 +44,8 @@ data class PersonSummaryRow(
     val albumCount: Int,
     val totalDuration: Long,
     val sampleSongImage: String?,
-    val sampleSongPath: String?
+    val sampleSongPath: String?,
+    val sampleSongVideoThumbnail: String?
 )
 
 /** Número de pista de una canción dentro de un álbum concreto (vive en la tabla de cruce). */

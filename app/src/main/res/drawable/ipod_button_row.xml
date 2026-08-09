@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de botones del iPod: mismo estilo que ipod_info_box pero con las esquinas
+     redondeadas al máximo (forma de "gusano"/píldora). El radio se pasa a propósito
+     más grande que la mitad de la altura de la fila: Android lo recorta solo al máximo
+     posible, así el redondeo queda siempre completo aunque cambie el alto de la fila. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/um_surface_variant" />
+    <corners android:radius="100dp" />
+    <stroke
+        android:width="@dimen/ipod_stroke_info_box"
+        android:color="@color/um_yellow" />
+</shape>

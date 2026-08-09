@@ -1,0 +1,338 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ventana a pantalla completa con forma de iPod -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/ipodRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background">
+
+    <!-- Cuerpo del iPod -->
+    <LinearLayout
+        android:id="@+id/ipodBody"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:layout_margin="5dp"
+        android:background="@drawable/ipod_body"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <!-- Cabecera: X a la izquierda + título centrado + alternar audio/vídeo a la derecha -->
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <ImageButton
+                android:id="@+id/btnClose"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="start|center_vertical"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_close"
+                android:src="@drawable/ic_close"
+                app:tint="@color/um_on_background" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="@string/ipod_title"
+                android:textColor="@color/um_on_background"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <ImageButton
+                android:id="@+id/btnVideo"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_gravity="end|center_vertical"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/ipod_toggle_video"
+                android:src="@drawable/ic_video"
+                app:tint="@color/um_on_background" />
+        </FrameLayout>
+
+        <!-- Recuadro superior (cuadrado): carátula (por defecto), cola o videoclip -->
+        <com.untar.ultimusic.ui.common.SquareFrameLayout
+            android:id="@+id/topBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/ipod_display"
+            android:padding="5dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/cover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:contentDescription="@string/song_cover_desc"
+                android:scaleType="centerCrop"
+                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/queueList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/um_queue_scrim"
+                android:clipToPadding="false"
+                android:visibility="gone" />
+
+            <!-- Reproductor de YouTube: ocupa todo topBox. En modo vídeo topBox deja de ser
+                 cuadrado y pasa a 16:9 (ver animateAspectRatio en IPodDialogFragment), así
+                 que match_parent encaja exacto, sin bandas que dejar. Antes era wrap_content +
+                 centrado verticalmente, pero el WebView interno no siempre respeta ese tamaño
+                 (el contenido tarda en asentarse), y eso dejaba el recorte de esquinas
+                 redondeadas descuadrado (redondeaba arriba pero no abajo). Ese recorte, además,
+                 ya no se aplica aquí: lo hace topBox entero (ver IPodDialogFragment.onViewCreated),
+                 así vale igual para la carátula, la cola y el vídeo sin recalcular nada al
+                 cambiar de forma. Empieza oculto; solo aparece en modo vídeo.
+
+                 El envoltorio impide que los toques lleguen al reproductor: tocarlo lo pausaría, y
+                 en pausa YouTube saca siempre su capa de marca (título, compartir, logo), que no se
+                 puede ocultar de ninguna otra forma. Los mandos del iPod están fuera y siguen
+                 gobernando el vídeo. -->
+            <com.untar.ultimusic.ui.common.TouchBlockerFrameLayout
+                android:id="@+id/videoContainer"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:visibility="gone">
+
+                <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+                    android:id="@+id/youtubePlayer"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:visibility="gone"
+                    app:autoPlay="false"
+                    app:enableAutomaticInitialization="false" />
+            </com.untar.ultimusic.ui.common.TouchBlockerFrameLayout>
+
+            <!-- Ruedecilla de carga: tapa el WebView mientras está en negro, entre que se pide el
+                 vídeo (ver VideoScreenController.load) y que YouTube pinta su propia ruedecilla de
+                 carga (ver VideoScreenController.onLoadingChanged). Se quita en cuanto llega el
+                 primer cambio de estado del reproductor, para no tener dos ruedecillas a la vez.
+                 Blanca y de trazo fino a propósito: es la misma que pinta YouTube en su propia
+                 ruedecilla, para que el relevo entre una y otra no se note. Empieza oculta; solo se
+                 ve en modo vídeo. -->
+            <com.google.android.material.progressindicator.CircularProgressIndicator
+                android:id="@+id/videoLoadingSpinner"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="center"
+                android:contentDescription="@string/video_loading_desc"
+                android:indeterminate="true"
+                android:visibility="gone"
+                app:indicatorColor="@android:color/white"
+                app:trackColor="@android:color/transparent"
+                app:trackThickness="3dp" />
+        </com.untar.ultimusic.ui.common.SquareFrameLayout>
+
+        <!-- Un único recuadro con el título de la canción y, debajo, "Artista | Álbum | Año". -->
+
+        <!-- Título + subtítulo de la canción en modo carátula, o el aviso de la cola/lista (en
+             tvMeta, con tvTitle oculto) en ese otro modo — ver IPodDialogFragment.updateInfoBox.
+             minHeight en vez de wrap_content y gravity="center_vertical": así la caja mide SIEMPRE
+             lo mismo en los dos modos (el aviso de la cola es más largo que título+subtítulo y puede
+             llegar a ocupar sus 2 líneas, ver tvMeta) y su contenido, sea el que sea, se centra
+             dentro en vez de quedar pegado arriba. -->
+        <LinearLayout
+            android:id="@+id/infoBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/ipod_info_box"
+            android:gravity="center_vertical"
+            android:minHeight="@dimen/ipod_info_box_min_height"
+            android:orientation="vertical"
+            android:paddingHorizontal="12dp">
+
+            <TextView
+                android:id="@+id/tvTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="1"
+                android:textColor="@color/um_on_background"
+                android:textSize="16sp" />
+
+            <!-- maxLines=2, no 1: en modo cola/lista lleva el aviso de la cola (ver R.string.queue_hint_playlist,
+                 el más largo), que no cabe en una sola línea. En modo carátula (subtítulo corto) esto no
+                 cambia nada, sigue viéndose en una única línea. -->
+            <TextView
+                android:id="@+id/tvMeta"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:gravity="center"
+                android:maxLines="2"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvPosition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp" />
+
+            <SeekBar
+                android:id="@+id/ipodProgress"
+                android:layout_width="0dp"
+                android:layout_height="16dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:layout_marginHorizontal="4dp"
+                android:layout_weight="1"
+                android:max="1000"
+                android:progress="0"
+                android:progressDrawable="@drawable/seekbar_line"
+                android:progressBackgroundTint="@color/um_divider"
+                android:progressTint="@color/um_yellow"
+                android:thumb="@null"
+                android:background="@null"
+                android:splitTrack="false" />
+
+            <TextView
+                android:id="@+id/tvDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <!-- Fila horizontal con los 5 controles: anterior, menú (3 rayas), play/pausa, menú de la
+             canción (3 puntos, duplicado del de la pestaña Canciones) y siguiente, en línea en vez
+             de repartidos en una rueda como el iPod classic de 3ª generación. Cada botón vive
+             centrado en una celda de igual ancho (layout_weight="1") dentro de un FrameLayout
+             propio, así el círculo se mantiene de tamaño fijo aunque la fila se estire para ocupar
+             todo el ancho disponible. -->
+        <LinearLayout
+            android:id="@+id/buttonRow"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/ipod_button_row"
+            android:orientation="horizontal"
+            android:paddingVertical="10dp">
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <ImageButton
+                    android:id="@+id/btnPrev"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ipod_round_button"
+                    android:foreground="@drawable/ipod_round_button_ripple"
+                    android:contentDescription="@string/ipod_prev"
+                    android:padding="13dp"
+                    android:src="@drawable/ic_skip_previous"
+                    app:tint="@color/um_yellow" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <ImageButton
+                    android:id="@+id/btnMenu"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ipod_round_button"
+                    android:foreground="@drawable/ipod_round_button_ripple"
+                    android:contentDescription="@string/ipod_toggle_view"
+                    android:padding="13dp"
+                    android:src="@drawable/ic_menu"
+                    app:tint="@color/um_yellow" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <ImageButton
+                    android:id="@+id/btnPlayPauseBig"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ipod_round_button"
+                    android:foreground="@drawable/ipod_round_button_ripple"
+                    android:contentDescription="@string/play_pause"
+                    android:padding="13dp"
+                    android:src="@drawable/ic_play"
+                    app:tint="@color/um_yellow" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <ImageButton
+                    android:id="@+id/btnSongMenu"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ipod_round_button"
+                    android:foreground="@drawable/ipod_round_button_ripple"
+                    android:contentDescription="@string/song_more"
+                    android:padding="13dp"
+                    android:src="@drawable/ic_more_vert"
+                    app:tint="@color/um_yellow" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1">
+
+                <ImageButton
+                    android:id="@+id/btnNext"
+                    android:layout_width="52dp"
+                    android:layout_height="52dp"
+                    android:layout_gravity="center"
+                    android:background="@drawable/ipod_round_button"
+                    android:foreground="@drawable/ipod_round_button_ripple"
+                    android:contentDescription="@string/ipod_next"
+                    android:padding="13dp"
+                    android:src="@drawable/ic_skip_next"
+                    app:tint="@color/um_yellow" />
+            </FrameLayout>
+        </LinearLayout>
+
+        <!-- Contenedor de la letra: ocupa todo el espacio restante (weight=1). Lo rellena
+             IPodDialogFragment.onViewCreated con Song.lyrics, una fila por línea (ver
+             IPodLyricsAdapter); si la canción no tiene letra guardada, una única fila con un aviso
+             invitando a rellenarla en el editor de metadatos. Es un RecyclerView (no un
+             NestedScrollView con un TextView, como antes) porque con letra sincronizada hace falta
+             poder resaltar y centrar la línea que toca cantar ahora; con letra sin sincronizar se
+             ve exactamente igual que antes (una fila = el texto entero, centrado, scrolleable si no
+             cabe entera). -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/lyricsBox"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="4dp"
+            android:background="@drawable/ipod_info_box"
+            android:clipToPadding="false"
+            android:padding="14dp" />
+
+    </LinearLayout>
+</FrameLayout>

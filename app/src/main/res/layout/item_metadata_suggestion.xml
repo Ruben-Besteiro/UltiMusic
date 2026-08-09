@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fila de un candidato de autorrelleno (ver MetadataSuggestionsAdapter). Calco de item_album_row.xml
+  con una insignia extra para el tipo de publicación (Álbum, Single, "Single (en directo)"...): es
+  justo lo que deja distinguir a simple vista el single del álbum cuando sus datos no coinciden.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/suggestionRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="10dp">
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/suggestionCover"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/cover_placeholder"
+        android:contentDescription="@string/suggestion_cover_desc"
+        android:scaleType="centerCrop" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/suggestionTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Bohemian Rhapsody" />
+
+        <TextView
+            android:id="@+id/suggestionSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="14sp"
+            tools:text="Queen | A Night at the Opera | 1975" />
+
+        <TextView
+            android:id="@+id/suggestionBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="12sp"
+            android:textStyle="italic"
+            tools:text="Single" />
+
+    </LinearLayout>
+
+</LinearLayout>

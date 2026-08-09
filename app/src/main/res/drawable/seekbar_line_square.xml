@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Variante de seekbar_line sin esquinas redondeadas, para el mini-reproductor.
+  Se pintan blancas y el color real lo dan progressBackgroundTint (fondo) y progressTint (progreso).
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@android:id/background" android:gravity="center_vertical">
+        <shape android:shape="rectangle">
+            <size android:height="8dp" />
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+    <item android:id="@android:id/progress" android:gravity="center_vertical">
+        <clip android:clipOrientation="horizontal" android:gravity="left">
+            <shape android:shape="rectangle">
+                <size android:height="8dp" />
+                <solid android:color="@android:color/white" />
+            </shape>
+        </clip>
+    </item>
+</layer-list>

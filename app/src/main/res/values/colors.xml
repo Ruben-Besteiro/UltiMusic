@@ -2,6 +2,15 @@
 <resources>
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
+    <!-- Blanco del ripple de los botones "de siempre" de la app (?attr/selectableItemBackground,
+         mini-reproductor, filas de listas...): un 20% de opacidad, el mismo que trae de fábrica
+         ripple_material_dark. Los controles de Material que pulsan en amarillo fijo por su cuenta
+         (los botones de AccentTint.buttons, y las casillas de dialog_settings.xml con
+         app:rippleColor) se pasan a este blanco en vez de a @color/white a secas, que al ser opaco
+         pulsaba mucho más fuerte que el resto de la app. El MaterialSwitch de esa misma pantalla es
+         un caso aparte que no usa este color: ver ThemeOverlay.UltiMusic.SwitchRippleWhite en
+         styles.xml. -->
+    <color name="um_ripple_white">#33FFFFFF</color>
 
     <!-- Esquema negro y amarillo de UltiMusic -->
     <color name="um_background">#FF202020</color>
@@ -16,4 +25,7 @@
     <color name="um_on_surface_muted">#FFB0B0B0</color>
     <color name="um_divider">#FF404040</color>
     <color name="um_cover_placeholder">#FF000000</color>
+    <!-- Velo semitransparente sobre la carátula cuando el iPod muestra la cola encima de ella
+         (ver IPodDialogFragment): la carátula se ve de fondo, atenuada, en vez de desaparecer. -->
+    <color name="um_queue_scrim">#D9000000</color>
 </resources>

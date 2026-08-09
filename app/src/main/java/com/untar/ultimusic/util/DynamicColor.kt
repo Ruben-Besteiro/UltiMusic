@@ -1,6 +1,7 @@
 package com.untar.ultimusic.util
 
 import android.content.Context
+import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
@@ -140,6 +141,35 @@ object DynamicColor {
     fun onColor(background: Int): Int =
         if (ColorUtils.calculateLuminance(background) > 0.5) Color.BLACK
         else Color.WHITE
+
+    /**
+     * `ColorStateList` para la pista de un `MaterialSwitch`: [accent] cuando está encendido, gris
+     * (el que traiga [defaultTrackTint] de fábrica, o [Color.GRAY] si no hay ninguno) cuando está
+     * apagado.
+     *
+     * Antes se aplicaba [accent] a los dos estados a la vez, así que el interruptor apagado también
+     * se veía teñido del color de la carátula en vez de gris neutro. [defaultTrackTint] hay que
+     * capturarlo del propio switch ANTES de tocar su `trackTintList` por primera vez, porque una vez
+     * pisado ya no se puede recuperar el gris original del tema.
+     *
+     * El "pulsa en amarillo al tocarlo" que esto parece que debería arreglar en realidad **no** está
+     * aquí: el `trackTint` es el relleno sólido de la pista, y el halo que se ve al tocar el switch
+     * es un `android:background` aparte que `MaterialSwitch` hereda de AppCompat, ajeno del todo a
+     * `trackTint`/`thumbTint`. Ver `ThemeOverlay.UltiMusic.SwitchRippleWhite` en `styles.xml`, que es
+     * donde se corrige de verdad.
+     */
+    fun switchTrackTint(accent: Int, defaultTrackTint: ColorStateList?): ColorStateList {
+        val uncheckedColor = defaultTrackTint
+            ?.getColorForState(intArrayOf(-android.R.attr.state_checked), Color.GRAY)
+            ?: Color.GRAY
+        return ColorStateList(
+            arrayOf(
+                intArrayOf(android.R.attr.state_checked),
+                intArrayOf(-android.R.attr.state_checked)
+            ),
+            intArrayOf(accent, uncheckedColor)
+        )
+    }
 
     private const val SAMPLE_SIZE = 128
     private const val MIN_SATURATION = 0.35f

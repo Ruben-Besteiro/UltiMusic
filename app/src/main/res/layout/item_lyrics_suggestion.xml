@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fila de un candidato del buscador de letras de lrclib.net (ver LyricsSuggestionsAdapter). Calco de
+  item_metadata_suggestion.xml, pero sin portada remota (lrclib.net no da ninguna): en su lugar, un
+  icono fijo de nota musical. La insignia, aquí, distingue letra sincronizada de letra plana en vez
+  de tipo de publicación.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/lyricsSuggestionRow"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="10dp">
+
+    <ImageView
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:padding="8dp"
+        android:src="@drawable/ic_music_note"
+        android:contentDescription="@null"
+        app:tint="@color/um_on_surface_muted" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/lyricsSuggestionTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Bohemian Rhapsody" />
+
+        <TextView
+            android:id="@+id/lyricsSuggestionSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="14sp"
+            tools:text="Queen | A Night at the Opera | 5:51" />
+
+        <TextView
+            android:id="@+id/lyricsSuggestionBadge"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="12sp"
+            android:textStyle="italic"
+            tools:text="Sincronizada" />
+
+    </LinearLayout>
+
+</LinearLayout>

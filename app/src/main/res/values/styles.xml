@@ -35,17 +35,6 @@
     </style>
 
     <!--
-      Deslizamiento del buscador. Es el mismo movimiento que el del iPod (sube al abrir, baja al
-      cerrar), pero copiando la transición de ~/Phonograph: además del desplazamiento hay un fundido,
-      y las curvas de velocidad son las "emphasized" de Material en vez de la aceleración simple.
-      Va en un estilo aparte para no tocar de rebote al iPod ni al editor de metadatos.
-    -->
-    <style name="Animation.UltiMusic.SearchSlide" parent="">
-        <item name="android:windowEnterAnimation">@anim/search_enter</item>
-        <item name="android:windowExitAnimation">@anim/search_exit</item>
-    </style>
-
-    <!--
       Campos del editor de metadatos. El estilo "Filled" de Material es el de la línea inferior
       subrayada del boceto: etiqueta encima y raya debajo.
     -->
@@ -62,14 +51,11 @@
         <item name="endIconMode">none</item>
     </style>
 
-    <!-- Cabecera clicable de una sección plegable de campos secundarios. -->
+    <!-- Cabecera (no interactiva) de un bloque de campos secundarios del editor. -->
     <style name="Widget.UltiMusic.SectionHeader" parent="">
         <item name="android:orientation">horizontal</item>
         <item name="android:gravity">center_vertical</item>
-        <item name="android:layout_marginTop">4dp</item>
-        <item name="android:background">?android:attr/selectableItemBackground</item>
-        <item name="android:clickable">true</item>
-        <item name="android:focusable">true</item>
+        <item name="android:layout_marginTop">12dp</item>
     </style>
 
     <style name="Widget.UltiMusic.SectionTitle" parent="">
@@ -77,5 +63,25 @@
         <item name="android:textColor">@color/um_on_surface_muted</item>
         <item name="android:textSize">14sp</item>
         <item name="android:textStyle">bold</item>
+    </style>
+
+    <!--
+      Fuerza a blanco el ripple (el halo del toque) de un MaterialSwitch, sin tocar el color fijo
+      de su pista/pomo (eso lo pinta trackTint/thumbTint, ver DynamicColor.switchTrackTint, y ya
+      sigue el acento por su cuenta).
+
+      Ese ripple no lo controla trackTint/thumbTint: lo dibuja el "android:background" que
+      MaterialSwitch hereda de Widget.AppCompat.CompoundButton.Switch (?attr/controlBackground),
+      cuyo drawable de fábrica (abc_color_highlight_material) usa colorControlActivated cuando el
+      interruptor está encendido -que en un tema Material3/MDC como el nuestro equivale a
+      colorAccent, y colorAccent a colorSecondary, o sea nuestro amarillo- y colorControlHighlight
+      (un blanco translúcido fijo, sin relación con el acento) cuando está apagado. Por eso el
+      ripple tocaba en blanco al activar (rama "apagado") y en amarillo al desactivar (rama
+      "encendido": el interruptor sigue marcado como encendido mientras se mantiene pulsado, antes
+      de soltar el dedo). Redefiniendo aquí colorControlActivated a blanco, las dos ramas quedan
+      iguales.
+    -->
+    <style name="ThemeOverlay.UltiMusic.SwitchRippleWhite" parent="">
+        <item name="android:colorControlActivated">@android:color/white</item>
     </style>
 </resources>

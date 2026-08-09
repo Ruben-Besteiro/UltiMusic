@@ -9,11 +9,47 @@
         android:maxSdkVersion="29" />
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
-    <!-- Solo para el modo vídeo del iPod: el reproductor de YouTube y el buscador para elegir el
-         vídeo de una canción. El audio de la biblioteca NUNCA sale a la red: sigue leyéndose del
-         almacenamiento local. -->
+    <!-- Solo para: el modo vídeo del iPod (reproductor de YouTube y buscador del videoclip), el
+         autorrelleno de metadatos (MusicBrainz/Cover Art Archive) y el buscador de letras
+         sincronizadas (lrclib.net) del editor. El audio de la biblioteca NUNCA sale a la red: sigue
+         leyéndose del almacenamiento local. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- Amplificador de volumen: enganchar un efecto de audio (LoudnessEnhancer) a la sesión del
+         reproductor. Es un permiso "normal", no de los que hay que pedir al usuario: el sistema lo
+         concede al instalar. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+
+    <!-- También para el amplificador: preguntarle a un aparato Bluetooth conectado QUÉ ES, para
+         distinguir unos auriculares (donde el tope del 150 % se mantiene) de un altavoz o del coche
+         (donde se puede quitar). Ver util/Headphones.kt.
+
+         Son dos permisos porque Android cambió el sistema en la versión 12 (API 31): antes bastaba
+         con BLUETOOTH, que se concede al instalar; a partir de ahí hace falta BLUETOOTH_CONNECT, que
+         se pide al usuario en tiempo de ejecución. El maxSdkVersion evita pedir el viejo en los
+         móviles donde ya no sirve.
+
+         usesPermissionFlags="neverForLocation" le dice al sistema que NO se va a usar el Bluetooth
+         para deducir dónde está el usuario; sin eso, Android lo trata como un permiso de ubicación. -->
+    <uses-permission
+        android:name="android.permission.BLUETOOTH"
+        android:maxSdkVersion="30" />
+    <uses-permission
+        android:name="android.permission.BLUETOOTH_CONNECT"
+        android:usesPermissionFlags="neverForLocation"
+        tools:targetApi="s" />
+
+    <!-- Notificación del reproductor (PlaybackService), operable desde la pantalla de bloqueo.
+         FOREGROUND_SERVICE es "normal" (se concede solo instalar); FOREGROUND_SERVICE_MEDIA_PLAYBACK
+         hace falta a partir de Android 14 (API 34) para que un servicio en primer plano pueda
+         declararse del tipo "mediaPlayback" (ver android:foregroundServiceType más abajo); también
+         es "normal", no se pide en tiempo de ejecución. POST_NOTIFICATIONS sí es de los que hay que
+         pedir al usuario (a partir de Android 13 / API 33): sin ella el Service sigue funcionando
+         igual, solo que la notificación no llega a aparecer (lo pide MainActivity al arrancar). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
         android:allowBackup="true"
@@ -33,6 +69,28 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- El motor de reproducción de verdad (ExoPlayer, cola, amplificador, ecualizador) y la
+             notificación con controles. Ver la cabecera de PlaybackService.kt para el porqué de
+             cada cosa de aquí abajo.
+             - foregroundServiceType="mediaPlayback": obligatorio desde Android 10 (API 29) para que
+               un servicio en primer plano de audio pueda arrancar aunque la aplicación no esté
+               visible en ese instante.
+             - stopWithTask="false": que cerrar la aplicación desde "recientes" NO corte la música
+               si en ese momento está sonando algo (MediaSessionService ya decide por su cuenta,
+               de fábrica, parar el propio Service en cuanto deje de sonar).
+             - exported="false": solo la propia aplicación puede arrancarlo; el intent-filter de
+               abajo es el que exige Media3 para que MediaSessionService sepa a qué Service
+               conectarse (Android Auto, asistente de voz, etc.), no hace falta exportarlo para eso. -->
+        <service
+            android:name=".playback.PlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback"
+            android:stopWithTask="false">
+            <intent-filter>
+                <action android:name="androidx.media3.session.MediaSessionService" />
+            </intent-filter>
+        </service>
     </application>
 
 </manifest>

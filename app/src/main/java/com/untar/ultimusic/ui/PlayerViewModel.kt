@@ -1,465 +1,330 @@
 package com.untar.ultimusic.ui
 
 import android.app.Application
-import android.content.Context
-import android.content.SharedPreferences
-import android.net.Uri
+import android.content.Intent
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.model.Song
-import com.untar.ultimusic.util.CoverArt
+import com.untar.ultimusic.playback.PlaybackService
 import com.untar.ultimusic.util.DynamicColor
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.flow.MutableSharedFlow
+import com.untar.ultimusic.util.Headphones
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.asSharedFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
-import java.io.File
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.stateIn
+import kotlin.math.log2
 
 /** Progreso de reproducción de la canción actual. */
 data class PlaybackProgress(val positionMs: Long = 0L, val durationMs: Long = 0L)
 
 /**
- * Posee el [ExoPlayer] y expone el estado de reproducción. Con ámbito de actividad, lo
- * comparten el mini-reproductor de la actividad y el fragmento de canciones.
+ * Qué tipo de colección ocupa la cola cuando NO es una cola suelta (ver
+ * [com.untar.ultimusic.playback.PlaybackService.isLooseQueue]). La usa el iPod para elegir la
+ * palabra correcta al anunciar cuántas canciones quedan ("en la playlist", "en el álbum", "de este
+ * artista"...) y qué decir al llegar a la última (ver
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [PLAYLIST] y [GENRE] los pone el modo
+ * navegación del iPod al empezar a reproducir esa colección (ver
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment.enterBrowseMode]); [ALBUM], [ARTIST] y
+ * [PRODUCER] los pone la ficha de detalle (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
  */
+enum class CollectionKind { PLAYLIST, GENRE, ALBUM, ARTIST, PRODUCER }
+
+/** Volumen normal: sin amplificar. Es el mínimo del amplificador y su valor por defecto. */
+const val BOOST_MIN_PERCENT = 100
+
+/**
+ * Tope del amplificador mientras el límite está puesto. Por encima de esto hay que marcar
+ * "Desactivar límite", que solo se permite sin auriculares (ver
+ * [com.untar.ultimusic.playback.PlaybackService.setLimitDisabled]).
+ */
+const val BOOST_LIMIT_PERCENT = 150
+
+/**
+ * Tope absoluto, incluso con el límite quitado.
+ *
+ * No está para proteger al usuario —de eso se encarga [BOOST_LIMIT_PERCENT]— sino porque **un tope
+ * tiene que existir**: sin él, los cálculos de la regla se desbordan y el ajuste se va a números
+ * absurdos (ver la cabecera de [com.untar.ultimusic.ui.common.ValueRuler]).
+ *
+ * 1000 % son unos 33 dB, muy por encima de cualquier uso real: mucho antes de llegar ahí el sonido
+ * es solo distorsión. Está puesto tan lejos para que arrastrando no se llegue nunca por accidente.
+ */
+const val BOOST_MAX_PERCENT = 1000
+
+/**
+ * Cuántos decibelios añade el amplificador puesto en [percent]. La explicación completa del porqué
+ * de esta fórmula (y no el `20 * log10` que uno esperaría) está en el comentario de
+ * [com.untar.ultimusic.playback.PlaybackService.applyBoost], que es quien la usa de verdad.
+ *
+ * `internal` (no `private`) porque [PlaybackService][com.untar.ultimusic.playback.PlaybackService]
+ * vive en otro fichero y otro paquete, pero dentro del mismo módulo de la aplicación.
+ */
+internal fun boostGainDb(percent: Int): Double = 10.0 * log2(percent / 100.0)
+
+/**
+ * Una banda del ecualizador: su frecuencia central (en Hz, para la etiqueta) y el rango de
+ * milibelios que admite su slider. El número de bandas y este rango los decide el propio
+ * dispositivo (ver [com.untar.ultimusic.playback.PlaybackService.eqBands]), no son un número fijo
+ * de la aplicación.
+ */
+data class EqBand(val centerFreqHz: Int, val minLevelMb: Int, val maxLevelMb: Int)
+
+/**
+ * Un preset del ecualizador: nombre, niveles de todas las bandas, y fuerzas de bass boost y
+ * virtualizer. Se usa tanto para presets predefinidos (Rock, Pop…) como para presets guardados
+ * por el usuario.
+ */
+data class EqPreset(
+    val name: String,
+    val bandLevels: List<Int>,  // Nivel en mB para cada banda; orden = eqBands
+    val bassBoostStrength: Int,  // 0-100
+    val virtualizerStrength: Int  // 0-100
+)
+
+/**
+ * Fachada de ámbito de actividad sobre [PlaybackService], compartida por el mini-reproductor y la
+ * ventana del iPod, igual que antes. **El reproductor de verdad —el `ExoPlayer`, la cola, el
+ * amplificador, el ecualizador— ya NO vive aquí**: vive en [PlaybackService], un `Service` en
+ * primer plano con notificación (ver su cabecera para el porqué del cambio: en resumen, para que la
+ * música y sus controles sobrevivan a cerrar la aplicación o apagar la pantalla, cosa que un
+ * `ViewModel` —atado a la vida de la `Activity`— no puede garantizar).
+ *
+ * Esta clase se ha quedado en una **fachada**: en cuanto se crea arranca el `Service` (si no estaba
+ * ya arrancado, [PlaybackService] es un singleton de facto mientras el proceso vive) y a partir de
+ * ahí se limita a dos cosas:
+ * - Reenviar cada método público a su gemelo de [PlaybackService] (`fun play(song) { service?.play(song) }`,
+ *   y así con el resto).
+ * - Exponer los mismos `StateFlow`/`Flow` que exponía antes, pero rellenados en caliente a partir de
+ *   los de [PlaybackService] con [serviceState]/[serviceEvents].
+ *
+ * Gracias a eso, **ningún fragmento ni adaptador de la aplicación ha tenido que cambiar una sola
+ * línea**: todos siguen hablando con `PlayerViewModel` exactamente igual que antes de este cambio.
+ *
+ * El único hueco real es la ventana, normalmente de una fracción de segundo, entre que se crea este
+ * ViewModel (arranca `MainActivity`) y que el sistema termina de llamar a `PlaybackService.onCreate()`:
+ * mientras tanto [service] vale `null` y las llamadas se ignoran en silencio (ver cada método). No
+ * hay forma de evitar esa ventana del todo —arrancar un `Service` es asíncrono por diseño de
+ * Android—, pero en la práctica no da tiempo a que el usuario llegue a tocar nada antes de que se
+ * cierre.
+ */
+@OptIn(ExperimentalCoroutinesApi::class)
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
-    /** Solo para resolver rutas obsoletas antes de reproducir (ver [loadCurrent]). */
-    private val library = LibraryRepository.get(app)
+    private val serviceFlow = PlaybackService.instanceFlow
+
+    /** El [PlaybackService] ya arrancado, o `null` durante la ventana descrita en la cabecera. */
+    private val service: PlaybackService? get() = serviceFlow.value
+
+    init {
+        // Arranque NO en primer plano a propósito: si se usara `startForegroundService`, el
+        // Service tendría solo 5 segundos para llamar a `startForeground()` o el sistema lo mata
+        // (`RemoteServiceException`), y eso solo pasa cuando de verdad empieza a sonar algo (lo
+        // gestiona Media3 solo, ver la cabecera de PlaybackService). Aquí, al abrir la aplicación,
+        // puede que el usuario tarde en pulsar play —o no llegue a hacerlo—, así que un arranque
+        // normal (en segundo plano) es el que corresponde.
+        app.startService(Intent(app, PlaybackService::class.java))
+    }
 
     /**
-     * Guarda qué sonaba para sobrevivir a que Android mate el proceso en segundo plano (ver
-     * [savePlaybackState] y [restorePlaybackState]). Sin esto, al recrearse la app este ViewModel
-     * nace con las colas vacías y "olvida" la canción, aunque la base de datos siga intacta: la
-     * cola de reproducción solo vivía en memoria.
+     * Construye un `StateFlow` de ámbito de actividad que seguirá siempre al de [PlaybackService]
+     * que señale [selector], usando [default] mientras el Service no esté listo. `flatMapLatest`
+     * es lo que permite "seguir" un StateFlow que en sí mismo puede no existir todavía (cuando
+     * [serviceFlow] vale null, usa un StateFlow de usar y tirar con el valor por defecto).
      */
-    private val playbackPrefs: SharedPreferences =
-        app.getSharedPreferences("playback_state", Context.MODE_PRIVATE)
+    private fun <T> serviceState(default: T, selector: (PlaybackService) -> StateFlow<T>): StateFlow<T> =
+        serviceFlow.flatMapLatest { it?.let(selector) ?: MutableStateFlow(default) }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, default)
 
-    /**
-     * Cola 1: lo que suena y su contexto (historial ya reproducido + canción actual + lo que el
-     * usuario ha encolado a mano). El elemento en [currentIndex] es lo que suena ahora. Es la única
-     * cola de la que se reproduce.
-     */
-    private val _queue1 = MutableStateFlow<List<Song>>(emptyList())
-    val queue1 = _queue1.asStateFlow()
+    /** Igual que [serviceState] pero para los avisos de una sola vez ([missingFile], [limitForcedByHeadphones]). */
+    private fun <T> serviceEvents(selector: (PlaybackService) -> Flow<T>): Flow<T> =
+        serviceFlow.flatMapLatest { it?.let(selector) ?: emptyFlow() }
 
-    /** Índice de la canción que suena dentro de [queue1]. */
-    private val _currentIndex = MutableStateFlow(0)
-    val currentIndex = _currentIndex.asStateFlow()
-
-    /**
-     * Cola 2: todas las demás canciones (las que no están en [queue1]), mezcladas. Nunca se
-     * reproduce directamente de aquí; cuando [queue1] se agota, su elemento 0 pasa al final de la
-     * cola 1 y se reproduce. Interna: la interfaz solo necesita la cola 1.
-     */
-    private val _queue2 = MutableStateFlow<List<Song>>(emptyList())
-    val queue2 = _queue2.asStateFlow()
-
-    private val _currentSong = MutableStateFlow<Song?>(null)
-    val currentSong = _currentSong.asStateFlow()
-
-    private val _isPlaying = MutableStateFlow(false)
-    val isPlaying = _isPlaying.asStateFlow()
-
-    private val _progress = MutableStateFlow(PlaybackProgress())
-    val progress = _progress.asStateFlow()
+    val queue: StateFlow<List<Song>> = serviceState(emptyList()) { it.queue }
+    val currentIndex: StateFlow<Int> = serviceState(0) { it.currentIndex }
+    val isLooseQueue: StateFlow<Boolean> = serviceState(false) { it.isLooseQueue }
+    val currentSong: StateFlow<Song?> = serviceState(null) { it.currentSong }
+    val isPlaying: StateFlow<Boolean> = serviceState(false) { it.isPlaying }
+    val progress: StateFlow<PlaybackProgress> = serviceState(PlaybackProgress()) { it.progress }
 
     /**
      * Color de acento de la aplicación, sacado de la carátula de lo que suena. Lo observan la
      * actividad principal (pestañas, barra de progreso, mini-reproductor) y la ventana del iPod,
-     * que así dejan de ser amarillos y se tiñen con la canción. Mientras no hay nada sonando vale
-     * [DynamicColor.DEFAULT], es decir, el amarillo de toda la vida.
+     * que así dejan de ser amarillos y se tiñen con la canción. Mientras no hay nada sonando (o el
+     * Service todavía no está listo) vale [DynamicColor.DEFAULT], el amarillo de toda la vida.
      */
-    private val _accentColor = MutableStateFlow(DynamicColor.DEFAULT)
-    val accentColor = _accentColor.asStateFlow()
+    val accentColor: StateFlow<Int> = serviceState(DynamicColor.DEFAULT) { it.accentColor }
 
-    /**
-     * Nombre de la playlist cuya colección ocupa ahora mismo la cola 1, o null si lo que suena no
-     * viene de una playlist (canción suelta, álbum, artista, productor...). Sirve para que el iPod, al
-     * reabrir una playlist, sepa si ya es lo que está sonando y deba mostrar el modo normal en vez de
-     * entrar en modo navegación.
-     */
-    private val _currentPlaylistName = MutableStateFlow<String?>(null)
-    val currentPlaylistName = _currentPlaylistName.asStateFlow()
+    /** Ver [PlaybackService.coverRevision]. Quien pinte una carátula sacada de [currentSong] o
+     * [queue] debe recargarla también cuando esto cambie, no solo cuando esos dos cambien: si no,
+     * reemplazar una carátula por otra con el mismo nombre de archivo (lo habitual, ver el editor
+     * de metadatos) no se refrescaría en esa vista aunque el acento sí lo haga. */
+    val coverRevision: StateFlow<Int> = serviceState(0) { it.coverRevision }
 
-    /**
-     * Avisa de que el archivo de una canción no aparece por ningún lado. `MainActivity` lo usa para
-     * dos cosas: enseñar un aviso y sacar la canción de todas las playlists (por eso emite la
-     * canción entera y no solo el título: hace falta su `filePath` para saber qué línea quitar).
-     *
-     * Es un evento de una sola vez, no un estado: por eso es un SharedFlow y no un StateFlow —un
-     * estado se reemitiría al girar la pantalla y el aviso saldría otra vez—.
-     */
-    private val _missingFile = MutableSharedFlow<Song>(extraBufferCapacity = 1)
-    val missingFile = _missingFile.asSharedFlow()
+    val currentPlaylistName: StateFlow<String?> = serviceState(null) { it.currentPlaylistName }
+    val currentCollectionKind: StateFlow<CollectionKind?> = serviceState(null) { it.currentCollectionKind }
 
-    /**
-     * Cálculo del acento en curso. Se guarda para poder cancelarlo: si el usuario pasa canciones
-     * rápido, el análisis de una portada anterior podría terminar después que el de la actual y
-     * dejar el color equivocado.
-     */
-    private var accentJob: Job? = null
+    /** Avisa de que el archivo de una canción no aparece por ningún lado (ver `MainActivity`). */
+    val missingFile: Flow<Song> = serviceEvents { it.missingFile }
 
-    /**
-     * Carga en curso. Como [loadCurrent] tiene que tocar disco para validar la ruta, se guarda para
-     * poder cancelarla: si el usuario pasa canciones rápido, una carga anterior podría terminar
-     * después que la actual y dejar sonando la canción equivocada.
-     */
-    private var loadJob: Job? = null
+    /** Avisa cuando se intenta agregar la canción que se está reproduciendo actualmente a la cola. */
+    val currentSongAddedToQueue: Flow<Song> = serviceEvents { it.currentSongAddedToQueue }
 
-    private val player: ExoPlayer = ExoPlayer.Builder(app).build().apply {
-        addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                _isPlaying.value = isPlaying
-            }
+    val volumeBoost: StateFlow<Int> = serviceState(BOOST_MIN_PERCENT) { it.volumeBoost }
+    val limitDisabled: StateFlow<Boolean> = serviceState(false) { it.limitDisabled }
+    val limitForcedByHeadphones: Flow<Unit> = serviceEvents { it.limitForcedByHeadphones }
 
-            override fun onPlaybackStateChanged(state: Int) {
-                // Al terminar una canción, avanzamos solos a la siguiente.
-                // (Cualificado: sin el this@, next() se resolvería al next() deprecado de ExoPlayer.)
-                if (state == Player.STATE_ENDED) this@PlayerViewModel.next()
-            }
-        })
-    }
+    val eqBands: List<EqBand> get() = service?.eqBands ?: emptyList()
+    val bassBoostSupported: Boolean get() = service?.bassBoostSupported ?: false
+    val virtualizerSupported: Boolean get() = service?.virtualizerSupported ?: false
+    val reverbSupported: Boolean get() = service?.reverbSupported ?: false
+    val dynamicsProcessingSupported: Boolean get() = service?.dynamicsProcessingSupported ?: false
 
-    init {
-        viewModelScope.launch {
-            while (isActive) {
-                if (player.playbackState != Player.STATE_IDLE) {
-                    _progress.value = PlaybackProgress(
-                        positionMs = player.currentPosition.coerceAtLeast(0L),
-                        durationMs = player.duration.takeIf { it > 0 } ?: 0L
-                    )
-                }
-                delay(500)
-            }
-        }
-        restorePlaybackState()
-    }
+    /** Nombres de las salas de `PresetReverb`: una lista fija, así que aquí vale un respaldo propio
+     *  para la breve ventana sin Service en vez de devolver una lista vacía. */
+    val reverbPresetNames: List<String> get() = service?.reverbPresetNames ?: FALLBACK_REVERB_PRESET_NAMES
 
-    // ===================================================================================
-    // Persistencia del estado de reproducción entre procesos.
-    //
-    // Las colas y la canción actual solo viven en los StateFlow de arriba: si Android mata el
-    // proceso mientras la app está en segundo plano (algo habitual pasado un rato, por presión de
-    // memoria), este ViewModel se recrea desde cero y esos StateFlow vuelven a sus valores
-    // iniciales. Aquí se guarda lo justo para reconstruirlo: los IDS de las canciones de ambas
-    // colas (no las canciones enteras, que son grandes y ya viven en la base de datos), el ID de
-    // la que sonaba, el nombre de la playlist y la posición en milisegundos.
-    // ===================================================================================
+    val eqEnabled: StateFlow<Boolean> = serviceState(false) { it.eqEnabled }
+    val eqBandLevels: StateFlow<List<Int>> = serviceState(emptyList()) { it.eqBandLevels }
+    val bassBoostStrength: StateFlow<Int> = serviceState(0) { it.bassBoostStrength }
+    val virtualizerStrength: StateFlow<Int> = serviceState(0) { it.virtualizerStrength }
+    val reverbPreset: StateFlow<Int> = serviceState(0) { it.reverbPreset }
+    val dynamicsStrength: StateFlow<Int> = serviceState(0) { it.dynamicsStrength }
+    val eqPreGain: StateFlow<Int> = serviceState(50) { it.eqPreGain }
+    val currentPresetName: StateFlow<String> = serviceState(FALLBACK_FLAT_PRESET_NAME) { it.currentPresetName }
+    val userPresets: StateFlow<List<EqPreset>> = serviceState(emptyList()) { it.userPresets }
+    val predefinedPresetNames: List<String> get() = service?.predefinedPresetNames ?: emptyList()
+    val userModifiedPresetName: String get() = service?.userModifiedPresetName ?: FALLBACK_USER_MODIFIED_PRESET_NAME
 
-    /**
-     * Vuelca el estado actual a [SharedPreferences]. Debe llamarla la actividad al pasar a
-     * segundo plano (`onStop`), que es el último punto garantizado antes de que el sistema pueda
-     * matar el proceso.
-     */
+    /** Debe llamarla la actividad al pasar a segundo plano (`onStop`): ver `PlaybackService.savePlaybackState`. */
     fun savePlaybackState() {
-        val queue1 = _queue1.value
-        if (queue1.isEmpty()) {
-            playbackPrefs.edit().clear().apply()
-            return
-        }
-        val currentSongId = queue1.getOrNull(_currentIndex.value)?.id ?: return
-        playbackPrefs.edit()
-            .putString(KEY_QUEUE1, queue1.joinToString(",") { it.id.toString() })
-            .putString(KEY_QUEUE2, _queue2.value.joinToString(",") { it.id.toString() })
-            .putLong(KEY_CURRENT_SONG_ID, currentSongId)
-            .putLong(KEY_POSITION_MS, player.currentPosition.coerceAtLeast(0L))
-            .putString(KEY_PLAYLIST_NAME, _currentPlaylistName.value)
-            .apply()
+        service?.savePlaybackState()
     }
 
-    /**
-     * Reconstruye las colas a partir de lo guardado por [savePlaybackState]. Se deja pausada (no
-     * arranca sola al abrir la app) y en la posición donde se quedó. Si alguna canción guardada ya
-     * no existe (se borró el archivo y se reconcilió), se omite sin más.
-     */
-    private fun restorePlaybackState() {
-        val queue1Ids = playbackPrefs.getString(KEY_QUEUE1, null)
-            ?.split(",")?.filter { it.isNotEmpty() }?.map { it.toLong() }
-        if (queue1Ids.isNullOrEmpty()) return
-        val queue2Ids = playbackPrefs.getString(KEY_QUEUE2, null)
-            ?.split(",")?.filter { it.isNotEmpty() }?.map { it.toLong() } ?: emptyList()
-        val currentSongId = playbackPrefs.getLong(KEY_CURRENT_SONG_ID, -1L)
-        val positionMs = playbackPrefs.getLong(KEY_POSITION_MS, 0L)
-        val playlistName = playbackPrefs.getString(KEY_PLAYLIST_NAME, null)
-
-        viewModelScope.launch {
-            val restoredQueue1 = library.songsByIds(queue1Ids)
-            if (restoredQueue1.isEmpty()) return@launch
-            val restoredQueue2 = library.songsByIds(queue2Ids)
-
-            _queue1.value = restoredQueue1
-            _queue2.value = restoredQueue2
-            // Se busca por id en vez de reusar el índice guardado: si alguna canción ANTERIOR a la
-            // que sonaba se ha borrado mientras tanto, un índice crudo apuntaría a la canción
-            // equivocada.
-            _currentIndex.value = restoredQueue1.indexOfFirst { it.id == currentSongId }
-                .let { if (it >= 0) it else 0 }
-            _currentPlaylistName.value = playlistName
-            loadCurrent(shouldPlay = false, seekToMs = positionMs)
-        }
+    fun play(song: Song) {
+        service?.play(song)
     }
 
-    // ===================================================================================
-    // Estrategia de cola de «Canciones».
-    //
-    // Estos tres métodos CREAN o AMPLÍAN el sistema de dos colas y son, a propósito, exclusivos
-    // del fragmento de Canciones (los invoca solo SongsFragment). El resto de fragmentos
-    // (Álbumes, Artistas, Géneros…) usarán en el futuro otra lógica de reproducción distinta,
-    // todavía por definir, y NO deben llamar a play/playRandom/addToQueue.
-    //
-    // En cambio, los controles sobre la cola ya existente (next/previous/jumpTo/seek/togglePlayPause)
-    // sí los usa el reproductor global —mini-reproductor e iPod— porque operan sobre lo que ya suena.
-    // ===================================================================================
-
-    // ---------------------------------------------------------------------------------------------
-    // Sistema de dos colas: es la lógica de reproducción EXCLUSIVA del fragmento «Canciones»
-    // (SongsFragment). Solo desde ahí se construye la cola (play / playRandom / addToQueue). El resto
-    // de fragmentos (Álbumes, Artistas…) usarán en el futuro otra lógica de reproducción distinta, así
-    // que no deben llamar a estos métodos.
-    // ---------------------------------------------------------------------------------------------
-
-    /**
-     * Al pinchar una canción en la lista, se **destruyen ambas colas y se recrean**: la cola 1
-     * pasa a contener solo esa canción y la cola 2 todas las demás, mezcladas.
-     */
-    fun play(song: Song, allSongs: List<Song>) {
-        _queue1.value = listOf(song)
-        _currentIndex.value = 0
-        _queue2.value = allSongs.filter { it.id != song.id }.shuffled()
-        _currentPlaylistName.value = null
-        playCurrent()
-    }
-
-    /** Reproduce una canción al azar de la lista dada (crea una cola con el resto mezclado). */
-    fun playRandom(songs: List<Song>) {
-        if (songs.isNotEmpty()) play(songs.random(), songs)
-    }
-
-    /**
-     * Pone la canción justo **a continuación de la que suena ahora**. Se quita de donde estuviera
-     * —cola 1 o cola 2— para que sea un movimiento y no una duplicación. No corta la reproducción.
-     * Si es la canción que suena ahora, no hace nada.
-     */
     fun addToQueue(song: Song) {
-        val q1 = _queue1.value
-        val idx = q1.indexOfFirst { it.id == song.id }
-        if (idx == _currentIndex.value) return
-        if (idx >= 0) {
-            // Ya estaba en la cola 1: la quitamos de su sitio y la reponemos justo tras la actual.
-            val withoutSong = q1.filterIndexed { i, _ -> i != idx }
-            val current = if (idx < _currentIndex.value) _currentIndex.value - 1 else _currentIndex.value
-            _currentIndex.value = current
-            _queue1.value = withoutSong.subList(0, current + 1) + song +
-                withoutSong.subList(current + 1, withoutSong.size)
-        } else {
-            // Estaba en la cola 2 (o no estaba): la sacamos de la 2 y la ponemos tras la actual.
-            _queue1.value = q1.subList(0, _currentIndex.value + 1) + song +
-                q1.subList(_currentIndex.value + 1, q1.size)
-            _queue2.value = _queue2.value.filter { it.id != song.id }
-        }
+        service?.addToQueue(song)
     }
 
-    // ---------------------------------------------------------------------------------------------
-    // Lógica de reproducción de las COLECCIONES (fichas de álbum, artista y productor).
-    //
-    // Es distinta de la de «Canciones»: allí se pincha un tema suelto y el resto de la biblioteca
-    // pasa a la cola 2 mezclada, porque no hay un "después" natural. Aquí sí lo hay —el álbum
-    // entero, en orden—, así que la colección ocupa la cola 1 completa y la cola 2 se queda vacía:
-    // al acabar el último tema, se para. Es lo que uno espera al poner un disco.
-    // ---------------------------------------------------------------------------------------------
-
-    /**
-     * Reproduce [collection] empezando por la canción en la posición [startIndex]. La colección pasa
-     * a ser la cola 1 al completo, conservando su orden.
-     *
-     * [playlistName] se pasa cuando la colección viene de una playlist (ver [currentPlaylistName});
-     * null para álbumes, artistas, productores, etc.
-     */
-    fun playCollection(collection: List<Song>, startIndex: Int, playlistName: String? = null) {
-        if (collection.isEmpty() || startIndex !in collection.indices) return
-        _queue1.value = collection
-        _currentIndex.value = startIndex
-        _queue2.value = emptyList()
-        _currentPlaylistName.value = playlistName
-        playCurrent()
+    fun addToQueue(songs: List<Song>) {
+        service?.addToQueue(songs)
     }
 
-    /** Igual, pero barajando la colección antes (el botón de las flechas cruzadas de la ficha). */
-    fun shuffleCollection(collection: List<Song>, playlistName: String? = null) {
-        if (collection.isEmpty()) return
-        playCollection(collection.shuffled(), 0, playlistName)
+    fun playCollection(
+        collection: List<Song>,
+        startIndex: Int,
+        playlistName: String? = null,
+        collectionKind: CollectionKind? = null
+    ) {
+        service?.playCollection(collection, startIndex, playlistName, collectionKind)
     }
 
-    /**
-     * Avanza a la siguiente canción. Si quedan canciones por delante en la cola 1, pasa a la
-     * siguiente; si la cola 1 se ha agotado, mueve el elemento 0 de la cola 2 al final de la cola 1
-     * y lo reproduce. Si no hay nada más, se queda parado.
-     *
-     * Si está pausada, solo carga la siguiente canción y la mantiene pausada.
-     */
-    fun next() {
-        if (_currentIndex.value < _queue1.value.lastIndex) {
-            _currentIndex.value += 1
-            loadCurrent(shouldPlay = player.isPlaying)
-        } else if (_queue2.value.isNotEmpty()) {
-            val nextSong = _queue2.value.first()
-            _queue2.value = _queue2.value.drop(1)
-            _queue1.value = _queue1.value + nextSong
-            _currentIndex.value = _queue1.value.lastIndex
-            loadCurrent(shouldPlay = player.isPlaying)
-        }
+    fun shuffleCollection(
+        collection: List<Song>,
+        playlistName: String? = null,
+        collectionKind: CollectionKind? = null
+    ) {
+        service?.shuffleCollection(collection, playlistName, collectionKind)
     }
 
-    /**
-     * Retrocede a la canción anterior de la cola 1 (si existe) y la reproduce.
-     * Si está pausada, solo carga la anterior canción y la mantiene pausada.
-     */
-    fun previous() {
-        if (_currentIndex.value - 1 >= 0) {
-            _currentIndex.value -= 1
-            loadCurrent(shouldPlay = player.isPlaying)
-        }
+    fun skipToPrevious() {
+        service?.skipToPrevious()
     }
 
-    /**
-     * Salto desde la vista de cola del iPod, que muestra la **lista combinada** cola 1 + cola 2.
-     * [d] es el índice dentro de esa lista combinada.
-     *
-     * Si lo que suena es una playlist ([currentPlaylistName] no nulo), esta es de una sola cola:
-     * saltar solo cambia [currentIndex], sin tocar las colas. Si no, es el sistema de dos colas de
-     * «Canciones»: la canción pinchada pasa a ser la **última de la cola 1** (lo que asegura que el
-     * divisor del iPod aparezca justo tras ella) y todo lo que hubiera después en la lista pasa a la
-     * cola 2.
-     */
-    fun jumpTo(d: Int) {
-        val combined = _queue1.value + _queue2.value
-        if (d < 0 || d >= combined.size) return
-
-        val oldIndex = _currentIndex.value
-
-        if (_currentPlaylistName.value != null) {
-            _currentIndex.value = d
-        } else {
-            // La canción pinchada siempre pasa a ser el final de la cola 1.
-            _queue1.value = combined.subList(0, d + 1).toList()
-            _queue2.value = combined.subList(d + 1, combined.size).toList()
-            _currentIndex.value = d
-        }
-
-        // Si hemos pinchado una canción distinta a la que sonaba, la reproducimos.
-        if (d != oldIndex) {
-            playCurrent()
-        }
+    fun skipToNext() {
+        service?.skipToNext()
     }
 
-    /** Carga en ExoPlayer la canción en [currentIndex] de la cola 1 y la reproduce desde el principio. */
-    private fun playCurrent() {
-        loadCurrent(shouldPlay = true)
+    fun jumpTo(d: Int, forcePlay: Boolean = true) {
+        service?.jumpTo(d, forcePlay)
     }
 
-    /**
-     * Carga en ExoPlayer la canción en [currentIndex] de la cola 1. Si [shouldPlay] es true,
-     * reproduce; si no, mantiene pausa.
-     *
-     * La ruta NO se le pasa a ExoPlayer tal cual: antes se valida con
-     * [LibraryRepository.resolvePlayablePath], porque puede haberse quedado obsoleta si el usuario
-     * movió el archivo de carpeta y la biblioteca aún no se ha vuelto a reconciliar. Dársela sin
-     * comprobar hacía que el reproductor fallara sin decir nada y se quedara clavado en 0:00.
-     *
-     * Como esa comprobación toca disco, va en una corrutina; lo que sí se hace de inmediato es
-     * publicar la canción y su color de acento, para que la interfaz responda al momento.
-     *
-     * [seekToMs] solo lo usa [restorePlaybackState], para retomar la canción por donde se dejó en
-     * vez de desde el principio.
-     */
-    private fun loadCurrent(shouldPlay: Boolean = true, seekToMs: Long = 0L) {
-        val index = _currentIndex.value
-        val song = _queue1.value.getOrNull(index) ?: return
-        _currentSong.value = song
-        updateAccent(song)
-
-        loadJob?.cancel()
-        loadJob = viewModelScope.launch {
-            val path = library.resolvePlayablePath(song)
-            if (path == null) {
-                // El archivo ya no está en la fonoteca: paramos (si no, seguiría sonando la canción
-                // anterior) y que la actividad avise.
-                player.stop()
-                _missingFile.emit(song)
-                return@launch
-            }
-            if (path != song.filePath) rewritePath(index, song, path)
-            player.setMediaItem(MediaItem.fromUri(Uri.fromFile(File(path))))
-            if (seekToMs > 0L) player.seekTo(seekToMs)
-            player.prepare()
-            if (shouldPlay) player.play() else player.pause()
-        }
+    fun refreshSong(song: Song) {
+        service?.refreshSong(song)
     }
 
-    /**
-     * Sustituye la ruta obsoleta de una canción por la buena en la cola y en lo que se está
-     * mostrando, para que el resto de la interfaz —que compara canciones por su `filePath`, como el
-     * resaltado de "sonando ahora" en la lista de una playlist— siga cuadrando.
-     */
-    private fun rewritePath(index: Int, song: Song, path: String) {
-        val fixed = song.copy(filePath = path)
-        val queue = _queue1.value
-        if (queue.getOrNull(index)?.id == song.id) {
-            _queue1.value = queue.toMutableList().also { it[index] = fixed }
-        }
-        if (_currentSong.value?.id == song.id) _currentSong.value = fixed
-    }
-
-    /** Recalcula el acento a partir de la carátula de [song] (ver [DynamicColor]). */
-    private fun updateAccent(song: Song) {
-        accentJob?.cancel()
-        accentJob = viewModelScope.launch {
-            val app = getApplication<Application>()
-            _accentColor.value = DynamicColor.fromCover(app, CoverArt.cover(app, song))
-        }
-    }
-
-    /** Salta a un punto de la canción actual, indicado como fracción 0..1 de su duración. */
     fun seekToFraction(fraction: Float) {
-        val duration = player.duration
-        if (duration > 0) {
-            player.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong())
-        }
+        service?.seekToFraction(fraction)
     }
 
-    /** Alterna play/pausa. Si no hay nada cargado, no hace nada. */
     fun togglePlayPause() {
-        if (_currentSong.value == null) return
-        if (player.isPlaying) player.pause() else player.play()
+        service?.togglePlayPause()
     }
 
-    /**
-     * Posición exacta de la reproducción local, en milisegundos. Se lee directamente del reproductor
-     * en vez de usar [progress], porque ese flujo solo se refresca cada 500 ms. Se usa para arrancar
-     * el vídeo del iPod justo donde va el audio (ver `VideoScreenController`), que siempre es la
-     * única fuente de sonido real, esté o no visible el modo vídeo.
-     */
-    fun currentPositionMs(): Long = player.currentPosition.coerceAtLeast(0L)
+    /** Ver `PlaybackService.currentPositionMs` (lo usa `VideoScreenController` para sincronizar el vídeo). */
+    fun currentPositionMs(): Long = service?.currentPositionMs() ?: 0L
 
-    override fun onCleared() {
-        player.release()
+    // --- Amplificador de volumen ---
+
+    fun setVolumeBoost(percent: Int) {
+        service?.setVolumeBoost(percent)
+    }
+
+    fun setLimitDisabled(disabled: Boolean): Headphones.Check =
+        service?.setLimitDisabled(disabled) ?: Headphones.Check.NONE
+
+    // --- Ecualizador ---
+
+    fun setEqEnabled(enabled: Boolean) {
+        service?.setEqEnabled(enabled)
+    }
+
+    fun setEqBandLevel(band: Int, levelMb: Int) {
+        service?.setEqBandLevel(band, levelMb)
+    }
+
+    fun setBassBoostStrength(percent: Int) {
+        service?.setBassBoostStrength(percent)
+    }
+
+    fun setVirtualizerStrength(percent: Int) {
+        service?.setVirtualizerStrength(percent)
+    }
+
+    fun setReverbPreset(preset: Int) {
+        service?.setReverbPreset(preset)
+    }
+
+    fun setDynamicsStrength(percent: Int) {
+        service?.setDynamicsStrength(percent)
+    }
+
+    fun setEqPreGain(percent: Int) {
+        service?.setEqPreGain(percent)
+    }
+
+    fun resetEqualizer() {
+        service?.resetEqualizer()
+    }
+
+    fun applyPreset(presetName: String) {
+        service?.applyPreset(presetName)
+    }
+
+    fun saveUserPreset(name: String) {
+        service?.saveUserPreset(name)
+    }
+
+    fun deleteUserPreset(name: String) {
+        service?.deleteUserPreset(name)
+    }
+
+    fun markEqAsModified() {
+        service?.markEqAsModified()
     }
 
     private companion object {
-        const val KEY_QUEUE1 = "queue1_ids"
-        const val KEY_QUEUE2 = "queue2_ids"
-        const val KEY_CURRENT_SONG_ID = "current_song_id"
-        const val KEY_POSITION_MS = "position_ms"
-        const val KEY_PLAYLIST_NAME = "playlist_name"
+        const val FALLBACK_FLAT_PRESET_NAME = "Plano"
+        const val FALLBACK_USER_MODIFIED_PRESET_NAME = "Usuario"
+        val FALLBACK_REVERB_PRESET_NAMES = listOf(
+            "Ninguno", "Habitación pequeña", "Habitación mediana", "Sala grande",
+            "Salón mediano", "Salón grande", "Plancha"
+        )
     }
 }

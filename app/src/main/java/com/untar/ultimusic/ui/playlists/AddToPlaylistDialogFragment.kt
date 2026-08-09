@@ -17,17 +17,22 @@ import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.util.AccentTint
 
 /**
- * Diálogo de "Añadir a playlist" para una canción. Muestra todas las playlists con **casillas**:
- * marcar añade la canción a esa playlist y desmarcar la quita. Abajo, un botón "Nueva playlist…"
- * crea una y mete la canción en ella.
+ * Diálogo de "Añadir a playlist" para una o varias canciones a la vez. Muestra todas las playlists
+ * con **casillas**: marcar añade las canciones a esa playlist y desmarcar las quita a todas. Abajo,
+ * un botón "Nueva playlist…" crea una y mete las canciones en ella.
  *
- * La lista de playlists y qué casillas van marcadas se calculan ANTES de abrir el diálogo (en
- * [com.untar.ultimusic.ui.songs.SongsFragment], que hace la lectura de disco en una
- * corrutina) y llegan aquí por argumentos. Así este diálogo se construye de forma síncrona y
- * sobrevive a un giro de pantalla sin volver a tocar disco. Las modificaciones se delegan en
- * [PlaylistsViewModel], que refresca el estado compartido (y con él el resaltado de Canciones).
+ * Vale igual para una canción suelta (lista de un elemento, desde
+ * [com.untar.ultimusic.ui.songs.SongsFragment] o el buscador) que para un álbum entero de una vez
+ * (desde [com.untar.ultimusic.ui.library.DetailDialogFragment], en el orden de sus números de
+ * pista): una casilla marcada significa que la playlist contiene TODAS las canciones pasadas.
+ *
+ * La lista de playlists y qué casillas van marcadas se calculan ANTES de abrir el diálogo (quien lo
+ * lanza hace la lectura de disco en una corrutina) y llegan aquí por argumentos. Así este diálogo se
+ * construye de forma síncrona y sobrevive a un giro de pantalla sin volver a tocar disco. Las
+ * modificaciones se delegan en [PlaylistsViewModel], que refresca el estado compartido.
  */
 class AddToPlaylistDialogFragment : DialogFragment() {
 
@@ -36,7 +41,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
 
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         val args = requireArguments()
-        val filename = args.getString(ARG_FILENAME)!!
+        val filenames = args.getStringArray(ARG_FILENAMES)!!.toList()
         val names = args.getStringArray(ARG_NAMES)?.toList() ?: emptyList()
         // Estado marcado/desmarcado; el propio AlertDialog lo va actualizando al tocar cada fila.
         val checked = args.getBooleanArray(ARG_CHECKED) ?: BooleanArray(names.size)
@@ -45,10 +50,10 @@ class AddToPlaylistDialogFragment : DialogFragment() {
             .setTitle(R.string.add_to_playlist_title)
             .setMultiChoiceItems(names.toTypedArray(), checked) { _, which, isChecked ->
                 val name = names[which]
-                if (isChecked) viewModel.addSong(name, filename)
-                else viewModel.removeSong(name, filename)
+                if (isChecked) viewModel.addSongs(name, filenames)
+                else viewModel.removeSongs(name, filenames)
             }
-            .setNeutralButton(R.string.playlist_new_option) { _, _ -> showCreateAndAdd(filename) }
+            .setNeutralButton(R.string.playlist_new_option) { _, _ -> showCreateAndAdd(filenames) }
             .setPositiveButton(R.string.dialog_ok, null)
             .create()
 
@@ -89,8 +94,8 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         })
     }
 
-    /** Pide un nombre, crea la playlist y añade la canción de una vez. */
-    private fun showCreateAndAdd(filename: String) {
+    /** Pide un nombre, crea la playlist y añade las canciones de una vez. */
+    private fun showCreateAndAdd(filenames: List<String>) {
         // Al pulsar "Nueva playlist…" el AlertDialog de este diálogo se cierra, y con él se DESANCLA
         // este DialogFragment. Por eso capturamos aquí (todavía anclados) el ViewModel de la actividad
         // y un contexto de la actividad: el segundo diálogo debe seguir funcionando aunque el fragmento
@@ -101,6 +106,9 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         val input = EditText(context).apply {
             hint = getString(R.string.playlist_name_hint)
             setSingleLine()
+            // Mismo tinte por estados que en PlaylistsFragment.showNameDialog para la rayita de
+            // debajo del campo: sin esto se queda en el amarillo fijo de colorControlActivated.
+            backgroundTintList = AccentTint.underline(context, accent)
         }
         val padding = (resources.displayMetrics.density * 20).toInt()
         val dialog = AlertDialog.Builder(context)
@@ -111,7 +119,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
                 val name = input.text.toString().trim()
                 if (name.isNotEmpty()) {
                     vm.create(name)
-                    vm.addSong(name, filename)
+                    vm.addSongs(name, filenames)
                 }
             }
             .create()
@@ -135,18 +143,18 @@ class AddToPlaylistDialogFragment : DialogFragment() {
     }
 
     companion object {
-        private const val ARG_FILENAME = "filename"
+        private const val ARG_FILENAMES = "filenames"
         private const val ARG_NAMES = "names"
         private const val ARG_CHECKED = "checked"
         const val TAG = "addToPlaylist"
 
         fun newInstance(
-            filename: String,
+            filenames: List<String>,
             names: List<String>,
             checked: BooleanArray
         ) = AddToPlaylistDialogFragment().apply {
             arguments = bundleOf(
-                ARG_FILENAME to filename,
+                ARG_FILENAMES to filenames.toTypedArray(),
                 ARG_NAMES to names.toTypedArray(),
                 ARG_CHECKED to checked
             )

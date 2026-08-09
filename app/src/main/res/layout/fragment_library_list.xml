@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pestaña en lista (Artistas y Productores: las dos usan este mismo layout). -->
+<!-- Pestaña en lista (Artistas, Productores y Géneros: las tres usan este mismo layout). -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"

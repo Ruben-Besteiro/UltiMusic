@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de una subcarpeta de la lista gris: su ruta (relativa a UltiMusic), el switch que activa o
+     desactiva si cuenta para la biblioteca, y una papelera que la quita de la lista (sin tocar la
+     carpeta real). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal" >
+
+    <TextView
+        android:id="@+id/greylistFolderPath"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="start"
+        android:maxLines="1"
+        android:textColor="@color/um_on_background"
+        android:textSize="15sp"
+        tools:text="Descargas/2024" />
+
+    <com.google.android.material.materialswitch.MaterialSwitch
+        android:id="@+id/greylistFolderSwitch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:contentDescription="@string/settings_greylist_switch_desc"
+        android:theme="@style/ThemeOverlay.UltiMusic.SwitchRippleWhite" />
+
+    <ImageButton
+        android:id="@+id/btnGreylistFolderDelete"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/settings_greylist_delete_desc"
+        android:src="@drawable/ic_delete" />
+
+</LinearLayout>

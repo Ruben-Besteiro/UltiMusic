@@ -35,8 +35,16 @@ class SquareFrameLayout @JvmOverloads constructor(
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         super.onMeasure(widthMeasureSpec, widthMeasureSpec)
+        // aspectRatio describe la proporción que debe tener el CONTENIDO (lo que se ve dentro del
+        // padding), no la del propio View: si se calculara sobre measuredWidth a secas, restar el
+        // mismo padding a un lado ancho (el ancho) y a uno estrecho (el alto) desvía la proporción
+        // resultante. Con la carátula (aspectRatio 1, cuadrado) no se notaba porque restar lo mismo
+        // a ambos lados iguales los deja iguales; con el vídeo (9/16) sí, y eso era lo que hacía que
+        // YouTube pilarboxeara el vídeo en vez de llenar el recuadro.
+        val contentWidth = measuredWidth - paddingLeft - paddingRight
+        val contentHeight = (contentWidth * aspectRatio).toInt()
         val height = View.MeasureSpec.makeMeasureSpec(
-            (measuredWidth * aspectRatio).toInt(),
+            contentHeight + paddingTop + paddingBottom,
             View.MeasureSpec.EXACTLY
         )
         super.onMeasure(widthMeasureSpec, height)

@@ -17,9 +17,10 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.DynamicColor
 
 /**
- * Lista de la cola 1 que se muestra dentro de la pantalla del iPod. La canción actual enseña el
- * icono de altavoz; el resto muestran su posición **relativa** a la actual: las ya reproducidas con
- * número negativo y en gris; las próximas con número positivo. Al pinchar una fila se salta a ella.
+ * Cola de reproducción tal cual está: la canción actual enseña el icono de altavoz; el resto
+ * muestran su posición **relativa** a la actual: las ya reproducidas con número negativo y en gris
+ * (historial); las próximas (encoladas a mano) con número positivo. Al pinchar una fila se salta a
+ * ella (ver [PlayerViewModel.jumpTo]).
  */
 class IPodQueueAdapter(
     private val onItemClick: (Int) -> Unit
@@ -28,6 +29,13 @@ class IPodQueueAdapter(
     private var songs: List<Song> = emptyList()
     private var currentIndex: Int = 0
 
+    /**
+     * Si se muestra el divisor de "final de cola" en la última fila. Lo decide
+     * [IPodDialogFragment.refreshEndDivider] mirando si la cola llena la pantalla o no: con hueco
+     * en blanco debajo de la última fila, el divisor aclara que ahí se acaba de verdad la cola.
+     */
+    private var showEndDivider = false
+
     /** Color de acento actual (icono de altavoz); por defecto el amarillo de la app. */
     private var accent: Int = DynamicColor.DEFAULT
 
@@ -35,6 +43,13 @@ class IPodQueueAdapter(
         songs = list
         currentIndex = current
         notifyDataSetChanged()
+    }
+
+    /** Ver [showEndDivider]. Solo repinta la última fila, que es la única que puede cambiar. */
+    fun setShowEndDivider(show: Boolean) {
+        if (show == showEndDivider) return
+        showEndDivider = show
+        if (songs.isNotEmpty()) notifyItemChanged(songs.lastIndex)
     }
 
     @SuppressLint("NotifyDataSetChanged")
@@ -52,8 +67,7 @@ class IPodQueueAdapter(
     }
 
     override fun onBindViewHolder(holder: QueueViewHolder, position: Int) {
-        // El divisor va justo tras la fila que suena ahora mismo.
-        val showDivider = position == currentIndex && position < songs.size - 1
+        val showDivider = showEndDivider && position == songs.lastIndex
         holder.bind(songs[position], position - currentIndex, showDivider, accent)
     }
 

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Explorador de subcarpetas de UltiMusic (FolderPickerDialogFragment), para elegir una carpeta que
+     añadir a la lista gris. Mismo esqueleto que dialog_settings.xml: toolbar + contenido a pantalla
+     completa. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/folderPickerRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/folderPickerToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_surface"
+        app:navigationContentDescription="@string/folder_picker_back"
+        app:navigationIcon="@drawable/ic_arrow_back"
+        app:navigationIconTint="@color/um_on_background"
+        app:title="@string/folder_picker_root_title"
+        app:titleTextColor="@color/um_on_background" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/folderPickerRecycler"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent" />
+
+        <TextView
+            android:id="@+id/folderPickerEmpty"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:padding="32dp"
+            android:text="@string/folder_picker_empty"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="15sp"
+            android:visibility="gone"
+            tools:visibility="visible" />
+
+    </FrameLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btnChooseFolder"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_margin="16dp"
+        android:text="@string/folder_picker_choose" />
+
+</LinearLayout>

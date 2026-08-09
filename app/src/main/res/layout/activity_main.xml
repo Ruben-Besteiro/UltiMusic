@@ -9,56 +9,197 @@
     android:orientation="vertical"
     tools:context=".ui.MainActivity">
 
-    <com.google.android.material.appbar.MaterialToolbar
+    <!--
+      Toolbar hecha a mano (en vez de MaterialToolbar + menú) porque el buscador necesita animar
+      cada icono por separado: al pinchar la barra, el engranaje, la ayuda y "más opciones" se echan
+      a un lado (visibility GONE) y, como searchBar es el único hijo con layout_weight, se estira
+      sola para ocupar todo el ancho que dejan libres. Con un Toolbar de menú nativo no hay forma de
+      coger cada icono por separado para animarlo así.
+    -->
+    <LinearLayout
         android:id="@+id/toolbar"
         android:layout_width="match_parent"
         android:layout_height="?attr/actionBarSize"
         android:background="@color/um_surface"
-        app:navigationIcon="@drawable/ic_menu"
-        app:navigationIconTint="@color/um_on_background"
-        app:title="@string/app_name"
-        app:titleTextColor="@color/um_on_background" />
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp">
 
-    <com.google.android.material.tabs.TabLayout
-        android:id="@+id/tabLayout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:background="@color/um_surface"
-        app:tabGravity="start"
-        app:tabIndicatorColor="@color/um_yellow"
-        app:tabMode="scrollable"
-        app:tabSelectedTextColor="@color/um_yellow"
-        app:tabTextColor="@color/um_on_surface_muted" />
+        <ImageButton
+            android:id="@+id/btnSettings"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/settings_title"
+            android:padding="12dp"
+            android:src="@drawable/ic_settings"
+            android:tint="@color/um_on_background" />
 
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/um_divider" />
+        <!-- El campo de verdad: no es un botón que abra otra pantalla, aquí es donde se escribe. Al
+             tocarla se expande (ver SearchBarController.expand); el icono de la lupa hace de botón
+             "atrás" mientras está expandida. -->
+        <LinearLayout
+            android:id="@+id/searchBar"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_bar"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="4dp">
 
-    <androidx.viewpager2.widget.ViewPager2
-        android:id="@+id/viewPager"
+            <ImageView
+                android:id="@+id/searchLeadingIcon"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/action_search"
+                android:padding="6dp"
+                android:src="@drawable/ic_search"
+                android:tint="@color/um_on_surface_muted" />
+
+            <EditText
+                android:id="@+id/searchInput"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:layout_weight="1"
+                android:background="@null"
+                android:gravity="center_vertical"
+                android:hint="@string/search_hint"
+                android:imeOptions="actionSearch"
+                android:includeFontPadding="false"
+                android:inputType="text"
+                android:maxLines="1"
+                android:paddingTop="0dp"
+                android:paddingBottom="0dp"
+                android:textColor="@color/um_on_background"
+                android:textColorHint="@color/um_on_surface_muted"
+                android:textSize="15sp" />
+
+            <ImageButton
+                android:id="@+id/btnSearchClear"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/search_clear"
+                android:padding="6dp"
+                android:src="@drawable/ic_delete"
+                android:tint="@color/um_on_surface_muted"
+                android:visibility="gone" />
+        </LinearLayout>
+
+        <ImageButton
+            android:id="@+id/btnHelp"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_help"
+            android:padding="12dp"
+            android:src="@drawable/ic_help"
+            android:tint="@color/um_on_background" />
+
+        <ImageButton
+            android:id="@+id/btnMore"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_more"
+            android:padding="12dp"
+            android:src="@drawable/ic_more_vert"
+            android:tint="@color/um_on_background" />
+    </LinearLayout>
+
+    <!-- Todo lo que hay debajo de la toolbar vive en uno de estos dos hermanos, que se turnan
+         (nunca los dos a la vez): mientras se busca, browseContent desaparece entero -pestañas,
+         reproductor incluido- y lo sustituye searchResultsContainer. -->
+    <FrameLayout
+        android:id="@+id/contentArea"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1">
 
-    <SeekBar
-        android:id="@+id/songProgress"
-        android:layout_width="match_parent"
-        android:layout_height="10dp"
-        android:paddingStart="0dp"
-        android:paddingEnd="0dp"
-        android:max="1000"
-        android:progress="0"
-        android:progressDrawable="@drawable/seekbar_line"
-        android:progressBackgroundTint="@color/um_divider"
-        android:progressTint="@color/um_yellow"
-        android:thumb="@null"
-        android:splitTrack="false"
-        android:background="@null"
-        android:foreground="@android:color/transparent" />
+        <LinearLayout
+            android:id="@+id/browseContent"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
 
-    <include
-        android:id="@+id/miniPlayer"
-        layout="@layout/view_mini_player" />
+            <com.google.android.material.tabs.TabLayout
+                android:id="@+id/tabLayout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/um_surface"
+                app:tabGravity="start"
+                app:tabIndicatorColor="@color/um_yellow"
+                app:tabMode="scrollable"
+                app:tabSelectedTextColor="@color/um_yellow"
+                app:tabTextColor="@color/um_on_surface_muted" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/um_divider" />
+
+            <androidx.viewpager2.widget.ViewPager2
+                android:id="@+id/viewPager"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <SeekBar
+                android:id="@+id/songProgress"
+                android:layout_width="match_parent"
+                android:layout_height="10dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:max="1000"
+                android:progress="0"
+                android:progressDrawable="@drawable/seekbar_line_square"
+                android:progressBackgroundTint="@color/um_divider"
+                android:progressTint="@color/um_yellow"
+                android:thumb="@null"
+                android:splitTrack="false"
+                android:background="@null"
+                android:foreground="@android:color/transparent" />
+
+            <include
+                android:id="@+id/miniPlayer"
+                layout="@layout/view_mini_player" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:id="@+id/searchResultsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/um_background"
+            android:visibility="gone">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/recyclerSearchResults"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:scrollbars="none"
+                tools:listitem="@layout/item_song" />
+
+            <!-- Mismo hueco para las dos situaciones: "aún no has escrito nada" y "no hay
+                 resultados" (ver SearchBarController.showEmptyMessage). -->
+            <TextView
+                android:id="@+id/searchEmptyView"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:layout_margin="24dp"
+                android:gravity="center"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="16sp"
+                tools:text="Escribe para buscar…" />
+        </FrameLayout>
+    </FrameLayout>
 
 </LinearLayout>

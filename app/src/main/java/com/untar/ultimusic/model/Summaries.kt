@@ -37,3 +37,15 @@ data class AlbumTrack(
     val song: Song,
     val trackNumber: Int?
 )
+
+/**
+ * Resumen de un género para su pestaña: su nombre y cuántas canciones lo llevan. A diferencia de
+ * álbumes/artistas/productores, un género no es una entidad propia de la base de datos —no tiene
+ * ficha, id ni portada—: es solo el texto que trae cada canción en su lista de géneros (ver
+ * [Song.genres]), agrupado aquí nada más que para pintar la pestaña (ver
+ * [com.untar.ultimusic.data.LibraryRepository.genres]).
+ */
+data class GenreSummary(
+    val name: String,
+    val songCount: Int
+)

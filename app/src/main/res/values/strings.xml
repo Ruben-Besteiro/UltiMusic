@@ -26,22 +26,25 @@
     <string name="shuffle_title">Escoger al azar</string>
     <string name="song_subtitle_format">%1$s | %2$s</string>
     <string name="song_more">Más opciones de la canción</string>
-    <string name="add_to_queue">Añadir a cola de reproducción inmediata</string>
+    <string name="add_to_queue">Añadir a cola</string>
     <string name="add_to_playlist">Añadir a playlist</string>
     <string name="delete_song">Eliminar</string>
-    <string name="delete_song_confirm">¿Eliminar «%1$s»? Se borrará el archivo del dispositivo y no se puede deshacer.</string>
+    <string name="delete_song_confirm">¿Eliminar <b>^1</b> del dispositivo?</string>
+    <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
     <string name="no_songs">Guarda tus archivos de audio en la carpeta UltiMusic</string>
-    <string name="song_file_missing">No se encuentra el archivo de «%1$s»</string>
+    <string name="song_file_missing">No se encuentra el archivo de %1$s</string>
+    <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
 
     <!-- Álbumes, artistas y productores -->
     <string name="person_image_desc">Imagen del artista o productor</string>
     <string name="shuffle_collection">Reproducir en orden aleatorio</string>
-    <string name="no_albums">Todavía no hay ningún álbum.</string>
-    <string name="no_artists">Todavía no hay ningún artista.</string>
+    <string name="no_albums">Todavía no hay ningún álbum</string>
+    <string name="no_artists">Todavía no hay ningún artista</string>
     <string name="no_producers">Todavía no hay ningún productor</string>
-    <string name="no_songs_here">Aquí no hay ninguna canción.</string>
+    <string name="no_genres">Todavía no hay ningún género</string>
+    <string name="no_songs_here">Aquí no hay ninguna canción</string>
 
     <!--
       Los <plurals> son la forma en que Android elige automáticamente entre "1 canción" y
@@ -64,8 +67,45 @@
     <string name="editor_save">Guardar</string>
     <string name="editor_pick_cover">Elegir portada</string>
     <string name="editor_saved">Cambios guardados</string>
-    <string name="editor_title_required">El título no puede quedar vacío.</string>
+    <string name="editor_title_required">El título no puede quedar vacío</string>
     <string name="language_auto_fill">Este campo se rellenará automáticamente al introducir la letra</string>
+    <string name="editor_clear_lyrics">Borrar la letra</string>
+    <string name="editor_clear_video_url">Quitar el videoclip</string>
+
+    <!-- Autorrelleno de metadatos (MusicBrainz): botón de la toolbar de los dos editores (canción
+         y álbum) y el diálogo de sugerencias que abre. Ver MetadataSuggestionsDialogFragment. -->
+    <string name="editor_autofill">Autorrelleno de metadatos</string>
+    <string name="autofill_missing_query_song">Escribe al menos el título o el artista para poder buscar</string>
+    <string name="autofill_missing_query_album">Escribe al menos el título del álbum o el artista para poder buscar</string>
+    <string name="suggestions_title">Sugerencias de metadatos</string>
+    <string name="suggestions_empty">No se han encontrado resultados</string>
+    <string name="suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
+    <string name="suggestions_retry">Reintentar</string>
+    <string name="suggestion_cover_desc">Portada de la sugerencia</string>
+    <!-- Separador de las partes del subtítulo de una sugerencia ("Artista | Álbum | Año"), el
+         mismo que ya usa song_subtitle_format en las listas de canciones/álbumes. -->
+    <string name="subtitle_separator">" | "</string>
+    <string name="suggestion_type_album">Álbum</string>
+    <string name="suggestion_type_single">Single</string>
+    <string name="suggestion_type_ep">EP</string>
+    <string name="suggestion_type_other">Publicación</string>
+    <string name="suggestion_type_live">en directo</string>
+    <string name="suggestion_type_compilation">recopilatorio</string>
+    <string name="suggestion_type_soundtrack">banda sonora</string>
+    <string name="suggestion_type_remix">remix</string>
+
+    <!-- Buscador de letras sincronizadas de lrclib.net (ver LyricsSuggestionsDialogFragment), abierto
+         desde el icono de lupa del campo "Letra" del editor. -->
+    <string name="lyrics_suggestions_title">Letras de lrclib.net</string>
+    <string name="lyrics_suggestions_empty">No se han encontrado letras en lrclib.net</string>
+    <string name="lyrics_suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
+    <string name="lyrics_suggestions_badge_synced">Sincronizada</string>
+
+    <!-- Editor de metadatos de ÁLBUM: mismo editor que el de canciones, pero con los campos que
+         tiene un álbum (no una canción suelta). Ver AlbumEditorDialogFragment. -->
+    <string name="album_editor_title">Editor de álbum</string>
+    <string name="album_editor_title_required">El título del álbum no puede quedar vacío</string>
+    <string name="field_album_title">Título del álbum</string>
 
     <string name="field_title">Título</string>
     <string name="field_albums">Álbum(es)</string>
@@ -74,10 +114,12 @@
     <string name="field_year">Año</string>
     <string name="field_genres">Género(s)</string>
     <string name="field_lyrics">Letra</string>
+    <string name="field_lyrics_hint">Toca para buscarla en lrclib.net</string>
+    <string name="field_country">País</string>
     <string name="field_language">Idioma</string>
     <string name="field_comment">Comentario</string>
     <string name="field_video_url">URL del vídeo</string>
-    <string name="field_video_url_hint">Toca para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo.</string>
+    <string name="field_video_url_hint">Toca para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo</string>
     <string name="field_track_number">Nº de pista</string>
     <string name="field_disc_number">Nº de disco</string>
     <string name="field_og_title">Título original</string>
@@ -93,7 +135,7 @@
     <!-- Mini-reproductor -->
     <string name="expand_player">Expandir reproductor</string>
     <string name="play_pause">Reproducir o pausar</string>
-    <string name="nothing_playing">Pincha en una canción para reproducirla</string>
+    <string name="nothing_playing">Toca en una canción para reproducirla</string>
     <string name="updating_database">Actualizando base de datos local…</string>
     <string name="updating_database_percent">Actualizando base de datos local… %d%%</string>
 
@@ -105,41 +147,123 @@
     <string name="ipod_next">Siguiente</string>
     <string name="ipod_now_playing">Sonando ahora</string>
     <string name="ipod_toggle_video">Alternar audio y vídeo</string>
+    <string name="ipod_no_lyrics">No se ha detectado letra para esta canción</string>
+    <!-- Aviso de la cola/lista, en @+id/tvMeta (ver IPodDialogFragment.updateInfoBox), mientras se ve
+         la cola/lista en vez de la carátula: la cola suelta y la playlist admiten seguir añadiendo
+         canciones a mano, así que invitan a hacerlo; álbum/artista/productor/género son colecciones
+         fijas, así que solo avisan de que se han acabado. -->
+    <string name="queue_hint_loose">Puedes añadir más música a la cola dándole a los tres puntos y a \"Añadir a cola\"</string>
+    <string name="queue_hint_playlist">Puedes añadir más música a la playlist dándole a los tres puntos y a \"Añadir a playlist\"</string>
+    <string name="queue_end">Has llegado al final</string>
 
     <!-- Modo vídeo del iPod -->
     <string name="video_picker_title">Elige el vídeo</string>
-    <string name="video_picker_saved">Vídeo guardado para «%1$s»</string>
+    <string name="video_picker_saved">Vídeo guardado para <b>^1</b></string>
     <string name="video_no_song">No hay ninguna canción sonando</string>
-    <string name="video_bad_url">El enlace del vídeo no es válido. Corrígelo en el editor de metadatos.</string>
-    <string name="video_thumbnail_desc">Miniatura del vídeo</string>
+    <string name="video_bad_url">El enlace del vídeo no es válido</string>
+    <string name="video_loading_desc">Cargando vídeo</string>
     <string name="video_settings_title">Ajustes del reproductor de vídeo</string>
-    <string name="video_settings_option_frame">Fotograma actual</string>
-    <string name="video_settings_option_thumbnail">Miniatura</string>
-    <string name="queue_subtitle_format">%1$s · %2$s</string>
+    <string name="video_settings_offset_title">Desplazamiento</string>
+    <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar el vídeo y en negativo para atrasarlo</string>
+    <string name="video_settings_offset_unit">ms</string>
+    <string name="queue_subtitle_format">%1$s | %2$s</string>
 
     <!-- Playlists -->
-    <string name="no_playlists">Todavía no hay ninguna playlist. Usa el botón + o añade una canción a una playlist nueva.</string>
-    <string name="playlist_subtitle_format">%1$s · %2$s</string>
+    <string name="no_playlists">Todavía no hay ninguna playlist. Usa el botón + o añade una canción a una playlist nueva</string>
+    <string name="playlist_subtitle_format">%1$s | %2$s</string>
     <string name="playlist_more">Más opciones de la playlist</string>
     <string name="playlist_create">Nueva playlist</string>
     <string name="playlist_new_option">Nueva playlist…</string>
     <string name="playlist_name_hint">Nombre de la playlist</string>
     <string name="playlist_rename">Renombrar</string>
-    <string name="playlist_delete">Borrar</string>
-    <string name="playlist_delete_confirm">¿Borrar la playlist «%1$s»? Los archivos de audio no se tocan.</string>
+    <string name="playlist_delete">Eliminar</string>
+    <string name="playlist_delete_confirm">¿Eliminar la playlist <b>^1</b>? Los archivos de audio no se tocarán</string>
     <string name="playlist_add_button">Crear playlist</string>
     <string name="playlist_reorder_desc">Arrastrar para reordenar</string>
-    <string name="playlist_name_taken">Ya existe una playlist con ese nombre.</string>
-    <string name="playlist_empty">Esta playlist está vacía.</string>
+    <string name="playlist_name_taken">Ya existe una playlist con ese nombre</string>
+    <string name="playlist_empty">Esta playlist está vacía</string>
     <string name="add_to_playlist_title">Añadir a playlist</string>
     <string name="ipod_shuffle_random">Reproducir una canción al azar</string>
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>
+
+    <!-- Ajustes -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_back">Cerrar los ajustes</string>
+    <string name="settings_boost_title">Amplificador de volumen</string>
+    <string name="settings_boost_subtitle">Untar Technologies no se hace legalmente responsable de cualquier pérdida auditiva causada por su uso</string>
+    <string name="settings_boost_no_limit">Desactivar límite</string>
+    <string name="settings_boost_no_limit_headphones">Desconecta los auriculares para poder desactivar el límite</string>
+    <string name="settings_boost_device_unknown">No se puede saber si el dispositivo conectado es un altavoz o unos auriculares, así que el límite se mantiene</string>
+    <string name="settings_boost_bluetooth_denied">Sin ese permiso, UltiMusic no puede distinguir un altavoz Bluetooth de unos auriculares, así que mantiene el límite</string>
+
+    <!-- Lista gris -->
+    <string name="settings_greylist_title">Lista gris</string>
+    <string name="settings_greylist_subtitle">Las canciones van en la carpeta UltiMusic. Con esta opción podrás ocultar y desocultar subcarpetas</string>
+    <string name="settings_greylist_add">Añadir subcarpeta</string>
+    <string name="settings_greylist_switch_desc">Activar o desactivar esta subcarpeta</string>
+    <string name="settings_greylist_delete_desc">Quitar de la lista gris</string>
+    <string name="settings_greylist_remove_confirm">¿Quitar <b>^1</b> de la lista gris? La carpeta no se borrará del dispositivo</string>
+    <string name="settings_greylist_empty">Todavía no has añadido ninguna subcarpeta</string>
+
+    <!-- Ecualizador -->
+    <string name="settings_eq_title">Ecualizador</string>
+    <string name="settings_eq_subtitle">Ajusta la respuesta en frecuencia y añade profundidad al sonido. Se aplica a todo lo que suene en UltiMusic</string>
+    <string name="settings_eq_switch_desc">Activar o desactivar el ecualizador</string>
+    <string name="settings_eq_reset">Restablecer</string>
+    <string name="settings_eq_bass_boost">Refuerzo de graves</string>
+    <string name="settings_eq_virtualizer">Sonido envolvente</string>
+    <string name="settings_eq_unavailable">Este dispositivo no tiene ecualizador</string>
+    <string name="settings_eq_bass_unsupported">No soportado en este dispositivo</string>
+    <string name="settings_eq_virtualizer_unsupported">No soportado en este dispositivo</string>
+    <string name="settings_eq_presets">Presets</string>
+    <string name="settings_eq_pre_gain">Ganancia maestra</string>
+    <string name="settings_eq_save_preset">Guardar como preset</string>
+    <string name="settings_eq_save_preset_name">Nombre del preset</string>
+    <string name="settings_eq_delete_preset">Borrar</string>
+    <string name="settings_eq_preset_deleted">Preset borrado</string>
+    <string name="settings_eq_preset_saved">Preset guardado</string>
+    <string name="settings_eq_preset_name_invalid">Ese nombre no está disponible</string>
+    <string name="settings_eq_delete_preset_confirm">¿Borrar el preset <b>^1</b>?</string>
+
+    <!-- Ecualizador: opciones adicionales (refuerzo de graves, sonido envolvente, reverberación y
+         compresor), agrupadas y ocultas por defecto detrás de una casilla. Cada una lleva un botón
+         de ayuda (?) porque hace algo que un slider vertical del ecualizador no puede replicar. -->
+    <string name="settings_eq_additional_options">Opciones adicionales</string>
+    <string name="settings_eq_bass_boost_help_desc">Qué es el refuerzo de graves</string>
+    <string name="settings_eq_bass_boost_help_title">Refuerzo de graves</string>
+    <string name="settings_eq_bass_boost_help_body">A diferencia de subir la banda más grave del ecualizador, este efecto actúa sobre todo el rango de graves, incluidas frecuencias más bajas que ninguna banda de este dispositivo cubre. En muchos móviles, además, añade armónicos para que el bajo se note incluso en altavoces pequeños que no pueden reproducir esas frecuencias tan bajas.</string>
+    <string name="settings_eq_virtualizer_help_desc">Qué es el sonido envolvente</string>
+    <string name="settings_eq_virtualizer_help_title">Sonido envolvente</string>
+    <string name="settings_eq_virtualizer_help_body">Ensancha el estéreo simulando altavoces separados a los lados. No es un ajuste de volumen por frecuencia: mezcla los canales izquierdo y derecho de otra forma para que el sonido parezca venir de fuera de la cabeza. Ningún slider del ecualizador puede lograr este efecto, porque esos solo suben o bajan bandas de frecuencia por igual en ambos canales.</string>
+    <string name="settings_eq_reverb_title">Reverberación</string>
+    <string name="settings_eq_reverb_help_desc">Qué es la reverberación</string>
+    <string name="settings_eq_reverb_help_title">Reverberación</string>
+    <string name="settings_eq_reverb_help_body">Simula el eco de un espacio (una habitación, una sala, un auditorio…) añadiendo repeticiones retardadas del sonido. Es un efecto en el tiempo, no en la frecuencia ni en el estéreo: ni el ecualizador ni el sonido envolvente pueden crear esta sensación de espacio. El desplegable elige el tamaño de la sala; \"Ninguno\" lo desactiva.</string>
+    <string name="settings_eq_reverb_unsupported">No soportado en este dispositivo</string>
+    <string name="settings_eq_dynamics_title">Compresor de rango dinámico</string>
+    <string name="settings_eq_dynamics_help_desc">Qué es el compresor de rango dinámico</string>
+    <string name="settings_eq_dynamics_help_title">Compresor de rango dinámico</string>
+    <string name="settings_eq_dynamics_help_body">A diferencia del amplificador de volumen, que sube el sonido una cantidad fija, este efecto reacciona en cada instante: sube lo que suena flojo y baja lo que suena fuerte, para que la diferencia entre ambos sea menor. Sirve para oír música a poco volumen sin perder las voces, o para nivelar canciones grabadas con masterizaciones muy distintas. Cuanto más alto el valor, más agresiva la compresión.</string>
+    <string name="settings_eq_dynamics_unsupported">No soportado en este dispositivo</string>
+
+    <!-- Selector de subcarpetas -->
+    <string name="folder_picker_root_title">UltiMusic</string>
+    <string name="folder_picker_back">Subir una carpeta</string>
+    <string name="folder_picker_choose">Elegir esta carpeta</string>
+    <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>
 
     <!-- Permisos -->
     <string name="permission_needed_title">Permiso necesario</string>
     <string name="permission_needed_message">UltiMusic necesita acceso a todos los archivos para leer tus canciones de Descargas y de la carpeta UltiMusic.</string>
     <string name="permission_grant">Conceder</string>
     <string name="permission_cancel">Ahora no</string>
-    <string name="permission_denied">Sin permiso no se pueden mostrar las canciones.</string>
+    <string name="permission_denied">Sin permiso no se pueden mostrar las canciones</string>
+
+    <!-- Notificación de reproducción (PlaybackService/UltiMusicNotificationProvider) -->
+    <string name="notification_channel_playback">Reproducción</string>
+    <string name="notif_play">Reproducir</string>
+    <string name="notif_pause">Pausar</string>
+    <string name="notif_previous">Canción anterior</string>
+    <string name="notif_next">Canción siguiente</string>
 </resources>

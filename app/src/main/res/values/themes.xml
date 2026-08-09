@@ -55,14 +55,4 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/um_background</item>
     </style>
-
-    <!--
-      El buscador es una ventana a pantalla completa como las anteriores, pero con su propia
-      animación de entrada y salida (ver Animation.UltiMusic.SearchSlide). Hereda todo lo demás del
-      tema del que cuelga, así que en modo noche recoge automáticamente la versión de values-night/
-      de ese padre: no hace falta duplicar este estilo allí.
-    -->
-    <style name="Theme.UltiMusic.SearchDialog" parent="Theme.UltiMusic.FullScreenDialog">
-        <item name="android:windowAnimationStyle">@style/Animation.UltiMusic.SearchSlide</item>
-    </style>
 </resources>

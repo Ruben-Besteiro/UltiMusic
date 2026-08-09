@@ -82,19 +82,27 @@ class PlaylistRepository private constructor() {
         runCatching { fileOf(oldName).renameTo(dest) }.getOrDefault(false)
     }
 
-    /** Añade una canción al final de la playlist si no estaba ya. */
-    suspend fun addSong(name: String, filename: String) = withContext(Dispatchers.IO) {
+    /**
+     * Añade una o varias canciones al final de la playlist, saltándose las que ya estuvieran.
+     * Sirve tanto para una canción suelta (lista de un elemento) como para un álbum entero de una
+     * vez (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]): una sola escritura en vez
+     * de una por canción evita reescribir el archivo N veces para lo mismo.
+     */
+    suspend fun addSongs(name: String, filenames: List<String>) = withContext(Dispatchers.IO) {
         val current = readFilenames(name)
-        if (filename !in current) setFilenames(name, current + filename)
+        val missing = filenames.filter { it !in current }
+        if (missing.isNotEmpty()) setFilenames(name, current + missing)
     }
 
     /**
-     * Quita una canción de la playlist. Si era la última, la playlist entera deja de tener sentido
-     * (una lista vacía no aporta nada) y se borra en vez de dejar un archivo a 0 canciones.
+     * Quita una o varias canciones de la playlist. Si no queda ninguna, la playlist entera deja de
+     * tener sentido (una lista vacía no aporta nada) y se borra en vez de dejar un archivo a 0
+     * canciones (ver [writeRemaining]).
      */
-    suspend fun removeSong(name: String, filename: String) = withContext(Dispatchers.IO) {
+    suspend fun removeSongs(name: String, filenames: List<String>) = withContext(Dispatchers.IO) {
         val current = readFilenames(name)
-        if (filename in current) writeRemaining(name, current.filter { it != filename })
+        val remaining = current.filterNot { it in filenames }
+        if (remaining.size != current.size) writeRemaining(name, remaining)
     }
 
     /**
@@ -118,14 +126,14 @@ class PlaylistRepository private constructor() {
         if (remaining.isEmpty()) deletePlaylist(name) else setFilenames(name, remaining)
     }
 
-    /** Unión de los nombres de archivo presentes en CUALQUIER playlist (para el resaltado amarillo). */
-    suspend fun filenamesInAnyPlaylist(): Set<String> = withContext(Dispatchers.IO) {
-        listPlaylistNames().flatMap { readFilenames(it) }.toSet()
-    }
-
-    /** Nombres de las playlists que contienen [filename] (para marcar las casillas del diálogo). */
-    suspend fun playlistsContaining(filename: String): Set<String> = withContext(Dispatchers.IO) {
-        listPlaylistNames().filter { filename in readFilenames(it) }.toSet()
+    /**
+     * Nombres de las playlists que contienen TODAS las canciones de [filenames] (para marcar las
+     * casillas del diálogo de "Añadir a playlist"). Con una sola canción, "todas" es justo esa una;
+     * así sirve igual para una canción suelta que para un álbum entero.
+     */
+    suspend fun playlistsContainingAll(filenames: List<String>): Set<String> = withContext(Dispatchers.IO) {
+        if (filenames.isEmpty()) return@withContext emptySet()
+        listPlaylistNames().filter { name -> filenames.all { it in readFilenames(name) } }.toSet()
     }
 
     /**

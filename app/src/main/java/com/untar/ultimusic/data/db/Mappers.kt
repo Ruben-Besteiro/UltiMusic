@@ -2,6 +2,7 @@ package com.untar.ultimusic.data.db
 
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
+import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.PersonSummaryRow
@@ -9,6 +10,7 @@ import com.untar.ultimusic.data.db.relations.SongWithRelations
 import com.untar.ultimusic.model.Album
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.Artist
+import com.untar.ultimusic.model.GreylistFolder
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
@@ -29,6 +31,11 @@ fun ProducerEntity.toDomain(): Producer = Producer(
     id = id,
     name = name,
     imageName = imageName
+)
+
+fun GreylistFolderEntity.toDomain(): GreylistFolder = GreylistFolder(
+    path = path,
+    excluded = excluded
 )
 
 /**
@@ -57,9 +64,12 @@ fun SongWithRelations.toDomain(): Song = Song(
     genres = song.genres,
     lyrics = song.lyrics,
     language = song.language,
+    country = song.country,
     imageName = song.imageName,
     comment = song.comment,
     videoUrl = song.videoUrl,
+    videoThumbnailName = song.videoThumbnailName,
+    videoOffsetMs = song.videoOffsetMs,
     ogTitle = song.ogTitle,
     ogArtist = song.ogArtist,
     ogAlbum = song.ogAlbum,
@@ -75,7 +85,12 @@ fun AlbumSummaryRow.toDomain(): AlbumSummary = AlbumSummary(
     year = year,
     songCount = songCount,
     totalDuration = totalDuration,
-    cover = CoverRef(ownImage = imageName, songImage = sampleSongImage, songPath = sampleSongPath)
+    cover = CoverRef(
+        ownImage = imageName,
+        songImage = sampleSongImage,
+        songPath = sampleSongPath,
+        videoThumbnail = sampleSongVideoThumbnail
+    )
 )
 
 fun PersonSummaryRow.toDomain(): PersonSummary = PersonSummary(
@@ -84,5 +99,10 @@ fun PersonSummaryRow.toDomain(): PersonSummary = PersonSummary(
     songCount = songCount,
     albumCount = albumCount,
     totalDuration = totalDuration,
-    cover = CoverRef(ownImage = imageName, songImage = sampleSongImage, songPath = sampleSongPath)
+    cover = CoverRef(
+        ownImage = imageName,
+        songImage = sampleSongImage,
+        songPath = sampleSongPath,
+        videoThumbnail = sampleSongVideoThumbnail
+    )
 )

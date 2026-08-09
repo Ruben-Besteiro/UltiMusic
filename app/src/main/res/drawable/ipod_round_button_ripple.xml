@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ripple de los botones circulares de la fila de controles, en android:foreground junto al
+     android:background="@drawable/ipod_round_button" de cada botón. ?attr/selectableItemBackgroundBorderless
+     no vale aquí: al no llevar máscara, su onda no respeta la forma ovalada del botón y se ve
+     cuadrada dentro de la celda de 52dp. La máscara oval de abajo recorta la onda para que quede
+     circular, igual que el propio botón. Va en un drawable aparte (no fusionado con
+     ipod_round_button) porque ese tiene que seguir siendo un GradientDrawable puro para que
+     AccentTint.stroke()/fill() puedan recolorearlo (ver el comentario de ese archivo). -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?android:attr/colorControlHighlight">
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval">
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+</ripple>

@@ -36,7 +36,7 @@
             android:maxLines="1"
             android:textColor="@color/um_on_surface_muted"
             android:textSize="14sp"
-            tools:text="12 canciones · 48:03" />
+            tools:text="12 canciones | 48:03" />
 
     </LinearLayout>
 

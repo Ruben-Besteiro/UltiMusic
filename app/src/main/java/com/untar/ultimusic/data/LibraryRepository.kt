@@ -1,12 +1,16 @@
 package com.untar.ultimusic.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Environment
+import coil.request.ImageRequest
 import com.untar.ultimusic.data.db.LibraryDao
 import com.untar.ultimusic.data.db.UltiMusicDatabase
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
+import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.toDomain
@@ -14,9 +18,13 @@ import com.untar.ultimusic.data.scan.MusicLibraryObserver
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.AlbumTrack
+import com.untar.ultimusic.model.GenreSummary
+import com.untar.ultimusic.model.GreylistFolder
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
+import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -48,6 +56,10 @@ class LibraryRepository private constructor(
     val albumTitles: Flow<List<String>> = dao.observeAlbumTitles()
     val producerNames: Flow<List<String>> = dao.observeProducerNames()
 
+    /** Subcarpetas de la lista gris (ajustes > Lista gris), reactivo: un cambio en cualquiera repinta la lista. */
+    val greylistFolders: Flow<List<GreylistFolder>> =
+        dao.observeGreylistFolders().map { list -> list.map { it.toDomain() } }
+
     // --- Pestañas de Álbumes / Artistas / Productores ---
     //
     // El `null` de estas llamadas significa "sin filtrar por id": devuelve la lista entera. Con un
@@ -62,10 +74,42 @@ class LibraryRepository private constructor(
     val producers: Flow<List<PersonSummary>> =
         dao.observeProducerSummaries(null).map { rows -> rows.map { it.toDomain() } }
 
+    /**
+     * Pestaña de Géneros. A diferencia de las tres de arriba, no sale de una consulta SQL: el
+     * género no vive en su propia tabla (ver [com.untar.ultimusic.data.db.Converters]), solo como
+     * lista de texto dentro de cada canción, así que se deriva aquí, en Kotlin, a partir de
+     * [songs]. Se agrupa por el texto EXACTO —igual que el resto de nombres de la aplicación, donde
+     * dos grafías distintas cuentan como cosas distintas— y se ordena igual que las demás pestañas.
+     */
+    val genres: Flow<List<GenreSummary>> = songs.map { list ->
+        list.asSequence()
+            .flatMap { it.genres.asSequence() }
+            .filter { it.isNotBlank() }
+            .groupingBy { it }
+            .eachCount()
+            .map { (name, count) -> GenreSummary(name, count) }
+            .sortedBy { it.name.lowercase() }
+    }
+
+    /** Canciones que llevan el género [genre] (comparación exacta, como [genres]). */
+    fun songsOfGenre(genre: String): Flow<List<Song>> =
+        songs.map { list -> list.filter { genre in it.genres } }
+
     // --- Fichas de detalle ---
 
     fun album(id: Long): Flow<AlbumSummary?> =
         dao.observeAlbumSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
+
+    /**
+     * El álbum tal cual está guardado (fila cruda + sus artistas), para el editor de metadatos de
+     * álbum. A diferencia de [album] —que trae cifras agregadas de sus canciones, calculadas para la
+     * ficha— aquí hace falta justo lo que el editor puede tocar: título editable, año, géneros,
+     * portada propia y la lista completa de artistas enlazados.
+     */
+    fun albumEntityForEdit(id: Long): Flow<Pair<AlbumEntity, List<String>>?> =
+        combine(dao.observeAlbumEntity(id), dao.observeAlbumArtistNames(id)) { entity, names ->
+            entity?.let { it to names }
+        }
 
     fun artist(id: Long): Flow<PersonSummary?> =
         dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
@@ -136,6 +180,23 @@ class LibraryRepository private constructor(
         libraryObserver = null
     }
 
+    // --- Lista gris ---
+    //
+    // Ninguno de estos tres llama a [reconcile]: activar/desactivar/quitar una subcarpeta es un
+    // UPDATE en bloque sobre lo ya guardado (ver LibraryDao), instantáneo y sin reescanear nada.
+
+    suspend fun addGreylistFolder(path: String) = withContext(Dispatchers.IO) {
+        dao.insertGreylistFolder(GreylistFolderEntity(path = path, excluded = false))
+    }
+
+    suspend fun removeGreylistFolder(path: String) = withContext(Dispatchers.IO) {
+        dao.removeGreylistFolder(path)
+    }
+
+    suspend fun setGreylistFolderExcluded(path: String, excluded: Boolean) = withContext(Dispatchers.IO) {
+        dao.setGreylistFolderExcluded(path, excluded)
+    }
+
     /**
      * Devuelve una ruta que se puede reproducir para [song], o null si el archivo ya no está en
      * ninguna parte de la fonoteca.
@@ -172,13 +233,40 @@ class LibraryRepository private constructor(
     suspend fun updateSong(song: SongEntity) = dao.updateSong(song)
     suspend fun updateArtist(artist: ArtistEntity) = dao.updateArtist(artist)
     suspend fun updateAlbum(album: AlbumEntity) = dao.updateAlbum(album)
+
+    /** Guardado completo desde el editor de metadatos de ÁLBUM (fila + reenlazado de artistas). */
+    suspend fun saveAlbumEdits(album: AlbumEntity, artistNames: List<String>) =
+        dao.saveAlbumEdits(album, artistNames)
     suspend fun updateProducer(producer: ProducerEntity) = dao.updateProducer(producer)
 
     /**
      * Guarda el enlace del videoclip elegido en el buscador del iPod. Al escribir en Room, el flujo
      * [songs] reemite solo y la canción que suena vuelve a llegar al reproductor ya con su `videoUrl`.
+     *
+     * Gestiona también la miniatura de reserva (best-effort), igual que el editor de metadatos: si
+     * el enlace cambia de verdad, borra la miniatura anterior (si tenía) y descarga la del vídeo
+     * nuevo. Así da igual por cuál de los dos caminos llegue el enlace: los dos dejan la miniatura
+     * lista para cuando haga falta como carátula de reserva.
      */
-    suspend fun setVideoUrl(songId: Long, videoUrl: String?) = dao.setVideoUrl(songId, videoUrl)
+    suspend fun setVideoUrl(song: Song, videoUrl: String?): String? = withContext(Dispatchers.IO) {
+        if (videoUrl == song.videoUrl) return@withContext song.videoThumbnailName
+        song.videoThumbnailName?.let { deleteVideoThumbnail(it) }
+        val thumbnailName = videoUrl?.let { url ->
+            YouTubeUrl.videoId(url)?.let { downloadVideoThumbnail(it, song.title) }
+        }
+        dao.setVideoUrl(songId = song.id, videoUrl = videoUrl, videoThumbnailName = thumbnailName)
+        thumbnailName
+    }
+
+    /**
+     * Guarda el desplazamiento de vídeo/audio elegido en los ajustes del reproductor de vídeo del
+     * iPod (ver [Song.videoOffsetMs]). Se llama en cada cambio mientras se arrastra la regla o se
+     * escribe el número a mano, igual que el amplificador de volumen guarda en cada cambio.
+     */
+    suspend fun setVideoOffsetMs(song: Song, offsetMs: Long) = withContext(Dispatchers.IO) {
+        if (offsetMs == song.videoOffsetMs) return@withContext
+        dao.setVideoOffsetMs(songId = song.id, offsetMs = offsetMs)
+    }
 
     /** Pista y disco de una canción (viven en la tabla de cruce, no en la fila de la canción). */
     suspend fun trackAndDisc(songId: Long): Pair<Int?, Int?> =
@@ -195,16 +283,20 @@ class LibraryRepository private constructor(
     ) = dao.saveSongEdits(song, artistNames, albumTitles, producerNames, trackNumber, discNumber)
 
     /**
-     * Copia la imagen elegida por el usuario a la carpeta privada de la app y devuelve el nombre de
-     * archivo resultante (lo que se guarda en `imageName`).
+     * Copia la imagen elegida por el usuario a `~/UltiMusic/images` y devuelve el nombre de
+     * archivo resultante (lo que se guarda en `imageName`), nombrado como [title].
      *
      * Se copia en vez de guardar la URI del sistema porque una URI del selector de fotos es un
      * permiso temporal: en cuanto el usuario borra o mueve la foto —o simplemente al reiniciar—
      * dejaría de poder leerse y la portada se rompería. Con la copia, la carátula es nuestra.
+     *
+     * Si la canción ya tenía una carátula propia, quien llame debe borrarla ANTES de llamar aquí
+     * (ver [deleteCoverImage]): así, cuando el título no ha cambiado, el nombre vuelve a estar
+     * libre y esta imagen ocupa el mismo hueco en vez de acabar en "Título (2).img".
      */
-    suspend fun importCoverImage(uri: Uri, songId: Long): String = withContext(Dispatchers.IO) {
-        val dir = CoverArt.coversDir(appContext)
-        val name = "song_${songId}_${System.currentTimeMillis()}.img"
+    suspend fun importCoverImage(uri: Uri, title: String): String = withContext(Dispatchers.IO) {
+        val dir = CoverArt.imagesDir(appContext)
+        val name = CoverArt.reserveFileName(dir, CoverArt.sanitizeFileName(title), "img", null)
         appContext.contentResolver.openInputStream(uri)?.use { input ->
             File(dir, name).outputStream().use { output -> input.copyTo(output) }
         } ?: error("No se ha podido leer la imagen seleccionada")
@@ -212,20 +304,75 @@ class LibraryRepository private constructor(
     }
 
     /**
+     * Renombra una imagen ya guardada (carátula propia o miniatura de YouTube) para que coincida
+     * con un título nuevo, sin volver a copiarla ni descargarla. Best-effort: si el archivo ya no
+     * existe, no hace nada y devuelve el nombre tal cual estaba.
+     *
+     * @param suffix lo que va detrás del título saneado, p. ej. `" (video)"` para una miniatura o
+     *   `""` para la carátula propia.
+     */
+    suspend fun renameImage(oldName: String, newTitle: String, suffix: String, ext: String): String =
+        withContext(Dispatchers.IO) {
+            val dir = CoverArt.imagesDir(appContext)
+            val old = File(dir, oldName)
+            if (!old.exists()) return@withContext oldName
+            val baseName = CoverArt.sanitizeFileName(newTitle) + suffix
+            val newName = CoverArt.reserveFileName(dir, baseName, ext, null)
+            if (newName == oldName || old.renameTo(File(dir, newName))) newName else oldName
+        }
+
+    /**
+     * Descarga la miniatura del vídeo [videoId], la recorta al cuadrado central y la guarda en
+     * `~/UltiMusic/images` nombrada como [title]. Best-effort: si algo falla (sin red, vídeo
+     * borrado...) devuelve null y la canción se queda sin miniatura, cayendo al recuadro negro.
+     */
+    suspend fun downloadVideoThumbnail(videoId: String, title: String): String? =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val request = ImageRequest.Builder(appContext)
+                    .data("https://img.youtube.com/vi/$videoId/hqdefault.jpg")
+                    .allowHardware(false)
+                    .build()
+                val bitmap = (CoverLoader.get(appContext).execute(request).drawable as? BitmapDrawable)
+                    ?.bitmap ?: return@runCatching null
+
+                val side = minOf(bitmap.width, bitmap.height)
+                val cropped = Bitmap.createBitmap(
+                    bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side
+                )
+
+                val dir = CoverArt.imagesDir(appContext)
+                val baseName = "${CoverArt.sanitizeFileName(title)} (video)"
+                val name = CoverArt.reserveFileName(dir, baseName, "jpg", null)
+                File(dir, name).outputStream().use { out ->
+                    cropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
+                }
+                name
+            }.getOrNull()
+        }
+
+    /**
      * Borra una canción de verdad: su archivo en disco, su fila en la base de datos (con los
-     * artistas/álbumes/productores que se queden huérfanos) y su carátula importada si tenía.
-     * No toca las playlists; quien llame debe sacarla también de ahí con
-     * `PlaylistRepository.removeSongFromAll`, igual que cuando un archivo desaparece solo.
+     * artistas/álbumes/productores que se queden huérfanos), su carátula importada y su miniatura
+     * de YouTube cacheada, si tenía. No toca las playlists; quien llame debe sacarla también de
+     * ahí con `PlaylistRepository.removeSongFromAll`, igual que cuando un archivo desaparece solo.
      */
     suspend fun deleteSong(song: Song) = withContext(Dispatchers.IO) {
         File(song.filePath).delete()
         song.imageName?.let { deleteCoverImage(it) }
+        song.videoThumbnailName?.let { deleteVideoThumbnail(it) }
         dao.deleteSong(song.id)
     }
 
     /** Borra una carátula importada que ya no usa nadie (best-effort). */
     suspend fun deleteCoverImage(imageName: String) = withContext(Dispatchers.IO) {
-        runCatching { File(CoverArt.coversDir(appContext), imageName).delete() }
+        runCatching { File(CoverArt.imagesDir(appContext), imageName).delete() }
+        Unit
+    }
+
+    /** Gemela de [deleteCoverImage], para la miniatura de YouTube cacheada. */
+    suspend fun deleteVideoThumbnail(name: String) = withContext(Dispatchers.IO) {
+        runCatching { File(CoverArt.imagesDir(appContext), name).delete() }
         Unit
     }
 

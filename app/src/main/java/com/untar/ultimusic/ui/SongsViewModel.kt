@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.model.Song
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -33,9 +34,17 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
 
     private var reconciled = false
 
-    /** Reconcilia solo la primera vez (p. ej. al conceder el permiso). */
+    /**
+     * Reconciliación en curso, si la hay. `onCreate` y `onResume` llaman a [loadIfNeeded] casi a la
+     * vez en el arranque en frío; sin este job, las dos llamadas pasan el check de [reconciled]
+     * (que no se pone a `true` hasta que termina, y eso tarda segundos) y se lanzan dos escaneos
+     * completos en paralelo.
+     */
+    private var reconcileJob: Job? = null
+
+    /** Reconcilia solo la primera vez (p. ej. al conceder el permiso), y nunca si ya hay una en curso. */
     fun loadIfNeeded() {
-        if (reconciled) return
+        if (reconciled || reconcileJob != null) return
         reload()
     }
 
@@ -44,9 +53,10 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { repository.deleteSong(song) }
     }
 
-    /** Reconcilia siempre (detecta archivos nuevos/borrados). */
+    /** Reconcilia siempre (detecta archivos nuevos/borrados). Cancela cualquier reconciliación en curso. */
     fun reload() {
-        viewModelScope.launch {
+        reconcileJob?.cancel()
+        reconcileJob = viewModelScope.launch {
             _loading.value = true
             _progress.value = 0
             runCatching {
@@ -56,6 +66,7 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
             }
             reconciled = true
             _loading.value = false
+            reconcileJob = null
         }
     }
 }

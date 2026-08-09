@@ -6,26 +6,24 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.AlbumTrack
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
-import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverRef
-import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.TimeFormat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import java.io.File
 
 /** Qué se está mirando en la ficha de detalle. */
 enum class DetailKind { ALBUM, ARTIST, PRODUCER }
@@ -89,29 +87,43 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Color con el que se tiñe la ficha, sacado de su propia carátula (ver [DynamicColor]). */
-    private val _accentColor = MutableStateFlow(DynamicColor.DEFAULT)
-    val accentColor = _accentColor.asStateFlow()
-
     /** Las canciones sueltas, para pasárselas al reproductor al pulsar una. */
     val songs: List<Song> get() = tracks.value.map { it.song }
+
+    /** Qué tipo de ficha es esta. Lo necesita el fragmento para saber si el menú de 3 puntos (acciones
+     * de álbum: añadir todo a una playlist, editar el álbum...) tiene sentido aquí, porque solo existe
+     * para álbumes. */
+    val currentKind: DetailKind? get() = target.value?.first
+
+    /** El id del álbum en edición; solo tiene valor cuando [currentKind] es [DetailKind.ALBUM]. */
+    val currentAlbumId: Long? get() = target.value?.takeIf { it.first == DetailKind.ALBUM }?.second
 
     /** Borra una canción de verdad (archivo y fila de la base de datos). */
     fun deleteSong(song: Song) {
         viewModelScope.launch { repository.deleteSong(song) }
     }
 
+    /**
+     * Borra TODAS las canciones del álbum, una a una, y las saca de cualquier playlist en la que
+     * estuvieran — exactamente lo mismo que si se borraran sueltas desde la pestaña de Canciones (ver
+     * [com.untar.ultimusic.ui.songs.SongsFragment.showDeleteDialog]).
+     *
+     * Es una función SUSPENDIDA, a diferencia de [deleteSong] (que lanza su propia corrutina y no
+     * espera), porque aquí quien llama SÍ necesita saber cuándo termina: la ficha debe cerrarse justo
+     * después, y cerrarla antes de tiempo cancelaría el borrado a medias (este ViewModel vive en el
+     * ámbito del propio diálogo).
+     */
+    suspend fun deleteAllSongs() {
+        val playlists = PlaylistRepository.get()
+        for (song in songs) {
+            repository.deleteSong(song)
+            playlists.removeSongFromAll(File(song.filePath).name)
+        }
+    }
+
     fun setTarget(kind: DetailKind, id: Long) {
         if (target.value != null) return
         target.value = kind to id
-
-        // El acento se calcula UNA sola vez, con la primera cabecera que llegue. Recalcularlo en
-        // cada emisión haría parpadear la pantalla al editar cualquier canción del álbum.
-        viewModelScope.launch {
-            val cover = header.first { it != null }!!.cover
-            val app = getApplication<Application>()
-            _accentColor.value = DynamicColor.fromCover(app, CoverArt.cover(app, cover))
-        }
     }
 
     // --- Construcción de la cabecera ---

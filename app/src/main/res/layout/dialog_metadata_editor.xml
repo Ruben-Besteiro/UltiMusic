@@ -52,10 +52,10 @@
                 <ImageView
                     android:id="@+id/editorCover"
                     android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/cover_placeholder"
                     android:contentDescription="@string/editor_pick_cover"
-                    android:scaleType="centerCrop"
-                    android:src="@drawable/cover_placeholder" />
+                    android:scaleType="centerCrop" />
 
                 <ImageButton
                     android:id="@+id/btnPickCover"
@@ -160,20 +160,13 @@
                         android:maxLines="1" />
                 </com.google.android.material.textfield.TextInputLayout>
 
-                <!-- ===== Sección plegable: Detalles ===== -->
+                <!-- ===== Detalles ===== -->
 
                 <LinearLayout
                     android:id="@+id/sectionDetailsHeader"
                     style="@style/Widget.UltiMusic.SectionHeader"
                     android:layout_width="match_parent"
                     android:layout_height="48dp">
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:contentDescription="@null"
-                        android:src="@drawable/ic_chevron_right"
-                        app:tint="@color/um_on_surface_muted" />
 
                     <TextView
                         style="@style/Widget.UltiMusic.SectionTitle"
@@ -186,8 +179,7 @@
                     android:id="@+id/sectionDetailsContent"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
 
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.UltiMusic.TextField"
@@ -219,18 +211,58 @@
                             android:maxLines="1" />
                     </com.google.android.material.textfield.TextInputLayout>
 
+                    <!-- FrameLayout para poder clavar la papelera en la esquina de ARRIBA: el icono
+                         final propio de TextInputLayout se centra en el alto entero de la caja, que
+                         con 10 líneas queda a media altura en vez de arriba. -->
+                    <FrameLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Widget.UltiMusic.TextField"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/field_lyrics"
+                            app:helperText="@string/field_lyrics_hint">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/inputLyrics"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:focusable="false"
+                                android:focusableInTouchMode="false"
+                                android:cursorVisible="false"
+                                android:longClickable="false"
+                                android:inputType="textMultiLine"
+                                android:maxLines="10" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageButton
+                            android:id="@+id/btnClearLyrics"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_gravity="top|end"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="4dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/editor_clear_lyrics"
+                            android:padding="4dp"
+                            android:src="@drawable/ic_delete"
+                            android:tint="@color/um_on_surface_muted" />
+                    </FrameLayout>
+
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.UltiMusic.TextField"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/field_lyrics">
+                        android:hint="@string/field_country">
 
                         <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inputLyrics"
+                            android:id="@+id/inputCountry"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:inputType="textMultiLine|textCapSentences"
-                            android:maxLines="4" />
+                            android:inputType="textCapCharacters"
+                            android:maxLines="1" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.textfield.TextInputLayout
@@ -266,39 +298,50 @@
                     <!-- Enlace del videoclip para el modo vídeo del iPod. Se puede dejar vacío: la
                          primera vez que se active el modo vídeo, el iPod abre un buscador de YouTube
                          y lo rellena con el que elija el usuario. -->
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.UltiMusic.TextField"
+                    <FrameLayout
                         android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="@string/field_video_url"
-                        app:helperText="@string/field_video_url_hint">
+                        android:layout_height="wrap_content">
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inputVideoUrl"
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Widget.UltiMusic.TextField"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:focusable="false"
-                            android:focusableInTouchMode="false"
-                            android:cursorVisible="false"
-                            android:longClickable="false"
-                            android:maxLines="1" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                            android:hint="@string/field_video_url"
+                            app:helperText="@string/field_video_url_hint">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/inputVideoUrl"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:focusable="false"
+                                android:focusableInTouchMode="false"
+                                android:cursorVisible="false"
+                                android:longClickable="false"
+                                android:maxLines="2" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageButton
+                            android:id="@+id/btnClearVideoUrl"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_gravity="top|end"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="4dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/editor_clear_video_url"
+                            android:padding="4dp"
+                            android:src="@drawable/ic_delete"
+                            android:tint="@color/um_on_surface_muted" />
+                    </FrameLayout>
                 </LinearLayout>
 
-                <!-- ===== Sección plegable: Posición en el álbum ===== -->
+                <!-- ===== Posición en el álbum ===== -->
 
                 <LinearLayout
                     android:id="@+id/sectionPositionHeader"
                     style="@style/Widget.UltiMusic.SectionHeader"
                     android:layout_width="match_parent"
                     android:layout_height="48dp">
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:contentDescription="@null"
-                        android:src="@drawable/ic_chevron_right"
-                        app:tint="@color/um_on_surface_muted" />
 
                     <TextView
                         style="@style/Widget.UltiMusic.SectionTitle"
@@ -311,8 +354,7 @@
                     android:id="@+id/sectionPositionContent"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
 
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.UltiMusic.TextField"
@@ -343,20 +385,13 @@
                     </com.google.android.material.textfield.TextInputLayout>
                 </LinearLayout>
 
-                <!-- ===== Sección plegable: Grabación original (campos og*) ===== -->
+                <!-- ===== Grabación original (campos og*) ===== -->
 
                 <LinearLayout
                     android:id="@+id/sectionOriginalHeader"
                     style="@style/Widget.UltiMusic.SectionHeader"
                     android:layout_width="match_parent"
                     android:layout_height="48dp">
-
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:contentDescription="@null"
-                        android:src="@drawable/ic_chevron_right"
-                        app:tint="@color/um_on_surface_muted" />
 
                     <TextView
                         style="@style/Widget.UltiMusic.SectionTitle"
@@ -369,8 +404,7 @@
                     android:id="@+id/sectionOriginalContent"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:visibility="gone">
+                    android:orientation="vertical">
 
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.UltiMusic.TextField"
@@ -432,4 +466,17 @@
             </LinearLayout>
         </LinearLayout>
     </androidx.core.widget.NestedScrollView>
+
+    <!-- Varita de autorrelleno: al ser hermana del NestedScrollView (no está dentro), el scroll del
+         formulario no la mueve de la esquina inferior derecha. -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAutofill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:contentDescription="@string/editor_autofill"
+        android:src="@drawable/ic_wand"
+        app:backgroundTint="@color/um_yellow"
+        app:tint="@color/um_background" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

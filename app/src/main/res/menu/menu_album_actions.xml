@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Contenido del PopupMenu que abre el botón de 3 puntos de una ficha de álbum (ver
+  DetailDialogFragment). Los títulos son EXACTAMENTE los mismos que en el menú de una canción
+  suelta (menu_song_item.xml): son la misma acción, solo que aplicada a todas las canciones del
+  álbum de una vez.
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_add_album_to_playlist"
+        android:title="@string/add_to_playlist" />
+    <item
+        android:id="@+id/action_add_album_to_queue"
+        android:title="@string/add_to_queue" />
+    <item
+        android:id="@+id/action_edit_album"
+        android:title="@string/edit_metadata" />
+    <item
+        android:id="@+id/action_delete_album"
+        android:title="@string/delete_song" />
+</menu>

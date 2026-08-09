@@ -1,0 +1,174 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Editor de metadatos de un ÁLBUM, a pantalla completa.
+
+  Es el mismo patrón que dialog_metadata_editor.xml (misma toolbar, misma portada cuadrada arriba,
+  mismos estilos de campo) pero con los campos que tiene un álbum: título, artista(s), año y
+  género(s). No hay secciones plegables porque, al ser tan pocos campos, no hace falta esconder
+  ninguno detrás de un desplegable.
+-->
+<androidx.coordinatorlayout.widget.CoordinatorLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/editorRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background">
+
+    <com.google.android.material.appbar.AppBarLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        app:elevation="0dp">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/editorToolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:minHeight="?attr/actionBarSize"
+            android:background="@drawable/bg_toolbar_scrim"
+            app:navigationContentDescription="@string/editor_close"
+            app:navigationIcon="@drawable/ic_close"
+            app:title="@string/metadata_editor_title"
+            app:titleTextColor="@android:color/white" />
+    </com.google.android.material.appbar.AppBarLayout>
+
+    <androidx.core.widget.NestedScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:fillViewport="true"
+        app:layout_behavior="@string/appbar_scrolling_view_behavior">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingBottom="32dp">
+
+            <!-- Portada: cuadrada (SquareFrameLayout). Tocarla o el botón abajo-derecha abre el selector. -->
+
+            <com.untar.ultimusic.ui.common.SquareFrameLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content">
+
+                <ImageView
+                    android:id="@+id/editorCover"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/cover_placeholder"
+                    android:contentDescription="@string/editor_pick_cover"
+                    android:scaleType="centerCrop" />
+
+                <ImageButton
+                    android:id="@+id/btnPickCover"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="bottom|end"
+                    android:layout_margin="12dp"
+                    android:background="@drawable/bg_circle_button"
+                    android:contentDescription="@string/editor_pick_cover"
+                    android:src="@drawable/ic_image" />
+
+            </com.untar.ultimusic.ui.common.SquareFrameLayout>
+
+            <!-- ===== Campo principal: Título del álbum, en su propio bloque de color ===== -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@color/um_surface_variant"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="16dp"
+                android:paddingBottom="8dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.UltiMusic.TextField"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/field_album_title">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/inputTitle"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textCapWords"
+                        android:maxLines="1"
+                        android:textSize="20sp"
+                        android:textStyle="bold" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+
+            <!-- ===== Resto de campos: Artista(s), Año y Género(s) ===== -->
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:paddingStart="16dp"
+                android:paddingTop="8dp"
+                android:paddingEnd="16dp">
+
+                <com.google.android.material.textfield.TextInputLayout
+                    android:id="@+id/layoutArtists"
+                    style="@style/Widget.UltiMusic.TextField.Dropdown"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/field_artists"
+                    app:helperText="@string/multi_value_hint">
+
+                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                        android:id="@+id/inputArtists"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:imeOptions="actionNext"
+                        android:inputType="textCapWords"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.UltiMusic.TextField"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/field_year">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/inputYear"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="number"
+                        android:maxLength="4"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+
+                <com.google.android.material.textfield.TextInputLayout
+                    style="@style/Widget.UltiMusic.TextField"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="@string/field_genres"
+                    app:helperText="@string/multi_value_hint">
+
+                    <com.google.android.material.textfield.TextInputEditText
+                        android:id="@+id/inputGenres"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:inputType="textCapWords"
+                        android:maxLines="1" />
+                </com.google.android.material.textfield.TextInputLayout>
+            </LinearLayout>
+        </LinearLayout>
+    </androidx.core.widget.NestedScrollView>
+
+    <!-- Varita de autorrelleno: al ser hermana del NestedScrollView (no está dentro), el scroll del
+         formulario no la mueve de la esquina inferior derecha. -->
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fabAutofill"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:contentDescription="@string/editor_autofill"
+        android:src="@drawable/ic_wand"
+        app:backgroundTint="@color/um_yellow"
+        app:tint="@color/um_background" />
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

@@ -7,10 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,15 +52,19 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
     private val _trackAndDisc = MutableStateFlow<Pair<Int?, Int?>?>(null)
     val trackAndDisc = _trackAndDisc.asStateFlow()
 
-    /** Se pone a true cuando el guardado termina, para que el diálogo avise al usuario. Se vuelve
-     * a false con [consumeSaved] en cuanto el diálogo reacciona. */
-    private val _saved = MutableStateFlow(false)
+    /** Se pone en no-null cuando el guardado termina, con la canción ya releída de Room (con todos
+     * sus campos al día: carátula, letra, título...), para que el diálogo avise al usuario y pueda
+     * refrescarla en [PlayerViewModel] si esta canción es la que suena — si no, lo editado no se
+     * vería reflejado ahí hasta que sonara otra canción y volviera a esta (ver
+     * [PlaybackService.refreshSong][com.untar.ultimusic.playback.PlaybackService.refreshSong]). Se
+     * vuelve a null con [consumeSaved] en cuanto el diálogo reacciona. */
+    private val _saved = MutableStateFlow<SaveResult?>(null)
     val saved = _saved.asStateFlow()
 
-    /** El diálogo ya ha reaccionado a [saved]: se vuelve a poner a false para que un guardado
+    /** El diálogo ya ha reaccionado a [saved]: se vuelve a poner a null para que un guardado
      * posterior (el editor ya no se cierra solo) también dispare la colecta. */
     fun consumeSaved() {
-        _saved.value = false
+        _saved.value = null
     }
 
     fun setSongId(id: Long) {
@@ -69,17 +75,38 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
 
     /**
      * Escribe todos los cambios. La imagen se importa AQUÍ (no al elegirla) para no dejar archivos
-     * sueltos en el almacenamiento si el usuario acaba cerrando el editor sin guardar.
+     * sueltos en el almacenamiento si el usuario acaba cerrando el editor sin guardar. Lo mismo
+     * para la miniatura de YouTube: se descarga aquí, solo si el enlace ha cambiado de verdad.
      */
     fun save(form: EditorForm, pickedImage: Uri?) {
         val current = song.value ?: return
+        val titleChanged = form.title != current.title
         viewModelScope.launch {
-            val imageName = if (pickedImage != null) {
-                runCatching { repository.importCoverImage(pickedImage, current.id) }
-                    .onSuccess { current.imageName?.let { old -> repository.deleteCoverImage(old) } }
-                    .getOrElse { current.imageName }
-            } else {
-                current.imageName
+            val imageName = when {
+                pickedImage != null -> {
+                    current.imageName?.let { old -> repository.deleteCoverImage(old) }
+                    runCatching { repository.importCoverImage(pickedImage, form.title) }
+                        .getOrElse { current.imageName }
+                }
+                current.imageName != null && titleChanged ->
+                    repository.renameImage(current.imageName, form.title, "", "img")
+                else -> current.imageName
+            }
+
+            var thumbnailName = current.videoThumbnailName
+            when {
+                form.videoUrl == null -> {
+                    current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
+                    thumbnailName = null
+                }
+                form.videoUrl != current.videoUrl -> {
+                    current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
+                    val videoId = YouTubeUrl.videoId(form.videoUrl)
+                    thumbnailName = videoId?.let { repository.downloadVideoThumbnail(it, form.title) }
+                }
+                current.videoThumbnailName != null && titleChanged ->
+                    thumbnailName =
+                        repository.renameImage(current.videoThumbnailName, form.title, " (video)", "jpg")
             }
 
             val entity = SongEntity(
@@ -91,9 +118,12 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
                 genres = form.genres,
                 lyrics = form.lyrics,
                 language = form.language,
+                country = form.country,
                 imageName = imageName,
                 comment = form.comment,
                 videoUrl = form.videoUrl,
+                videoThumbnailName = thumbnailName,
+                videoOffsetMs = current.videoOffsetMs,
                 ogTitle = form.ogTitle,
                 ogArtist = form.ogArtist,
                 ogAlbum = form.ogAlbum,
@@ -108,7 +138,13 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
                 trackNumber = form.trackNumber,
                 discNumber = form.discNumber
             )
-            _saved.value = true
+            // Se relee de Room en vez de construirla a mano aquí: artistas/álbumes/productores son
+            // relaciones que saveSongEdits acaba de resolver (nombre -> fila existente o nueva), y
+            // reconstruir eso a mano duplicaría esa lógica. Por si acaso no apareciera (no debería:
+            // se acaba de guardar), se cae de vuelta a un parche mínimo sobre lo que ya había.
+            val fresh = repository.songs.first().firstOrNull { it.id == current.id }
+                ?: current.copy(imageName = imageName, videoThumbnailName = thumbnailName)
+            _saved.value = SaveResult(fresh)
         }
     }
 
@@ -116,6 +152,10 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
         const val NO_SONG = -1L
     }
 }
+
+/** Canción ya guardada y releída de Room, para que quien observe [MetadataEditorViewModel.saved]
+ * pueda refrescarla entera en el reproductor si esta canción es la que suena. */
+data class SaveResult(val song: Song)
 
 /**
  * Los valores del formulario ya limpios (recortados, con los vacíos convertidos a null y los campos
@@ -130,6 +170,7 @@ data class EditorForm(
     val genres: List<String>,
     val lyrics: String?,
     val language: String?,
+    val country: String?,
     val comment: String?,
     val videoUrl: String?,
     val trackNumber: Int?,

@@ -78,14 +78,4 @@ object YouTubeUrl {
 
     /** Enlace canónico de un vídeo, que es lo que se guarda en `Song.videoUrl`. */
     fun watchUrl(videoId: String): String = "https://www.youtube.com/watch?v=$videoId"
-
-    /**
-     * Miniatura oficial de un vídeo, servida por el propio YouTube (no es una captura del
-     * reproductor: es un recurso público pensado para esto, así que se puede cargar y mostrar sin
-     * restricción). Se usa `hqdefault.jpg` porque existe siempre para cualquier vídeo público; las
-     * resoluciones mayores (`maxresdefault.jpg`, etc.) no las tienen todos los vídeos y, si falta,
-     * el servidor no da error: devuelve igualmente una imagen (un recuadro gris), así que Coil no
-     * podría detectar el fallo para caer en la siguiente.
-     */
-    fun thumbnailUrl(videoId: String): String = "https://img.youtube.com/vi/$videoId/hqdefault.jpg"
 }

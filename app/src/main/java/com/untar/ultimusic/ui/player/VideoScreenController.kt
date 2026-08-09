@@ -1,11 +1,8 @@
 package com.untar.ultimusic.ui.player
 
-import android.graphics.Outline
 import android.view.View
 import android.view.ViewGroup
-import android.view.ViewOutlineProvider
 import android.webkit.WebView
-import com.untar.ultimusic.R
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
@@ -41,33 +38,25 @@ import kotlin.math.abs
 class VideoScreenController(
     private val view: YouTubePlayerView,
     /** Avisa de que el vídeo no se puede reproducir (por ejemplo, embebido desactivado). */
-    private val onPlaybackError: () -> Unit
+    private val onPlaybackError: () -> Unit,
+    /**
+     * Avisa de si hay que tapar el WebView con una ruedecilla de carga propia: `true` justo al
+     * pedir un vídeo (ver [load]), `false` en cuanto llega el primer aviso del reproductor sobre
+     * ese vídeo (ver [awaitingFirstState]), que es cuando YouTube ya pinta algo por su cuenta
+     * (su propia ruedecilla, o el vídeo directamente) y tener las dos a la vez sobraría.
+     */
+    private val onLoadingChanged: (Boolean) -> Unit = {}
 ) {
 
     private var player: YouTubePlayer? = null
 
-    init {
-        // El vídeo lo pinta, por dentro, un WebView; y un WebView con vídeo suele promocionar el
-        // fotograma a una capa acelerada por hardware que Android compone directamente por fuera
-        // del árbol de vistas (como una SurfaceView). Eso lo deja SIEMPRE por encima de todo lo
-        // demás en la ventana, sin importar el orden en el XML: por eso tapaba la barra de
-        // progreso, la caja de info, la rueda... Forzándolo a capa de software vuelve a pintarse
-        // como una vista normal y respeta el Z-order. El vídeo es pequeño y mudo, así que el coste
-        // de rendimiento de renderizarlo por software es imperceptible.
-        // DEBUG TEMPORAL: probando si esto es lo que deja el vídeo en negro.
-        // findWebView(view)?.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
-
-        // El vídeo es un rectángulo de esquinas rectas, pero vive dentro del recuadro redondeado
-        // de la pantalla del iPod (mismo radio que usa la carátula, ver ipod_display_corner_radius):
-        // sin recortarlo, esas esquinas asoman por fuera del marco y tapan el cuerpo del iPod.
-        val radius = view.resources.getDimension(R.dimen.ipod_display_corner_radius)
-        view.clipToOutline = true
-        view.outlineProvider = object : ViewOutlineProvider() {
-            override fun getOutline(v: View, outline: Outline) {
-                outline.setRoundRect(0, 0, v.width, v.height, radius)
-            }
-        }
-    }
+    /**
+     * Milisegundos que se suma a la posición del audio local para obtener la del vídeo: positivo lo
+     * adelanta, negativo lo atrasa. Lo fijan los ajustes del reproductor de vídeo (ver [setOffset])
+     * y lo aplican [load], [sync] y [seekTo] para que todo el mundo hable siempre en "posición de
+     * vídeo" a partir de la posición real del audio.
+     */
+    private var offsetMs: Long = 0
 
     /** True en cuanto se ha pedido la inicialización, para no pedirla dos veces. */
     private var initializing = false
@@ -90,6 +79,13 @@ class VideoScreenController(
      * enseña su miniatura habitual con el HUD propio (título, botón de play…) en vez de negro.
      */
     private var pauseOnceStarted = false
+
+    /**
+     * True entre que se pide un vídeo (ver [load]) y que llega el primer aviso de estado del
+     * reproductor sobre él (ver [onStateChange]), que es cuando la ruedecilla de carga propia (ver
+     * [onLoadingChanged]) deja de hacer falta porque YouTube ya se encarga de pintar algo.
+     */
+    private var awaitingFirstState = false
 
     private val listener = object : AbstractYouTubePlayerListener() {
 
@@ -117,6 +113,10 @@ class VideoScreenController(
             state: PlayerConstants.PlayerState
         ) {
             android.util.Log.d("UMVideoDebug", "onStateChange $state")
+            if (awaitingFirstState) {
+                awaitingFirstState = false
+                onLoadingChanged(false)
+            }
             lastKnownPlaying = state == PlayerConstants.PlayerState.PLAYING
             // Ver [pauseOnceStarted]: en cuanto el vídeo arranca de verdad (ya hay fotograma), se
             // pausa si el audio local estaba en pausa.
@@ -134,6 +134,10 @@ class VideoScreenController(
             error: PlayerConstants.PlayerError
         ) {
             android.util.Log.d("UMVideoDebug", "onError $error")
+            if (awaitingFirstState) {
+                awaitingFirstState = false
+                onLoadingChanged(false)
+            }
             onPlaybackError()
         }
 
@@ -147,14 +151,19 @@ class VideoScreenController(
     }
 
     /**
-     * Carga [videoId] desde [startMs], que es la posición que lleva el audio local.
+     * Carga [videoId] desde [startMs], que es la posición que lleva el audio local. [offsetMs] es el
+     * desplazamiento guardado de la canción (ver `Song.videoOffsetMs`); se aplica aquí y queda
+     * recordado para que [sync] y [seekTo] lo sigan aplicando mientras dure este vídeo.
      *
      * [isPlaying] tiene que valer lo que esté haciendo el audio local: si la canción está en pausa,
      * el vídeo se ve congelado también. Cambiar de modo no es darle al play.
      */
-    fun load(videoId: String, startMs: Long, isPlaying: Boolean) {
-        lastKnownPositionMs = startMs
-        val request = Request(videoId, startMs, isPlaying)
+    fun load(videoId: String, startMs: Long, isPlaying: Boolean, offsetMs: Long = 0) {
+        this.offsetMs = offsetMs
+        lastKnownPositionMs = withOffset(startMs)
+        awaitingFirstState = true
+        onLoadingChanged(true)
+        val request = Request(videoId, withOffset(startMs), isPlaying)
         val ready = player
         if (ready != null) {
             ready.start(request)
@@ -179,15 +188,32 @@ class VideoScreenController(
         if (targetIsPlaying != lastKnownPlaying) {
             if (targetIsPlaying) ready.play() else ready.pause()
         }
-        if (abs(targetPositionMs - lastKnownPositionMs) > driftThresholdMs) {
-            ready.seekTo(targetPositionMs / 1000f)
+        val target = withOffset(targetPositionMs)
+        if (abs(target - lastKnownPositionMs) > driftThresholdMs) {
+            ready.seekTo(target / 1000f)
         }
     }
 
-    /** Salta al instante a [positionMs], sin esperar al siguiente tick de [sync]. */
+    /** Salta al instante a [positionMs] (posición del audio local), sin esperar al siguiente tick de
+     * [sync]. */
     fun seekTo(positionMs: Long) {
-        player?.seekTo(positionMs / 1000f)
+        player?.seekTo(withOffset(positionMs) / 1000f)
     }
+
+    /**
+     * Cambia el desplazamiento en caliente a [newOffsetMs] y reposiciona el vídeo al instante a
+     * partir de [currentAudioPositionMs] (la posición real del audio ahora mismo), para que el
+     * ajuste se note en tiempo real mientras se edita en los ajustes del reproductor de vídeo, sin
+     * esperar al siguiente tick de [sync].
+     */
+    fun setOffset(newOffsetMs: Long, currentAudioPositionMs: Long) {
+        offsetMs = newOffsetMs
+        seekTo(currentAudioPositionMs)
+    }
+
+    /** Traduce una posición del audio local a la posición equivalente del vídeo, aplicando
+     * [offsetMs]. Nunca negativa: YouTube no admite pedir un vídeo desde antes de su inicio. */
+    private fun withOffset(audioPositionMs: Long): Long = (audioPositionMs + offsetMs).coerceAtLeast(0L)
 
     /**
      * `loadVideo` deja el vídeo cargándose y reproduciéndose (mudo). Si el audio local no estaba

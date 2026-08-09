@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  El aleatorio va SIEMPRE (álbum, artista o productor); el de 3 puntos solo tiene sentido en un
+  álbum (sus acciones son "de álbum": añadir todas sus canciones, editar SUS metadatos...), así que
+  el código lo oculta para artista/productor. Va después en el XML para quedar más a la derecha,
+  que es justo el hueco que deja al moverse el aleatorio.
+-->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
@@ -6,6 +12,12 @@
         android:id="@+id/action_shuffle"
         android:icon="@drawable/ic_shuffle"
         android:title="@string/shuffle_collection"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_album_menu"
+        android:icon="@drawable/ic_more_vert"
+        android:title="@string/action_more"
         app:showAsAction="always" />
 
 </menu>

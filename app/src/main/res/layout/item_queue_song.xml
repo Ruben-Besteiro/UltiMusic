@@ -2,7 +2,9 @@
 <!--
   Fila de la cola de reproducción. El "hueco" izquierdo muestra el icono de altavoz cuando es la
   canción que suena ahora, o el número de posición en el resto de filas (el adaptador alterna cuál).
-  Debajo, un divisor que el adaptador solo muestra en la frontera entre la cola 1 y la cola 2.
+  Debajo, un divisor que el adaptador solo muestra en la ÚLTIMA fila, y solo si la cola no llega a
+  llenar la pantalla (ver IPodDialogFragment.refreshEndDivider): marca que ahí se acaba de verdad la
+  cola, en vez de dejar ambiguo si el hueco en blanco de debajo es solo scroll sin usar.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
@@ -53,7 +55,7 @@
             android:textSize="15sp" />
     </LinearLayout>
 
-    <!-- Divisor gris oscuro entre la cola 1 y la cola 2 (solo visible en la fila frontera). -->
+    <!-- Divisor gris que marca el final de la cola (solo en la última fila, ver arriba). -->
     <View
         android:id="@+id/queueDivider"
         android:layout_width="match_parent"

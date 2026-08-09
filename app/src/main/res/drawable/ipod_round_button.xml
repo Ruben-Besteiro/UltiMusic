@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Botón circular de la fila de controles (menú, anterior, play/pausa, siguiente). Tiene que ser
+     un GradientDrawable "puro" (shape suelto, no envuelto en un ripple) porque AccentTint.stroke()
+     y AccentTint.fill() (ver IPodDialogFragment.tintIPod) recolorean el aro y el relleno haciendo
+     `background as? GradientDrawable`: si esto fuera un RippleDrawable ese cast fallaría y el aro
+     se quedaría fijo en @color/um_yellow en vez de seguir el acento de la carátula que suena. El
+     ripple va aparte, en android:foreground (ver ipod_round_button_ripple.xml). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/um_surface_variant" />
+    <stroke
+        android:width="@dimen/ipod_stroke_button_ring"
+        android:color="@color/um_yellow" />
+</shape>

@@ -1,4 +1,6 @@
-<!-- Engranaje: ajustes del reproductor de vídeo (botón de las 3 rayas, reutilizado en modo vídeo). -->
+<!-- Engranaje. Se usa en dos sitios: el botón de la izquierda de la barra superior de la actividad
+     principal (abre SettingsDialogFragment) y el botón de las 3 rayas del iPod cuando está en modo
+     vídeo (ajustes del reproductor de vídeo). -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"

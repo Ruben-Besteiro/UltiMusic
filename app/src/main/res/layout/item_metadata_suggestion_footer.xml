@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fila final de la lista de sugerencias mientras se pide la página siguiente (scroll infinito, ver
+  MetadataSuggestionsAdapter). Su color se tiñe con el acento dinámico igual que el resto de
+  indicadores de carga de la app (ver AccentTint.kt): por defecto saldría del amarillo fijo de
+  colorPrimary, y la regla del proyecto es que todo lo amarillo use el color dinámico.
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:paddingVertical="16dp">
+
+    <ProgressBar
+        android:id="@+id/suggestionLoadMoreSpinner"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_gravity="center" />
+
+</FrameLayout>

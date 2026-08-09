@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una fila de la letra del iPod (ver IPodLyricsAdapter). Con letra sin sincronizar hay una sola
+     fila, con el texto entero; con letra sincronizada, una por línea. El color/negrita de "es la
+     que toca ahora" los pone el propio adaptador en tiempo de bind, no este XML. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:paddingVertical="6dp"
+    android:textColor="@color/um_on_background"
+    android:textSize="15sp" />

@@ -2,10 +2,12 @@ package com.untar.ultimusic.ui.playlists
 
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.text.TextUtils
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -20,7 +22,8 @@ import com.untar.ultimusic.model.PlaylistSummary
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
-import com.untar.ultimusic.ui.player.IPodNanoDialogFragment
+import com.untar.ultimusic.ui.player.IPodDialogFragment
+import com.untar.ultimusic.util.AccentTint
 import kotlinx.coroutines.launch
 
 /**
@@ -41,7 +44,7 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
         val adapter = PlaylistsAdapter(
             onPlaylistClick = { playlist ->
                 if (parentFragmentManager.findFragmentByTag("ipod") == null) {
-                    IPodNanoDialogFragment.newInstance(playlist.name)
+                    IPodDialogFragment.newInstance(playlist.name)
                         .show(parentFragmentManager, "ipod")
                 }
             },
@@ -69,6 +72,7 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         createButton.backgroundTintList = ColorStateList.valueOf(accent)
+                        AccentTint.contentOnAccent(createButton, accent)
                         scrollbar.setAccentColor(accent)
                     }
                 }
@@ -102,12 +106,13 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
 
     /** Confirmación antes de borrar; deja claro que no se tocan los archivos de audio. */
     private fun showDeleteDialog(playlist: PlaylistSummary) {
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.playlist_delete)
-            .setMessage(getString(R.string.playlist_delete_confirm, playlist.name))
+            .setMessage(TextUtils.expandTemplate(resources.getText(R.string.playlist_delete_confirm), playlist.name))
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.playlist_delete) { _, _ -> viewModel.delete(playlist.name) }
             .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
     /**
@@ -120,11 +125,19 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
         positive: String,
         onAccept: (String) -> Unit
     ) {
+        val accent = playerViewModel.accentColor.value
         val input = EditText(requireContext()).apply {
             setText(initial)
             setSelection(text.length)
             hint = getString(R.string.playlist_name_hint)
             setSingleLine()
+            // La rayita de debajo es el `background` de un EditText normal (no lleva
+            // TextInputLayout): por defecto Android la pinta con colorControlActivated al
+            // enfocar, que en este tema vale lo mismo que colorPrimary (amarillo fijo). Con un
+            // tinte por estados se enfoca en el acento y se queda en el gris de fábrica
+            // (colorControlNormal) sin foco, el mismo que ya se ve en el campo de vídeo de los
+            // ajustes de reproducción (ver AccentTint.underline).
+            backgroundTintList = AccentTint.underline(requireContext(), accent)
         }
         val padding = (resources.displayMetrics.density * 20).toInt()
         val dialog = AlertDialog.Builder(requireContext())
@@ -137,6 +150,18 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
             val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
             ok.isEnabled = input.text.isNotBlank()
             input.doAfterTextChanged { ok.isEnabled = !it.isNullOrBlank() }
+
+            // El botón se deshabilita mientras el campo está vacío; con un tinte plano se vería
+            // igual de amarillo estando gris de verdad, así que necesita sus dos estados (mismo
+            // patrón que AddToPlaylistDialogFragment.showCreateAndAdd).
+            val muted = ContextCompat.getColor(requireContext(), R.color.um_on_surface_muted)
+            ok.setTextColor(
+                ColorStateList(
+                    arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+                    intArrayOf(muted, accent)
+                )
+            )
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ColorStateList.valueOf(accent))
         }
         dialog.show()
     }

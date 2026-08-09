@@ -1,0 +1,163 @@
+package com.untar.ultimusic.ui.editor
+
+import android.content.res.ColorStateList
+import android.os.Bundle
+import android.view.LayoutInflater
+import android.view.View
+import android.view.ViewGroup
+import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.ProgressBar
+import android.widget.TextView
+import androidx.core.os.bundleOf
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
+import androidx.core.view.updatePadding
+import androidx.fragment.app.DialogFragment
+import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.setFragmentResult
+import androidx.fragment.app.viewModels
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.button.MaterialButton
+import com.untar.ultimusic.R
+import com.untar.ultimusic.model.LyricsSuggestion
+import com.untar.ultimusic.ui.PlayerViewModel
+import kotlinx.coroutines.launch
+
+/**
+ * Diálogo del buscador de letras de lrclib.net: busca por título+artista (a través de
+ * [LyricsSuggestionsViewModel]) y deja al usuario elegir un candidato, que se devuelve a
+ * [MetadataEditorDialogFragment] para que rellene el campo "Letra". Nunca guarda nada por su
+ * cuenta: solo entrega datos.
+ *
+ * Mismo patrón que [MetadataSuggestionsDialogFragment] (que a su vez sigue el de
+ * [com.untar.ultimusic.ui.player.VideoPickerDialogFragment]): un [DialogFragment] a pantalla
+ * completa que devuelve su resultado con la API de resultados entre fragmentos
+ * (`setFragmentResult`/`setFragmentResultListener`).
+ *
+ * A diferencia del de MusicBrainz, aquí el resultado es un único texto (la letra elegida, ya
+ * sincronizada o plana): la búsqueda de [com.untar.ultimusic.data.remote.LrcLibApi] trae la letra
+ * completa de cada candidato, así que no hace falta pedir nada más al elegirlo.
+ */
+class LyricsSuggestionsDialogFragment : DialogFragment() {
+
+    private val viewModel: LyricsSuggestionsViewModel by viewModels()
+    private val playerViewModel: PlayerViewModel by activityViewModels()
+
+    /** Evita devolver dos veces el resultado si el usuario llega a tocar dos filas antes de que se
+     * cierre el diálogo. */
+    private var resultSent = false
+
+    private lateinit var list: RecyclerView
+    private lateinit var loading: ProgressBar
+    private lateinit var messageGroup: View
+    private lateinit var message: TextView
+    private lateinit var retryButton: MaterialButton
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
+    }
+
+    override fun onCreateView(
+        inflater: LayoutInflater,
+        container: ViewGroup?,
+        savedInstanceState: Bundle?
+    ): View = inflater.inflate(R.layout.dialog_lyrics_suggestions, container, false)
+
+    override fun onStart() {
+        super.onStart()
+        val window = dialog?.window ?: return
+        window.setLayout(MATCH_PARENT, MATCH_PARENT)
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+    }
+
+    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
+        val root = view.findViewById<View>(R.id.lyricsSuggestionsRoot)
+        val toolbar = view.findViewById<MaterialToolbar>(R.id.lyricsSuggestionsToolbar)
+        ViewCompat.setOnApplyWindowInsetsListener(root) { v, insets ->
+            val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
+            v.setPadding(bars.left, 0, bars.right, bars.bottom)
+            toolbar.updatePadding(top = bars.top)
+            insets
+        }
+        toolbar.setNavigationOnClickListener { dismiss() }
+
+        list = view.findViewById(R.id.lyricsSuggestionsList)
+        loading = view.findViewById(R.id.lyricsSuggestionsLoading)
+        messageGroup = view.findViewById(R.id.lyricsSuggestionsMessageGroup)
+        message = view.findViewById(R.id.lyricsSuggestionsMessage)
+        retryButton = view.findViewById(R.id.lyricsSuggestionsRetry)
+
+        val adapter = LyricsSuggestionsAdapter { onSuggestionPicked(it) }
+        list.layoutManager = LinearLayoutManager(requireContext())
+        list.adapter = adapter
+        retryButton.setOnClickListener { viewModel.retry() }
+
+        viewModel.search(
+            requireArguments().getString(ARG_TITLE).orEmpty(),
+            requireArguments().getString(ARG_ARTIST).orEmpty()
+        )
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.state.collect { state -> render(state, adapter) }
+                }
+                // Regla del proyecto: todo lo amarillo usa el color dinámico (ver
+                // MetadataSuggestionsDialogFragment, de donde se copia este bloque).
+                launch {
+                    playerViewModel.accentColor.collect { accent ->
+                        loading.indeterminateTintList = ColorStateList.valueOf(accent)
+                        retryButton.backgroundTintList = ColorStateList.valueOf(accent)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun render(state: LyricsSuggestionsUiState, adapter: LyricsSuggestionsAdapter) {
+        loading.isVisible = state is LyricsSuggestionsUiState.Loading
+        list.isVisible = state is LyricsSuggestionsUiState.Success
+        messageGroup.isVisible = state is LyricsSuggestionsUiState.Empty || state is LyricsSuggestionsUiState.Error
+        retryButton.isVisible = state is LyricsSuggestionsUiState.Error
+
+        when (state) {
+            is LyricsSuggestionsUiState.Success -> adapter.submit(state.suggestions)
+            is LyricsSuggestionsUiState.Empty -> message.setText(R.string.lyrics_suggestions_empty)
+            is LyricsSuggestionsUiState.Error -> message.setText(R.string.lyrics_suggestions_error)
+            LyricsSuggestionsUiState.Loading -> Unit
+        }
+    }
+
+    /** La letra sincronizada gana siempre que exista; si no, se devuelve la plana (ver
+     * [LyricsSuggestion.syncedLyrics]). */
+    private fun onSuggestionPicked(suggestion: LyricsSuggestion) {
+        if (resultSent) return
+        resultSent = true
+        setFragmentResult(
+            RESULT_KEY,
+            bundleOf(RESULT_LYRICS to (suggestion.syncedLyrics ?: suggestion.plainLyrics))
+        )
+        dismiss()
+    }
+
+    companion object {
+        /** Clave con la que el editor escucha el resultado. */
+        const val RESULT_KEY = "lyrics_suggestions_result"
+        const val RESULT_LYRICS = "lyrics"
+
+        private const val ARG_TITLE = "title"
+        private const val ARG_ARTIST = "artist"
+
+        fun newInstance(title: String, artist: String) = LyricsSuggestionsDialogFragment().apply {
+            arguments = bundleOf(ARG_TITLE to title, ARG_ARTIST to artist)
+        }
+    }
+}

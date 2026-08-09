@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo de la barra de búsqueda de la toolbar principal: una píldora sin acento (nada de
+     amarillo, es un campo de entrada, no una acción). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/um_surface_variant" />
+    <corners android:radius="20dp" />
+</shape>

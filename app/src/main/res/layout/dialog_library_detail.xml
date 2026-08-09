@@ -33,19 +33,27 @@
 
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="201dp"
+            android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:paddingHorizontal="16dp"
             android:paddingBottom="16dp">
 
-            <com.google.android.material.imageview.ShapeableImageView
-                android:id="@+id/detailCover"
-                android:layout_width="198dp"
-                android:layout_height="185dp"
-                android:background="@drawable/cover_placeholder"
-                android:contentDescription="@string/album_cover_desc"
-                android:scaleType="centerCrop"
-                app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
+            <!-- La carátula es cuadrada, así que el recuadro se calcula con SquareFrameLayout
+                 (alto = ancho) en vez de con un tamaño fijo en dp: así queda cuadrada de verdad -->
+            <com.untar.ultimusic.ui.common.SquareFrameLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="0.5">
+
+                <com.google.android.material.imageview.ShapeableImageView
+                    android:id="@+id/detailCover"
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent"
+                    android:background="@drawable/cover_placeholder"
+                    android:contentDescription="@string/album_cover_desc"
+                    android:scaleType="centerCrop" />
+
+            </com.untar.ultimusic.ui.common.SquareFrameLayout>
 
             <!-- Las líneas (artista, nº canciones, duración, año) las añade el código: cuántas hay
                  depende del tipo de ficha y de qué metadatos existan. -->
@@ -54,7 +62,7 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="16dp"
-                android:layout_weight="1"
+                android:layout_weight="0.55"
                 android:gravity="center_vertical"
                 android:orientation="vertical" />
 
@@ -87,5 +95,30 @@
             android:visibility="gone" />
 
     </FrameLayout>
+
+    <!--
+      Única ventana a pantalla completa que también lleva mini-reproductor (ver
+      DetailDialogFragment y MiniPlayerController): así se puede pausar, reanudar o abrir el iPod
+      sin salir de la ficha que se está mirando.
+    -->
+    <SeekBar
+        android:id="@+id/songProgress"
+        android:layout_width="match_parent"
+        android:layout_height="10dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:max="1000"
+        android:progress="0"
+        android:progressDrawable="@drawable/seekbar_line"
+        android:progressBackgroundTint="@color/um_divider"
+        android:progressTint="@color/um_yellow"
+        android:thumb="@null"
+        android:splitTrack="false"
+        android:background="@null"
+        android:foreground="@android:color/transparent" />
+
+    <include
+        android:id="@+id/miniPlayer"
+        layout="@layout/view_mini_player" />
 
 </LinearLayout>

@@ -21,7 +21,7 @@ import java.io.File
 /**
  * Estado de la pestaña de Playlists. Vive en el ámbito de la ACTIVIDAD (`by activityViewModels()`)
  * para que lo compartan la pestaña de Playlists, el diálogo de "añadir a playlist" y la pestaña de
- * Canciones (que necesita saber qué canciones ya están en alguna playlist para el resaltado).
+ * Canciones (que la usa para [forgetSong] al eliminar una canción).
  *
  * A diferencia de [LibraryViewModel], la fuente aquí son ARCHIVOS ([PlaylistRepository]), que no
  * reemiten solos al cambiar. Por eso hay un [tick]: cada vez que algo muta una playlist se
@@ -46,11 +46,6 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
             .mapLatest { songs -> buildSummaries(songs) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Nombres de archivo presentes en CUALQUIER playlist. Lo usa Canciones para el resaltado. */
-    val songFilenamesInAnyPlaylist: StateFlow<Set<String>> =
-        tick.mapLatest { repository.filenamesInAnyPlaylist() }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
-
     private suspend fun buildSummaries(songs: List<Song>): List<PlaylistSummary> {
         val byFilename = songs.associateBy { File(it.filePath).name }
         return repository.listPlaylistNames().map { name ->
@@ -72,8 +67,8 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     fun create(name: String) = mutate { repository.createPlaylist(name) }
     fun rename(oldName: String, newName: String) = mutate { repository.renamePlaylist(oldName, newName) }
     fun delete(name: String) = mutate { repository.deletePlaylist(name) }
-    fun addSong(name: String, filename: String) = mutate { repository.addSong(name, filename) }
-    fun removeSong(name: String, filename: String) = mutate { repository.removeSong(name, filename) }
+    fun addSongs(name: String, filenames: List<String>) = mutate { repository.addSongs(name, filenames) }
+    fun removeSongs(name: String, filenames: List<String>) = mutate { repository.removeSongs(name, filenames) }
     fun reorder(name: String, filenames: List<String>) = mutate { repository.setFilenames(name, filenames) }
 
     /**

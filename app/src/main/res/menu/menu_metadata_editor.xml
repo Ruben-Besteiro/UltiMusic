@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Única acción de la barra del editor: confirmar los cambios. -->
+<!-- Una única acción en la barra del editor: confirmar los cambios. El autorrelleno (ver
+     MetadataSuggestionsDialogFragment) se abre ahora desde la varita flotante de la esquina
+     inferior derecha, no desde aquí. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item

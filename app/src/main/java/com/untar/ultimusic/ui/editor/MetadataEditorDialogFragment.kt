@@ -25,6 +25,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.children
+import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import androidx.core.widget.addTextChangedListener
 import androidx.fragment.app.DialogFragment
@@ -35,16 +36,19 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import coil.load
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.remote.MusicBrainzApi
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
-import com.untar.ultimusic.ui.common.CollapsibleSection
 import com.untar.ultimusic.ui.player.VideoPickerDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.NetworkImage
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.launch
 
@@ -56,8 +60,8 @@ import kotlinx.coroutines.launch
  * lanza. Con [STYLE_NO_FRAME] y `setLayout(MATCH_PARENT, MATCH_PARENT)` deja de parecer un diálogo
  * flotante y ocupa toda la pantalla.
  *
- * Los cuatro campos principales están siempre visibles; los secundarios se agrupan en secciones
- * plegables ([CollapsibleSection]). Lo que se escribe aquí se guarda en Room, de modo que persiste
+ * Todos los campos están siempre visibles, agrupados bajo cabeceras ("Detalles", "Posición en el
+ * álbum", "Grabación original"). Lo que se escribe aquí se guarda en Room, de modo que persiste
  * aunque se cierre la aplicación y el escaneo del disco no lo pisa.
  */
 class MetadataEditorDialogFragment : DialogFragment() {
@@ -89,9 +93,12 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private lateinit var inputYear: EditText
     private lateinit var inputGenres: EditText
     private lateinit var inputLyrics: EditText
+    private lateinit var btnClearLyrics: ImageButton
+    private lateinit var inputCountry: EditText
     private lateinit var inputLanguage: EditText
     private lateinit var inputComment: EditText
     private lateinit var inputVideoUrl: EditText
+    private lateinit var btnClearVideoUrl: ImageButton
     private lateinit var inputTrackNumber: EditText
     private lateinit var inputDiscNumber: EditText
     private lateinit var inputOgTitle: EditText
@@ -100,6 +107,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private lateinit var inputOgYear: EditText
     private lateinit var cover: ImageView
     private lateinit var btnPickCover: ImageButton
+    private lateinit var fabAutofill: FloatingActionButton
 
     /**
      * Selector de fotos del sistema. Es el moderno ([ActivityResultContracts.PickVisualMedia]): no
@@ -151,7 +159,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
         bindViews(view)
         setupToolbar(view)
-        setupSections(view)
 
         val textFields = mutableListOf<TextInputLayout>()
         collectTextInputLayouts(view, textFields)
@@ -167,6 +174,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
             )
         }
         btnPickCover.setOnClickListener { openPicker() }
+        fabAutofill.setOnClickListener { openMetadataSuggestions() }
 
         // El campo no se escribe a mano: se pulsa y abre el mismo buscador de YouTube que usa el
         // iPod (ver [VideoPickerDialogFragment]); al elegir un vídeo se rellena con su enlace.
@@ -178,6 +186,35 @@ class MetadataEditorDialogFragment : DialogFragment() {
             val videoId = bundle.getString(VideoPickerDialogFragment.RESULT_VIDEO_ID)
             if (videoId != null) {
                 inputVideoUrl.setText(YouTubeUrl.watchUrl(videoId))
+            }
+        }
+        childFragmentManager.setFragmentResultListener(
+            MetadataSuggestionsDialogFragment.RESULT_KEY,
+            viewLifecycleOwner
+        ) { _, bundle -> applySuggestion(bundle) }
+
+        // Papelera para vaciar letra y URL del vídeo: al no ser campos que se escriban a mano
+        // (se pulsan y abren un buscador), tocarlos otra vez no sirve para borrarlos. Va en un
+        // ImageButton aparte -no el icono final de TextInputLayout- para poder clavarla en la
+        // esquina de ARRIBA en vez de centrada en todo el alto de la caja (ver el FrameLayout que
+        // envuelve a cada campo en el XML). Solo se ve mientras el campo tiene algo que borrar.
+        listOf(btnClearLyrics to inputLyrics, btnClearVideoUrl to inputVideoUrl).forEach { (button, field) ->
+            button.isVisible = field.text?.isNotEmpty() == true
+            button.setOnClickListener { field.setText("") }
+            field.addTextChangedListener { button.isVisible = it?.isNotEmpty() == true }
+        }
+
+        // Igual que el campo de vídeo: no se escribe a mano, se pulsa y abre el buscador de
+        // lrclib.net (ver [LyricsSuggestionsDialogFragment]); al elegir una letra se rellena con
+        // ella. Es la ÚNICA forma de poner letra a una canción.
+        inputLyrics.setOnClickListener { openLyricsPicker() }
+        childFragmentManager.setFragmentResultListener(
+            LyricsSuggestionsDialogFragment.RESULT_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            val lyrics = bundle.getString(LyricsSuggestionsDialogFragment.RESULT_LYRICS)
+            if (lyrics != null) {
+                inputLyrics.setText(lyrics)
             }
         }
 
@@ -208,8 +245,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
                     viewModel.producerNames.collect { names -> setSuggestions(inputProducers, names) }
                 }
                 launch {
-                    viewModel.saved.collect { saved ->
-                        if (saved) {
+                    viewModel.saved.collect { result ->
+                        if (result != null) {
                             Toast.makeText(
                                 requireContext(), R.string.editor_saved, Toast.LENGTH_SHORT
                             ).show()
@@ -220,6 +257,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
                             // Ya se importó a disco: si no se vuelve a null, un guardado posterior
                             // sin tocar la portada la reimportaría de nuevo por nada.
                             pickedImage = null
+                            // Si esta es la canción que suena, el reproductor la sustituye entera
+                            // (letra, título, carátula...) al instante en vez de esperar a la
+                            // siguiente reproducción.
+                            playerViewModel.refreshSong(result.song)
                             viewModel.consumeSaved()
                         }
                     }
@@ -233,6 +274,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
                         accentColor = accent
                         updateSaveIcon()
                         AccentTint.fill(view, R.id.btnPickCover, accent)
+                        AccentTint.contentOnAccent(btnPickCover, accent)
+                        fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
+                        AccentTint.contentOnAccent(fabAutofill, accent)
                         val strokeColors = ColorStateList(
                             arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
                             intArrayOf(accent, defaultStroke)
@@ -292,6 +336,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private fun bindViews(view: View) {
         cover = view.findViewById(R.id.editorCover)
         btnPickCover = view.findViewById(R.id.btnPickCover)
+        fabAutofill = view.findViewById(R.id.fabAutofill)
         inputTitle = view.findViewById(R.id.inputTitle)
         inputAlbums = view.findViewById(R.id.inputAlbums)
         inputArtists = view.findViewById(R.id.inputArtists)
@@ -299,9 +344,12 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputYear = view.findViewById(R.id.inputYear)
         inputGenres = view.findViewById(R.id.inputGenres)
         inputLyrics = view.findViewById(R.id.inputLyrics)
+        btnClearLyrics = view.findViewById(R.id.btnClearLyrics)
+        inputCountry = view.findViewById(R.id.inputCountry)
         inputLanguage = view.findViewById(R.id.inputLanguage)
         inputComment = view.findViewById(R.id.inputComment)
         inputVideoUrl = view.findViewById(R.id.inputVideoUrl)
+        btnClearVideoUrl = view.findViewById(R.id.btnClearVideoUrl)
         inputTrackNumber = view.findViewById(R.id.inputTrackNumber)
         inputDiscNumber = view.findViewById(R.id.inputDiscNumber)
         inputOgTitle = view.findViewById(R.id.inputOgTitle)
@@ -316,10 +364,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
         toolbar.inflateMenu(R.menu.menu_metadata_editor)
         saveMenuItem = toolbar.menu.findItem(R.id.action_save)
         toolbar.setOnMenuItemClickListener { item ->
-            if (item.itemId == R.id.action_save) {
-                save()
-                true
-            } else false
+            when (item.itemId) {
+                R.id.action_save -> { save(); true }
+                else -> false
+            }
         }
     }
 
@@ -344,31 +392,17 @@ class MetadataEditorDialogFragment : DialogFragment() {
         saveMenuItem.icon = drawable
     }
 
-    private fun setupSections(view: View) {
-        CollapsibleSection.setup(
-            view.findViewById(R.id.sectionDetailsHeader),
-            view.findViewById(R.id.sectionDetailsContent)
-        )
-        CollapsibleSection.setup(
-            view.findViewById(R.id.sectionPositionHeader),
-            view.findViewById(R.id.sectionPositionContent)
-        )
-        CollapsibleSection.setup(
-            view.findViewById(R.id.sectionOriginalHeader),
-            view.findViewById(R.id.sectionOriginalContent)
-        )
-    }
-
     /** Vuelca la canción en los campos. Solo la primera vez (ver [formLoaded]). */
     private fun fillForm(song: Song) {
         if (formLoaded) return
         formLoaded = true
         isFillingForm = true
 
+        // Sin error(...): si Coil no encuentra carátula, deja el ImageView sin imagen y se ve el
+        // mismo fondo cover_placeholder que en las listas de canciones/álbumes (item_song.xml,
+        // item_album_card.xml...), en vez de estirar ese drawable como si fuera la foto en sí.
         if (pickedImage == null) {
-            cover.load(CoverArt.cover(requireContext(), song), CoverLoader.get(requireContext())) {
-                error(R.drawable.cover_placeholder)
-            }
+            cover.load(CoverArt.cover(requireContext(), song), CoverLoader.get(requireContext()))
         }
 
         inputTitle.setText(song.title)
@@ -379,6 +413,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputYear.setText(song.year?.toString().orEmpty())
         inputGenres.setText(song.genres.joinToString(SEPARATOR))
         inputLyrics.setText(song.lyrics.orEmpty())
+        inputCountry.setText(song.country.orEmpty())
         inputLanguage.setText(song.language.orEmpty())
         inputComment.setText(song.comment.orEmpty())
         inputVideoUrl.setText(song.videoUrl.orEmpty())
@@ -411,6 +446,90 @@ class MetadataEditorDialogFragment : DialogFragment() {
         VideoPickerDialogFragment.newInstance(query).show(childFragmentManager, TAG_VIDEO_PICKER)
     }
 
+    /** Busca sugerencias con lo que haya AHORA en los campos de título y artista (no la canción
+     * cargada): así tiene en cuenta lo que se esté escribiendo aunque no se haya guardado todavía,
+     * igual que [openVideoPicker]. */
+    private fun openMetadataSuggestions() {
+        val title = inputTitle.text.toString().trim()
+        val artist = inputArtists.splitValues().firstOrNull().orEmpty()
+        if (title.isEmpty() && artist.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.autofill_missing_query_song, Toast.LENGTH_SHORT)
+                .show()
+            return
+        }
+        MetadataSuggestionsDialogFragment.newInstance(SuggestionKind.SONG, title, artist)
+            .show(childFragmentManager, TAG_SUGGESTIONS)
+    }
+
+    /** Busca letras en lrclib.net con lo que haya AHORA en título/artista, igual que
+     * [openMetadataSuggestions]. */
+    private fun openLyricsPicker() {
+        val title = inputTitle.text.toString().trim()
+        val artist = inputArtists.splitValues().firstOrNull().orEmpty()
+        if (title.isEmpty() && artist.isEmpty()) {
+            Toast.makeText(requireContext(), R.string.autofill_missing_query_song, Toast.LENGTH_SHORT)
+                .show()
+            return
+        }
+        LyricsSuggestionsDialogFragment.newInstance(title, artist)
+            .show(childFragmentManager, TAG_LYRICS_SUGGESTIONS)
+    }
+
+    /**
+     * Vuelca en el formulario la sugerencia elegida en [MetadataSuggestionsDialogFragment]. Nunca
+     * pisa lo que el usuario ya hubiera escrito en artistas (solo AÑADE el de la sugerencia si no
+     * estaba ya) porque MusicBrainz puede no conocer a todos los colaboradores que el usuario sí
+     * tenga anotados.
+     */
+    private fun applySuggestion(bundle: Bundle) {
+        isFillingForm = true
+
+        val title = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_TITLE).orEmpty()
+        if (title.isNotEmpty()) inputTitle.setText(title)
+
+        val album = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ALBUM).orEmpty()
+        if (album.isNotEmpty()) inputAlbums.setText(album, false)
+
+        val artist = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
+        if (artist.isNotEmpty()) {
+            val current = inputArtists.splitValues()
+            if (current.none { it.equals(artist, ignoreCase = true) }) {
+                val merged = (current + artist).joinToString(SEPARATOR)
+                inputArtists.setText(merged, false)
+            }
+        }
+
+        val genres = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_GENRES).orEmpty()
+        if (genres.isNotEmpty()) inputGenres.setText(genres)
+
+        val year = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_YEAR, MetadataSuggestionsDialogFragment.NO_VALUE)
+        if (year > 0) inputYear.setText(year.toString())
+
+        val trackNumber = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_TRACK_NUMBER, MetadataSuggestionsDialogFragment.NO_VALUE)
+        if (trackNumber > 0) inputTrackNumber.setText(trackNumber.toString())
+
+        val discNumber = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_DISC_NUMBER, MetadataSuggestionsDialogFragment.NO_VALUE)
+        if (discNumber > 0) inputDiscNumber.setText(discNumber.toString())
+
+        val country = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_COUNTRY).orEmpty()
+        if (country.isNotEmpty()) inputCountry.setText(country)
+
+        isFillingForm = false
+        markDirty()
+
+        // La portada se descarga aparte y de forma asíncrona: si tarda o falla, el resto de los
+        // campos ya se han rellenado igualmente (ver NetworkImage.download, best-effort).
+        val coverUrl = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_COVER_URL).orEmpty()
+        if (coverUrl.isNotEmpty()) {
+            viewLifecycleOwner.lifecycleScope.launch {
+                NetworkImage.download(requireContext(), MusicBrainzApi.fullResCoverUrl(coverUrl))?.let { uri ->
+                    pickedImage = uri
+                    cover.load(uri)
+                }
+            }
+        }
+    }
+
     private fun save() {
         val title = inputTitle.text.toString().trim()
         if (title.isEmpty()) {
@@ -428,6 +547,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
                 year = inputYear.intOrNull(),
                 genres = inputGenres.splitValues(),
                 lyrics = inputLyrics.textOrNull(),
+                country = inputCountry.textOrNull(),
                 language = inputLanguage.textOrNull(),
                 comment = inputComment.textOrNull(),
                 videoUrl = inputVideoUrl.textOrNull(),
@@ -464,6 +584,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
     companion object {
         private const val ARG_SONG_ID = "songId"
         private const val TAG_VIDEO_PICKER = "video_picker"
+        private const val TAG_SUGGESTIONS = "metadata_suggestions"
+        private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
         private const val SEPARATOR = ", "
         private const val SEPARATOR_CHAR = ','
 

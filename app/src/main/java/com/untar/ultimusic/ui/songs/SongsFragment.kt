@@ -2,6 +2,7 @@ package com.untar.ultimusic.ui.songs
 
 import android.content.res.ColorStateList
 import android.os.Bundle
+import android.text.TextUtils
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
@@ -19,6 +20,7 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
+import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
@@ -39,7 +41,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         val loadingSpinner = view.findViewById<ProgressBar>(R.id.loadingSpinner)
 
         val adapter = SongsAdapter(
-            onSongClick = { song -> playerViewModel.play(song, songsViewModel.songs.value) },
+            onSongClick = { song -> playerViewModel.play(song) },
             onAddToQueue = { song -> playerViewModel.addToQueue(song) },
             onAddToPlaylist = { song -> showAddToPlaylist(song) },
             onEditMetadata = { song ->
@@ -77,8 +79,13 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                             emptyView.text = requireContext().getString(R.string.updating_database)
                             emptyView.visibility = View.VISIBLE
                         } else if (songsViewModel.songs.value.isEmpty()) {
-                            emptyView.text = requireContext().getString(R.string.nothing_playing)
+                            emptyView.text = requireContext().getString(R.string.no_songs)
                             emptyView.visibility = View.VISIBLE
+                        } else {
+                            // La reconciliación puede terminar sin cambiar ninguna fila (biblioteca ya al
+                            // día): el flujo `songs` no reemite y el otro collector nunca se dispara, así
+                            // que hay que ocultar el aviso aquí también o se queda clavado en pantalla.
+                            emptyView.visibility = View.GONE
                         }
                     }
                 }
@@ -92,14 +99,8 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                         }
                     }
                 }
-                // Qué canciones ya están en alguna playlist (para el resaltado de los 3 puntos).
-                launch {
-                    playlistsViewModel.songFilenamesInAnyPlaylist.collect { adapter.setMembership(it) }
-                }
-                // El amarillo dinámico del resaltado sigue el color de lo que suena.
                 launch {
                     playerViewModel.accentColor.collect { accent ->
-                        adapter.setAccent(accent)
                         scrollbar.setAccentColor(accent)
                         loadingSpinner.indeterminateTintList = ColorStateList.valueOf(accent)
                     }
@@ -118,23 +119,24 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
             val filename = File(song.filePath).name
             val repo = PlaylistRepository.get()
             val names = repo.listPlaylistNames()
-            val contained = repo.playlistsContaining(filename)
+            val contained = repo.playlistsContainingAll(listOf(filename))
             val checked = BooleanArray(names.size) { names[it] in contained }
-            AddToPlaylistDialogFragment.newInstance(filename, names, checked)
+            AddToPlaylistDialogFragment.newInstance(listOf(filename), names, checked)
                 .show(parentFragmentManager, AddToPlaylistDialogFragment.TAG)
         }
     }
 
     /** Confirmación antes de borrar de verdad el archivo del dispositivo. */
     private fun showDeleteDialog(song: Song) {
-        AlertDialog.Builder(requireContext())
+        val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.delete_song)
-            .setMessage(getString(R.string.delete_song_confirm, song.title))
+            .setMessage(TextUtils.expandTemplate(resources.getText(R.string.delete_song_confirm), song.title))
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.delete_song) { _, _ ->
                 songsViewModel.delete(song)
                 playlistsViewModel.forgetSong(File(song.filePath).name)
             }
             .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 }

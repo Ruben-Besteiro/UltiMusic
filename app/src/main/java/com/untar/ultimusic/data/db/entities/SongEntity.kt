@@ -18,6 +18,19 @@ import androidx.room.PrimaryKey
  * obligan a borrar o refrescar cada 30 días los datos sacados de su API, mientras que lo que teclea
  * el usuario es dato nuestro y se puede guardar indefinidamente.
  *
+ * [videoThumbnailName] es la miniatura de ese vídeo, recortada al cuadrado y cacheada como una
+ * carátula más (ver `util/CoverArt.kt`): sirve de carátula de reserva cuando la canción no tiene
+ * imagen propia ni arte embebido.
+ *
+ * [videoOffsetMs] adelanta (positivo) o atrasa (negativo) el vídeo respecto al audio local, para
+ * cuando el videoclip no va del todo sincronizado. Se ajusta desde los ajustes del reproductor de
+ * vídeo del iPod y nunca toca el audio, solo la posición a la que se pide el vídeo.
+ *
+ * [hiddenByGreylist] marca una canción como oculta porque su carpeta está desactivada en la lista
+ * gris de los ajustes (ver `LibraryDao.setSongsHiddenUnderFolder`). Es solo un filtro de lectura:
+ * la fila nunca se borra por esto, así que reactivar la carpeta la devuelve intacta, con sus
+ * ediciones, carátula y vídeo.
+ *
  * El productor NO está aquí: vive en su propia tabla ([ProducerEntity]) enlazada por
  * [SongProducerCrossRef], igual que los artistas, porque tiene pestaña y ficha propias.
  */
@@ -34,9 +47,13 @@ data class SongEntity(
     val genres: List<String>,
     val lyrics: String?,
     val language: String?,
+    val country: String?,
     val imageName: String?,
     val comment: String?,
     val videoUrl: String?,
+    val videoThumbnailName: String?,
+    val videoOffsetMs: Long = 0,
+    val hiddenByGreylist: Boolean = false,
 
     val ogTitle: String?,
     val ogArtist: String?,

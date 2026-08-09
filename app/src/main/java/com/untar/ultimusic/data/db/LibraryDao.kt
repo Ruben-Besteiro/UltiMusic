@@ -9,6 +9,7 @@ import androidx.room.Update
 import com.untar.ultimusic.data.db.entities.AlbumArtistCrossRef
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
+import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
@@ -34,7 +35,7 @@ abstract class LibraryDao {
     // --- Lectura reactiva (lo que observa la UI) ---
 
     @Transaction
-    @Query("SELECT * FROM songs ORDER BY LOWER(title)")
+    @Query("SELECT * FROM songs WHERE hiddenByGreylist = 0 ORDER BY LOWER(title)")
     abstract fun observeSongs(): Flow<List<SongWithRelations>>
 
     // --- Resúmenes de las pestañas Álbumes / Artistas / Productores ---
@@ -56,22 +57,51 @@ abstract class LibraryDao {
             (SELECT ar.name FROM album_artist aa
                 JOIN artists ar ON ar.id = aa.artistId
                 WHERE aa.albumId = a.id ORDER BY LOWER(ar.name) LIMIT 1) AS artistName,
-            (SELECT COUNT(*) FROM song_album sa WHERE sa.albumId = a.id) AS songCount,
+            (SELECT COUNT(*) FROM song_album sa
+                JOIN songs s ON s.id = sa.songId
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_album sa
-                JOIN songs s ON s.id = sa.songId WHERE sa.albumId = a.id) AS totalDuration,
+                JOIN songs s ON s.id = sa.songId
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration,
             (SELECT s.imageName FROM song_album sa
                 JOIN songs s ON s.id = sa.songId
-                WHERE sa.albumId = a.id AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
             (SELECT s.filePath FROM song_album sa
                 JOIN songs s ON s.id = sa.songId
-                WHERE sa.albumId = a.id
-                ORDER BY sa.trackNumber IS NULL, sa.trackNumber LIMIT 1) AS sampleSongPath
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY sa.trackNumber IS NULL, sa.trackNumber LIMIT 1) AS sampleSongPath,
+            (SELECT s.videoThumbnailName FROM song_album sa
+                JOIN songs s ON s.id = sa.songId
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.videoThumbnailName IS NOT NULL
+                LIMIT 1) AS sampleSongVideoThumbnail
         FROM albums a
-        WHERE :id IS NULL OR a.id = :id
+        WHERE (:id IS NULL OR a.id = :id)
+          AND EXISTS (
+              SELECT 1 FROM song_album sa JOIN songs s ON s.id = sa.songId
+              WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+          )
         ORDER BY LOWER(a.title)
         """
     )
     abstract fun observeAlbumSummaries(id: Long?): Flow<List<AlbumSummaryRow>>
+
+    /**
+     * La fila cruda del álbum (no el resumen calculado de [observeAlbumSummaries]): la usa el editor
+     * de metadatos de álbum, que necesita el título editable, el año, los géneros y la portada tal
+     * cual están guardados, no cifras agregadas de sus canciones.
+     */
+    @Query("SELECT * FROM albums WHERE id = :id")
+    abstract fun observeAlbumEntity(id: Long): Flow<AlbumEntity?>
+
+    /** Nombres de los artistas enlazados a un álbum, para rellenar su editor de metadatos. */
+    @Query(
+        """
+        SELECT ar.name FROM album_artist aa JOIN artists ar ON ar.id = aa.artistId
+        WHERE aa.albumId = :albumId ORDER BY LOWER(ar.name)
+        """
+    )
+    abstract fun observeAlbumArtistNames(albumId: Long): Flow<List<String>>
 
     @Query(
         """
@@ -79,19 +109,34 @@ abstract class LibraryDao {
             ar.id AS id,
             ar.name AS name,
             ar.imageName AS imageName,
-            (SELECT COUNT(*) FROM song_artist x WHERE x.artistId = ar.id) AS songCount,
+            (SELECT COUNT(*) FROM song_artist x
+                JOIN songs s ON s.id = x.songId
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS songCount,
             (SELECT COUNT(DISTINCT sa.albumId) FROM song_artist x
-                JOIN song_album sa ON sa.songId = x.songId WHERE x.artistId = ar.id) AS albumCount,
+                JOIN song_album sa ON sa.songId = x.songId
+                JOIN songs s ON s.id = x.songId
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS albumCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_artist x
-                JOIN songs s ON s.id = x.songId WHERE x.artistId = ar.id) AS totalDuration,
+                JOIN songs s ON s.id = x.songId
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS totalDuration,
             (SELECT s.imageName FROM song_artist x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0
+                AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
             (SELECT s.filePath FROM song_artist x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id ORDER BY LOWER(s.title) LIMIT 1) AS sampleSongPath
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0
+                ORDER BY LOWER(s.title) LIMIT 1) AS sampleSongPath,
+            (SELECT s.videoThumbnailName FROM song_artist x
+                JOIN songs s ON s.id = x.songId
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0 AND s.videoThumbnailName IS NOT NULL
+                LIMIT 1) AS sampleSongVideoThumbnail
         FROM artists ar
-        WHERE :id IS NULL OR ar.id = :id
+        WHERE (:id IS NULL OR ar.id = :id)
+          AND EXISTS (
+              SELECT 1 FROM song_artist x JOIN songs s ON s.id = x.songId
+              WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0
+          )
         ORDER BY LOWER(ar.name)
         """
     )
@@ -104,19 +149,34 @@ abstract class LibraryDao {
             p.id AS id,
             p.name AS name,
             p.imageName AS imageName,
-            (SELECT COUNT(*) FROM song_producer x WHERE x.producerId = p.id) AS songCount,
+            (SELECT COUNT(*) FROM song_producer x
+                JOIN songs s ON s.id = x.songId
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS songCount,
             (SELECT COUNT(DISTINCT sa.albumId) FROM song_producer x
-                JOIN song_album sa ON sa.songId = x.songId WHERE x.producerId = p.id) AS albumCount,
+                JOIN song_album sa ON sa.songId = x.songId
+                JOIN songs s ON s.id = x.songId
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS albumCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_producer x
-                JOIN songs s ON s.id = x.songId WHERE x.producerId = p.id) AS totalDuration,
+                JOIN songs s ON s.id = x.songId
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS totalDuration,
             (SELECT s.imageName FROM song_producer x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0
+                AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
             (SELECT s.filePath FROM song_producer x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id ORDER BY LOWER(s.title) LIMIT 1) AS sampleSongPath
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0
+                ORDER BY LOWER(s.title) LIMIT 1) AS sampleSongPath,
+            (SELECT s.videoThumbnailName FROM song_producer x
+                JOIN songs s ON s.id = x.songId
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0 AND s.videoThumbnailName IS NOT NULL
+                LIMIT 1) AS sampleSongVideoThumbnail
         FROM producers p
-        WHERE :id IS NULL OR p.id = :id
+        WHERE (:id IS NULL OR p.id = :id)
+          AND EXISTS (
+              SELECT 1 FROM song_producer x JOIN songs s ON s.id = x.songId
+              WHERE x.producerId = p.id AND s.hiddenByGreylist = 0
+          )
         ORDER BY LOWER(p.name)
         """
     )
@@ -133,7 +193,7 @@ abstract class LibraryDao {
         """
         SELECT s.* FROM songs s
         JOIN song_album sa ON sa.songId = s.id
-        WHERE sa.albumId = :albumId
+        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0
         ORDER BY sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
         """
     )
@@ -151,7 +211,7 @@ abstract class LibraryDao {
         """
         SELECT s.* FROM songs s
         JOIN song_artist x ON x.songId = s.id
-        WHERE x.artistId = :artistId
+        WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
         ORDER BY LOWER(s.title)
         """
     )
@@ -162,7 +222,7 @@ abstract class LibraryDao {
         """
         SELECT s.* FROM songs s
         JOIN song_producer x ON x.songId = s.id
-        WHERE x.producerId = :producerId
+        WHERE x.producerId = :producerId AND s.hiddenByGreylist = 0
         ORDER BY LOWER(s.title)
         """
     )
@@ -174,7 +234,7 @@ abstract class LibraryDao {
      * al restaurar el estado guardado, ya que solo se persisten los ids, no las canciones enteras.
      */
     @Transaction
-    @Query("SELECT * FROM songs WHERE id IN (:ids)")
+    @Query("SELECT * FROM songs WHERE id IN (:ids) AND hiddenByGreylist = 0")
     abstract suspend fun findSongsByIds(ids: List<Long>): List<SongWithRelations>
 
     // --- Consultas de apoyo para la reconciliación ---
@@ -227,6 +287,54 @@ abstract class LibraryDao {
     @Query("SELECT name FROM producers ORDER BY LOWER(name)")
     abstract fun observeProducerNames(): Flow<List<String>>
 
+    // --- Lista gris (ajustes > Lista gris) ---
+
+    @Query("SELECT * FROM greylist_folders ORDER BY path")
+    abstract fun observeGreylistFolders(): Flow<List<GreylistFolderEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    abstract suspend fun insertGreylistFolder(folder: GreylistFolderEntity)
+
+    @Query("DELETE FROM greylist_folders WHERE path = :path")
+    abstract suspend fun deleteGreylistFolder(path: String)
+
+    @Query("UPDATE greylist_folders SET excluded = :excluded WHERE path = :path")
+    abstract suspend fun updateGreylistFolderExcluded(path: String, excluded: Boolean)
+
+    /** Carpetas actualmente fuera de la lista (switch encendido), para [reconcile]. */
+    @Query("SELECT path FROM greylist_folders WHERE excluded = 1")
+    abstract suspend fun excludedGreylistFolderPaths(): List<String>
+
+    @Query("UPDATE songs SET hiddenByGreylist = :hidden WHERE filePath = :path")
+    abstract suspend fun setSongHidden(path: String, hidden: Boolean)
+
+    /**
+     * Oculta o muestra en bloque todas las canciones que cuelgan de [folderPath], sin tocar
+     * ninguna otra columna. La usan [setGreylistFolderExcluded] y [removeGreylistFolder]: activar o
+     * desactivar una subcarpeta es instantáneo (un UPDATE), nunca un reescaneo.
+     */
+    @Transaction
+    open suspend fun setSongsHiddenUnderFolder(folderPath: String, hidden: Boolean) {
+        val prefix = "$folderPath/"
+        for (path in allSongPaths()) {
+            if (path.startsWith(prefix)) setSongHidden(path, hidden)
+        }
+    }
+
+    /** Switch de una subcarpeta: activarlo oculta sus canciones, desactivarlo las hace contar de nuevo. */
+    @Transaction
+    open suspend fun setGreylistFolderExcluded(path: String, excluded: Boolean) {
+        updateGreylistFolderExcluded(path, excluded)
+        setSongsHiddenUnderFolder(path, hidden = excluded)
+    }
+
+    /** Quita la papelera: la fila de la lista gris desaparece y sus canciones vuelven a verse. */
+    @Transaction
+    open suspend fun removeGreylistFolder(path: String) {
+        deleteGreylistFolder(path)
+        setSongsHiddenUnderFolder(path, hidden = false)
+    }
+
     // --- Inserciones ---
 
     @Insert
@@ -267,7 +375,7 @@ abstract class LibraryDao {
     @Update
     abstract suspend fun updateProducer(producer: ProducerEntity)
 
-    // --- Desenlazado (el editor rehace los enlaces de una canción desde cero) ---
+    // --- Desenlazado (el editor rehace los enlaces de una canción o de un álbum desde cero) ---
 
     @Query("DELETE FROM song_artist WHERE songId = :songId")
     abstract suspend fun clearSongArtists(songId: Long)
@@ -277,6 +385,9 @@ abstract class LibraryDao {
 
     @Query("DELETE FROM song_producer WHERE songId = :songId")
     abstract suspend fun clearSongProducers(songId: Long)
+
+    @Query("DELETE FROM album_artist WHERE albumId = :albumId")
+    abstract suspend fun clearAlbumArtists(albumId: Long)
 
     // --- Borrado y poda de huérfanos ---
 
@@ -304,8 +415,25 @@ abstract class LibraryDao {
      * usuario elija un vídeo en el buscador: allí no hay formulario abierto, así que reescribir la
      * fila completa obligaría a leerla antes y arriesgaría pisar una edición hecha mientras tanto.
      */
-    @Query("UPDATE songs SET videoUrl = :videoUrl WHERE id = :songId")
-    abstract suspend fun setVideoUrl(songId: Long, videoUrl: String?)
+    @Query(
+        """
+        UPDATE songs SET videoUrl = :videoUrl, videoThumbnailName = :videoThumbnailName
+        WHERE id = :songId
+        """
+    )
+    abstract suspend fun setVideoUrl(
+        songId: Long,
+        videoUrl: String?,
+        videoThumbnailName: String?
+    )
+
+    /**
+     * Guarda el desplazamiento de vídeo/audio de una canción, mismo motivo que [setVideoUrl]: lo
+     * llaman los ajustes del reproductor de vídeo del iPod, sin ningún formulario abierto de por
+     * medio.
+     */
+    @Query("UPDATE songs SET videoOffsetMs = :offsetMs WHERE id = :songId")
+    abstract suspend fun setVideoOffsetMs(songId: Long, offsetMs: Long)
 
     /** Reapunta una canción a su nueva ruta cuando el usuario ha movido el archivo (ver [reconcile]). */
     @Query("UPDATE songs SET filePath = :newPath WHERE filePath = :oldPath")
@@ -346,6 +474,11 @@ abstract class LibraryDao {
         val scannedPaths = HashSet<String>(scanned.size)
         for (s in scanned) scannedPaths.add(s.filePath)
 
+        // Carpetas actualmente fuera de la lista gris: lo que caiga bajo alguna de ellas entra o se
+        // reapunta ya oculto, para no colarse visible hasta que se desactive el switch.
+        val excludedPrefixes = excludedGreylistFolderPaths().map { "$it/" }
+        fun isHidden(path: String) = excludedPrefixes.any { path.startsWith(it) }
+
         // Fase 1: bajas y altas candidatas.
         val gone = existing.filter { it !in scannedPaths }
         val appeared = scanned.filter { it.filePath !in existing }
@@ -361,6 +494,9 @@ abstract class LibraryDao {
             val oldPath = goneByName[s.filePath.substringAfterLast('/')]?.removeFirstOrNull()
             if (oldPath != null) {
                 updateSongPath(oldPath, s.filePath)
+                // Si el archivo se ha movido dentro o fuera de una carpeta desactivada, su
+                // visibilidad se recalcula con la ruta nueva.
+                setSongHidden(s.filePath, isHidden(s.filePath))
                 moved.add(oldPath)
             } else {
                 inserted.add(s)
@@ -369,22 +505,32 @@ abstract class LibraryDao {
 
         // Fase 3: altas reales.
         for (s in inserted) {
-            val songId = insertSong(s.toEntity())
+            val songId = insertSong(s.toEntity(hidden = isHidden(s.filePath)))
 
-            val artistName = s.artist ?: MusicScanner.UNKNOWN_ARTIST
-            val artistId = getOrCreateArtist(artistName)
-            insertSongArtist(SongArtistCrossRef(songId = songId, artistId = artistId))
+            // La etiqueta puede traer varios artistas separados por comas ("A, B"): se tratan como
+            // varias personas, igual que hace el editor de metadatos manual (ver
+            // EditText.splitValues en MetadataEditorDialogFragment), no como una sola con nombre
+            // compuesto.
+            val artistNames = splitTagNames(s.artist).ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
+            val artistIds = artistNames.map { getOrCreateArtist(it) }
+            for (artistId in artistIds) {
+                insertSongArtist(SongArtistCrossRef(songId = songId, artistId = artistId))
+            }
 
             // El productor solo se enlaza si la etiqueta traía uno: al contrario que artista y
             // álbum, no inventamos un "Productor desconocido" que llenaría la pestaña de ruido.
-            s.producer?.let { producerName ->
+            // Mismo tratamiento de comas que el artista.
+            for (producerName in splitTagNames(s.producer)) {
                 val producerId = getOrCreateProducer(producerName)
                 insertSongProducer(SongProducerCrossRef(songId = songId, producerId = producerId))
             }
 
-            val albumArtist = s.albumArtist ?: s.artist ?: MusicScanner.UNKNOWN_ARTIST
+            val albumArtistTag = s.albumArtist ?: s.artist ?: MusicScanner.UNKNOWN_ARTIST
+            val albumArtistIds = splitTagNames(s.albumArtist ?: s.artist)
+                .ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
+                .map { getOrCreateArtist(it) }
             val albumTitle = s.album ?: MusicScanner.UNKNOWN_ALBUM
-            val albumId = getOrCreateAlbum(albumTitle, albumArtist, s.year, s.genres, artistId)
+            val albumId = getOrCreateAlbum(albumTitle, albumArtistTag, s.year, s.genres, albumArtistIds)
             insertSongAlbum(
                 SongAlbumCrossRef(
                     songId = songId,
@@ -470,6 +616,28 @@ abstract class LibraryDao {
         pruneOrphanProducers()
     }
 
+    /**
+     * Gemela de [saveSongEdits] pero para el editor de metadatos de ÁLBUM (ver
+     * [com.untar.ultimusic.ui.editor.AlbumEditorDialogFragment]): guarda la fila del álbum entera
+     * (título, año, géneros, portada) y reenlaza sus artistas desde cero, igual que se reenlazan los
+     * de una canción. No toca `song_album` ni ninguna canción: solo la ficha del álbum en sí.
+     */
+    @Transaction
+    open suspend fun saveAlbumEdits(album: AlbumEntity, artistNames: List<String>) {
+        updateAlbum(album)
+
+        clearAlbumArtists(album.id)
+        val artists = artistNames.ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
+        for (name in artists) {
+            insertAlbumArtist(AlbumArtistCrossRef(albumId = album.id, artistId = resolveArtist(name)))
+        }
+
+        // Un artista del que ya no cuelga ninguna canción deja de tener sentido (igual que tras
+        // editar una canción); quitarlo de un álbum no borra sus canciones, así que en la práctica
+        // esto rara vez borra nada, pero es la misma red de seguridad que usa saveSongEdits.
+        pruneOrphanArtists()
+    }
+
     /** Busca el artista por su nombre visible, luego por el de etiqueta; si no existe, lo crea. */
     private suspend fun resolveArtist(name: String): Long {
         findArtistByName(name)?.let { return it.id }
@@ -517,7 +685,7 @@ abstract class LibraryDao {
         tagAlbumArtist: String,
         year: Int?,
         genres: List<String>,
-        artistId: Long
+        artistIds: List<Long>
     ): Long {
         findAlbumByTag(tagTitle, tagAlbumArtist)?.let { return it.id }
         val albumId = insertAlbum(
@@ -530,10 +698,21 @@ abstract class LibraryDao {
                 imageName = null
             )
         )
-        insertAlbumArtist(AlbumArtistCrossRef(albumId = albumId, artistId = artistId))
+        for (artistId in artistIds) {
+            insertAlbumArtist(AlbumArtistCrossRef(albumId = albumId, artistId = artistId))
+        }
         return albumId
     }
 }
+
+/**
+ * Parte una etiqueta multivalor (nombres separados por comas) igual que hace el editor de
+ * metadatos manual (ver `EditText.splitValues` en `MetadataEditorDialogFragment`): así un artista
+ * o productor con varios colaboradores en la etiqueta original ("A, B") se enlaza como dos
+ * personas, no como una sola con nombre compuesto.
+ */
+private fun splitTagNames(raw: String?): List<String> =
+    raw?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
 
 /**
  * Convierte el resultado crudo del escaneo en su fila de la tabla de canciones. Los campos `og*`
@@ -541,7 +720,7 @@ abstract class LibraryDao {
  * el usuario desde el editor cuando la canción sea efectivamente un remix. El productor tampoco
  * aparece aquí: se enlaza aparte en su tabla de cruce, igual que los artistas y los álbumes.
  */
-private fun ScannedSong.toEntity(): SongEntity = SongEntity(
+private fun ScannedSong.toEntity(hidden: Boolean): SongEntity = SongEntity(
     filePath = filePath,
     title = title,
     duration = duration,
@@ -549,9 +728,12 @@ private fun ScannedSong.toEntity(): SongEntity = SongEntity(
     genres = genres,
     lyrics = null,
     language = null,
+    country = null,
     imageName = null,
     comment = null,
     videoUrl = null,
+    videoThumbnailName = null,
+    hiddenByGreylist = hidden,
     ogTitle = null,
     ogArtist = null,
     ogAlbum = null,

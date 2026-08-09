@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de la lista de Géneros: como la de Playlists (nombre + recuento, sin imagen), pero sin
+     botón de 3 puntos: un género no se puede renombrar ni borrar, es solo lo que traen las
+     canciones (ver GenresAdapter). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:orientation="vertical"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp">
+
+    <TextView
+        android:id="@+id/genreName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/um_on_background"
+        android:textSize="16sp"
+        android:textStyle="italic"
+        tools:text="Rock" />
+
+    <TextView
+        android:id="@+id/genreSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="14sp"
+        tools:text="12 canciones" />
+
+</LinearLayout>

@@ -19,19 +19,24 @@ import com.untar.ultimusic.util.DynamicColor
 import java.util.Collections
 
 /**
- * Lista de una playlist mostrada dentro del iPod en **modo navegación** (donde se elige qué sonará
- * después). Cada fila enseña "Título · Artista" y un manejador para arrastrarla y reordenar. La fila
- * seleccionada con las flechas del iPod se resalta, para que se vea cuál reproduciría el botón de
- * play.
+ * Lista de una colección mostrada dentro del iPod en **modo navegación** (donde se elige qué sonará
+ * después): una playlist o, desde que existe la pestaña de Géneros, también un género (ver
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment.enterBrowseMode]). Cada fila enseña
+ * "Título | Artista". La fila seleccionada con las flechas del iPod se resalta, para que se vea
+ * cuál reproduciría el botón de play.
  *
- * Si la canción que suena de verdad en la app (venga de esta playlist o de otro sitio) está entre
+ * Solo una playlist se puede reordenar arrastrando —tiene un orden propio guardado en su archivo—;
+ * un género no ([reorderable] a `false`), así que esa colección oculta el manejador de arrastre.
+ *
+ * Si la canción que suena de verdad en la app (venga de esta colección o de otro sitio) está entre
  * estas, la fila se comporta como en [IPodQueueAdapter]: icono de altavoz en esa fila y números
  * relativos a ella en el resto ([setNowPlaying]). Si no, cada fila muestra su posición absoluta.
  */
 class PlaylistQueueAdapter(
     private val onItemClick: (Int) -> Unit,
     private val onStartDrag: (RecyclerView.ViewHolder) -> Unit,
-    private val onReordered: (List<Song>) -> Unit
+    private val onReordered: (List<Song>) -> Unit,
+    private val reorderable: Boolean = true
 ) : RecyclerView.Adapter<PlaylistQueueAdapter.RowViewHolder>() {
 
     private val songs: MutableList<Song> = mutableListOf()
@@ -121,7 +126,7 @@ class PlaylistQueueAdapter(
     }
 
     override fun onBindViewHolder(holder: RowViewHolder, position: Int) {
-        holder.bind(songs[position], position, position == selectedIndex, nowPlayingIndex, accent)
+        holder.bind(songs[position], position, position == selectedIndex, nowPlayingIndex, accent, reorderable)
     }
 
     class RowViewHolder(
@@ -142,7 +147,14 @@ class PlaylistQueueAdapter(
          * cada fila muestra sencillamente su posición absoluta.
          */
         @SuppressLint("ClickableViewAccessibility")
-        fun bind(song: Song, position: Int, selected: Boolean, nowPlayingIndex: Int, accent: Int) {
+        fun bind(
+            song: Song,
+            position: Int,
+            selected: Boolean,
+            nowPlayingIndex: Int,
+            accent: Int,
+            reorderable: Boolean
+        ) {
             val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
             subtitle.text = itemView.context.getString(
                 R.string.queue_subtitle_format, song.title, artist
@@ -176,9 +188,10 @@ class PlaylistQueueAdapter(
             )
 
             itemView.setOnClickListener { onItemClick(bindingAdapterPosition) }
-            // Tocar el manejador arranca el arrastre (lo gestiona el ItemTouchHelper del fragmento).
+            // Sin orden que guardar (género), no hay manejador que mostrar ni arrastre que arrancar.
+            handle.isVisible = reorderable
             handle.setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) onStartDrag(this)
+                if (reorderable && event.actionMasked == MotionEvent.ACTION_DOWN) onStartDrag(this)
                 false
             }
         }

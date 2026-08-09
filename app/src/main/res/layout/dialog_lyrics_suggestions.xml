@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Diálogo del buscador de letras de lrclib.net (ver LyricsSuggestionsDialogFragment).
+
+  Calco de dialog_metadata_suggestions.xml: toolbar + una superposición dentro de un FrameLayout,
+  porque la lista, el indicador de carga y el mensaje de vacío/error nunca se ven a la vez (el
+  fragmento cambia su visibilidad según el estado de la búsqueda).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/lyricsSuggestionsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/lyricsSuggestionsToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_background"
+        app:navigationContentDescription="@string/editor_close"
+        app:navigationIcon="@drawable/ic_close"
+        app:title="@string/lyrics_suggestions_title"
+        app:titleTextColor="@color/um_on_background" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/lyricsSuggestionsList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            tools:listitem="@layout/item_lyrics_suggestion" />
+
+        <!-- Su color se tiñe con el acento dinámico al arrancar (ver el fragmento): por defecto
+             saldría del amarillo fijo de colorPrimary (ver themes.xml), y la regla del proyecto es
+             que todo lo amarillo use el color dinámico. -->
+        <ProgressBar
+            android:id="@+id/lyricsSuggestionsLoading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+        <LinearLayout
+            android:id="@+id/lyricsSuggestionsMessageGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/lyricsSuggestionsMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="15sp"
+                tools:text="@string/lyrics_suggestions_empty" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/lyricsSuggestionsRetry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/suggestions_retry"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</LinearLayout>

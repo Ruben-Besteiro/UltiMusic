@@ -101,11 +101,7 @@ class SearchAdapter(
         }
     }
 
-    /**
-     * Fila de canción. Es la misma que la de la pestaña «Canciones», con su menú de tres puntos, pero
-     * sin el resaltado en amarillo de "esta canción no está en ninguna playlist": aquí el usuario ha
-     * venido a buscar algo concreto, no a repasar su biblioteca, así que ese aviso sobraría.
-     */
+    /** Fila de canción. Es la misma que la de la pestaña «Canciones», con su menú de tres puntos. */
     class SongViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val cover: ShapeableImageView = itemView.findViewById(R.id.cover)
         private val title: TextView = itemView.findViewById(R.id.songTitle)

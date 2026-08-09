@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Igual que ic_arrow_back, pero desplazada hacia arriba: en una MaterialToolbar el texto (el
+     título o, en el buscador, lo escrito) queda ópticamente más alto que un icono centrado de verdad,
+     porque "Ajustes"/"Buscar" no tienen ninguna letra con rabillo hacia abajo (g, j, p, q, y) y el
+     TextView se centra contando ese hueco igualmente. Se usa solo como flecha "atrás" de las
+     toolbars que llevan texto al lado (buscador y ajustes); el resto de usos de ic_arrow_back no
+     tocan este archivo.
+     Con android:width/height/gravity puestos, android:top deja de ser un inset (que encoge y
+     distorsiona el dibujo, como en el intento anterior) y pasa a ser un desplazamiento puro desde la
+     posición que marca gravity: aquí, 3dp hacia arriba desde el centro. -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:width="24dp"
+        android:height="24dp"
+        android:drawable="@drawable/ic_arrow_back"
+        android:gravity="center"
+        android:top="-3dp" />
+</layer-list>
