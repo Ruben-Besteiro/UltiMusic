@@ -1,9 +1,14 @@
 package com.untar.ultimusic.ui
 
 import android.app.Application
+import android.content.ComponentName
+import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
+import android.os.IBinder
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.playback.PlaybackService
 import com.untar.ultimusic.util.DynamicColor
@@ -16,6 +21,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
 import kotlin.math.log2
 
 /** Progreso de reproducción de la canción actual. */
@@ -104,12 +110,38 @@ data class EqPreset(
  * Gracias a eso, **ningún fragmento ni adaptador de la aplicación ha tenido que cambiar una sola
  * línea**: todos siguen hablando con `PlayerViewModel` exactamente igual que antes de este cambio.
  *
- * El único hueco real es la ventana, normalmente de una fracción de segundo, entre que se crea este
- * ViewModel (arranca `MainActivity`) y que el sistema termina de llamar a `PlaybackService.onCreate()`:
- * mientras tanto [service] vale `null` y las llamadas se ignoran en silencio (ver cada método). No
- * hay forma de evitar esa ventana del todo —arrancar un `Service` es asíncrono por diseño de
- * Android—, pero en la práctica no da tiempo a que el usuario llegue a tocar nada antes de que se
- * cierre.
+ * **Qué pasa cuando no hay Service.** [service] vale `null` en dos situaciones, y las dos son
+ * frecuentes de verdad:
+ * - Entre que se crea este ViewModel (arranca `MainActivity`) y que el sistema termina de llamar a
+ *   `PlaybackService.onCreate()`. Arrancar un `Service` es asíncrono por diseño de Android y, desde
+ *   Android 8, los arranques en segundo plano se encolan y pueden retrasarse; en un arranque en frío
+ *   el hilo principal va cargadísimo, así que la interfaz puede estar respondiendo al tacto antes de
+ *   que el `Service` exista.
+ * - Justo después de crearse este ViewModel, mientras el `Service` termina de arrancar.
+ *
+ * Antes había un segundo caso, y era un bug de los gordos: el `Service` solo se *arrancaba*
+ * (`startService`), nunca se *enlazaba*. Un `Service` arrancado y sin nadie enlazado a él es, para
+ * Android, prescindible en cuanto deja de estar en primer plano —y este solo está en primer plano
+ * mientras suena algo—, así que tras un rato en segundo plano el sistema (o el gestor de batería del
+ * fabricante) se lo llevaba por delante. Como el `startService` estaba solo en el [init], no lo
+ * volvía a arrancar nadie nunca: [service] se quedaba `null` para siempre y **cada toque en una
+ * canción se descartaba en silencio** —se veía el ripple y no sonaba nada— hasta matar la aplicación.
+ *
+ * Eso se parcheó con [withService] (dejar la orden pendiente y volver a arrancar el `Service`), pero
+ * el parche solo tapaba el síntoma de las órdenes que da el usuario: seguía habiendo huecos en los
+ * que el `Service` moría a media faena y se llevaba por delante cosas que nadie había pedido —la más
+ * grave, encadenar la canción siguiente al acabarse una (ver `PlaybackService.loadCurrent`)—.
+ *
+ * **El arreglo de fondo es [bindService][android.content.Context.bindService]**, que es lo que hace
+ * [ensureServiceRunning] además de arrancarlo. Un `Service` con alguien enlazado no lo para el
+ * sistema mientras dure ese enlace: solo desaparece si muere el proceso entero. Y como el enlace lo
+ * mantiene este ViewModel —vivo mientras viva `MainActivity`, rotaciones incluidas— el `Service`
+ * existe, garantizado, durante toda la vida de la aplicación. Al soltarlo ([onCleared], cuando la
+ * `Activity` se destruye de verdad) el `Service` vuelve a depender solo de su arranque: sigue sonando
+ * si estaba sonando (ver `stopWithTask="false"` en el manifiesto) y se para solo si no.
+ *
+ * [withService] se queda igualmente: entre crear este ViewModel y que el `Service` esté listo hay
+ * unos milisegundos, y ahí sigue haciendo falta guardar la orden.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class PlayerViewModel(app: Application) : AndroidViewModel(app) {
@@ -119,14 +151,129 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     /** El [PlaybackService] ya arrancado, o `null` durante la ventana descrita en la cabecera. */
     private val service: PlaybackService? get() = serviceFlow.value
 
+    /**
+     * La orden que el usuario ha dado mientras no había Service, a la espera de que aparezca (ver
+     * [withService]). Una sola: son órdenes de reproducción, mutuamente excluyentes por naturaleza,
+     * así que si llegan dos seguidas la que vale es la última —justo lo que espera quien toca dos
+     * canciones seguidas—. Solo se toca desde el hilo principal.
+     */
+    private var pendingAction: ((PlaybackService) -> Unit)? = null
+
+    /**
+     * El enlace con el [PlaybackService] (ver la cabecera de la clase). No hace falta el `IBinder`
+     * que devuelve —`PlayerViewModel` habla con el `Service` por [PlaybackService.instanceFlow], que
+     * es directo y sin `Binder` de por medio porque los dos viven en el mismo proceso—: lo que
+     * importa es el enlace en sí, que es lo que impide que Android pare el `Service`.
+     *
+     * Los tres métodos se dejan vacíos a propósito. [ServiceConnection.onNullBinding] no llega a
+     * ocurrir (se enlaza con la acción que [MediaSessionService] espera, así que devuelve un
+     * `Binder` de verdad) y [ServiceConnection.onServiceDisconnected] solo ocurriría si muriera el
+     * proceso del `Service`, que es este mismo: si eso pasa, no queda nadie a quien avisar.
+     */
+    private val serviceConnection = object : ServiceConnection {
+        override fun onServiceConnected(name: ComponentName?, binder: IBinder?) = Unit
+        override fun onServiceDisconnected(name: ComponentName?) = Unit
+        override fun onNullBinding(name: ComponentName?) = Unit
+    }
+
+    /** Si [serviceConnection] está registrado, para no enlazar dos veces ni soltar lo que no se cogió. */
+    private var bound = false
+
     init {
-        // Arranque NO en primer plano a propósito: si se usara `startForegroundService`, el
-        // Service tendría solo 5 segundos para llamar a `startForeground()` o el sistema lo mata
-        // (`RemoteServiceException`), y eso solo pasa cuando de verdad empieza a sonar algo (lo
-        // gestiona Media3 solo, ver la cabecera de PlaybackService). Aquí, al abrir la aplicación,
-        // puede que el usuario tarde en pulsar play —o no llegue a hacerlo—, así que un arranque
-        // normal (en segundo plano) es el que corresponde.
-        app.startService(Intent(app, PlaybackService::class.java))
+        ensureServiceRunning()
+
+        // Ejecuta la orden pendiente, si la hay, en cuanto el Service se publica. `Eagerly` no hace
+        // falta pedirlo: `viewModelScope` ya es Dispatchers.Main.immediate, el hilo desde el que se
+        // puede tocar el reproductor.
+        viewModelScope.launch {
+            serviceFlow.collect { svc ->
+                if (svc == null) return@collect
+                val action = pendingAction ?: return@collect
+                pendingAction = null
+                action(svc)
+            }
+        }
+    }
+
+    /**
+     * Deja el [PlaybackService] en marcha y enlazado. Hace las dos cosas porque cada una sirve para
+     * algo distinto, y hacen falta las dos (ver la cabecera de la clase):
+     *
+     * - **Arrancarlo** (`startService`) es lo que le da vida propia, independiente de la `Activity`:
+     *   es lo que hace que la música siga sonando con la aplicación cerrada. Arranque NO en primer
+     *   plano a propósito: si se usara `startForegroundService`, el `Service` tendría solo 5 segundos
+     *   para llamar a `startForeground()` o el sistema lo mata (`RemoteServiceException`), y eso solo
+     *   pasa cuando de verdad empieza a sonar algo (lo gestiona Media3 solo, ver la cabecera de
+     *   `PlaybackService`). Aquí puede que el usuario tarde en pulsar play —o no llegue a hacerlo—.
+     * - **Enlazarlo** (`bindService`) es lo que impide que el sistema lo pare mientras la aplicación
+     *   esté viva. Un `Service` solo arrancado, cuando no está en primer plano, es prescindible para
+     *   Android; con un enlace vivo, no.
+     *
+     * Se enlaza con la acción que espera [MediaSessionService] (la misma del `intent-filter` del
+     * manifiesto) porque es el contrato documentado de Media3 y así devuelve un `Binder` de verdad,
+     * aunque aquí no se use para nada: [BIND_AUTO_CREATE][android.content.Context.BIND_AUTO_CREATE]
+     * además crea el `Service` si no existiera, o sea que el enlace por sí solo ya lo revive.
+     *
+     * La llaman el [init] y `MainActivity.onResume`. Si ya está todo hecho —el caso normal— no hace
+     * nada: un `Service` no se crea dos veces y [bound] evita enlazar por duplicado.
+     *
+     * Los `runCatching` son por si esto llegara a llamarse con la aplicación ya en segundo plano:
+     * ahí Android 8+ prohíbe arrancar servicios y `startService` lanzaría `IllegalStateException`
+     * (`bindService` sí está permitido desde segundo plano, que es otra razón para tenerlo). No
+     * debería pasar —solo se llama desde `onResume` o al tocar algo, con la aplicación visible—, pero
+     * de morir la aplicación por esto no se salva nadie, y la orden se queda pendiente igualmente
+     * para el siguiente intento.
+     */
+    fun ensureServiceRunning() {
+        val app = getApplication<Application>()
+        runCatching { app.startService(Intent(app, PlaybackService::class.java)) }
+
+        if (bound) return
+        val bindIntent = Intent(app, PlaybackService::class.java)
+            .setAction(MediaSessionService.SERVICE_INTERFACE)
+        runCatching {
+            app.bindService(bindIntent, serviceConnection, Context.BIND_AUTO_CREATE)
+            // A propósito sin mirar lo que devuelve `bindService`: aunque diga que no ha podido
+            // enlazar, la conexión queda registrada y hay que soltarla igual (lo dice su
+            // documentación). Con `bound = true` nos aseguramos de que [onCleared] lo hará.
+            bound = true
+        }
+    }
+
+    /**
+     * Suelta el enlace del [PlaybackService]. Ocurre cuando `MainActivity` se destruye de verdad
+     * (no en una rotación: el `ViewModel` sobrevive a eso). A partir de aquí el `Service` vuelve a
+     * depender solo de su arranque, que es justo lo que se quiere: si estaba sonando algo sigue
+     * sonando —con su notificación en primer plano, y `stopWithTask="false"` en el manifiesto para
+     * que cerrar desde "recientes" tampoco lo corte—, y si no estaba sonando nada se para solo.
+     */
+    override fun onCleared() {
+        if (bound) {
+            bound = false
+            runCatching { getApplication<Application>().unbindService(serviceConnection) }
+        }
+        super.onCleared()
+    }
+
+    /**
+     * Le pasa [action] al [PlaybackService] ya arrancado; si todavía no lo está (o lo han matado),
+     * lo arranca y deja la orden pendiente para ejecutarla en cuanto aparezca. Por aquí pasan todas
+     * las órdenes de reproducción: son las que el usuario da tocando algo y espera ver cumplidas, y
+     * antes se perdían en silencio (ver la cabecera de la clase).
+     *
+     * Los ajustes de sonido (amplificador, ecualizador) NO pasan por aquí a propósito: no tienen la
+     * urgencia de un toque en una canción, y encolarlos aquí desalojaría la orden de reproducción
+     * pendiente, que es la que de verdad importa. Además sus diálogos solo se abren desde el
+     * reproductor, o sea que para entonces el Service lleva rato vivo.
+     */
+    private fun withService(action: (PlaybackService) -> Unit) {
+        val svc = service
+        if (svc != null) {
+            action(svc)
+            return
+        }
+        pendingAction = action
+        ensureServiceRunning()
     }
 
     /**
@@ -173,6 +320,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     /** Avisa cuando se intenta agregar la canción que se está reproduciendo actualmente a la cola. */
     val currentSongAddedToQueue: Flow<Song> = serviceEvents { it.currentSongAddedToQueue }
 
+    /** Avisa (con el nº de canciones) cada vez que se añade algo a la cola, para el Toast de MainActivity. */
+    val songsAddedToQueue: Flow<Int> = serviceEvents { it.songsAddedToQueue }
+
+    /** Avisa cuando se intenta añadir a la cola sin que suene nada todavía (ver `PlaybackService`). */
+    val cannotAddToEmptyQueue: Flow<Unit> = serviceEvents { it.cannotAddToEmptyQueue }
+
     val volumeBoost: StateFlow<Int> = serviceState(BOOST_MIN_PERCENT) { it.volumeBoost }
     val limitDisabled: StateFlow<Boolean> = serviceState(false) { it.limitDisabled }
     val limitForcedByHeadphones: Flow<Unit> = serviceEvents { it.limitForcedByHeadphones }
@@ -204,46 +357,33 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         service?.savePlaybackState()
     }
 
-    fun play(song: Song) {
-        service?.play(song)
-    }
+    fun play(song: Song) = withService { it.play(song) }
 
-    fun addToQueue(song: Song) {
-        service?.addToQueue(song)
-    }
+    /** Ver `PlaybackService.playRandomFromLibrary`. */
+    fun playRandomFromLibrary() = withService { it.playRandomFromLibrary() }
 
-    fun addToQueue(songs: List<Song>) {
-        service?.addToQueue(songs)
-    }
+    fun addToQueue(song: Song) = withService { it.addToQueue(song) }
+
+    fun addToQueue(songs: List<Song>) = withService { it.addToQueue(songs) }
 
     fun playCollection(
         collection: List<Song>,
         startIndex: Int,
         playlistName: String? = null,
         collectionKind: CollectionKind? = null
-    ) {
-        service?.playCollection(collection, startIndex, playlistName, collectionKind)
-    }
+    ) = withService { it.playCollection(collection, startIndex, playlistName, collectionKind) }
 
     fun shuffleCollection(
         collection: List<Song>,
         playlistName: String? = null,
         collectionKind: CollectionKind? = null
-    ) {
-        service?.shuffleCollection(collection, playlistName, collectionKind)
-    }
+    ) = withService { it.shuffleCollection(collection, playlistName, collectionKind) }
 
-    fun skipToPrevious() {
-        service?.skipToPrevious()
-    }
+    fun skipToPrevious() = withService { it.skipToPrevious() }
 
-    fun skipToNext() {
-        service?.skipToNext()
-    }
+    fun skipToNext() = withService { it.skipToNext() }
 
-    fun jumpTo(d: Int, forcePlay: Boolean = true) {
-        service?.jumpTo(d, forcePlay)
-    }
+    fun jumpTo(d: Int, forcePlay: Boolean = true) = withService { it.jumpTo(d, forcePlay) }
 
     fun refreshSong(song: Song) {
         service?.refreshSong(song)
@@ -253,9 +393,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         service?.seekToFraction(fraction)
     }
 
-    fun togglePlayPause() {
-        service?.togglePlayPause()
-    }
+    fun togglePlayPause() = withService { it.togglePlayPause() }
 
     /** Ver `PlaybackService.currentPositionMs` (lo usa `VideoScreenController` para sincronizar el vídeo). */
     fun currentPositionMs(): Long = service?.currentPositionMs() ?: 0L

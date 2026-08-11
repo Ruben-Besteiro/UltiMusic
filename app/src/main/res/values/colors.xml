@@ -28,4 +28,10 @@
     <!-- Velo semitransparente sobre la carátula cuando el iPod muestra la cola encima de ella
          (ver IPodDialogFragment): la carátula se ve de fondo, atenuada, en vez de desaparecer. -->
     <color name="um_queue_scrim">#D9000000</color>
+    <!-- Rojo de "esto ha ido mal" (de momento solo el token de Genius que no vale, ver
+         GeniusTokenDialogFragment). NO se tiñe con el color dinámico a propósito: la regla del
+         proyecto es para lo amarillo, que es decorativo, y un error tiene que leerse como error
+         aunque la carátula que suene sea roja o verde. Es el rojo de error de Material sobre fondo
+         oscuro, lo bastante claro para leerse encima de um_background. -->
+    <color name="um_error">#FFF2B8B5</color>
 </resources>

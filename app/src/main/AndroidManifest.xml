@@ -10,7 +10,7 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <!-- Solo para: el modo vídeo del iPod (reproductor de YouTube y buscador del videoclip), el
-         autorrelleno de metadatos (MusicBrainz/Cover Art Archive) y el buscador de letras
+         autorrelleno de metadatos (iTunes Search API, y Genius si hay token) y el buscador de letras
          sincronizadas (lrclib.net) del editor. El audio de la biblioteca NUNCA sale a la red: sigue
          leyéndose del almacenamiento local. -->
     <uses-permission android:name="android.permission.INTERNET" />
@@ -52,6 +52,7 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <application
+        android:name=".UltiMusicApp"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -62,11 +63,31 @@
         android:theme="@style/Theme.UltiMusic">
         <activity
             android:name=".ui.MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+
+            <!-- "Abrir con UltiMusic" desde un gestor de archivos. Van en DOS intent-filter, uno
+                 por esquema, porque dentro de un mismo intent-filter Android combina todos los
+                 <data> en producto cruzado (todo scheme con todo mimeType declarado), no en
+                 parejas: con uno solo se habría aceptado, por ejemplo, cualquier content:// sin
+                 mirar su tipo. singleTask (arriba) hace que, si la app ya está abierta, reciba el
+                 archivo por onNewIntent en vez de apilar una MainActivity nueva encima. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" android:mimeType="audio/*" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="file" android:mimeType="audio/*" />
             </intent-filter>
         </activity>
 
@@ -78,7 +99,9 @@
                visible en ese instante.
              - stopWithTask="false": que cerrar la aplicación desde "recientes" NO corte la música
                si en ese momento está sonando algo (MediaSessionService ya decide por su cuenta,
-               de fábrica, parar el propio Service en cuanto deje de sonar).
+               de fábrica, parar el propio Service en cuanto deje de sonar). Mientras la aplicación
+               está abierta esto ni entra en juego: PlayerViewModel mantiene el Service ENLAZADO
+               (bindService), y un Service enlazado no lo para el sistema — ver su cabecera.
              - exported="false": solo la propia aplicación puede arrancarlo; el intent-filter de
                abajo es el que exige Media3 para que MediaSessionService sepa a qué Service
                conectarse (Android Auto, asistente de voz, etc.), no hace falta exportarlo para eso. -->

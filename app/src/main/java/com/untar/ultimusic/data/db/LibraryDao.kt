@@ -19,7 +19,6 @@ import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.PersonSummaryRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
 import com.untar.ultimusic.data.db.relations.TrackPosition
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.data.scan.ScannedSong
 import kotlinx.coroutines.flow.Flow
 
@@ -56,7 +55,7 @@ abstract class LibraryDao {
             a.year AS year,
             (SELECT ar.name FROM album_artist aa
                 JOIN artists ar ON ar.id = aa.artistId
-                WHERE aa.albumId = a.id ORDER BY LOWER(ar.name) LIMIT 1) AS artistName,
+                WHERE aa.albumId = a.id ORDER BY aa.position LIMIT 1) AS artistName,
             (SELECT COUNT(*) FROM song_album sa
                 JOIN songs s ON s.id = sa.songId
                 WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
@@ -94,11 +93,15 @@ abstract class LibraryDao {
     @Query("SELECT * FROM albums WHERE id = :id")
     abstract fun observeAlbumEntity(id: Long): Flow<AlbumEntity?>
 
-    /** Nombres de los artistas enlazados a un álbum, para rellenar su editor de metadatos. */
+    /**
+     * Nombres de los artistas enlazados a un álbum, para rellenar su editor de metadatos. Van en el
+     * orden en que se enlazaron ([AlbumArtistCrossRef.position]), no alfabético: es el mismo orden
+     * en el que el usuario los escribió.
+     */
     @Query(
         """
         SELECT ar.name FROM album_artist aa JOIN artists ar ON ar.id = aa.artistId
-        WHERE aa.albumId = :albumId ORDER BY LOWER(ar.name)
+        WHERE aa.albumId = :albumId ORDER BY aa.position
         """
     )
     abstract fun observeAlbumArtistNames(albumId: Long): Flow<List<String>>
@@ -237,6 +240,15 @@ abstract class LibraryDao {
     @Query("SELECT * FROM songs WHERE id IN (:ids) AND hiddenByGreylist = 0")
     abstract suspend fun findSongsByIds(ids: List<Long>): List<SongWithRelations>
 
+    /**
+     * Busca una canción por su ruta exacta. La usa `MainActivity` al recibir un archivo por
+     * "Abrir con UltiMusic": si ya está en la fonoteca, se reproduce esa fila (con su portada,
+     * artistas, letra…) en vez de tratarlo como un archivo suelto sin catalogar.
+     */
+    @Transaction
+    @Query("SELECT * FROM songs WHERE filePath = :path LIMIT 1")
+    abstract suspend fun findSongByPath(path: String): SongWithRelations?
+
     // --- Consultas de apoyo para la reconciliación ---
 
     @Query("SELECT filePath FROM songs")
@@ -319,6 +331,16 @@ abstract class LibraryDao {
         for (path in allSongPaths()) {
             if (path.startsWith(prefix)) setSongHidden(path, hidden)
         }
+    }
+
+    /**
+     * Añade una subcarpeta a la lista gris ya excluida (switch encendido), ocultando de paso sus
+     * canciones: quien la añade lo hace para dejarla fuera, no para tener que dar un segundo paso.
+     */
+    @Transaction
+    open suspend fun addGreylistFolder(path: String) {
+        insertGreylistFolder(GreylistFolderEntity(path = path, excluded = true))
+        setSongsHiddenUnderFolder(path, hidden = true)
     }
 
     /** Switch de una subcarpeta: activarlo oculta sus canciones, desactivarlo las hace contar de nuevo. */
@@ -428,12 +450,12 @@ abstract class LibraryDao {
     )
 
     /**
-     * Guarda el desplazamiento de vídeo/audio de una canción, mismo motivo que [setVideoUrl]: lo
-     * llaman los ajustes del reproductor de vídeo del iPod, sin ningún formulario abierto de por
-     * medio.
+     * Guarda la letra elegida en el buscador de lrclib.net, mismo motivo que [setVideoUrl]: lo
+     * llama el iPod cuando se toca el recuadro de letra vacío, sin ningún formulario abierto de
+     * por medio.
      */
-    @Query("UPDATE songs SET videoOffsetMs = :offsetMs WHERE id = :songId")
-    abstract suspend fun setVideoOffsetMs(songId: Long, offsetMs: Long)
+    @Query("UPDATE songs SET lyrics = :lyrics WHERE id = :songId")
+    abstract suspend fun setLyrics(songId: Long, lyrics: String?)
 
     /** Reapunta una canción a su nueva ruta cuando el usuario ha movido el archivo (ver [reconcile]). */
     @Query("UPDATE songs SET filePath = :newPath WHERE filePath = :oldPath")
@@ -510,35 +532,37 @@ abstract class LibraryDao {
             // La etiqueta puede traer varios artistas separados por comas ("A, B"): se tratan como
             // varias personas, igual que hace el editor de metadatos manual (ver
             // EditText.splitValues en MetadataEditorDialogFragment), no como una sola con nombre
-            // compuesto.
-            val artistNames = splitTagNames(s.artist).ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
-            val artistIds = artistNames.map { getOrCreateArtist(it) }
-            for (artistId in artistIds) {
-                insertSongArtist(SongArtistCrossRef(songId = songId, artistId = artistId))
+            // compuesto. Igual que el productor (ver más abajo), si la etiqueta no trae artista no
+            // se inventa uno: la canción se queda sin artista.
+            val artistIds = splitTagNames(s.artist).map { getOrCreateArtist(it) }
+            for ((position, artistId) in artistIds.withIndex()) {
+                insertSongArtist(SongArtistCrossRef(songId = songId, artistId = artistId, position = position))
             }
 
-            // El productor solo se enlaza si la etiqueta traía uno: al contrario que artista y
-            // álbum, no inventamos un "Productor desconocido" que llenaría la pestaña de ruido.
-            // Mismo tratamiento de comas que el artista.
-            for (producerName in splitTagNames(s.producer)) {
+            // El productor solo se enlaza si la etiqueta traía uno: no inventamos un "Productor
+            // desconocido" que llenaría la pestaña de ruido. Mismo tratamiento de comas que el
+            // artista.
+            for ((position, producerName) in splitTagNames(s.producer).withIndex()) {
                 val producerId = getOrCreateProducer(producerName)
-                insertSongProducer(SongProducerCrossRef(songId = songId, producerId = producerId))
+                insertSongProducer(SongProducerCrossRef(songId = songId, producerId = producerId, position = position))
             }
 
-            val albumArtistTag = s.albumArtist ?: s.artist ?: MusicScanner.UNKNOWN_ARTIST
-            val albumArtistIds = splitTagNames(s.albumArtist ?: s.artist)
-                .ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
-                .map { getOrCreateArtist(it) }
-            val albumTitle = s.album ?: MusicScanner.UNKNOWN_ALBUM
-            val albumId = getOrCreateAlbum(albumTitle, albumArtistTag, s.year, s.genres, albumArtistIds)
-            insertSongAlbum(
-                SongAlbumCrossRef(
-                    songId = songId,
-                    albumId = albumId,
-                    trackNumber = s.trackNumber,
-                    discNumber = s.discNumber
+            // El álbum tiene el mismo trato: sin etiqueta de álbum no hay fila de álbum ni cruce
+            // canción↔álbum, en vez de agrupar todo lo suelto bajo un "Álbum desconocido" común.
+            val albumTitle = s.album
+            if (albumTitle != null) {
+                val albumArtistTag = s.albumArtist ?: s.artist ?: ""
+                val albumArtistIds = splitTagNames(s.albumArtist ?: s.artist).map { getOrCreateArtist(it) }
+                val albumId = getOrCreateAlbum(albumTitle, albumArtistTag, s.year, s.genres, albumArtistIds)
+                insertSongAlbum(
+                    SongAlbumCrossRef(
+                        songId = songId,
+                        albumId = albumId,
+                        trackNumber = s.trackNumber,
+                        discNumber = s.discNumber
+                    )
                 )
-            )
+            }
         }
 
         // Fase 3 (bis): bajas reales, es decir, las que han desaparecido sin reaparecer en otra carpeta.
@@ -577,20 +601,19 @@ abstract class LibraryDao {
     ) {
         updateSong(song)
 
-        val artists = artistNames.ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
-        val albums = albumTitles.ifEmpty { listOf(MusicScanner.UNKNOWN_ALBUM) }
-
         clearSongArtists(song.id)
-        val artistIds = artists.map { resolveArtist(it) }
-        for (artistId in artistIds) {
-            insertSongArtist(SongArtistCrossRef(songId = song.id, artistId = artistId))
+        val artistIds = artistNames.map { resolveArtist(it) }
+        for ((position, artistId) in artistIds.withIndex()) {
+            insertSongArtist(SongArtistCrossRef(songId = song.id, artistId = artistId, position = position))
         }
 
         clearSongAlbums(song.id)
-        // El "artista del álbum" con el que se crearía un álbum nuevo es el primero de la canción.
-        val albumArtistName = artists.first()
-        for (title in albums) {
-            val albumId = resolveAlbum(title, albumArtistName, artistIds.first())
+        // El "artista del álbum" con el que se crearía un álbum nuevo es el primero de la canción;
+        // si la canción se ha quedado sin artista, el álbum se crea sin artista también.
+        val albumArtistName = artistNames.firstOrNull() ?: ""
+        val albumArtistId = artistIds.firstOrNull()
+        for (title in albumTitles) {
+            val albumId = resolveAlbum(title, albumArtistName, albumArtistId)
             insertSongAlbum(
                 SongAlbumCrossRef(
                     songId = song.id,
@@ -601,12 +624,12 @@ abstract class LibraryDao {
             )
         }
 
-        // Los productores no tienen valor por defecto: si el usuario vacía el campo, la canción se
-        // queda sin ninguno (y el productor huérfano desaparece de su pestaña).
+        // Ni artista, ni álbum ni productor tienen valor por defecto: si el usuario vacía el campo,
+        // la canción se queda sin ninguno (y el que se quede huérfano desaparece de su pestaña).
         clearSongProducers(song.id)
-        for (name in producerNames) {
+        for ((position, name) in producerNames.withIndex()) {
             insertSongProducer(
-                SongProducerCrossRef(songId = song.id, producerId = resolveProducer(name))
+                SongProducerCrossRef(songId = song.id, producerId = resolveProducer(name), position = position)
             )
         }
 
@@ -627,9 +650,10 @@ abstract class LibraryDao {
         updateAlbum(album)
 
         clearAlbumArtists(album.id)
-        val artists = artistNames.ifEmpty { listOf(MusicScanner.UNKNOWN_ARTIST) }
-        for (name in artists) {
-            insertAlbumArtist(AlbumArtistCrossRef(albumId = album.id, artistId = resolveArtist(name)))
+        for ((position, name) in artistNames.withIndex()) {
+            insertAlbumArtist(
+                AlbumArtistCrossRef(albumId = album.id, artistId = resolveArtist(name), position = position)
+            )
         }
 
         // Un artista del que ya no cuelga ninguna canción deja de tener sentido (igual que tras
@@ -652,8 +676,12 @@ abstract class LibraryDao {
         return insertProducer(ProducerEntity(name = name, tagName = name, imageName = null))
     }
 
-    /** Ídem para el álbum. Al crearlo se enlaza con el artista principal de la canción. */
-    private suspend fun resolveAlbum(title: String, albumArtist: String, artistId: Long): Long {
+    /**
+     * Ídem para el álbum. Al crearlo se enlaza con el artista principal de la canción, si tiene
+     * ([artistId] es null cuando la canción se ha quedado sin artista: el álbum se crea sin
+     * ninguno, igual que un productor sin nombre no se enlaza a nada).
+     */
+    private suspend fun resolveAlbum(title: String, albumArtist: String, artistId: Long?): Long {
         findAlbumByTitle(title)?.let { return it.id }
         findAlbumByTag(title, albumArtist)?.let { return it.id }
         val albumId = insertAlbum(
@@ -666,7 +694,9 @@ abstract class LibraryDao {
                 imageName = null
             )
         )
-        insertAlbumArtist(AlbumArtistCrossRef(albumId = albumId, artistId = artistId))
+        if (artistId != null) {
+            insertAlbumArtist(AlbumArtistCrossRef(albumId = albumId, artistId = artistId))
+        }
         return albumId
     }
 
@@ -698,8 +728,8 @@ abstract class LibraryDao {
                 imageName = null
             )
         )
-        for (artistId in artistIds) {
-            insertAlbumArtist(AlbumArtistCrossRef(albumId = albumId, artistId = artistId))
+        for ((position, artistId) in artistIds.withIndex()) {
+            insertAlbumArtist(AlbumArtistCrossRef(albumId = albumId, artistId = artistId, position = position))
         }
         return albumId
     }
@@ -728,7 +758,6 @@ private fun ScannedSong.toEntity(hidden: Boolean): SongEntity = SongEntity(
     genres = genres,
     lyrics = null,
     language = null,
-    country = null,
     imageName = null,
     comment = null,
     videoUrl = null,

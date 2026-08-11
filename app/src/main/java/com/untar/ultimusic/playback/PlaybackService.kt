@@ -17,6 +17,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
@@ -49,6 +51,7 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.io.File
@@ -74,11 +77,14 @@ import kotlin.math.roundToInt
  * Media3 pensada exactamente para esto: envuelve el [ExoPlayer] en una [MediaSession] y, a cambio,
  * regala gratis buena parte de lo que pide un reproductor "de verdad" — la notificación con
  * [MediaStyle][androidx.media3.session.MediaStyleNotificationHelper.MediaStyle] (que es la única
- * forma de que la notificación sea también operable desde la pantalla de bloqueo), enfocar/soltar
- * el audio cuando llega una llamada u otra aplicación de música, pausarse solo al desenchufar los
- * auriculares, y responder a los botones de auriculares Bluetooth. Todo eso sale de fábrica por el
- * simple hecho de crear la [MediaSession]; no hay una sola línea de código aquí que lo implemente
- * a mano.
+ * forma de que la notificación sea también operable desde la pantalla de bloqueo) y responder a los
+ * botones de auriculares Bluetooth. Eso sí sale de fábrica por el simple hecho de crear la
+ * [MediaSession]; no hay una sola línea de código aquí que lo implemente a mano.
+ *
+ * Lo que **no** sale de fábrica, aunque uno lo dé por supuesto, es convivir con las demás
+ * aplicaciones: ceder el audio cuando entra una llamada u otro reproductor, y pausarse al
+ * desenchufar los auriculares. Eso son dos opciones del `ExoPlayer` de dentro y hay que pedirlas
+ * explícitamente al construirlo (ver [player]); tenerlo envuelto en una [MediaSession] no las activa.
  *
  * **Por qué sigue habiendo una cola en memoria en vez de dársela entera al `ExoPlayer`.** El diseño
  * de toda la vida de UltiMusic es cargar **una** canción cada vez (`player.setMediaItem`, no
@@ -173,23 +179,74 @@ class PlaybackService : MediaSessionService() {
     private val _currentSongAddedToQueue = MutableSharedFlow<Song>(extraBufferCapacity = 1)
     val currentSongAddedToQueue = _currentSongAddedToQueue.asSharedFlow()
 
+    private val _songsAddedToQueue = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    val songsAddedToQueue = _songsAddedToQueue.asSharedFlow()
+
+    /** Avisa cuando se intenta añadir a la cola sin que suene nada (p. ej. justo tras abrir la app
+     *  en frío, antes de tocar una canción): no hay "cola" a la que añadir. */
+    private val _cannotAddToEmptyQueue = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val cannotAddToEmptyQueue = _cannotAddToEmptyQueue.asSharedFlow()
+
     private var accentJob: Job? = null
     private var loadJob: Job? = null
 
-    private val player: ExoPlayer by lazy {
-        ExoPlayer.Builder(this).build().apply {
-            addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    _isPlaying.value = isPlaying
-                }
+    /**
+     * La restauración de la cola guardada, mientras está en marcha (ver [restorePlaybackState]).
+     * Resolver los ids contra la base de datos es asíncrono, así que un Service recién creado —el
+     * que revive `MainActivity.onResume` al volver de segundo plano— pasa un rato con [_queue]
+     * vacía y [_isLooseQueue] en false aunque haya estado guardado. Las órdenes que dependen de la
+     * cola esperan a que esto termine en vez de caer en saco roto (ver [withQueue]).
+     */
+    private var restoreJob: Job? = null
 
-                override fun onPlaybackStateChanged(state: Int) {
-                    // Al terminar una canción, avanzamos solos a la siguiente. (Cualificado: sin
-                    // el this@, next() se resolvería al next() deprecado del propio ExoPlayer.)
-                    if (state == Player.STATE_ENDED) this@PlaybackService.next()
-                }
-            })
-        }
+    /** La espera a que cargue la biblioteca para seguir con una canción al azar (ver
+     *  [continueWithRandomSong]). Se guarda para poder cancelarla si llega otra orden antes. */
+    private var randomContinuationJob: Job? = null
+
+    /**
+     * El reproductor. Las dos opciones del constructor son las que convierten un `ExoPlayer` "pelado"
+     * en uno que se porta bien con el resto del móvil; **ninguna de las dos viene puesta de fábrica**,
+     * hay que pedirlas a mano aunque haya una [MediaSession] por medio:
+     *
+     * - **[ExoPlayer.Builder.setAudioAttributes] con `handleAudioFocus = true`.** Es lo que hace que
+     *   el reproductor pida el foco de audio al empezar y lo suelte al parar, y —lo que de verdad se
+     *   nota— que reaccione cuando otro se lo quita: baja el volumen solo mientras suena un aviso del
+     *   navegador ("ducking"), se pausa al entrar una llamada o al ponerse a sonar otra aplicación de
+     *   música, y vuelve al terminar. Sin esto, UltiMusic seguía sonando por encima de todo lo demás.
+     *   Las `AudioAttributes` que se le pasan (`USAGE_MEDIA` + `CONTENT_TYPE_MUSIC`) son, además, lo
+     *   que le dice al sistema que esto es música: sirven para que el volumen que se ajuste sea el de
+     *   multimedia y para que el móvil lo enrute donde toca.
+     * - **[ExoPlayer.Builder.setHandleAudioBecomingNoisy].** Pausa al desenchufar los auriculares o al
+     *   desconectarse los Bluetooth, en vez de ponerse a sonar de golpe por el altavoz del móvil.
+     *
+     * (No confundir con el [AudioDeviceCallback] de más abajo, que mira los aparatos conectados por
+     * otro motivo completamente distinto: el tope del amplificador de volumen, ver
+     * [enforceHeadphoneLimit].)
+     */
+    private val player: ExoPlayer by lazy {
+        ExoPlayer.Builder(this)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                /* handleAudioFocus = */ true
+            )
+            .setHandleAudioBecomingNoisy(true)
+            .build()
+            .apply {
+                addListener(object : Player.Listener {
+                    override fun onIsPlayingChanged(isPlaying: Boolean) {
+                        _isPlaying.value = isPlaying
+                    }
+
+                    override fun onPlaybackStateChanged(state: Int) {
+                        // Al terminar una canción, avanzamos solos a la siguiente. (Cualificado: sin
+                        // el this@, next() se resolvería al next() deprecado del propio ExoPlayer.)
+                        if (state == Player.STATE_ENDED) this@PlaybackService.next()
+                    }
+                })
+            }
     }
 
     // ===================================================================================
@@ -282,7 +339,6 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        _instance.value = this
 
         probeEqCapabilities()
         createPredefinedPresets()
@@ -317,6 +373,12 @@ class PlaybackService : MediaSessionService() {
             .build()
         addSession(mediaSession)
         setMediaNotificationProvider(UltiMusicNotificationProvider(this))
+
+        // ÚLTIMA línea a propósito: publicarse en [_instance] es lo que destraba las órdenes que
+        // `PlayerViewModel` hubiera dejado pendientes (ver su `withService`), y esas órdenes pueden
+        // llamar a cualquier cosa de aquí. Si esto estuviera al principio de onCreate —como estaba—,
+        // una orden pendiente podría entrar con el `mediaSession` todavía sin construir.
+        _instance.value = this
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession = mediaSession
@@ -434,9 +496,17 @@ class PlaybackService : MediaSessionService() {
         val collectionKindName = playbackPrefs.getString(KEY_COLLECTION_KIND, null)
         val wasRandomContinuation = playbackPrefs.getBoolean(KEY_RANDOM_CONTINUATION, false)
 
-        serviceScope.launch {
+        restoreJob = serviceScope.launch {
             val restoredQueue = library.songsByIds(queueIds)
             if (restoredQueue.isEmpty()) return@launch
+
+            // Resolver la cola guardada contra la base de datos es una llamada suspend: tarda lo
+            // suyo, y en ese hueco el usuario ya puede haber tocado una canción (una orden que
+            // `PlayerViewModel` tenía pendiente y que se ejecuta en cuanto este Service se publica).
+            // Si eso ha pasado, la cola de verdad es la suya y NO se pisa: sin esto, el toque se
+            // quedaba a medias — la canción elegida saltaba de vuelta a la cola vieja y, encima, en
+            // pausa, porque aquí abajo se recarga con shouldPlay = false.
+            if (_queue.value.isNotEmpty()) return@launch
 
             _queue.value = restoredQueue
             _isLooseQueue.value = wasRandomContinuation
@@ -463,8 +533,33 @@ class PlaybackService : MediaSessionService() {
         playCurrent()
     }
 
+    /**
+     * Reproduce una canción al azar de toda la biblioteca (nunca una de la lista gris, ver
+     * [librarySongsPool]), como si el usuario la hubiera tocado directamente en Canciones: cola
+     * suelta de una sola canción. La usan el botón de play del mini-reproductor y el del iPod
+     * cuando no suena nada todavía (ver [MiniPlayerController]/[IPodDialogFragment]), que en ese
+     * estado muestran el icono de aleatorio en vez del de play.
+     */
+    fun playRandomFromLibrary() {
+        val pool = librarySongsPool.value
+        if (pool.isNotEmpty()) {
+            play(pool.random())
+            return
+        }
+        // Mismo motivo que en [continueWithRandomSong]: el pozo puede no haber cargado todavía, y
+        // un botón de play que no hace nada es peor que uno que tarda un instante.
+        randomContinuationJob?.cancel()
+        randomContinuationJob = serviceScope.launch {
+            play(librarySongsPool.first { it.isNotEmpty() }.random())
+        }
+    }
+
     fun addToQueue(song: Song) {
         val q = _queue.value
+        if (q.isEmpty()) {
+            serviceScope.launch { _cannotAddToEmptyQueue.emit(Unit) }
+            return
+        }
         val currentId = q.getOrNull(_currentIndex.value)?.id
         if (song.id == currentId) {
             serviceScope.launch { _currentSongAddedToQueue.emit(song) }
@@ -479,12 +574,17 @@ class PlaybackService : MediaSessionService() {
         } else {
             _queue.value = q + song
         }
+        serviceScope.launch { _songsAddedToQueue.emit(1) }
     }
 
     fun addToQueue(songs: List<Song>) {
         if (songs.isEmpty()) return
-        val ids = songs.map { it.id }.toHashSet()
         val q = _queue.value
+        if (q.isEmpty()) {
+            serviceScope.launch { _cannotAddToEmptyQueue.emit(Unit) }
+            return
+        }
+        val ids = songs.map { it.id }.toHashSet()
         val currentId = q.getOrNull(_currentIndex.value)?.id
 
         val currentSongs = songs.filter { it.id == currentId }
@@ -501,6 +601,7 @@ class PlaybackService : MediaSessionService() {
         _currentIndex.value = withoutThem.indexOfFirst { it.id == currentId }
             .let { if (it >= 0) it else _currentIndex.value }
         _queue.value = withoutThem + toAppend
+        serviceScope.launch { _songsAddedToQueue.emit(toAppend.size) }
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -541,9 +642,28 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
+    /**
+     * Alarga la cola suelta con una canción al azar de la biblioteca y la reproduce.
+     *
+     * [librarySongsPool] lo rellena un `Flow` de Room que se empieza a recoger en [onCreate], así
+     * que en un Service **recién creado** —el que revive `MainActivity.onResume` al volver de
+     * segundo plano— puede estar todavía vacío. Antes eso era un `return` a secas: la cola se
+     * acababa, el "siguiente" no hacía nada y no había forma de enterarse. Ahora se espera a la
+     * primera lista de verdad y se sigue donde se había quedado.
+     */
     private fun continueWithRandomSong(shouldPlay: Boolean) {
         val pool = librarySongsPool.value
-        if (pool.isEmpty()) return
+        if (pool.isNotEmpty()) {
+            appendRandomSong(pool, shouldPlay)
+            return
+        }
+        randomContinuationJob?.cancel()
+        randomContinuationJob = serviceScope.launch {
+            appendRandomSong(librarySongsPool.first { it.isNotEmpty() }, shouldPlay)
+        }
+    }
+
+    private fun appendRandomSong(pool: List<Song>, shouldPlay: Boolean) {
         val previousId = _currentSong.value?.id
         val candidates = pool.filter { it.id != previousId }.ifEmpty { pool }
         _queue.value = _queue.value + candidates.random()
@@ -551,13 +671,36 @@ class PlaybackService : MediaSessionService() {
         loadCurrent(shouldPlay = shouldPlay)
     }
 
-    fun skipToPrevious() = jumpTo(_currentIndex.value - 1, forcePlay = false)
+    /**
+     * Ejecuta [command] cuando la cola ya esté puesta. Con el Service recién creado, [_instance] se
+     * publica al final de [onCreate] y eso destraba al instante la orden que `PlayerViewModel`
+     * tuviera pendiente (ver su `withService`), pero [restorePlaybackState] todavía está resolviendo
+     * los ids contra la base de datos: [_queue] está vacía y [_isLooseQueue] en false. Una orden de
+     * "siguiente"/"anterior"/"play" que entrara en ese instante se evaluaba contra esa cola vacía y
+     * no hacía nada, en silencio y para siempre. Aquí se espera a que la restauración aterrice.
+     *
+     * Las órdenes que TRAEN su propia cola ([play], [playCollection]…) no pasan por aquí a propósito:
+     * mandan ellas, y la restauración ya se aparta sola si se le adelantan.
+     */
+    private fun withQueue(command: () -> Unit) {
+        val job = restoreJob
+        if (job == null || !job.isActive || _queue.value.isNotEmpty()) {
+            command()
+            return
+        }
+        serviceScope.launch {
+            job.join()
+            command()
+        }
+    }
 
-    fun skipToNext() {
+    fun skipToPrevious() = withQueue { jumpTo(_currentIndex.value - 1, forcePlay = false) }
+
+    fun skipToNext() = withQueue {
         val idx = _currentIndex.value
         if (idx >= _queue.value.lastIndex) {
             if (_isLooseQueue.value) continueWithRandomSong(shouldPlay = player.playWhenReady)
-            return
+            return@withQueue
         }
         jumpTo(idx + 1, forcePlay = false)
     }
@@ -576,6 +719,34 @@ class PlaybackService : MediaSessionService() {
         loadCurrent(shouldPlay = true)
     }
 
+    /**
+     * Carga en el reproductor la canción que toca según [_currentIndex].
+     *
+     * **Por qué el camino normal es SÍNCRONO.** Aquí se llega, entre otros sitios, desde
+     * `onPlaybackStateChanged(STATE_ENDED)`: al acabarse una canción hay que encadenar la siguiente.
+     * Antes todo esto vivía dentro de un `serviceScope.launch`, así que entre que terminaba una
+     * canción y empezaba la otra había un ida y vuelta a [Dispatchers.IO] (lo pide
+     * [LibraryRepository.resolvePlayablePath]) durante el cual el `ExoPlayer` se quedaba parado en
+     * `STATE_ENDED`. En ese hueco Media3 hace lo que debe: rehace la notificación viéndola ya como
+     * "nada sonando" (ver `showPauseButton` en [UltiMusicNotificationProvider]) y saca el Service del
+     * primer plano. Si el sistema aprovechaba para pararlo, [onDestroy] cancelaba [serviceScope] y
+     * con él la corrutina que iba a cargar la canción siguiente: la reproducción se quedaba muerta
+     * **sin error ni aviso ninguno**, que es exactamente el síntoma de "se acaba la última canción de
+     * la cola y no ocurre absolutamente nada".
+     *
+     * Que el Service se muera ahí ya no debería pasar —`PlayerViewModel` lo mantiene *enlazado*, no
+     * solo arrancado, ver su cabecera—, pero el camino síncrono se queda igualmente: no depender de
+     * que una corrutina sobreviva para encadenar la canción siguiente es lo correcto por sí solo, y
+     * de paso el reproductor deja de pasar por `STATE_ENDED` entre canción y canción.
+     *
+     * Con el camino rápido aquí abajo, la canción siguiente entra en el reproductor dentro de la
+     * misma llamada que avisó del final: el reproductor no llega a quedarse quieto en `STATE_ENDED`,
+     * la notificación no parpadea a "parado" y no hay corrutina que se pueda quedar a medias.
+     * Comprobar que el archivo sigue donde dice la base de datos es un `stat()` sobre almacenamiento
+     * local (microsegundos), nada que ver con leer etiquetas o recorrer carpetas; solo cuando ESO
+     * falla —el usuario ha movido el archivo— se pasa al camino lento de siempre, que sí necesita
+     * segundo plano y donde el retraso ya no importa porque la reproducción se ha cortado igualmente.
+     */
     private fun loadCurrent(shouldPlay: Boolean = true, seekToMs: Long = 0L) {
         val index = _currentIndex.value
         val song = _queue.value.getOrNull(index) ?: return
@@ -583,6 +754,14 @@ class PlaybackService : MediaSessionService() {
         updateAccent(song)
 
         loadJob?.cancel()
+
+        if (File(song.filePath).exists()) {
+            startPlayback(song, song.filePath, shouldPlay, seekToMs)
+            return
+        }
+
+        // Camino lento: la ruta guardada se ha quedado obsoleta y hay que buscar el archivo por
+        // nombre por toda la fonoteca (ver [LibraryRepository.resolvePlayablePath]).
         loadJob = serviceScope.launch {
             val path = library.resolvePlayablePath(song)
             if (path == null) {
@@ -590,12 +769,16 @@ class PlaybackService : MediaSessionService() {
                 _missingFile.emit(song)
                 return@launch
             }
-            if (path != song.filePath) rewritePath(index, song, path)
-            player.setMediaItem(buildMediaItem(song, path))
-            if (seekToMs > 0L) player.seekTo(seekToMs)
-            player.prepare()
-            if (shouldPlay) player.play() else player.pause()
+            rewritePath(index, song, path)
+            startPlayback(song, path, shouldPlay, seekToMs)
         }
+    }
+
+    private fun startPlayback(song: Song, path: String, shouldPlay: Boolean, seekToMs: Long) {
+        player.setMediaItem(buildMediaItem(song, path))
+        if (seekToMs > 0L) player.seekTo(seekToMs)
+        player.prepare()
+        if (shouldPlay) player.play() else player.pause()
     }
 
     /**
@@ -605,7 +788,7 @@ class PlaybackService : MediaSessionService() {
      * miraba esta metadata; ahora la mira la notificación (y, con ella, la pantalla de bloqueo).
      */
     private fun buildMediaItem(song: Song, path: String): MediaItem {
-        val artistName = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
+        val artistName = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
         val albumName = song.albums.firstOrNull()?.title
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)
@@ -661,8 +844,8 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    fun togglePlayPause() {
-        if (_currentSong.value == null) return
+    fun togglePlayPause() = withQueue {
+        if (_currentSong.value == null) return@withQueue
         if (player.isPlaying) player.pause() else player.play()
     }
 
@@ -1132,8 +1315,13 @@ class PlaybackService : MediaSessionService() {
          * El propio `Service` en cuanto está arrancado (null mientras no lo está). Es el "puente"
          * que usa `PlayerViewModel` para reenviarle todas sus llamadas y sus `StateFlow`: no es una
          * conexión de verdad entre procesos (esto no lo necesita: `PlayerViewModel` y este `Service`
-         * viven siempre en el mismo proceso de la aplicación), así que basta con esto en vez de un
-         * `bindService`/`ServiceConnection` completo.
+         * viven siempre en el mismo proceso de la aplicación), así que basta con esto en vez de
+         * pasar por el `IBinder` de un `bindService`.
+         *
+         * Ojo, que `PlayerViewModel` **sí** hace `bindService` (ver su `ensureServiceRunning`), pero
+         * para otra cosa completamente distinta: para que Android no pueda parar el `Service`
+         * mientras la aplicación esté viva. Ese enlace no se usa para hablar; el `IBinder` que
+         * devuelve se tira. Para hablar está esto.
          */
         private val _instance = MutableStateFlow<PlaybackService?>(null)
         val instanceFlow = _instance.asStateFlow()

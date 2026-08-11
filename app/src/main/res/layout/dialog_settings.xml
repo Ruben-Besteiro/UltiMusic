@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
   Pantalla de ajustes de UltiMusic. Se abre desde el engranaje de la barra superior de la actividad
-  principal. Tiene el amplificador de volumen, la lista gris de subcarpetas y el ecualizador, uno
-  detrás de otro dentro de un único ScrollView (montada como una lista vertical para que ir
-  añadiendo ajustes debajo no obligue a rehacerla).
+  principal. Está dividida en dos grupos, uno detrás de otro dentro de un único ScrollView (montada
+  como una lista vertical para que ir añadiendo ajustes debajo no obligue a rehacerla):
+
+    - "Ajustes auditivos": el amplificador de volumen y el ecualizador.
+    - "Ajustes visuales": la lista gris de subcarpetas y "Usar carátula del álbum siempre".
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -43,12 +45,24 @@
             android:paddingEnd="20dp"
             android:paddingBottom="16dp">
 
+            <!-- ===== Grupo: ajustes auditivos ===== -->
+
+            <TextView
+                android:id="@+id/audioSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/settings_audio_section_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
             <!-- ===== Ajuste: amplificador de volumen ===== -->
 
             <TextView
                 android:id="@+id/boostTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
                 android:text="@string/settings_boost_title"
                 android:textColor="@color/um_yellow"
                 android:textSize="18sp"
@@ -143,53 +157,12 @@
                 android:textSize="15sp"
                 app:rippleColor="@color/um_ripple_white" />
 
-            <!-- ===== Ajuste: lista gris ===== -->
-
-            <TextView
-                android:id="@+id/greylistTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                android:text="@string/settings_greylist_title"
-                android:textColor="@color/um_yellow"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="@string/settings_greylist_subtitle"
-                android:textColor="@color/um_on_surface_muted"
-                android:textSize="14sp" />
-
-            <!--
-              nestedScrollingEnabled=false porque ya vive dentro del ScrollView de fuera: la lista es
-              corta (subcarpetas añadidas a mano) y no necesita su propio scroll independiente.
-            -->
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/greylistRecycler"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:nestedScrollingEnabled="false" />
-
-            <TextView
-                android:id="@+id/btnAddGreylistFolder"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="?attr/selectableItemBackground"
-                android:paddingVertical="8dp"
-                android:text="@string/settings_greylist_add"
-                android:textColor="@color/um_on_background"
-                android:textStyle="bold" />
-
             <!-- ===== Ajuste: ecualizador ===== -->
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
+                android:layout_marginTop="24dp"
                 android:orientation="horizontal">
 
                 <TextView
@@ -543,6 +516,77 @@
             </LinearLayout>
 
             </LinearLayout>
+
+            <!-- ===== Grupo: ajustes visuales ===== -->
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="28dp"
+                android:background="@color/um_divider" />
+
+            <TextView
+                android:id="@+id/visualSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/settings_visual_section_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <!-- ===== Ajuste: lista gris ===== -->
+
+            <TextView
+                android:id="@+id/greylistTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_greylist_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_greylist_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <!--
+              nestedScrollingEnabled=false porque ya vive dentro del ScrollView de fuera: la lista es
+              corta (subcarpetas añadidas a mano) y no necesita su propio scroll independiente.
+            -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/greylistRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:nestedScrollingEnabled="false" />
+
+            <TextView
+                android:id="@+id/btnAddGreylistFolder"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_greylist_add"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold" />
+
+            <!-- ===== Ajuste: usar carátula del álbum siempre ===== -->
+
+            <com.google.android.material.checkbox.MaterialCheckBox
+                android:id="@+id/useAlbumCoverAlwaysCheck"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/settings_visual_use_album_cover_always"
+                android:textColor="@color/um_on_background"
+                android:textSize="15sp"
+                app:rippleColor="@color/um_ripple_white" />
 
         </LinearLayout>
 

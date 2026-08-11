@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.provider.DocumentsContract
+import android.provider.OpenableColumns
 import android.provider.Settings
 import android.view.View
 import android.view.ViewGroup
@@ -32,6 +34,12 @@ import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayoutMediator
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.scan.MusicScanner
+import com.untar.ultimusic.data.scan.ScannedSong
+import com.untar.ultimusic.model.Album
+import com.untar.ultimusic.model.Artist
+import com.untar.ultimusic.model.Producer
+import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.ui.search.SearchBarController
@@ -42,6 +50,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 
 class MainActivity : AppCompatActivity() {
@@ -97,6 +106,17 @@ class MainActivity : AppCompatActivity() {
         setupDynamicColor()
         checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
         requestNotificationPermissionIfNeeded()
+        handleViewIntent(intent)       /** "Abrir con UltiMusic" desde un gestor de archivos **/
+    }
+
+    /**
+     * Con `launchMode="singleTask"` (ver el manifiesto), si la app ya estaba abierta el sistema NO
+     * crea una `MainActivity` nueva: reutiliza esta y el archivo llega aquí en vez de a [onCreate].
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleViewIntent(intent)
     }
 
     /**
@@ -173,6 +193,11 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadIfPermitted()
+        // Estando la aplicación en segundo plano, el sistema puede haber matado el PlaybackService
+        // (no está en primer plano mientras no suene nada). Lo revivimos aquí, al volver, en vez de
+        // esperar a que el usuario toque una canción: así la cola y el mini-reproductor ya están de
+        // vuelta cuando mira. Si el Service sigue vivo —el caso normal—, esto no hace nada.
+        playerViewModel.ensureServiceRunning()
     }
 
     /**
@@ -279,6 +304,28 @@ class MainActivity : AppCompatActivity() {
                 }
             }
         }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                playerViewModel.cannotAddToEmptyQueue.collect {
+                    Toast.makeText(
+                        this@MainActivity,
+                        R.string.cannot_add_to_empty_queue,
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                playerViewModel.songsAddedToQueue.collect { count ->
+                    Toast.makeText(
+                        this@MainActivity,
+                        resources.getQuantityString(R.plurals.toast_added_to_queue, count, count),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
     }
 
     /**
@@ -329,4 +376,104 @@ class MainActivity : AppCompatActivity() {
             Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
         }
     }
+
+    // --- "Abrir con UltiMusic" desde un gestor de archivos ---
+
+    /**
+     * Reproduce el archivo que llega en un intent VIEW. Si su ruta ya está catalogada en la
+     * fonoteca, se reproduce esa canción tal cual (con su portada, artistas, letra…); si no —el
+     * caso normal, porque la fonoteca solo indexa lo que hay bajo `~/UltiMusic` (ver
+     * [MusicScanner])—, se leen sus etiquetas al vuelo y se reproduce suelta, sin escribir nada en
+     * la base de datos: el archivo puede venir de cualquier otra carpeta o app.
+     */
+    private fun handleViewIntent(intent: Intent?) {
+        val uri = intent?.data?.takeIf { intent.action == Intent.ACTION_VIEW } ?: return
+        lifecycleScope.launch {
+            val path = withContext(Dispatchers.IO) { resolvePathFromUri(uri) }
+            val song = path?.let { p ->
+                LibraryRepository.get(this@MainActivity).songByPath(p)
+                    ?: withContext(Dispatchers.IO) { MusicScanner.readTags(File(p))?.toAdHocSong() }
+            }
+            if (song == null) {
+                Toast.makeText(this@MainActivity, R.string.cannot_open_file, Toast.LENGTH_LONG).show()
+                return@launch
+            }
+            playerViewModel.play(song)
+        }
+    }
+
+    /**
+     * Reduce el `Uri` del intent a una ruta de archivo real: [com.untar.ultimusic.playback.PlaybackService]
+     * exige un `File` de verdad, no sirve un `content://` tal cual. Tres caminos, de más a menos
+     * directo:
+     *  - `file://`: ya es una ruta, se usa tal cual.
+     *  - `content://` del proveedor de almacenamiento externo de Android (el que usan la mayoría de
+     *    gestores de archivos al abrir "con otra app"): su id de documento ES la ruta relativa, así
+     *    que se reconstruye sin tocar MediaStore (ver CLAUDE.md: MediaStore solo para sobrescribir
+     *    lo que edita el usuario).
+     *  - Cualquier otro `content://` (gestor con su propio proveedor, sin ruta real accesible): se
+     *    copia su contenido a una carpeta de caché propia y se reproduce esa copia.
+     */
+    private fun resolvePathFromUri(uri: Uri): String? = when (uri.scheme) {
+        "file" -> uri.path
+        "content" -> resolveExternalStorageDocumentPath(uri) ?: copyToCache(uri)
+        else -> null
+    }
+
+    private fun resolveExternalStorageDocumentPath(uri: Uri): String? {
+        if (uri.authority != "com.android.externalstorage.documents") return null
+        val docId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull() ?: return null
+        val parts = docId.split(":", limit = 2)
+        if (parts.size != 2 || !parts[0].equals("primary", ignoreCase = true)) return null
+        return "${Environment.getExternalStorageDirectory()}/${parts[1]}".takeIf { File(it).exists() }
+    }
+
+    /** Best-effort: si no se puede leer el nombre o el contenido, se rinde con null. */
+    private fun copyToCache(uri: Uri): String? {
+        val name = queryDisplayName(uri) ?: return null
+        return runCatching {
+            val dest = File(File(cacheDir, "abierto_con").apply { mkdirs() }, name)
+            contentResolver.openInputStream(uri)?.use { input ->
+                dest.outputStream().use { output -> input.copyTo(output) }
+            } ?: return null
+            dest.absolutePath
+        }.getOrNull()
+    }
+
+    private fun queryDisplayName(uri: Uri): String? {
+        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
+            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+            if (index >= 0 && cursor.moveToFirst()) return cursor.getString(index)
+        }
+        return null
+    }
+
+    /**
+     * Convierte las etiquetas leídas al vuelo en una canción "suelta" (id 0, sin persistir): solo
+     * para que [PlayerViewModel] y la notificación tengan algo que enseñar mientras suena.
+     */
+    private fun ScannedSong.toAdHocSong(): Song = Song(
+        filePath = filePath,
+        title = title,
+        artists = artist?.let { listOf(Artist(name = it, imageName = null)) } ?: emptyList(),
+        albums = album?.let {
+            listOf(Album(title = it, artists = emptyList(), year = year, genres = genres, imageName = null))
+        } ?: emptyList(),
+        producers = producer?.let { listOf(Producer(name = it, imageName = null)) } ?: emptyList(),
+        duration = duration,
+        year = year,
+        genres = genres,
+        lyrics = null,
+        language = null,
+        imageName = null,
+        comment = null,
+        videoUrl = null,
+        videoThumbnailName = null,
+        videoOffsetMs = 0L,
+        lyricsOffsetMs = 0L,
+        ogTitle = null,
+        ogArtist = null,
+        ogAlbum = null,
+        ogYear = null
+    )
 }

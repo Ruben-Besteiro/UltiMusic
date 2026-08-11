@@ -55,4 +55,5 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@color/um_background</item>
     </style>
+
 </resources>

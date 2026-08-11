@@ -26,5 +26,7 @@ import androidx.room.Index
 )
 data class AlbumArtistCrossRef(
     val albumId: Long,
-    val artistId: Long
+    val artistId: Long,
+    /** Posición del artista en la lista del álbum. Gemelo de [SongArtistCrossRef.position]. */
+    val position: Int = 0
 )

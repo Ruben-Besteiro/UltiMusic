@@ -1,18 +1,17 @@
 package com.untar.ultimusic.ui.player
 
 import android.app.Dialog
-import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Outline
 import android.os.Bundle
 import android.text.TextUtils
+import android.view.GestureDetector
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewOutlineProvider
-import android.view.inputmethod.InputMethodManager
-import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.PopupMenu
 import android.widget.SeekBar
@@ -24,7 +23,6 @@ import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
-import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -45,8 +43,8 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.SquareFrameLayout
-import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.common.attachVerticalDrag
+import com.untar.ultimusic.ui.editor.LyricsSuggestionsDialogFragment
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
@@ -58,6 +56,7 @@ import com.untar.ultimusic.util.LrcParser
 import com.untar.ultimusic.util.LyricLine
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.YouTubeUrl
+import com.untar.ultimusic.util.joinNonBlank
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -126,6 +125,24 @@ class IPodDialogFragment : DialogFragment() {
      */
     private var browsing = false
 
+    /**
+     * Tipo de colección que se está navegando mientras [browsing] es true (playlist o género). Lo
+     * usa [queueEndText] para saber de qué colección hablar en el aviso de la caja de info: mientras
+     * se navega, ese aviso debe ser sobre la playlist/género que se está viendo, no sobre la cola
+     * real que suena de fondo (que puede ser suelta, de otra colección, o no existir aún si la app
+     * acaba de arrancar en frío).
+     */
+    private var browsingKind: CollectionKind? = null
+
+    /**
+     * Cuántas canciones tiene la colección que se está navegando, o -1 mientras [loadSongs] (ver
+     * [enterBrowseMode]) todavía no ha devuelto nada. Lo usa [queueEndText] para distinguir "la
+     * playlist está vacía" de "se ha acabado la playlist": -1 se trata como "no vacía todavía" para
+     * no mostrar el aviso de vacía en el instante en que se abre, antes de saber cuántas tiene de
+     * verdad.
+     */
+    private var browsingSongCount = -1
+
     /** Cursor de la fila seleccionada con las flechas (la que reproduciría el botón de play). */
     private var selectedIndex = 0
 
@@ -175,25 +192,6 @@ class IPodDialogFragment : DialogFragment() {
     private var videoController: VideoScreenController? = null
 
     /**
-     * Cómo pintar y cablear el botón de las 3 rayas cuando NO se está en modo vídeo (modo normal o
-     * navegación de playlist). Se guarda aquí, en vez de aplicarse directamente, porque en modo vídeo
-     * ese botón lo ocupa el engranaje de ajustes (ver [applyMenuButton]): así [exitVideo] puede
-     * reponer exactamente lo que tocaba sin tener que saber en qué modo estaba.
-     */
-    private var restoreMenuButton: () -> Unit = {}
-
-    /**
-     * Fija el icono+listener del botón de las 3 rayas para cuando NO se está en modo vídeo, y lo
-     * recuerda en [restoreMenuButton]. Si ya estamos en modo vídeo al llamarla (p. ej. la canción
-     * cambia mientras se navega una playlist con el vídeo puesto), NO se aplica todavía —eso taparía
-     * el engranaje—, solo se recuerda para cuando se salga del modo vídeo.
-     */
-    private fun applyMenuButton(action: () -> Unit) {
-        restoreMenuButton = action
-        if (!videoMode) action()
-    }
-
-    /**
      * Vídeos elegidos en el buscador durante esta sesión, por id de canción.
      *
      * Hace falta porque [PlayerViewModel] guarda una **copia en memoria** de las canciones de la
@@ -203,14 +201,6 @@ class IPodDialogFragment : DialogFragment() {
      * que ya se le había elegido vídeo.
      */
     private val pickedVideoIds = mutableMapOf<Long, String>()
-
-    /**
-     * Desplazamientos de vídeo/audio elegidos en los ajustes durante esta sesión, por id de
-     * canción. Existe por el mismo motivo que [pickedVideoIds]: [PlayerViewModel] no observa Room,
-     * así que sin este mapa reabrir los ajustes tras cambiarlo (sin recargar la cola) mostraría el
-     * valor viejo.
-     */
-    private val pickedVideoOffsets = mutableMapOf<Long, Long>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -388,6 +378,47 @@ class IPodDialogFragment : DialogFragment() {
         lyricsBox.layoutManager = lyricsLayoutManager
         lyricsBox.adapter = lyricsAdapter
         var lyricLines: List<LyricLine> = emptyList()
+        // Desplazamiento letra/audio de la canción que suena (ver Song.lyricsOffsetMs, ajustado en
+        // el editor de metadatos); se suma a la posición real antes de buscar la línea actual, igual
+        // que videoController.sync suma su propio offset a la posición del vídeo.
+        var lyricsOffsetMs = 0L
+        // Desplazamiento de vídeo ya aplicado al controlador activo (ver Song.videoOffsetMs). Solo
+        // sirve para detectar, en el collect de currentSong de más abajo, que el editor de metadatos
+        // acaba de guardar un valor distinto: no se toca mientras se arrastra el slider (eso no llega
+        // aquí hasta guardar, ver MetadataEditorDialogFragment.setupOffsetControls), solo al guardar.
+        var appliedVideoOffsetMs = 0L
+
+        // Sin letra guardada, tocar el recuadro abre el mismo buscador de lrclib.net que el campo
+        // "Letra" del editor de metadatos ([MetadataEditorDialogFragment.openLyricsPicker], la
+        // ÚNICA forma de ponerle letra a una canción): así se puede añadir/editar desde aquí
+        // también, sin tener que abrir el editor completo. El resultado se guarda directo en Room
+        // (ver el listener de [LyricsSuggestionsDialogFragment.RESULT_KEY] más abajo), como el
+        // enlace del vídeo.
+        //
+        // Un `setOnClickListener` normal NO sirve aquí: `RecyclerView.onTouchEvent` gestiona el
+        // toque entero para el scroll/fling y nunca llama a `performClick()`, así que el click
+        // nunca llegaría a dispararse. Hace falta interceptar el toque a mano con un
+        // `OnItemTouchListener` + `GestureDetector` (la vía que recomienda la propia documentación
+        // de RecyclerView para detectar un toque simple sin robarle el gesto al scroll).
+        val lyricsTapDetector = GestureDetector(
+            requireContext(),
+            object : GestureDetector.SimpleOnGestureListener() {
+                override fun onSingleTapUp(e: MotionEvent): Boolean {
+                    val song = playerViewModel.currentSong.value ?: return false
+                    if (!song.lyrics.isNullOrBlank()) return false
+                    val artist = song.artists.firstOrNull()?.name
+                        ?.takeIf { it != MusicScanner.UNKNOWN_ARTIST }
+                        .orEmpty()
+                    LyricsSuggestionsDialogFragment.newInstance(song.title, artist, song.duration)
+                        .show(childFragmentManager, TAG_LYRICS_SUGGESTIONS)
+                    return true
+                }
+            }
+        )
+        lyricsBox.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
+            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean =
+                lyricsTapDetector.onTouchEvent(e)
+        })
 
         /**
          * Decide si [queueAdapter] pinta el divisor de "final de cola" en su última fila: solo si la
@@ -444,19 +475,8 @@ class IPodDialogFragment : DialogFragment() {
             refreshEndDivider()
             updateInfoBox(queueList, tvTitle, tvMeta)
             btnVideo.setImageResource(R.drawable.ic_video)
-            // El botón de las 3 rayas vuelve a ser lo que tocaba fuera de modo vídeo (menú normal o
-            // el de la navegación de playlist, ver [applyMenuButton]).
-            restoreMenuButton()
             // Vuelve a ser cuadrada, como fuera del modo vídeo.
             topBox.animateAspectRatio(1f)
-        }
-
-        /**
-         * "Ajustes del reproductor de vídeo": el enlace del videoclip (mismo campo que el editor de
-         * metadatos) y el desplazamiento vídeo/audio (ver [openVideoSettings]).
-         */
-        val showVideoSettingsDialog = {
-            playerViewModel.currentSong.value?.let { song -> openVideoSettings(song) }
         }
 
         // Dueño del reproductor de YouTube. Es mudo: la barra de progreso y el botón de play/pausa
@@ -482,9 +502,6 @@ class IPodDialogFragment : DialogFragment() {
             cover.isVisible = false
             queueList.isVisible = false
             updateInfoBox(queueList, tvTitle, tvMeta)
-            // El botón de las 3 rayas pasa a ser el engranaje de ajustes (ver [showVideoSettingsDialog]).
-            btnMenu.setImageResource(R.drawable.ic_settings)
-            btnMenu.setOnClickListener { showVideoSettingsDialog() }
 
             val playingNow = playerViewModel.isPlaying.value
             youtubePlayer.isVisible = true
@@ -494,28 +511,35 @@ class IPodDialogFragment : DialogFragment() {
             // La pantalla del iPod pasa de cuadrada a 16:9 para no dejar bandas vacías arriba y
             // abajo del videoclip.
             topBox.animateAspectRatio(VIDEO_ASPECT_RATIO)
-            val offsetMs = pickedVideoOffsets[song.id] ?: song.videoOffsetMs
-            controller.load(videoId, playerViewModel.currentPositionMs(), playingNow, offsetMs)
+            controller.load(videoId, playerViewModel.currentPositionMs(), playingNow, song.videoOffsetMs)
+            appliedVideoOffsetMs = song.videoOffsetMs
         }
 
         // --- Cableado del modo NORMAL (se sobrescribe si entramos en navegación) ---
         val setupNormalControls = {
             // El botón de las 3 rayas muestra/oculta la cola por encima de la carátula (que se ve
             // siempre, incluso con la cola encima: ver el velo semitransparente de queueList en el
-            // XML). En modo vídeo lo ocupa el engranaje de ajustes (ver [applyMenuButton] y
-            // [startVideo]), así que esto no se aplica hasta que se salga de él.
-            applyMenuButton {
-                btnMenu.setImageResource(R.drawable.ic_menu)
-                btnMenu.setOnClickListener {
-                    queueList.isVisible = !queueList.isVisible
-                    refreshEndDivider()
-                    updateInfoBox(queueList, tvTitle, tvMeta)
-                }
+            // XML). Se comporta exactamente igual en modo vídeo: ahí muestra/oculta la misma cola,
+            // ahora por encima del videoclip (ver el orden de queueList y videoContainer en el XML).
+            btnMenu.setImageResource(R.drawable.ic_menu)
+            btnMenu.setOnClickListener {
+                queueList.isVisible = !queueList.isVisible
+                refreshEndDivider()
+                updateInfoBox(queueList, tvTitle, tvMeta)
             }
             btnPrev.setOnClickListener { playerViewModel.skipToPrevious() }
             btnNext.setOnClickListener { playerViewModel.skipToNext() }
-            // El play/pausa siempre gobierna el audio local, esté o no visible el vídeo.
-            btnPlayPause.setOnClickListener { playerViewModel.togglePlayPause() }
+            // El play/pausa siempre gobierna el audio local, esté o no visible el vídeo. Sin nada
+            // en reproducción (arranque en limpio) lleva el icono de aleatorio (ver el collect de
+            // currentSong+isPlaying más abajo) y arranca una canción al azar de la biblioteca que
+            // no esté en la lista gris; a partir de ahí vuelve a comportarse como play/pausa normal.
+            btnPlayPause.setOnClickListener {
+                if (playerViewModel.currentSong.value == null) {
+                    playerViewModel.playRandomFromLibrary()
+                } else {
+                    playerViewModel.togglePlayPause()
+                }
+            }
         }
         setupNormalControls()
 
@@ -598,6 +622,24 @@ class IPodDialogFragment : DialogFragment() {
             }
         }
 
+        // El buscador de letras devuelve el texto elegido por aquí (ver su listener de arriba en
+        // lyricsBox). Se guarda directo en Room, sin formulario abierto de por medio, igual que el
+        // enlace del vídeo: al reemitir, currentSong llega ya con la letra nueva y el collect de
+        // más abajo la pinta sola.
+        childFragmentManager.setFragmentResultListener(
+            LyricsSuggestionsDialogFragment.RESULT_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            val lyrics = bundle.getString(LyricsSuggestionsDialogFragment.RESULT_LYRICS)
+            val song = playerViewModel.currentSong.value
+            if (lyrics != null && song != null) {
+                viewLifecycleOwner.lifecycleScope.launch {
+                    LibraryRepository.get(requireContext()).setLyrics(song, lyrics)
+                    playerViewModel.refreshSong(song.copy(lyrics = lyrics))
+                }
+            }
+        }
+
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
@@ -615,6 +657,19 @@ class IPodDialogFragment : DialogFragment() {
                         // vuelve al archivo local, que es el que sabe seguir la cola. El vídeo de la
                         // siguiente canción puede no estar ni elegido todavía.
                         if (videoMode && song?.id != videoSongId) exitVideo()
+                        // El editor de metadatos guarda el nuevo desplazamiento en Room y, si esta es
+                        // la canción que suena, PlayerViewModel.refreshSong reemite currentSong con él
+                        // ya puesto (ver MetadataEditorDialogFragment). Si el vídeo de esa canción está
+                        // en pantalla, se reposiciona al instante con el offset nuevo, en vez de esperar
+                        // a salir y volver a entrar en modo vídeo. La comparación con
+                        // [appliedVideoOffsetMs] evita reposicionar (con el saltito que eso da) en cada
+                        // guardado que no toque el offset, p. ej. al editar solo la letra.
+                        if (videoMode && song != null && song.id == videoSongId &&
+                            song.videoOffsetMs != appliedVideoOffsetMs
+                        ) {
+                            appliedVideoOffsetMs = song.videoOffsetMs
+                            videoController?.setOffset(song.videoOffsetMs, playerViewModel.currentPositionMs())
+                        }
                         if (song != null) {
                             cover.load(CoverArt.cover(requireContext(), song), loader) {
                                 error(R.drawable.cover_placeholder)
@@ -630,23 +685,37 @@ class IPodDialogFragment : DialogFragment() {
                         // fila con el texto entero — o el aviso de "sin letra" si no hay ninguna.
                         val rawLyrics = song?.lyrics?.takeIf { it.isNotBlank() }
                         lyricLines = rawLyrics?.let { LrcParser.parse(it) } ?: emptyList()
+                        lyricsOffsetMs = song?.lyricsOffsetMs ?: 0L
                         if (lyricLines.isNotEmpty()) {
                             lyricsAdapter.submit(lyricLines.map { it.text }, synced = true)
-                        } else {
+                        } else if (song != null) {
+                            // Solo avisamos de "sin letra" si de verdad suena algo: sin canción (app
+                            // recién abierta en frío) el recuadro debe quedarse vacío, no fingir que
+                            // hay una canción sin letra.
                             lyricsAdapter.submit(
                                 listOf(rawLyrics ?: getString(R.string.ipod_no_lyrics)),
                                 synced = false
                             )
+                        } else {
+                            lyricsAdapter.submit(emptyList(), synced = false)
                         }
                         // Sin nada en reproducción no hay nada que arrastrar: se deshabilita la barra.
                         progressBar.isEnabled = song != null
                     }
                 }
                 launch {
-                    playerViewModel.isPlaying.collect { isPlaying ->
-                        // El botón siempre refleja el audio local, esté o no visible el vídeo.
+                    // El botón siempre refleja el audio local, esté o no visible el vídeo. Sin
+                    // canción, muestra el icono de aleatorio en vez de play (ver su listener en
+                    // [setupNormalControls]).
+                    combine(playerViewModel.currentSong, playerViewModel.isPlaying) { song, isPlaying ->
+                        song to isPlaying
+                    }.collect { (song, isPlaying) ->
                         btnPlayPause.setImageResource(
-                            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                            when {
+                                song == null -> R.drawable.ic_shuffle
+                                isPlaying -> R.drawable.ic_pause
+                                else -> R.drawable.ic_play
+                            }
                         )
                         // El vídeo (mudo) se pone en el mismo estado, al instante, sin esperar al
                         // siguiente tick de progreso.
@@ -676,7 +745,7 @@ class IPodDialogFragment : DialogFragment() {
                         // lyricLines está vacía y aquí no se hace nada (la única fila que hay se
                         // queda tal cual la pintó el collect de currentSong).
                         if (lyricLines.isNotEmpty()) {
-                            val index = LrcParser.currentIndex(lyricLines, p.positionMs)
+                            val index = LrcParser.currentIndex(lyricLines, p.positionMs + lyricsOffsetMs)
                             if (lyricsAdapter.setCurrentLine(index) && index >= 0) {
                                 // Mismo truco que centra la fila actual de la cola (queueList más
                                 // abajo): pone el TOPE de la fila a media altura del contenedor. Con
@@ -709,6 +778,11 @@ class IPodDialogFragment : DialogFragment() {
                         .collect { (queue, index) ->
                             if (browsing) return@collect
                             queueAdapter.submit(queue, index)
+                            // El resumen de la caja de info ("Quedan N canciones" + duración) cuenta
+                            // lo que hay en la cola, así que hay que rehacerlo también cuando cambia
+                            // la cola sin cambiar la canción: encolar algo a mano con la cola a la
+                            // vista, por ejemplo.
+                            updateInfoBox(queueList, tvTitle, tvMeta)
                             // Centrar la fila actual (la altura ya está disponible en post{}).
                             queueList.post {
                                 queueLayoutManager.scrollToPositionWithOffset(
@@ -791,11 +865,13 @@ class IPodDialogFragment : DialogFragment() {
     ) {
         browsing = true
         selectedIndex = 0
+        browsingSongCount = -1
 
         // Playlist y género son las dos únicas colecciones que pasan por aquí (ver [CollectionKind]);
         // álbum/artista/productor se reproducen directamente desde su ficha, sin pasar por modo
         // navegación (ver [DetailDialogFragment]).
         val kind = if (reorderable) CollectionKind.PLAYLIST else CollectionKind.GENRE
+        browsingKind = kind
 
         // Muestra la lista (para hacer scroll y pinchar) por encima de la carátula, que se sigue
         // viendo de fondo, atenuada (ver el velo semitransparente de queueList en el XML). El resto
@@ -873,14 +949,12 @@ class IPodDialogFragment : DialogFragment() {
             if (playlistAdapter.containsNowPlaying()) {
                 selectedIndex = playlistAdapter.nowPlayingIndex()
                 renderSelected()
-                // Igual que en modo normal: en modo vídeo este botón lo ocupa el engranaje de
-                // ajustes (ver [applyMenuButton]), así que esto no se aplica hasta salir de él.
-                applyMenuButton {
-                    btnMenu.setImageResource(R.drawable.ic_menu)
-                    btnMenu.setOnClickListener {
-                        queueList.isVisible = !queueList.isVisible
-                        updateInfoBox(queueList, tvTitle, tvMeta)
-                    }
+                // Igual que en modo normal (ver setupNormalControls): se comporta igual en modo
+                // vídeo, mostrando/ocultando la misma cola por encima del videoclip.
+                btnMenu.setImageResource(R.drawable.ic_menu)
+                btnMenu.setOnClickListener {
+                    queueList.isVisible = !queueList.isVisible
+                    updateInfoBox(queueList, tvTitle, tvMeta)
                 }
                 // Ir a la anterior/siguiente canción de ESTA playlist equivale a pinchar la fila de
                 // al lado: interrumpe lo que sonaba e inicia la playlist desde ahí (sale de
@@ -902,12 +976,10 @@ class IPodDialogFragment : DialogFragment() {
                     }
                 }
             } else {
-                applyMenuButton {
-                    btnMenu.setImageResource(R.drawable.ic_shuffle)
-                    btnMenu.setOnClickListener {
-                        startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
-                            playerViewModel.shuffleCollection(it.currentSongs(), collectionKey, kind)
-                        }
+                btnMenu.setImageResource(R.drawable.ic_shuffle)
+                btnMenu.setOnClickListener {
+                    startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
+                        playerViewModel.shuffleCollection(it.currentSongs(), collectionKey, kind)
                     }
                 }
                 btnPrev.setOnClickListener {
@@ -957,6 +1029,11 @@ class IPodDialogFragment : DialogFragment() {
             selectedIndex = initialIndex
             renderSelected()
             refreshBrowseControls()
+            // Ahora que ya sabemos cuántas canciones tiene de verdad, refrescamos el aviso de la caja
+            // de info por si estaba mostrando el de "puedes añadir más" sin saber todavía que la
+            // colección está vacía (ver [browsingSongCount] y [queueEndText]).
+            browsingSongCount = songs.size
+            updateInfoBox(queueList, tvTitle, tvMeta)
         }
     }
 
@@ -979,6 +1056,7 @@ class IPodDialogFragment : DialogFragment() {
     ) {
         val playlistAdapter = queueList.adapter as? PlaylistQueueAdapter ?: return
         browsing = false
+        browsingKind = null
         browseJob?.cancel()
         browseJob = null
         itemTouchHelper?.attachToRecyclerView(null)
@@ -1041,8 +1119,33 @@ class IPodDialogFragment : DialogFragment() {
      * [updateInfoBox]): una cola suelta o una playlist admiten seguir añadiendo canciones a mano, así
      * que invitan a hacerlo; el resto (género, álbum, artista, productor, o una colección sin tipo
      * conocido) son fijas y solo avisan de que se han acabado.
+     *
+     * Mientras se navega ([browsing]), el aviso habla de la colección que se está viendo
+     * ([browsingKind]), no de la cola real que suena de fondo: esta puede ser suelta, de otra
+     * colección distinta, o no existir todavía (app recién abierta en frío), y en los tres casos el
+     * texto debe seguir siendo el de la playlist que se tiene delante.
+     *
+     * En ambos casos (cola real o colección navegada) distingue además "vacía de por sí" de "se ha
+     * acabado": si la playlist que se navega no tiene ninguna canción ([browsingSongCount] en 0, ya
+     * cargada), o la cola real no tiene ninguna ([PlayerViewModel.queue] vacía), no tiene sentido
+     * decir "has llegado al final" ni invitar a añadir más, porque no hay nada que "recorrer".
      */
     private fun queueEndText(): String {
+        if (browsing) {
+            if (browsingSongCount == 0) {
+                return if (browsingKind == CollectionKind.PLAYLIST) {
+                    getString(R.string.playlist_empty)
+                } else {
+                    getString(R.string.queue_end)
+                }
+            }
+            return if (browsingKind == CollectionKind.PLAYLIST) {
+                getString(R.string.queue_hint_playlist)
+            } else {
+                getString(R.string.queue_end)
+            }
+        }
+        if (playerViewModel.queue.value.isEmpty()) return getString(R.string.queue_empty)
         if (playerViewModel.isLooseQueue.value) return getString(R.string.queue_hint_loose)
         return if (playerViewModel.currentCollectionKind.value == CollectionKind.PLAYLIST) {
             getString(R.string.queue_hint_playlist)
@@ -1053,17 +1156,24 @@ class IPodDialogFragment : DialogFragment() {
 
     /** Construye la línea "Artista | Álbum | Año" omitiendo el año si no existe. */
     private fun metaLine(song: Song): String {
-        val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
+        val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
         val album = song.albums.firstOrNull()?.title ?: MusicScanner.UNKNOWN_ALBUM
-        return listOfNotNull(artist, album, song.year?.toString()).joinToString(" | ")
+        return joinNonBlank(artist, album, song.year?.toString())
     }
 
     /**
-     * Actualiza [R.id.infoBox] según si se ve la cola/lista o la carátula. En modo cola/lista
-     * [tvTitle] no se usa (esa fila ya la ocupa la lista de arriba, no hay título que mostrar):
-     * se oculta del todo (`GONE`, no solo vacío) para que [tvMeta] suba y ocupe su sitio,
-     * mostrando el aviso de la cola ([queueEndText]) en su lugar. En modo carátula, [tvTitle]
-     * vuelve a verse con el título de la canción y [tvMeta] baja a su papel normal de subtítulo.
+     * Actualiza [R.id.infoBox] según si se ve la cola/lista o la carátula.
+     *
+     * En modo cola/lista la caja resume lo que QUEDA por sonar: [tvTitle] lleva "Quedan N canciones"
+     * (sin contar la actual, que ya está sonando) y [tvMeta], debajo, lo que duran todas ellas
+     * juntas. Cuando no queda ninguna —la actual es la última— no hay nada que resumir, así que
+     * [tvTitle] se oculta del todo (`GONE`, no solo vacío) para que [tvMeta] suba y ocupe su sitio
+     * con el aviso de la cola ([queueEndText]).
+     *
+     * En modo carátula, [tvTitle] vuelve a verse con el título de la canción y [tvMeta] baja a su
+     * papel normal de subtítulo. Sin canción (app recién abierta en frío, antes de elegir nada) no
+     * hay título ni subtítulo que mostrar, así que se trata igual que la cola vacía: [tvTitle] se
+     * oculta y [tvMeta] lleva el aviso, ocupando toda la caja.
      */
     private fun updateInfoBox(
         queueList: RecyclerView,
@@ -1072,12 +1182,29 @@ class IPodDialogFragment : DialogFragment() {
     ) {
         val song = playerViewModel.currentSong.value
         if (queueList.isVisible) {
-            tvTitle.isVisible = false
-            tvMeta.text = queueEndText()
-        } else {
+            // La cuenta sale siempre de la cola REAL, no de las filas que se estén viendo: en modo
+            // navegación la lista de arriba puede ser una playlist que ni siquiera está sonando (ver
+            // enterBrowseMode), pero lo que "queda" es lo que queda por reproducirse de verdad.
+            // drop() ya devuelve vacío si la actual es la última (o si no hay cola).
+            val remaining = playerViewModel.queue.value
+                .drop(playerViewModel.currentIndex.value + 1)
+            if (remaining.isEmpty()) {
+                tvTitle.isVisible = false
+                tvMeta.text = queueEndText()
+            } else {
+                tvTitle.isVisible = true
+                tvTitle.text = resources.getQuantityString(
+                    R.plurals.queue_remaining, remaining.size, remaining.size
+                )
+                tvMeta.text = TimeFormat.hhmmss(remaining.sumOf { it.duration })
+            }
+        } else if (song != null) {
             tvTitle.isVisible = true
-            tvTitle.text = song?.title ?: getString(R.string.nothing_playing)
-            tvMeta.text = song?.let { metaLine(it) } ?: ""
+            tvTitle.text = song.title
+            tvMeta.text = metaLine(song)
+        } else {
+            tvTitle.isVisible = false
+            tvMeta.text = getString(R.string.ipod_nothing_playing)
         }
     }
 
@@ -1156,105 +1283,6 @@ class IPodDialogFragment : DialogFragment() {
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
-    /**
-     * Ajustes del reproductor de vídeo de [song]: el enlace del videoclip (idéntico al del editor de
-     * metadatos: al tocarlo se cierran estos ajustes y se abre el mismo buscador de YouTube) y el
-     * desplazamiento vídeo/audio (regla arrastrable, igual que el amplificador de volumen sin
-     * límite, ver [ValueRuler]).
-     *
-     * El desplazamiento se aplica y se guarda en cada cambio, tanto arrastrando la regla como
-     * escribiendo el número a mano: no hace falta un botón de guardar. Si la canción está sonando,
-     * [VideoScreenController.setOffset] reposiciona el vídeo al instante para que el efecto se vea
-     * en tiempo real mientras se ajusta.
-     */
-    private fun openVideoSettings(song: Song) {
-        val content = layoutInflater.inflate(R.layout.dialog_video_settings, null)
-        val inputVideoUrl = content.findViewById<EditText>(R.id.inputVideoUrl)
-        val ruler = content.findViewById<ValueRuler>(R.id.offsetRuler)
-        val valueInput = content.findViewById<EditText>(R.id.offsetValue)
-
-        inputVideoUrl.setText(song.videoUrl.orEmpty())
-
-        // La regla trabaja en "muescas" de VIDEO_OFFSET_STEP_MS: cada unidad suya son 100 ms de
-        // desplazamiento real, no 1 ms. Con 1 ms por unidad, la separación fija entre marcas de
-        // ValueRuler (ver su cabecera) obligaría a arrastrar metros para cambios de unos pocos cientos
-        // de milisegundos, que es el caso normal de una desincronización.
-        ruler.minValue = -VIDEO_OFFSET_MAX_MS / VIDEO_OFFSET_STEP_MS
-        ruler.maxValue = VIDEO_OFFSET_MAX_MS / VIDEO_OFFSET_STEP_MS
-        ruler.accentColor = playerViewModel.accentColor.value
-
-        // Igual que en SettingsDialogFragment: bandera de "lo estoy cambiando yo" para que repintar
-        // la regla o la caja de texto no se confunda con un cambio del usuario y entre en bucle.
-        var updatingUi = false
-        fun showOffset(ms: Int) {
-            updatingUi = true
-            // La caja de texto admite cualquier milisegundo exacto; la regla solo tiene una muesca
-            // por cada 100 ms, así que se cuadra a la más cercana.
-            val notch = Math.round(ms / VIDEO_OFFSET_STEP_MS.toFloat())
-            if (ruler.currentValue != notch) ruler.setValue(notch, notify = false)
-            if (valueInput.text.toString() != ms.toString()) {
-                valueInput.setText(ms.toString())
-                valueInput.setSelection(valueInput.text.length)
-            }
-            updatingUi = false
-        }
-
-        val startingOffsetMs = pickedVideoOffsets[song.id] ?: song.videoOffsetMs
-        showOffset(startingOffsetMs.toInt())
-
-        fun applyOffset(ms: Int) {
-            val clamped = ms.coerceIn(-VIDEO_OFFSET_MAX_MS, VIDEO_OFFSET_MAX_MS).toLong()
-            pickedVideoOffsets[song.id] = clamped
-            if (videoMode) videoController?.setOffset(clamped, playerViewModel.currentPositionMs())
-            viewLifecycleOwner.lifecycleScope.launch {
-                LibraryRepository.get(requireContext()).setVideoOffsetMs(song, clamped)
-            }
-        }
-
-        ruler.onValueChanged = { notch ->
-            if (!updatingUi) {
-                val ms = notch * VIDEO_OFFSET_STEP_MS
-                applyOffset(ms)
-                showOffset(ms)
-            }
-        }
-        valueInput.doAfterTextChanged { text ->
-            if (updatingUi) return@doAfterTextChanged
-            val typed = text?.toString()?.toIntOrNull() ?: return@doAfterTextChanged
-            applyOffset(typed)
-        }
-        // Al pulsar "hecho" la caja se cuadra con lo aplicado de verdad (por si quedó fuera del
-        // rango o a medio escribir un "-") y se cierra el teclado, igual que en SettingsDialogFragment.
-        valueInput.setOnEditorActionListener { _, _, _ ->
-            showOffset((pickedVideoOffsets[song.id] ?: 0L).toInt())
-            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
-            imm.hideSoftInputFromWindow(valueInput.windowToken, 0)
-            valueInput.clearFocus()
-            true
-        }
-        valueInput.setOnFocusChangeListener { _, hasFocus ->
-            if (!hasFocus) showOffset((pickedVideoOffsets[song.id] ?: 0L).toInt())
-        }
-
-        val dialog = AlertDialog.Builder(requireContext())
-            .setTitle(R.string.video_settings_title)
-            .setView(content)
-            .setPositiveButton(R.string.dialog_ok, null)
-            .create()
-        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentColor.value) }
-
-        // Elegir un vídeo nuevo cierra estos ajustes y abre el mismo buscador que usa el botón de
-        // vídeo principal: el resultado lo recoge el listener de [VideoPickerDialogFragment.RESULT_KEY]
-        // ya registrado en [onViewCreated], que guarda el enlace y reinicia el vídeo con el nuevo id.
-        inputVideoUrl.setOnClickListener {
-            dialog.dismiss()
-            VideoPickerDialogFragment.newInstance(searchQuery(song))
-                .show(childFragmentManager, TAG_VIDEO_PICKER)
-        }
-
-        dialog.show()
-    }
-
     override fun onDestroyView() {
         // El audio local nunca se pausó por el modo vídeo, así que aquí no hay nada que devolver.
         // El reproductor de YouTube lleva un WebView dentro: hay que liberarlo a mano o seguiría
@@ -1270,6 +1298,7 @@ class IPodDialogFragment : DialogFragment() {
         private const val ARG_SUPPRESS_ENTER_ANIM = "suppress_enter_anim"
         private const val TAG_VIDEO_PICKER = "video_picker"
         private const val TAG_METADATA_EDITOR = "metadataEditor"
+        private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
 
         /**
          * Prefijo de la clave que identifica una colección de género en
@@ -1287,17 +1316,6 @@ class IPodDialogFragment : DialogFragment() {
 
         /** Duración de la animación de cierre (ver [animateClose]). */
         private const val CLOSE_ANIM_MS = 200L
-
-        /**
-         * Tope del desplazamiento vídeo/audio, en cada sentido. Como el del amplificador de volumen
-         * sin límite, no está para proteger al usuario sino porque [ValueRuler] necesita un máximo
-         * (ver su cabecera): 30 segundos son muchísimo más que cualquier desincronización real, así
-         * que arrastrando no se llega nunca por accidente.
-         */
-        private const val VIDEO_OFFSET_MAX_MS = 30_000
-
-        /** Cuántos milisegundos avanza la regla del desplazamiento por cada muesca (ver [openVideoSettings]). */
-        private const val VIDEO_OFFSET_STEP_MS = 100
 
         /**
          * Abre el iPod mostrando la playlist [playlistName] para elegir qué sonará. Si esa playlist

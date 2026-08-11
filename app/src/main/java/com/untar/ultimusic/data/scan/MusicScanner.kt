@@ -21,8 +21,8 @@ object MusicScanner {            // OBJECT = SINGLETON
         "mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma", "mkv"
     )
 
-    const val UNKNOWN_ARTIST = "Artista desconocido"
-    const val UNKNOWN_ALBUM = "Álbum desconocido"
+    const val UNKNOWN_ARTIST = ""
+    const val UNKNOWN_ALBUM = ""
 
     /**
      * El listado de carpetas en las que se buscan canciones.
@@ -77,6 +77,16 @@ object MusicScanner {            // OBJECT = SINGLETON
         }
         files.firstOrNull { it.name == filename }
     }
+
+    /**
+     * Lee las etiquetas de UN archivo suelto, fuera del escaneo completo de [scanRoots].
+     *
+     * La usa `MainActivity` al reproducir un archivo llegado por "Abrir con UltiMusic": puede
+     * vivir en cualquier carpeta (Descargas, otra app…), no solo bajo `~/UltiMusic`, así que nunca
+     * pasaría por [scan]. Reutiliza el mismo lector de etiquetas para que se vea exactamente igual
+     * que si estuviera en la fonoteca.
+     */
+    suspend fun readTags(file: File): ScannedSong? = withContext(Dispatchers.IO) { readSong(file) }
 
     /** Recorre recursivamente [dir] añadiendo los archivos de audio a [out]. */
     private fun collectAudioFiles(dir: File, out: MutableSet<File>) {

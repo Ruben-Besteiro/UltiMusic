@@ -26,5 +26,7 @@ import androidx.room.Index
 )
 data class SongProducerCrossRef(
     val songId: Long,
-    val producerId: Long
+    val producerId: Long,
+    /** Posición del productor en la lista de la canción. Gemelo de [SongArtistCrossRef.position]. */
+    val position: Int = 0
 )

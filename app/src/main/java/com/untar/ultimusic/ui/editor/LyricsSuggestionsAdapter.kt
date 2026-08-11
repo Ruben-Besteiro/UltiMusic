@@ -49,11 +49,24 @@ class LyricsSuggestionsAdapter(
             title.text = item.trackName
             subtitle.text = buildSubtitle(item)
 
-            val isSynced = item.syncedLyrics != null
-            badge.isVisible = isSynced
-            if (isSynced) badge.setText(R.string.lyrics_suggestions_badge_synced)
+            val badgeText = buildBadge(item)
+            badge.isVisible = badgeText.isNotEmpty()
+            badge.text = badgeText
 
             itemView.setOnClickListener { onPicked(item) }
+        }
+
+        /** "Sincronizada | Duración coincide": las marcas que hay, con el separador de siempre. Está
+         * vacío (y la insignia se oculta) cuando el candidato no cumple ninguna de las dos. */
+        private fun buildBadge(item: LyricsSuggestion): String {
+            val context = itemView.context
+            val marks = listOfNotNull(
+                context.getString(R.string.lyrics_suggestions_badge_synced)
+                    .takeIf { item.syncedLyrics != null },
+                context.getString(R.string.lyrics_suggestions_badge_duration_match)
+                    .takeIf { item.durationMatches }
+            )
+            return marks.joinToString(context.getString(R.string.subtitle_separator))
         }
 
         /** "Artista | Álbum | m:ss", mismo separador que el resto de listas y filas de sugerencia

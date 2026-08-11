@@ -10,13 +10,12 @@ import java.net.URL
 
 /**
  * Descarga una imagen suelta de la red (la portada elegida en el autorrelleno de metadatos, ver
- * [com.untar.ultimusic.data.remote.MusicBrainzApi]) a la caché de la app, y la deja lista como si
+ * [com.untar.ultimusic.data.remote.ItunesApi]) a la caché de la app, y la deja lista como si
  * el usuario la hubiera elegido con el selector de fotos del sistema.
  *
  * A diferencia de [com.untar.ultimusic.data.LibraryRepository.downloadVideoThumbnail] (la
  * miniatura de YouTube), aquí no hace falta pasar por Coil ni recortar nada a cuadrado: las
- * portadas de Cover Art Archive en tamaño "front-250" ya vienen cuadradas, así que basta con
- * copiar los bytes tal cual.
+ * carátulas de iTunes ya vienen cuadradas, así que basta con copiar los bytes tal cual.
  *
  * Se guarda en la caché (no directamente en `~/UltiMusic/images`) porque todavía no se sabe si el
  * usuario va a guardar el formulario: la importación "de verdad", con el nombre final basado en el
@@ -29,11 +28,11 @@ import java.net.URL
  */
 object NetworkImage {
 
-    /** Mismo dato de contacto que exige la política de uso de MusicBrainz para su API (ver
-     * [com.untar.ultimusic.data.remote.MusicBrainzApi]); Cover Art Archive es un servicio
-     * hermano, no MusicBrainz en sí, pero identificarse igual de bien es buena práctica y no
-     * cuesta nada. Se repite aquí en vez de reutilizar la constante de `MusicBrainzApi` para que
-     * los dos archivos sigan siendo independientes entre sí. */
+    /** Mismo dato de contacto que mandan los clientes de API de la app (ver
+     * [com.untar.ultimusic.data.remote.ItunesApi]): identificarse es buena práctica y no cuesta
+     * nada, aunque descargar una imagen del CDN de Apple no lo exija. Se repite aquí en vez de
+     * reutilizar la constante de `ItunesApi` para que los dos archivos sigan siendo
+     * independientes entre sí. */
     private const val USER_AGENT = "UltiMusic/1.0 ( rbesteiro@proton.me )"
 
     private const val TIMEOUT_MS = 8_000
@@ -53,7 +52,7 @@ object NetworkImage {
                 check(connection.responseCode == HttpURLConnection.HTTP_OK) {
                     "Descarga de portada respondió ${connection.responseCode}"
                 }
-                val file = File.createTempFile("mb_cover_", ".jpg", context.cacheDir)
+                val file = File.createTempFile("remote_cover_", ".jpg", context.cacheDir)
                 connection.inputStream.use { input ->
                     file.outputStream().use { output -> input.copyTo(output) }
                 }

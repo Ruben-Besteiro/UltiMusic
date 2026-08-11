@@ -2,8 +2,8 @@
 <!--
   Fila de un candidato del buscador de letras de lrclib.net (ver LyricsSuggestionsAdapter). Calco de
   item_metadata_suggestion.xml, pero sin portada remota (lrclib.net no da ninguna): en su lugar, un
-  icono fijo de nota musical. La insignia, aquí, distingue letra sincronizada de letra plana en vez
-  de tipo de publicación.
+  icono fijo de nota musical. La insignia, aquí, lleva las marcas del candidato (letra sincronizada
+  y duración que coincide con la del archivo) en vez del tipo de publicación.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -61,7 +61,7 @@
             android:textColor="@color/um_on_surface_muted"
             android:textSize="12sp"
             android:textStyle="italic"
-            tools:text="Sincronizada" />
+            tools:text="Sincronizada | Duración coincide" />
 
     </LinearLayout>
 

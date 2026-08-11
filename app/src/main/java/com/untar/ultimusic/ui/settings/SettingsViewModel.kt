@@ -5,16 +5,18 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.model.GreylistFolder
+import com.untar.ultimusic.util.DisplaySettings
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 /**
- * Estado de la lista gris para [SettingsDialogFragment]. Va aparte de [com.untar.ultimusic.ui.PlayerViewModel]
- * (que es sobre audio/reproducción) porque esto es sobre la biblioteca/carpetas, y sigue el mismo
- * patrón que [com.untar.ultimusic.ui.library.LibraryViewModel]: envuelve [LibraryRepository] y expone
- * sus flujos como [StateFlow].
+ * Estado de los "ajustes visuales" para [SettingsDialogFragment]: la lista gris y "Usar carátula del
+ * álbum siempre". Va aparte de [com.untar.ultimusic.ui.PlayerViewModel] (que es sobre audio/
+ * reproducción, los "ajustes auditivos") porque esto es sobre la biblioteca/carátulas, y sigue el
+ * mismo patrón que [com.untar.ultimusic.ui.library.LibraryViewModel]: envuelve [LibraryRepository] y
+ * expone sus flujos como [StateFlow].
  */
 class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
@@ -33,5 +35,13 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun setGreylistFolderExcluded(path: String, excluded: Boolean) {
         viewModelScope.launch { repository.setGreylistFolderExcluded(path, excluded) }
+    }
+
+    /** Ver la cabecera larga de esto en [com.untar.ultimusic.util.CoverArt.cover] y en
+     *  [DisplaySettings]. */
+    val useAlbumCoverAlways: StateFlow<Boolean> = DisplaySettings.useAlbumCoverAlwaysFlow
+
+    fun setUseAlbumCoverAlways(enabled: Boolean) {
+        DisplaySettings.setUseAlbumCoverAlways(enabled)
     }
 }

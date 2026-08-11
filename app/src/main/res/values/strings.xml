@@ -35,7 +35,9 @@
     <string name="song_cover_desc">Portada de la canción</string>
     <string name="no_songs">Guarda tus archivos de audio en la carpeta UltiMusic</string>
     <string name="song_file_missing">No se encuentra el archivo de %1$s</string>
+    <string name="cannot_open_file">No se ha podido abrir el archivo</string>
     <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
+    <string name="cannot_add_to_empty_queue">No hay cola de reproducción</string>
 
     <!-- Álbumes, artistas y productores -->
     <string name="person_image_desc">Imagen del artista o productor</string>
@@ -59,6 +61,14 @@
         <item quantity="one">%d álbum</item>
         <item quantity="other">%d álbumes</item>
     </plurals>
+    <plurals name="toast_added_to_queue">
+        <item quantity="one">Añadida %d canción a la cola</item>
+        <item quantity="other">Añadidas %d canciones a la cola</item>
+    </plurals>
+    <plurals name="toast_added_to_playlist">
+        <item quantity="one">Añadida %1$d canción a «%2$s»</item>
+        <item quantity="other">Añadidas %1$d canciones a «%2$s»</item>
+    </plurals>
 
     <!-- Editor de metadatos -->
     <string name="edit_metadata">Editar metadatos</string>
@@ -68,11 +78,13 @@
     <string name="editor_pick_cover">Elegir portada</string>
     <string name="editor_saved">Cambios guardados</string>
     <string name="editor_title_required">El título no puede quedar vacío</string>
-    <string name="language_auto_fill">Este campo se rellenará automáticamente al introducir la letra</string>
+    <string name="editor_unsaved_changes_title">Cambios sin guardar</string>
+    <string name="editor_unsaved_changes_message">Tienes ediciones sin guardar. ¿Seguro que quieres irte?</string>
+    <string name="editor_leave">Irme</string>
     <string name="editor_clear_lyrics">Borrar la letra</string>
     <string name="editor_clear_video_url">Quitar el videoclip</string>
 
-    <!-- Autorrelleno de metadatos (MusicBrainz): botón de la toolbar de los dos editores (canción
+    <!-- Autorrelleno de metadatos (iTunes): botón de la toolbar de los dos editores (canción
          y álbum) y el diálogo de sugerencias que abre. Ver MetadataSuggestionsDialogFragment. -->
     <string name="editor_autofill">Autorrelleno de metadatos</string>
     <string name="autofill_missing_query_song">Escribe al menos el título o el artista para poder buscar</string>
@@ -80,26 +92,71 @@
     <string name="suggestions_title">Sugerencias de metadatos</string>
     <string name="suggestions_empty">No se han encontrado resultados</string>
     <string name="suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
+    <!-- Vale para iTunes y para lrclib.net: los dos buscadores enseñan este mismo mensaje cuando la
+         API correspondiente nos limita las peticiones. %1$d son los segundos que quedan de espera. -->
+    <string name="suggestions_rate_limited">Se han hecho demasiadas búsquedas seguidas. Vuelve a intentarlo dentro de %1$d segundos</string>
+    <!-- Aviso pasajero al elegir una sugerencia cuando Genius nos ha limitado: el autorrelleno sigue
+         adelante con los datos de iTunes, solo se queda sin los extras (productores, remix, vídeo). -->
+    <string name="suggestions_genius_rate_limited">Genius ha limitado las peticiones (%1$d s): se han rellenado los datos de iTunes, pero sin productores ni datos del remix</string>
     <string name="suggestions_retry">Reintentar</string>
+
+    <!-- Diálogo de "Acción requerida" que sale al tocar la varita del editor de CANCIÓN sin token de
+         Genius configurado (ver GeniusTokenDialogFragment). No sale en el editor de álbum: ese
+         autorrelleno solo usa iTunes, que no pide clave. -->
+    <string name="genius_setup_title">Acción requerida</string>
+    <string name="genius_setup_intro">El sistema de rellenado automático de metadatos utiliza la API de Genius. Por causas ajenas a UltiMusic, para utilizar esta función debes seguir un proceso corto:</string>
+    <string name="genius_setup_step1">1 - Abre este enlace e inicia sesión:</string>
+    <string name="genius_setup_step2">2 - Dale a New API Client e introduce lo siguiente:</string>
+    <!-- Las etiquetas van con el valor incrustado porque al lado hay un botón que copia justo ese
+         valor: separarlos haría dudar de qué se está copiando. -->
+    <string name="genius_setup_field_name">App Name: UltiMusic</string>
+    <string name="genius_setup_field_url">App Website URL: https://github.com/Ruben-Besteiro/UltiMusic</string>
+    <string name="genius_setup_step3">3 - Hecho esto, abajo del todo dale a Generate Access Token y copia lo que te salga. Se comprobará automáticamente cuando le des a <b>Continuar</b>.</string>
+    <!-- Lo que copian los botones: el valor a secas, sin la etiqueta "App Name:" de delante. -->
+    <string name="genius_setup_value_name">UltiMusic</string>
+    <!-- Valor a copiar/pegar en el campo "App Website URL" del paso 2: el repositorio del proyecto. -->
+    <string name="genius_setup_url">https://github.com/Ruben-Besteiro/UltiMusic</string>
+    <!-- Enlace que abre el paso 1: la gestión de API Clients de Genius, NO el repositorio de arriba
+         (son dos URLs distintas, aunque el paso 2 pida pegar la de GitHub una vez ya está allí). Si
+         el usuario no tiene sesión iniciada, Genius redirige sola al login y vuelve aquí después. -->
+    <string name="genius_setup_login_url">https://genius.com/api-clients</string>
+    <string name="genius_setup_copy">Copiar</string>
+    <string name="genius_setup_copied">Copiado</string>
+    <string name="genius_setup_exit">Salir</string>
+    <string name="genius_setup_continue">Continuar</string>
+    <string name="genius_setup_checking">Comprobando el token…</string>
+    <string name="genius_setup_ok">Token guardado</string>
+    <string name="genius_setup_invalid">Ese token no vale. Comprueba que has copiado el Client Access Token, no el Client ID ni el Client Secret</string>
+    <string name="genius_setup_no_token">No hay ningún token copiado. Copia el Client Access Token y vuelve a darle a Continuar</string>
+    <string name="genius_setup_no_browser">No se ha encontrado ningún navegador para abrir el enlace</string>
+    <!-- Cierre del diálogo largo: deja claro que se puede decir que no. Importa porque el usuario
+         puede estar baneado de Genius y no poder completar el proceso aunque quiera. -->
+    <string name="genius_setup_optional">Este proceso es opcional, pero si lo rechazas, no podrás sacarle el máximo partido a esta función.</string>
+
+    <!-- Aviso previo cuando el API Client del usuario deja de funcionar (401 invalid_token: lo ha
+         borrado, lo ha regenerado, o le han suspendido la cuenta). Al aceptar se abre el diálogo
+         largo. Ver GeniusApiErrorDialogFragment. -->
+    <string name="genius_error_title">Error con la API de Genius</string>
+    <string name="genius_error_message">Se ha producido un error con tu API Client de Genius. Para continuar sacándole el máximo partido al rellenado automático de metadatos, debes crear otro. Disculpa las molestias.</string>
     <string name="suggestion_cover_desc">Portada de la sugerencia</string>
     <!-- Separador de las partes del subtítulo de una sugerencia ("Artista | Álbum | Año"), el
          mismo que ya usa song_subtitle_format en las listas de canciones/álbumes. -->
     <string name="subtitle_separator">" | "</string>
+    <!-- Etiqueta de cada fila de sugerencia. iTunes clasifica toda publicación en uno de estos
+         tres tipos, así que no hace falta ninguna etiqueta de reserva. -->
     <string name="suggestion_type_album">Álbum</string>
     <string name="suggestion_type_single">Single</string>
     <string name="suggestion_type_ep">EP</string>
-    <string name="suggestion_type_other">Publicación</string>
-    <string name="suggestion_type_live">en directo</string>
-    <string name="suggestion_type_compilation">recopilatorio</string>
-    <string name="suggestion_type_soundtrack">banda sonora</string>
-    <string name="suggestion_type_remix">remix</string>
 
     <!-- Buscador de letras sincronizadas de lrclib.net (ver LyricsSuggestionsDialogFragment), abierto
          desde el icono de lupa del campo "Letra" del editor. -->
-    <string name="lyrics_suggestions_title">Letras de lrclib.net</string>
-    <string name="lyrics_suggestions_empty">No se han encontrado letras en lrclib.net</string>
+    <string name="lyrics_suggestions_title">Sugerencias de letra</string>
+    <string name="lyrics_suggestions_empty">No se han encontrado letras</string>
     <string name="lyrics_suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
     <string name="lyrics_suggestions_badge_synced">Sincronizada</string>
+    <!-- Marca de que el candidato dura lo mismo que el archivo del usuario: si no coincide, el
+         audio viene de otra fuente y la letra sincronizada probablemente vaya desfasada. -->
+    <string name="lyrics_suggestions_badge_duration_match">Duración coincide</string>
 
     <!-- Editor de metadatos de ÁLBUM: mismo editor que el de canciones, pero con los campos que
          tiene un álbum (no una canción suelta). Ver AlbumEditorDialogFragment. -->
@@ -115,7 +172,6 @@
     <string name="field_genres">Género(s)</string>
     <string name="field_lyrics">Letra</string>
     <string name="field_lyrics_hint">Toca para buscarla en lrclib.net</string>
-    <string name="field_country">País</string>
     <string name="field_language">Idioma</string>
     <string name="field_comment">Comentario</string>
     <string name="field_video_url">URL del vídeo</string>
@@ -135,7 +191,7 @@
     <!-- Mini-reproductor -->
     <string name="expand_player">Expandir reproductor</string>
     <string name="play_pause">Reproducir o pausar</string>
-    <string name="nothing_playing">Toca en una canción para reproducirla</string>
+    <string name="nothing_playing">Toca donde quieras o dale aquí →</string>
     <string name="updating_database">Actualizando base de datos local…</string>
     <string name="updating_database_percent">Actualizando base de datos local… %d%%</string>
 
@@ -147,14 +203,30 @@
     <string name="ipod_next">Siguiente</string>
     <string name="ipod_now_playing">Sonando ahora</string>
     <string name="ipod_toggle_video">Alternar audio y vídeo</string>
-    <string name="ipod_no_lyrics">No se ha detectado letra para esta canción</string>
-    <!-- Aviso de la cola/lista, en @+id/tvMeta (ver IPodDialogFragment.updateInfoBox), mientras se ve
-         la cola/lista en vez de la carátula: la cola suelta y la playlist admiten seguir añadiendo
-         canciones a mano, así que invitan a hacerlo; álbum/artista/productor/género son colecciones
-         fijas, así que solo avisan de que se han acabado. -->
+    <string name="ipod_no_lyrics">No se ha detectado letra para esta canción. Añádela tocando aquí</string>
+    <!-- Lo que queda de cola, en @+id/tvTitle (ver IPodDialogFragment.updateInfoBox), mientras se ve
+         la cola/lista en vez de la carátula. No cuenta la canción actual: son las que quedan POR
+         sonar. Debajo, en tvMeta, va lo que duran todas ellas juntas (TimeFormat.hhmmss). -->
+    <plurals name="queue_remaining">
+        <item quantity="one">Queda %d canción</item>
+        <item quantity="other">Quedan %d canciones</item>
+    </plurals>
+    <!-- Aviso de la cola/lista, en @+id/tvMeta (ver IPodDialogFragment.updateInfoBox), cuando ya no
+         queda ninguna canción por sonar (la actual es la última): la cola suelta y la playlist
+         admiten seguir añadiendo canciones a mano, así que invitan a hacerlo;
+         álbum/artista/productor/género son colecciones fijas, así que solo avisan de que se han
+         acabado. -->
     <string name="queue_hint_loose">Puedes añadir más música a la cola dándole a los tres puntos y a \"Añadir a cola\"</string>
     <string name="queue_hint_playlist">Puedes añadir más música a la playlist dándole a los tres puntos y a \"Añadir a playlist\"</string>
     <string name="queue_end">Has llegado al final</string>
+    <!-- Igual que queue_end, pero para cuando no es que se haya acabado la cola/playlist: es que
+         está vacía de por sí (cola real sin ninguna canción, o playlist navegada sin canciones). -->
+    <string name="queue_empty">No hay cola de reproducción</string>
+    <!--<string name="playlist_empty">Esta playlist está vacía</string>-->
+    <!-- @+id/tvMeta en modo carátula (ver IPodDialogFragment.updateInfoBox) cuando no suena nada
+         todavía (app recién abierta en frío): tvTitle se oculta igual que en modo cola/lista vacía,
+         así que este texto ocupa toda la caja de info. -->
+    <string name="ipod_nothing_playing">Nada en reproducción</string>
 
     <!-- Modo vídeo del iPod -->
     <string name="video_picker_title">Elige el vídeo</string>
@@ -162,10 +234,16 @@
     <string name="video_no_song">No hay ninguna canción sonando</string>
     <string name="video_bad_url">El enlace del vídeo no es válido</string>
     <string name="video_loading_desc">Cargando vídeo</string>
-    <string name="video_settings_title">Ajustes del reproductor de vídeo</string>
-    <string name="video_settings_offset_title">Desplazamiento</string>
+    <!-- Desplazamiento vídeo/audio, ahora en el editor de metadatos (ver dialog_metadata_editor.xml),
+         debajo del campo de la URL del vídeo. -->
+    <string name="video_settings_offset_title">Desplazamiento del vídeo</string>
     <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar el vídeo y en negativo para atrasarlo</string>
     <string name="video_settings_offset_unit">ms</string>
+    <!-- Desplazamiento letra/audio, debajo del campo de la letra en el editor de metadatos. Solo
+         tiene efecto con letra sincronizada (ver LrcParser); reutiliza video_settings_offset_unit
+         para la unidad (ms), igual para los dos desplazamientos. -->
+    <string name="lyrics_offset_title">Desplazamiento de la letra</string>
+    <string name="lyrics_offset_subtitle">Ponlo en positivo para adelantar la letra y en negativo para atrasarla</string>
     <string name="queue_subtitle_format">%1$s | %2$s</string>
 
     <!-- Playlists -->
@@ -190,6 +268,9 @@
     <!-- Ajustes -->
     <string name="settings_title">Ajustes</string>
     <string name="settings_back">Cerrar los ajustes</string>
+    <string name="settings_audio_section_title">Ajustes auditivos</string>
+    <string name="settings_visual_section_title">Ajustes visuales</string>
+    <string name="settings_visual_use_album_cover_always">Usar carátula del álbum siempre</string>
     <string name="settings_boost_title">Amplificador de volumen</string>
     <string name="settings_boost_subtitle">Untar Technologies no se hace legalmente responsable de cualquier pérdida auditiva causada por su uso</string>
     <string name="settings_boost_no_limit">Desactivar límite</string>

@@ -40,7 +40,6 @@ import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.db.entities.AlbumEntity
-import com.untar.ultimusic.data.remote.MusicBrainzApi
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.util.AccentTint
@@ -304,8 +303,13 @@ class AlbumEditorDialogFragment : DialogFragment() {
      * Vuelca la sugerencia elegida. Más simple que
      * [MetadataEditorDialogFragment.applySuggestion]: un álbum no tiene pista, disco ni "álbum" al
      * que pertenecer, así que solo se tocan título, artistas, año, géneros y portada. El criterio
-     * de artistas es el mismo: se AÑADE el de la sugerencia si no estaba ya, nunca sustituye lo
-     * que el usuario hubiera escrito.
+     * de artistas es el mismo: SUSTITUYE lo que hubiera, para no acabar con el mismo artista
+     * escrito de dos formas y un perfil duplicado en la pestaña de Artistas (ver el javadoc de
+     * [MetadataEditorDialogFragment.applySuggestion]).
+     *
+     * Aquí, además, ese campo viene siempre de iTunes: a las sugerencias de álbum no se les pregunta
+     * a Genius, así que puede llegar una única cadena con los artistas pegados ("A & B") en vez de
+     * separados. Se vuelca tal cual y el usuario la separa a mano si hace falta, antes de guardar.
      */
     private fun applySuggestion(bundle: Bundle) {
         isFillingForm = true
@@ -313,14 +317,9 @@ class AlbumEditorDialogFragment : DialogFragment() {
         val title = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_TITLE).orEmpty()
         if (title.isNotEmpty()) inputTitle.setText(title)
 
-        val artist = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
-        if (artist.isNotEmpty()) {
-            val current = inputArtists.splitValues()
-            if (current.none { it.equals(artist, ignoreCase = true) }) {
-                val merged = (current + artist).joinToString(SEPARATOR)
-                inputArtists.setText(merged, false)
-            }
-        }
+        val artists = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
+            .split(SEPARATOR_CHAR).map { it.trim() }.filter { it.isNotEmpty() }
+        if (artists.isNotEmpty()) inputArtists.setText(artists.joinToString(SEPARATOR), false)
 
         val genres = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_GENRES).orEmpty()
         if (genres.isNotEmpty()) inputGenres.setText(genres)
@@ -334,7 +333,7 @@ class AlbumEditorDialogFragment : DialogFragment() {
         val coverUrl = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_COVER_URL).orEmpty()
         if (coverUrl.isNotEmpty()) {
             viewLifecycleOwner.lifecycleScope.launch {
-                NetworkImage.download(requireContext(), MusicBrainzApi.fullResCoverUrl(coverUrl))?.let { uri ->
+                NetworkImage.download(requireContext(), coverUrl)?.let { uri ->
                     pickedImage = uri
                     cover.load(uri)
                 }

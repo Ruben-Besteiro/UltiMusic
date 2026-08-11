@@ -1,6 +1,7 @@
 package com.untar.ultimusic.ui.playlists
 
 import android.app.Dialog
+import android.content.Context
 import android.content.res.ColorStateList
 import android.os.Bundle
 import android.view.View
@@ -8,6 +9,7 @@ import android.view.ViewGroup
 import android.widget.CheckedTextView
 import android.widget.EditText
 import android.widget.ListView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
@@ -50,8 +52,12 @@ class AddToPlaylistDialogFragment : DialogFragment() {
             .setTitle(R.string.add_to_playlist_title)
             .setMultiChoiceItems(names.toTypedArray(), checked) { _, which, isChecked ->
                 val name = names[which]
-                if (isChecked) viewModel.addSongs(name, filenames)
-                else viewModel.removeSongs(name, filenames)
+                if (isChecked) {
+                    viewModel.addSongs(name, filenames)
+                    showAddedToast(name, filenames.size)
+                } else {
+                    viewModel.removeSongs(name, filenames)
+                }
             }
             .setNeutralButton(R.string.playlist_new_option) { _, _ -> showCreateAndAdd(filenames) }
             .setPositiveButton(R.string.dialog_ok, null)
@@ -94,6 +100,15 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         })
     }
 
+    /** Aviso de "N canciones añadidas a X" al marcar una casilla o crear la playlist desde aquí. */
+    private fun showAddedToast(playlistName: String, count: Int, context: Context = requireContext()) {
+        Toast.makeText(
+            context,
+            context.resources.getQuantityString(R.plurals.toast_added_to_playlist, count, count, playlistName),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     /** Pide un nombre, crea la playlist y añade las canciones de una vez. */
     private fun showCreateAndAdd(filenames: List<String>) {
         // Al pulsar "Nueva playlist…" el AlertDialog de este diálogo se cierra, y con él se DESANCLA
@@ -120,6 +135,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
                 if (name.isNotEmpty()) {
                     vm.create(name)
                     vm.addSongs(name, filenames)
+                    showAddedToast(name, filenames.size, context)
                 }
             }
             .create()

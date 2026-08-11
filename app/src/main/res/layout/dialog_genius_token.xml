@@ -1,0 +1,139 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cuerpo del diálogo de "Acción requerida" que sale al tocar la varita del editor de CANCIÓN sin
+  tener token de Genius (ver GeniusTokenDialogFragment). El título y los botones "Salir"/"Continuar"
+  los pone el AlertDialog, aquí solo va el contenido.
+
+  Las dos filas de valor + botón de copiar existen porque escribir a mano una URL de GitHub en el
+  teclado del móvil es justo la parte del proceso que más se equivoca la gente.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingStart="24dp"
+        android:paddingEnd="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/genius_setup_intro"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+
+        <!-- Paso 1: el enlace. Se tiñe con el acento dinámico desde el fragmento (en el XML es
+             amarillo, y la regla del proyecto es que todo lo amarillo use el color dinámico). -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/genius_setup_step1"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/geniusSetupLink"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:background="?attr/selectableItemBackground"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
+            android:text="@string/genius_setup_login_url"
+            android:textColor="@color/um_yellow"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <!-- Paso 2: los dos campos del formulario, cada uno con su botón de copiar. -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/genius_setup_step2"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/genius_setup_field_name"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <ImageButton
+                android:id="@+id/geniusSetupCopyName"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/genius_setup_copy"
+                android:src="@drawable/ic_copy" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="@string/genius_setup_field_url"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <ImageButton
+                android:id="@+id/geniusSetupCopyUrl"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/genius_setup_copy"
+                android:src="@drawable/ic_copy" />
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/genius_setup_step3"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+
+        <!-- Cierre: que se puede decir que no, y qué se pierde. Va en gris (no en el color de
+             acento) porque es una aclaración, no una llamada a la acción. -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/genius_setup_optional"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="14sp"
+            android:textStyle="italic" />
+
+        <!-- Resultado de la comprobación del token (validando / válido / no vale). Oculto hasta que
+             hay algo que decir. -->
+        <TextView
+            android:id="@+id/geniusSetupStatus"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+</ScrollView>

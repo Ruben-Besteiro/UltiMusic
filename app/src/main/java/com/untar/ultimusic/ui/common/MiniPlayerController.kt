@@ -81,7 +81,17 @@ class MiniPlayerController(
         val expand = miniPlayer.findViewById<ImageView>(R.id.btnExpand)
         val loader = CoverLoader.get(context)
 
-        playPause.setOnClickListener { playerViewModel.togglePlayPause() }
+        // Sin nada en reproducción (arranque en limpio, "Toca donde quieras...") el botón lleva el
+        // icono de aleatorio (ver el collect de currentSong+isPlaying más abajo) y, en vez de
+        // pausa/play, arranca una canción al azar de la biblioteca que no esté en la lista gris;
+        // a partir de ahí currentSong deja de ser null y el botón vuelve a comportarse normal.
+        playPause.setOnClickListener {
+            if (playerViewModel.currentSong.value == null) {
+                playerViewModel.playRandomFromLibrary()
+            } else {
+                playerViewModel.togglePlayPause()
+            }
+        }
         // Igual que en Phonograph, todo el mini-reproductor es una única zona de toque que abre el
         // iPod a pantalla completa (animación de ventana normal, ver [IPodDialogFragment.onStart]);
         // el botón de play/pausa, al tener su propio listener, no propaga el toque hacia aquí.
@@ -132,9 +142,17 @@ class MiniPlayerController(
                     }
                 }
                 launch {
-                    playerViewModel.isPlaying.collect { isPlaying ->
+                    // Sin canción, el botón muestra el icono de aleatorio en vez de play (ver su
+                    // listener más arriba); con canción, el play/pausa de siempre.
+                    combine(playerViewModel.currentSong, playerViewModel.isPlaying) { song, isPlaying ->
+                        song to isPlaying
+                    }.collect { (song, isPlaying) ->
                         playPause.setImageResource(
-                            if (isPlaying) R.drawable.ic_pause else R.drawable.ic_play
+                            when {
+                                song == null -> R.drawable.ic_shuffle
+                                isPlaying -> R.drawable.ic_pause
+                                else -> R.drawable.ic_play
+                            }
                         )
                     }
                 }

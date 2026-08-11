@@ -15,6 +15,7 @@ import com.untar.ultimusic.R
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.joinNonBlank
 
 /**
  * Cola de reproducción tal cual está: la canción actual enseña el icono de altavoz; el resto
@@ -82,10 +83,8 @@ class IPodQueueAdapter(
 
         /** [offset] = posición relativa a la actual: 0 = suena ahora, <0 = ya sonó, >0 = próxima. */
         fun bind(song: Song, offset: Int, showDivider: Boolean, accent: Int) {
-            val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
-            subtitle.text = itemView.context.getString(
-                R.string.queue_subtitle_format, song.title, artist
-            )
+            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
+            subtitle.text = joinNonBlank(song.title, artist)
 
             val isCurrent = offset == 0
             speaker.isVisible = isCurrent

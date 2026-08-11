@@ -2,8 +2,8 @@ package com.untar.ultimusic.data.scan
 
 /**
  * Estos son los metadatos que el [MusicScanner] lee y entrega a la capa de persistencia para reconciliar.
- * Los campos de artista/álbum son anulables (pueden faltar en las etiquetas); la capa de datos
- * decide el valor por defecto ("desconocido") al crear las entidades.
+ * Los campos de artista/álbum son anulables (pueden faltar en las etiquetas); si faltan, la capa de
+ * datos no crea entidad ni enlace para ellos (igual que ya hacía con el productor).
  *
  * Esto NO ES MEDIASTORE. Esto pertenece al archivo, mientras que MediaStore es una "copia" que pertenece al SO
  */

@@ -74,9 +74,26 @@ object CoverArt {
         }
     }
 
-    /** Dato que se pasa a Coil para cargar la carátula de una canción. */
-    fun cover(context: Context, song: Song): Any =
-        cover(context, CoverRef(song.imageName, null, song.filePath, song.videoThumbnailName))
+    /**
+     * Dato que se pasa a Coil para cargar la carátula de una canción.
+     *
+     * Con el ajuste "Usar carátula del álbum siempre" activo (ver [DisplaySettings]) y la canción
+     * perteneciendo a un álbum, la cadena tira primero de la imagen propia del ÁLBUM en vez de la de
+     * la canción; el resto de eslabones (imagen propia de la canción, arte embebido, miniatura de
+     * YouTube) se mantienen como reserva, así que una canción sin nada propio de todos modos no
+     * queda en negro. Como [com.untar.ultimusic.playback.PlaybackService.updateAccent] calcula el
+     * color dinámico a partir de este mismo dato, activar el ajuste también hace que el color
+     * dinámico salga de la carátula del álbum en vez de la de la canción.
+     */
+    fun cover(context: Context, song: Song): Any {
+        val album = song.albums.firstOrNull()
+        val ref = if (album != null && DisplaySettings.useAlbumCoverAlways) {
+            CoverRef(album.imageName, song.imageName, song.filePath, song.videoThumbnailName)
+        } else {
+            CoverRef(song.imageName, null, song.filePath, song.videoThumbnailName)
+        }
+        return cover(context, ref)
+    }
 
     /**
      * Ídem para un álbum/artista/productor. Devuelve el primer eslabón disponible de la cadena; el

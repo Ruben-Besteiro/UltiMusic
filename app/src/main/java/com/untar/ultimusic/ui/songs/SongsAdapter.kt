@@ -15,6 +15,7 @@ import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.joinNonBlank
 
 /**
  * Lista de canciones simple.
@@ -65,9 +66,9 @@ class SongsAdapter(
         ) {
             title.text = song.title
 
-            val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
+            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
             val album = song.albums.firstOrNull()?.title ?: MusicScanner.UNKNOWN_ALBUM
-            subtitle.text = itemView.context.getString(R.string.song_subtitle_format, artist, album)
+            subtitle.text = joinNonBlank(artist, album)
 
             val loader = CoverLoader.get(itemView.context)
             cover.load(CoverArt.cover(itemView.context, song), loader)

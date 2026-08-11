@@ -69,14 +69,6 @@
                 android:scaleType="centerCrop"
                 app:shapeAppearanceOverlay="@style/ShapeAppearanceOverlay.UltiMusic.Cover" />
 
-            <androidx.recyclerview.widget.RecyclerView
-                android:id="@+id/queueList"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@color/um_queue_scrim"
-                android:clipToPadding="false"
-                android:visibility="gone" />
-
             <!-- Reproductor de YouTube: ocupa todo topBox. En modo vídeo topBox deja de ser
                  cuadrado y pasa a 16:9 (ver animateAspectRatio en IPodDialogFragment), así
                  que match_parent encaja exacto, sin bandas que dejar. Antes era wrap_content +
@@ -105,6 +97,20 @@
                     app:autoPlay="false"
                     app:enableAutomaticInitialization="false" />
             </com.untar.ultimusic.ui.common.TouchBlockerFrameLayout>
+
+            <!-- Va DESPUÉS de videoContainer a propósito: en modo vídeo el botón de las 3 rayas
+                 sigue mostrando/ocultando esta misma cola (ver IPodDialogFragment), y para que se
+                 vea (y se pueda tocar/scrollear) por ENCIMA del videoclip en vez de quedar tapada
+                 por él, tiene que ser el hermano posterior en el árbol de vistas: Android dibuja y
+                 reparte el toque a los hermanos posteriores primero. Con el video oculto (modo
+                 normal) el orden entre los dos no importa. -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/queueList"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/um_queue_scrim"
+                android:clipToPadding="false"
+                android:visibility="gone" />
 
             <!-- Ruedecilla de carga: tapa el WebView mientras está en negro, entre que se pide el
                  vídeo (ver VideoScreenController.load) y que YouTube pinta su propia ruedecilla de

@@ -26,6 +26,10 @@ import androidx.room.PrimaryKey
  * cuando el videoclip no va del todo sincronizado. Se ajusta desde los ajustes del reproductor de
  * vídeo del iPod y nunca toca el audio, solo la posición a la que se pide el vídeo.
  *
+ * [lyricsOffsetMs] es lo mismo que [videoOffsetMs] pero para la letra sincronizada: adelanta o
+ * atrasa qué línea toca resaltar respecto al audio, para cuando la letra de lrclib.net no va del
+ * todo a tiempo. Se ajusta desde el editor de metadatos, igual que el del vídeo.
+ *
  * [hiddenByGreylist] marca una canción como oculta porque su carpeta está desactivada en la lista
  * gris de los ajustes (ver `LibraryDao.setSongsHiddenUnderFolder`). Es solo un filtro de lectura:
  * la fila nunca se borra por esto, así que reactivar la carpeta la devuelve intacta, con sus
@@ -47,12 +51,12 @@ data class SongEntity(
     val genres: List<String>,
     val lyrics: String?,
     val language: String?,
-    val country: String?,
     val imageName: String?,
     val comment: String?,
     val videoUrl: String?,
     val videoThumbnailName: String?,
     val videoOffsetMs: Long = 0,
+    val lyricsOffsetMs: Long = 0,
     val hiddenByGreylist: Boolean = false,
 
     val ogTitle: String?,

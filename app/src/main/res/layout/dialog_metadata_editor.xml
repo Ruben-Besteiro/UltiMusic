@@ -13,6 +13,7 @@
     android:background="@color/um_background">
 
     <com.google.android.material.appbar.AppBarLayout
+        android:id="@+id/editorAppBar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         app:elevation="0dp">
@@ -251,19 +252,65 @@
                             android:tint="@color/um_on_surface_muted" />
                     </FrameLayout>
 
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.UltiMusic.TextField"
+                    <!-- Desplazamiento letra/audio (ver Song.lyricsOffsetMs): misma regla arrastrable
+                         que la del vídeo, justo debajo de la letra a la que corrige. Solo tiene efecto
+                         real con letra sincronizada (ver LrcParser); con letra sin sincronizar o sin
+                         letra se puede tocar igualmente, pero no cambia nada visible. -->
+                    <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:hint="@string/field_country">
+                        android:layout_marginTop="16dp"
+                        android:text="@string/lyrics_offset_title"
+                        android:textColor="@color/um_on_background"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
 
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inputCountry"
-                            android:layout_width="match_parent"
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/lyrics_offset_subtitle"
+                        android:textColor="@color/um_on_surface_muted"
+                        android:textSize="13sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.untar.ultimusic.ui.common.ValueRuler
+                            android:id="@+id/lyricsOffsetRuler"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:inputType="textCapCharacters"
-                            android:maxLines="1" />
-                    </com.google.android.material.textfield.TextInputLayout>
+                            android:layout_weight="1"
+                            android:layout_marginBottom="10dp"
+                            android:contentDescription="@string/lyrics_offset_title" />
+
+                        <EditText
+                            android:id="@+id/lyricsOffsetValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:background="@null"
+                            android:gravity="end"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberSigned"
+                            android:maxLength="6"
+                            android:maxLines="1"
+                            android:textColor="@color/um_on_background"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:text="@string/video_settings_offset_unit"
+                            android:textColor="@color/um_on_background" />
+
+                    </LinearLayout>
 
                     <com.google.android.material.textfield.TextInputLayout
                         style="@style/Widget.UltiMusic.TextField"
@@ -275,10 +322,8 @@
                             android:id="@+id/inputLanguage"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:enabled="false"
                             android:inputType="text"
-                            android:maxLines="1"
-                            android:textColor="@color/um_on_surface_muted" />
+                            android:maxLines="1" />
                     </com.google.android.material.textfield.TextInputLayout>
 
                     <com.google.android.material.textfield.TextInputLayout
@@ -333,6 +378,65 @@
                             android:src="@drawable/ic_delete"
                             android:tint="@color/um_on_surface_muted" />
                     </FrameLayout>
+
+                    <!-- Desplazamiento vídeo/audio del modo vídeo del iPod (ver Song.videoOffsetMs):
+                         regla arrastrable igual que el amplificador de volumen sin límite (ver
+                         ValueRuler). Antes vivía en unos ajustes aparte del propio iPod; ahora es un
+                         campo más de este formulario, así que se aplica al guardar como el resto. -->
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="16dp"
+                        android:text="@string/video_settings_offset_title"
+                        android:textColor="@color/um_on_background"
+                        android:textSize="16sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="@string/video_settings_offset_subtitle"
+                        android:textColor="@color/um_on_surface_muted"
+                        android:textSize="13sp" />
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <com.untar.ultimusic.ui.common.ValueRuler
+                            android:id="@+id/offsetRuler"
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:contentDescription="@string/video_settings_offset_title" />
+
+                        <EditText
+                            android:id="@+id/offsetValue"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="12dp"
+                            android:background="@null"
+                            android:gravity="end"
+                            android:imeOptions="actionDone"
+                            android:importantForAutofill="no"
+                            android:inputType="numberSigned"
+                            android:maxLength="6"
+                            android:maxLines="1"
+                            android:textColor="@color/um_on_background"
+                            android:textSize="18sp" />
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginStart="4dp"
+                            android:text="@string/video_settings_offset_unit"
+                            android:textColor="@color/um_on_background" />
+
+                    </LinearLayout>
                 </LinearLayout>
 
                 <!-- ===== Posición en el álbum ===== -->

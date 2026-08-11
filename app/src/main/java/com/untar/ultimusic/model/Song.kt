@@ -12,10 +12,6 @@ data class Song(
     val genres: List<String>,
     val lyrics: String?,
     val language: String?,
-    /** Código de país tal como lo da MusicBrainz (p. ej. "JP", "US"; "XW" es "en todo el mundo"),
-     * de la publicación elegida al autorrellenar (ver [com.untar.ultimusic.model.MetadataSuggestion.
-     * country]). También editable a mano. */
-    val country: String?,
     val imageName: String?,
     val comment: String?,
 
@@ -30,6 +26,13 @@ data class Song(
      * para corregir videoclips que no van del todo sincronizados. Ver los ajustes del reproductor de
      * vídeo del iPod. */
     val videoOffsetMs: Long,
+
+    /** Milisegundos que se adelanta (positivo) o atrasa (negativo) la letra sincronizada respecto al
+     * audio local, para corregir letras de lrclib.net que no van del todo a tiempo. Mismo mecanismo
+     * que [videoOffsetMs] pero aplicado en [com.untar.ultimusic.util.LrcParser.currentIndex] en vez
+     * de en el vídeo. No afecta a letras sin sincronizar: sin marcas de tiempo no hay nada que
+     * desplazar. */
+    val lyricsOffsetMs: Long,
 
     val ogTitle: String?,
     val ogArtist: String?,

@@ -7,13 +7,14 @@ import android.view.ViewGroup
 import android.widget.ImageView
 import android.widget.ProgressBar
 import android.widget.TextView
-import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.MetadataSuggestion
-import com.untar.ultimusic.model.SuggestionKind
+import com.untar.ultimusic.model.ReleaseType
 import com.untar.ultimusic.util.CoverLoader
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.launch
 
 /**
  * Lista de candidatos del diálogo de autorrelleno, con scroll infinito (ver
@@ -24,8 +25,21 @@ import com.untar.ultimusic.util.CoverLoader
  *
  * No usa `ListAdapter`/`DiffUtil`: cada página nueva se limita a añadirse al final de la lista
  * anterior, así que no hace falta comparar listas — un `notifyDataSetChanged` basta.
+ *
+ * [scope] lanza la sustitución de carátula de cada fila (ver [ViewHolder.bind]); vive tan poco como
+ * la vista de la lista (se le pasa `viewLifecycleOwner.lifecycleScope`), así que una fila que se
+ * recicla o se cierra el diálogo a medias no deja ninguna descarga huérfana. [coverOverride] es
+ * [MetadataSuggestionsViewModel.coverArtOverride].
+ *
+ * [usesGenius] dice si esta lista va a preguntarle a Genius por la carátula de cada fila. Es cierto
+ * solo en sugerencias de CANCIÓN **y** con token de Genius utilizable: en una de álbum Genius no
+ * pinta nada, y sin token [coverOverride] devolvería null siempre, así que en los dos casos lanzar la
+ * corrutina de [ViewHolder.bind] sería una llamada de más sin nada que ganar.
  */
 class MetadataSuggestionsAdapter(
+    private val usesGenius: Boolean,
+    private val scope: CoroutineScope,
+    private val coverOverride: suspend (MetadataSuggestion) -> String?,
     private val onPicked: (MetadataSuggestion) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
@@ -64,7 +78,7 @@ class MetadataSuggestionsAdapter(
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
         when (holder) {
-            is ViewHolder -> holder.bind(items[position])
+            is ViewHolder -> holder.bind(items[position], usesGenius, scope, coverOverride)
             is FooterViewHolder -> holder.bind(accent)
         }
     }
@@ -92,59 +106,62 @@ class MetadataSuggestionsAdapter(
         private val subtitle: TextView = itemView.findViewById(R.id.suggestionSubtitle)
         private val badge: TextView = itemView.findViewById(R.id.suggestionBadge)
 
-        fun bind(item: MetadataSuggestion) {
+        /** El item que está pintando esta vista AHORA MISMO, para que la sustitución asíncrona de
+         * [bind] (ver más abajo) no le ponga la carátula de una fila a otra: el `RecyclerView` puede
+         * reciclar esta vista para un item distinto antes de que Genius conteste. */
+        private var boundItem: MetadataSuggestion? = null
+
+        fun bind(
+            item: MetadataSuggestion,
+            usesGenius: Boolean,
+            scope: CoroutineScope,
+            coverOverride: suspend (MetadataSuggestion) -> String?
+        ) {
             val context = itemView.context
+            boundItem = item
 
             title.text = item.title
             subtitle.text = buildSubtitle(item)
+            badge.text = context.getString(describeType(item.releaseType))
+            itemView.setOnClickListener { onPicked(item) }
 
-            val badgeText = describeType(item)
-            badge.text = badgeText
-            badge.isVisible = badgeText != null
-
-            cover.load(item.coverUrl, CoverLoader.get(context)) {
-                error(R.drawable.cover_placeholder)
+            // Sin Genius de por medio, la miniatura de iTunes es la única candidata: se pinta ya.
+            if (!usesGenius) {
+                cover.load(item.coverUrl, CoverLoader.get(context)) {
+                    error(R.drawable.cover_placeholder)
+                }
+                return
             }
 
-            itemView.setOnClickListener { onPicked(item) }
+            // Con Genius disponible, la de iTunes es solo el respaldo (ver coverOverride): no se
+            // pinta todavía, para no enseñar un momento la carátula del álbum y sustituirla después
+            // por la propia de la canción — es justo lo que causaba el bug original. La fila se
+            // queda con el placeholder de fondo del XML hasta que se sepa cuál de las dos gana.
+            scope.launch {
+                val override = coverOverride(item)
+                if (boundItem !== item) return@launch // reciclada para otra fila mientras se esperaba
+                cover.load(override ?: item.coverUrl, CoverLoader.get(context)) {
+                    error(R.drawable.cover_placeholder)
+                }
+            }
         }
 
         /** "Artista | Álbum | Año" para una canción (mismo separador que usan las listas de
-         * canciones/álbumes, ver `song_subtitle_format`); "Artista | Año" para un álbum, donde
-         * [MetadataSuggestion.title] YA es el álbum y repetirlo sería redundante. */
-        private fun buildSubtitle(item: MetadataSuggestion): String {
-            val year = item.year?.toString()
-            val parts = if (item.kind == SuggestionKind.SONG) {
-                listOfNotNull(item.artist.takeIf { it.isNotBlank() }, item.albumTitle, year)
-            } else {
-                listOfNotNull(item.artist.takeIf { it.isNotBlank() }, year)
-            }
-            return parts.joinToString(itemView.context.getString(R.string.subtitle_separator))
-        }
+         * canciones/álbumes, ver `song_subtitle_format`). En una sugerencia de álbum queda
+         * "Artista | Año" solo, sin necesidad de distinguir el caso: ahí
+         * [MetadataSuggestion.albumTitle] es null porque [MetadataSuggestion.title] YA es el álbum
+         * y repetirlo sería redundante. */
+        private fun buildSubtitle(item: MetadataSuggestion): String =
+            listOfNotNull(item.artist.takeIf { it.isNotBlank() }, item.albumTitle, item.year?.toString())
+                .joinToString(itemView.context.getString(R.string.subtitle_separator))
 
-        /** Traduce `primaryType`/`secondaryTypes` (en inglés, tal como los da MusicBrainz) a algo
-         * legible, p. ej. "Single" o "Álbum (en directo)". Null si MusicBrainz no clasificó la
-         * publicación (pasa con datos antiguos o mal etiquetados por la comunidad). */
-        private fun describeType(item: MetadataSuggestion): String? {
-            val context = itemView.context
-            val primaryLabel = when (item.primaryType) {
-                "Album" -> context.getString(R.string.suggestion_type_album)
-                "Single" -> context.getString(R.string.suggestion_type_single)
-                "EP" -> context.getString(R.string.suggestion_type_ep)
-                null -> null
-                else -> context.getString(R.string.suggestion_type_other)
-            } ?: return null
-
-            val secondaryLabels = item.secondaryTypes.mapNotNull {
-                when (it) {
-                    "Live" -> context.getString(R.string.suggestion_type_live)
-                    "Compilation" -> context.getString(R.string.suggestion_type_compilation)
-                    "Soundtrack" -> context.getString(R.string.suggestion_type_soundtrack)
-                    "Remix" -> context.getString(R.string.suggestion_type_remix)
-                    else -> null // el resto no se traduce: mejor omitirlo que enseñar el inglés suelto
-                }
-            }
-            return if (secondaryLabels.isEmpty()) primaryLabel else "$primaryLabel (${secondaryLabels.joinToString(", ")})"
+        /** Etiqueta de la fila. A diferencia de MusicBrainz, iTunes siempre deja clasificar la
+         * publicación en uno de los tres tipos (ver [ReleaseType]), así que la etiqueta nunca se
+         * queda vacía y no hay tipos secundarios ("en directo", "recopilatorio"…) que añadir. */
+        private fun describeType(type: ReleaseType): Int = when (type) {
+            ReleaseType.ALBUM -> R.string.suggestion_type_album
+            ReleaseType.SINGLE -> R.string.suggestion_type_single
+            ReleaseType.EP -> R.string.suggestion_type_ep
         }
     }
 }

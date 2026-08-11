@@ -1,5 +1,6 @@
 package com.untar.ultimusic.ui.editor
 
+import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.drawable.Drawable
 import android.net.Uri
@@ -10,14 +11,17 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.MenuItem
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.activity.ComponentDialog
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
@@ -28,6 +32,7 @@ import androidx.core.view.children
 import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import androidx.core.widget.addTextChangedListener
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import androidx.fragment.app.viewModels
@@ -40,14 +45,16 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.remote.MusicBrainzApi
+import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.player.VideoPickerDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.LanguageDetector
 import com.untar.ultimusic.util.NetworkImage
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.launch
@@ -63,6 +70,9 @@ import kotlinx.coroutines.launch
  * Todos los campos están siempre visibles, agrupados bajo cabeceras ("Detalles", "Posición en el
  * álbum", "Grabación original"). Lo que se escribe aquí se guarda en Room, de modo que persiste
  * aunque se cierre la aplicación y el escaneo del disco no lo pisa.
+ *
+ * Se abre siempre igual, ocupando toda la pantalla, sea cual sea el sitio desde el que se lanza
+ * (Canciones, una ficha de álbum/artista/productor, el buscador o el iPod).
  */
 class MetadataEditorDialogFragment : DialogFragment() {
 
@@ -79,12 +89,17 @@ class MetadataEditorDialogFragment : DialogFragment() {
      * confunda con un cambio del usuario y marque el formulario como sucio. */
     private var isFillingForm = false
 
-    /** True en cuanto el usuario cambia algo (texto o portada). El icono de guardar se pinta de
-     * amarillo dinámico mientras esto sea true, para señalar que esa es la opción recomendada. */
+    /** True en cuanto el usuario cambia algo (texto o portada). Controla si al intentar salir
+     * (ver [attemptClose]) hace falta pedir confirmación. */
     private var isDirty = false
 
-    private lateinit var saveMenuItem: MenuItem
     private var accentColor: Int = 0
+
+    /** Se activa mientras se sincronizan entre sí cada regla de desplazamiento y su caja de texto
+     * (ver [setupOffsetControls]: vale tanto para vídeo como para letra), para que ese repintado
+     * no se confunda con un cambio del usuario y entre en bucle (mismo patrón que
+     * `IPodDialogFragment.openVideoSettings` usaba antes de mudarse aquí). */
+    private var updatingOffsetUi = false
 
     private lateinit var inputTitle: EditText
     private lateinit var inputAlbums: MaterialAutoCompleteTextView
@@ -94,11 +109,14 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private lateinit var inputGenres: EditText
     private lateinit var inputLyrics: EditText
     private lateinit var btnClearLyrics: ImageButton
-    private lateinit var inputCountry: EditText
+    private lateinit var lyricsOffsetRuler: ValueRuler
+    private lateinit var lyricsOffsetValue: EditText
     private lateinit var inputLanguage: EditText
     private lateinit var inputComment: EditText
     private lateinit var inputVideoUrl: EditText
     private lateinit var btnClearVideoUrl: ImageButton
+    private lateinit var offsetRuler: ValueRuler
+    private lateinit var offsetValue: EditText
     private lateinit var inputTrackNumber: EditText
     private lateinit var inputDiscNumber: EditText
     private lateinit var inputOgTitle: EditText
@@ -159,6 +177,12 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
         bindViews(view)
         setupToolbar(view)
+        setupBackHandling()
+
+        // Dos reglas idénticas en funcionamiento (ver [setupOffsetControls]): la del vídeo
+        // ([offsetRuler]) y la de la letra ([lyricsOffsetRuler], justo debajo del campo de letra).
+        setupOffsetControls(offsetRuler, offsetValue)
+        setupOffsetControls(lyricsOffsetRuler, lyricsOffsetValue)
 
         val textFields = mutableListOf<TextInputLayout>()
         collectTextInputLayouts(view, textFields)
@@ -191,7 +215,41 @@ class MetadataEditorDialogFragment : DialogFragment() {
         childFragmentManager.setFragmentResultListener(
             MetadataSuggestionsDialogFragment.RESULT_KEY,
             viewLifecycleOwner
-        ) { _, bundle -> applySuggestion(bundle) }
+        ) { _, bundle ->
+            applySuggestion(bundle)
+            // Si por el camino Genius rechazó el token, el candidato elegido YA se ha aplicado (con
+            // lo que dio iTunes) y solo después se avisa: la elección del usuario no se pierde por
+            // un problema que no es suyo. GeniusApi ya ha borrado el token para entonces.
+            if (bundle.getBoolean(MetadataSuggestionsDialogFragment.RESULT_GENIUS_TOKEN_INVALID)) {
+                GeniusApiErrorDialogFragment.newInstance()
+                    .show(childFragmentManager, GeniusApiErrorDialogFragment.TAG)
+            }
+        }
+
+        // Fin del diálogo de configuración de Genius, por cualquiera de sus dos salidas: se abre el
+        // autorrelleno que el usuario pidió al tocar la varita, para que no tenga que volver a
+        // tocarla. Si lo configuró, con Genius; si lo rechazó, solo con iTunes (ver
+        // GeniusTokenDialogFragment.decline).
+        childFragmentManager.setFragmentResultListener(
+            GeniusTokenDialogFragment.RESULT_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            val configured = bundle.getBoolean(GeniusTokenDialogFragment.RESULT_CONFIGURED)
+            val declined = bundle.getBoolean(GeniusTokenDialogFragment.RESULT_DECLINED)
+            if (configured || declined) openMetadataSuggestions()
+        }
+
+        // "Error con la API de Genius" aceptado: se encadena el diálogo largo con las instrucciones
+        // para sacar un API Client nuevo.
+        childFragmentManager.setFragmentResultListener(
+            GeniusApiErrorDialogFragment.RESULT_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            if (bundle.getBoolean(GeniusApiErrorDialogFragment.RESULT_ACKNOWLEDGED)) {
+                GeniusTokenDialogFragment.newInstance()
+                    .show(childFragmentManager, GeniusTokenDialogFragment.TAG)
+            }
+        }
 
         // Papelera para vaciar letra y URL del vídeo: al no ser campos que se escriban a mano
         // (se pulsan y abren un buscador), tocarlos otra vez no sirve para borrarlos. Va en un
@@ -216,6 +274,14 @@ class MetadataEditorDialogFragment : DialogFragment() {
             if (lyrics != null) {
                 inputLyrics.setText(lyrics)
             }
+        }
+
+        // El campo "Idioma" se autorrellena deduciéndolo de la letra cada vez que esta cambia,
+        // tanto al elegirla en el buscador como al vaciarla con la papelera, pero el usuario puede
+        // sobrescribirlo a mano después. Durante el volcado inicial (isFillingForm) NO se recalcula:
+        // se respeta el idioma que ya traía guardado la canción.
+        inputLyrics.doAfterTextChanged { text ->
+            if (!isFillingForm) updateLanguageFromLyrics(text?.toString())
         }
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -250,10 +316,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
                             Toast.makeText(
                                 requireContext(), R.string.editor_saved, Toast.LENGTH_SHORT
                             ).show()
-                            // Ya no se cierra el editor: el usuario sigue editando. El disquete
-                            // vuelve a su color por defecto porque ya no hay cambios sin guardar.
+                            // Ya no se cierra el editor: el usuario sigue editando, pero ya no hay
+                            // cambios sin guardar (así salir ahora mismo no pediría confirmación).
                             isDirty = false
-                            updateSaveIcon()
                             // Ya se importó a disco: si no se vuelve a null, un guardado posterior
                             // sin tocar la portada la reimportaría de nuevo por nada.
                             pickedImage = null
@@ -272,7 +337,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
                     val defaultStroke = ContextCompat.getColor(requireContext(), R.color.um_divider)
                     playerViewModel.accentColor.collect { accent ->
                         accentColor = accent
-                        updateSaveIcon()
+                        offsetRuler.accentColor = accent
+                        lyricsOffsetRuler.accentColor = accent
                         AccentTint.fill(view, R.id.btnPickCover, accent)
                         AccentTint.contentOnAccent(btnPickCover, accent)
                         fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
@@ -345,11 +411,14 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputGenres = view.findViewById(R.id.inputGenres)
         inputLyrics = view.findViewById(R.id.inputLyrics)
         btnClearLyrics = view.findViewById(R.id.btnClearLyrics)
-        inputCountry = view.findViewById(R.id.inputCountry)
+        lyricsOffsetRuler = view.findViewById(R.id.lyricsOffsetRuler)
+        lyricsOffsetValue = view.findViewById(R.id.lyricsOffsetValue)
         inputLanguage = view.findViewById(R.id.inputLanguage)
         inputComment = view.findViewById(R.id.inputComment)
         inputVideoUrl = view.findViewById(R.id.inputVideoUrl)
         btnClearVideoUrl = view.findViewById(R.id.btnClearVideoUrl)
+        offsetRuler = view.findViewById(R.id.offsetRuler)
+        offsetValue = view.findViewById(R.id.offsetValue)
         inputTrackNumber = view.findViewById(R.id.inputTrackNumber)
         inputDiscNumber = view.findViewById(R.id.inputDiscNumber)
         inputOgTitle = view.findViewById(R.id.inputOgTitle)
@@ -358,11 +427,75 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputOgYear = view.findViewById(R.id.inputOgYear)
     }
 
+    /**
+     * Engancha [ruler] y [value] entre sí y con [markDirty], para que se comporten como una sola
+     * regla de desplazamiento: la usan tanto [offsetRuler]/[offsetValue] (vídeo) como
+     * [lyricsOffsetRuler]/[lyricsOffsetValue] (letra), que solo difieren en a qué campo de la
+     * canción acaban escribiendo (ver [save]).
+     *
+     * La regla trabaja en "muescas" de [OFFSET_STEP_MS]: cada unidad suya son 100 ms de
+     * desplazamiento real, no 1 ms. Con 1 ms por unidad, la separación fija entre marcas de
+     * [ValueRuler] (ver su cabecera) obligaría a arrastrar metros para cambios de unos pocos
+     * cientos de milisegundos, que es el caso normal de una desincronización.
+     */
+    private fun setupOffsetControls(ruler: ValueRuler, value: EditText) {
+        ruler.minValue = -OFFSET_MAX_MS / OFFSET_STEP_MS
+        ruler.maxValue = OFFSET_MAX_MS / OFFSET_STEP_MS
+        ruler.onValueChanged = { notch ->
+            if (!updatingOffsetUi) {
+                showOffset(ruler, value, notch * OFFSET_STEP_MS)
+                markDirty()
+            }
+        }
+        // La caja admite cualquier milisegundo exacto escrito a mano; se refleja en la regla
+        // cuadrando a la muesca de 100 ms más cercana (ver [showOffset] para el camino contrario).
+        value.doAfterTextChanged { text ->
+            if (updatingOffsetUi || isFillingForm) return@doAfterTextChanged
+            val typed = text?.toString()?.toIntOrNull() ?: return@doAfterTextChanged
+            updatingOffsetUi = true
+            val notch = Math.round(typed / OFFSET_STEP_MS.toFloat())
+            if (ruler.currentValue != notch) ruler.setValue(notch, notify = false)
+            updatingOffsetUi = false
+        }
+        // Al pulsar "hecho" la caja se cuadra dentro del rango (por si quedó a medio escribir un
+        // "-" o se pasó del tope) y se cierra el teclado, igual que SettingsDialogFragment.
+        value.setOnEditorActionListener { _, _, _ ->
+            showOffset(ruler, value, clampedOffsetOrZero(value))
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(value.windowToken, 0)
+            value.clearFocus()
+            true
+        }
+        value.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) showOffset(ruler, value, clampedOffsetOrZero(value))
+        }
+    }
+
+    /**
+     * Refleja [ms] en [ruler] y en [value] a la vez, cuadrando la regla a su muesca de
+     * [OFFSET_STEP_MS] más cercana. [updatingOffsetUi] evita que este repintado se confunda
+     * con un cambio del usuario (ver [setupOffsetControls]).
+     */
+    private fun showOffset(ruler: ValueRuler, value: EditText, ms: Int) {
+        updatingOffsetUi = true
+        val notch = Math.round(ms / OFFSET_STEP_MS.toFloat())
+        if (ruler.currentValue != notch) ruler.setValue(notch, notify = false)
+        if (value.text.toString() != ms.toString()) {
+            value.setText(ms.toString())
+            value.setSelection(value.text.length)
+        }
+        updatingOffsetUi = false
+    }
+
+    /** Lo escrito en [value], dentro del rango permitido; 0 si está vacío o a medio escribir. */
+    private fun clampedOffsetOrZero(value: EditText): Int =
+        value.text.toString().toIntOrNull()
+            ?.coerceIn(-OFFSET_MAX_MS, OFFSET_MAX_MS) ?: 0
+
     private fun setupToolbar(view: View) {
         val toolbar = view.findViewById<MaterialToolbar>(R.id.editorToolbar)
-        toolbar.setNavigationOnClickListener { dismiss() }
+        toolbar.setNavigationOnClickListener { attemptClose() }
         toolbar.inflateMenu(R.menu.menu_metadata_editor)
-        saveMenuItem = toolbar.menu.findItem(R.id.action_save)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_save -> { save(); true }
@@ -371,25 +504,50 @@ class MetadataEditorDialogFragment : DialogFragment() {
         }
     }
 
-    /** El usuario ha cambiado algo desde que se abrió el editor: se pinta el icono de guardar con
-     * el acento para señalar que guardar es la opción recomendada. */
-    private fun markDirty() {
-        if (isDirty) return
-        isDirty = true
-        updateSaveIcon()
+    /**
+     * El botón "atrás" del sistema/gesto tiene que pasar por la misma confirmación que la flecha
+     * de la toolbar (ver [attemptClose]). El despachador es el del DIÁLOGO, no el de la actividad
+     * (mismo motivo que en [com.untar.ultimusic.ui.player.VideoPickerDialogFragment]): un
+     * DialogFragment se dibuja en su propia ventana y es esa la que recibe el "atrás".
+     */
+    private fun setupBackHandling() {
+        (dialog as? ComponentDialog)?.onBackPressedDispatcher?.addCallback(
+            viewLifecycleOwner,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = attemptClose()
+            }
+        )
     }
 
-    /** Repinta el icono de guardar: amarillo dinámico si hay cambios sin guardar, el color por
-     * defecto del tema si no. Se reconstruye desde el recurso en vez de limpiar el tinte anterior
-     * porque un [android.graphics.drawable.Drawable] no permite volver a su `android:tint` original
-     * una vez sobreescrito. */
-    private fun updateSaveIcon() {
-        if (!::saveMenuItem.isInitialized) return
-        val drawable = AppCompatResources.getDrawable(requireContext(), R.drawable.ic_save)?.mutate()
-        if (isDirty) {
-            drawable?.let { DrawableCompat.setTint(it, accentColor) }
-        }
-        saveMenuItem.icon = drawable
+    /** Punto único de salida del editor: si hay cambios sin guardar pide confirmación antes de
+     * cerrar (ver [showUnsavedChangesDialog]); si no, cierra directamente. */
+    private fun attemptClose() {
+        if (isDirty) showUnsavedChangesDialog() else closeNow()
+    }
+
+    /** Los botones siguen el color dinámico de la canción que suena, como manda el proyecto para
+     * todo lo amarillo (ver [AccentTint.buttons]). */
+    private fun showUnsavedChangesDialog() {
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.editor_unsaved_changes_title)
+            .setMessage(R.string.editor_unsaved_changes_message)
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.editor_leave) { _, _ -> closeNow() }
+            .show()
+        AccentTint.buttons(dialog, accentColor)
+    }
+
+    /** Cierra de verdad, sin pedir confirmación (ya se ha hecho o no hacía falta, ver
+     * [attemptClose]). La animación de salida la pone el tema
+     * ([R.style.Theme_UltiMusic_FullScreenDialog]). */
+    private fun closeNow() {
+        dismiss()
+    }
+
+    /** El usuario ha cambiado algo desde que se abrió el editor: si intenta salir ahora, hará
+     * falta pedir confirmación (ver [attemptClose]). */
+    private fun markDirty() {
+        isDirty = true
     }
 
     /** Vuelca la canción en los campos. Solo la primera vez (ver [formLoaded]). */
@@ -413,23 +571,38 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputYear.setText(song.year?.toString().orEmpty())
         inputGenres.setText(song.genres.joinToString(SEPARATOR))
         inputLyrics.setText(song.lyrics.orEmpty())
-        inputCountry.setText(song.country.orEmpty())
         inputLanguage.setText(song.language.orEmpty())
         inputComment.setText(song.comment.orEmpty())
         inputVideoUrl.setText(song.videoUrl.orEmpty())
+        showOffset(offsetRuler, offsetValue, song.videoOffsetMs.toInt())
+        showOffset(lyricsOffsetRuler, lyricsOffsetValue, song.lyricsOffsetMs.toInt())
         inputOgTitle.setText(song.ogTitle.orEmpty())
         inputOgArtist.setText(song.ogArtist.orEmpty())
         inputOgAlbum.setText(song.ogAlbum.orEmpty())
         inputOgYear.setText(song.ogYear?.toString().orEmpty())
 
         isFillingForm = false
+    }
 
-        inputLanguage.setOnClickListener {
-            Toast.makeText(
-                requireContext(),
-                R.string.language_auto_fill,
-                Toast.LENGTH_SHORT
-            ).show()
+    /**
+     * Deduce el idioma a partir de [lyrics] con [LanguageDetector] y lo vuelca en [inputLanguage].
+     * Letra vacía limpia el campo sin más (no hay de dónde deducir nada); si ML Kit no consigue
+     * decidirse, también lo deja vacío en vez de dejar el idioma de una letra anterior.
+     *
+     * La detección es asíncrona: para cuando responde, la letra pudo haber cambiado otra vez (o el
+     * editor pudo haberse cerrado), así que el resultado solo se aplica si [inputLyrics] sigue
+     * teniendo exactamente el mismo texto que se mandó a analizar.
+     */
+    private fun updateLanguageFromLyrics(lyrics: String?) {
+        val text = lyrics.orEmpty().trim()
+        if (text.isEmpty()) {
+            inputLanguage.setText("")
+            return
+        }
+        LanguageDetector.detect(text) { language ->
+            if (isAdded && inputLyrics.text.toString().trim() == text) {
+                inputLanguage.setText(language.orEmpty())
+            }
         }
     }
 
@@ -448,13 +621,27 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
     /** Busca sugerencias con lo que haya AHORA en los campos de título y artista (no la canción
      * cargada): así tiene en cuenta lo que se esté escribiendo aunque no se haya guardado todavía,
-     * igual que [openVideoPicker]. */
+     * igual que [openVideoPicker].
+     *
+     * La primera vez pasa por [GeniusTokenDialogFragment]: el autorrelleno de canción usa Genius
+     * para los productores, el remix y el videoclip, y ese token lo pone cada usuario (ver
+     * [com.untar.ultimusic.data.remote.GeniusTokenStore] sobre por qué). La comprobación va después
+     * de la de los campos vacíos a propósito: no tiene sentido mandar a nadie a registrar un cliente
+     * de API para una búsqueda que ni siquiera se podría lanzar. */
     private fun openMetadataSuggestions() {
         val title = inputTitle.text.toString().trim()
         val artist = inputArtists.splitValues().firstOrNull().orEmpty()
         if (title.isEmpty() && artist.isEmpty()) {
             Toast.makeText(requireContext(), R.string.autofill_missing_query_song, Toast.LENGTH_SHORT)
                 .show()
+            return
+        }
+        // Solo se ofrece si no hay token utilizable Y el usuario no lo ha rechazado ya: quien dijo
+        // que no (o no puede completarlo, p. ej. estando baneado de Genius) usa el autorrelleno con
+        // iTunes y no se le vuelve a insistir. Ver GeniusTokenStore.shouldOfferSetup.
+        if (GeniusTokenStore.shouldOfferSetup) {
+            GeniusTokenDialogFragment.newInstance()
+                .show(childFragmentManager, GeniusTokenDialogFragment.TAG)
             return
         }
         MetadataSuggestionsDialogFragment.newInstance(SuggestionKind.SONG, title, artist)
@@ -471,15 +658,24 @@ class MetadataEditorDialogFragment : DialogFragment() {
                 .show()
             return
         }
-        LyricsSuggestionsDialogFragment.newInstance(title, artist)
+        // La duración se saca de la canción cargada (no del formulario: no es un campo editable) y
+        // sirve para marcar los candidatos que sean de la misma grabación.
+        LyricsSuggestionsDialogFragment.newInstance(title, artist, viewModel.song.value?.duration ?: 0L)
             .show(childFragmentManager, TAG_LYRICS_SUGGESTIONS)
     }
 
     /**
-     * Vuelca en el formulario la sugerencia elegida en [MetadataSuggestionsDialogFragment]. Nunca
-     * pisa lo que el usuario ya hubiera escrito en artistas (solo AÑADE el de la sugerencia si no
-     * estaba ya) porque MusicBrainz puede no conocer a todos los colaboradores que el usuario sí
-     * tenga anotados.
+     * Vuelca en el formulario la sugerencia elegida en [MetadataSuggestionsDialogFragment]. El
+     * grueso viene de iTunes; productores, canción original y videoclip los aporta Genius cuando
+     * está configurado (ver [com.untar.ultimusic.data.remote.GeniusApi]), y llegan vacíos si no.
+     *
+     * Artistas y productores se tratan igual, como manda el proyecto: los dos se SUSTITUYEN por lo
+     * que traiga la sugerencia, no se acumulan. Acumular parece más prudente, pero acaba dejando el
+     * mismo artista escrito de dos formas ("ピノキオピー" junto a "PinocchioP") — y aquí eso no es un
+     * campo de texto feo, es un perfil de más en la pestaña de Artistas, que además hay que ir a
+     * borrar a mano. Sustituir deja el campo tal cual lo dice la fuente, y como el editor no guarda
+     * nada hasta que se pulsa Guardar, cualquier colaborador que falte se puede volver a escribir
+     * antes de eso.
      */
     private fun applySuggestion(bundle: Bundle) {
         isFillingForm = true
@@ -490,14 +686,11 @@ class MetadataEditorDialogFragment : DialogFragment() {
         val album = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ALBUM).orEmpty()
         if (album.isNotEmpty()) inputAlbums.setText(album, false)
 
-        val artist = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
-        if (artist.isNotEmpty()) {
-            val current = inputArtists.splitValues()
-            if (current.none { it.equals(artist, ignoreCase = true) }) {
-                val merged = (current + artist).joinToString(SEPARATOR)
-                inputArtists.setText(merged, false)
-            }
-        }
+        val artists = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
+        replaceValues(inputArtists, artists)
+
+        val producers = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_PRODUCERS).orEmpty()
+        replaceValues(inputProducers, producers)
 
         val genres = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_GENRES).orEmpty()
         if (genres.isNotEmpty()) inputGenres.setText(genres)
@@ -511,23 +704,51 @@ class MetadataEditorDialogFragment : DialogFragment() {
         val discNumber = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_DISC_NUMBER, MetadataSuggestionsDialogFragment.NO_VALUE)
         if (discNumber > 0) inputDiscNumber.setText(discNumber.toString())
 
-        val country = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_COUNTRY).orEmpty()
-        if (country.isNotEmpty()) inputCountry.setText(country)
+        // Los og* solo llegan con algo si Genius sabe que esta canción es un remix; si no, se
+        // quedan como estaban (normalmente vacíos, que es justo lo que significan).
+        val ogTitle = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_OG_TITLE).orEmpty()
+        if (ogTitle.isNotEmpty()) inputOgTitle.setText(ogTitle)
+
+        val ogArtist = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_OG_ARTIST).orEmpty()
+        if (ogArtist.isNotEmpty()) inputOgArtist.setText(ogArtist)
+
+        val ogAlbum = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_OG_ALBUM).orEmpty()
+        if (ogAlbum.isNotEmpty()) inputOgAlbum.setText(ogAlbum)
+
+        val ogYear = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_OG_YEAR, MetadataSuggestionsDialogFragment.NO_VALUE)
+        if (ogYear > 0) inputOgYear.setText(ogYear.toString())
+
+        // El videoclip solo se pone si el campo está VACÍO, a diferencia del resto: si ya hay uno,
+        // lo eligió el usuario a mano en el buscador de YouTube y sabe mejor que Genius cuál quiere.
+        val videoUrl = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_VIDEO_URL).orEmpty()
+        if (videoUrl.isNotEmpty() && inputVideoUrl.text.isNullOrBlank()) inputVideoUrl.setText(videoUrl)
 
         isFillingForm = false
         markDirty()
 
         // La portada se descarga aparte y de forma asíncrona: si tarda o falla, el resto de los
-        // campos ya se han rellenado igualmente (ver NetworkImage.download, best-effort).
+        // campos ya se han rellenado igualmente (ver NetworkImage.download, best-effort). La URL
+        // llega ya en su resolución final y con la fuente decidida, así que aquí no hay nada que
+        // ajustar (ver MetadataSuggestionsDialogFragment.coverUrlFor).
         val coverUrl = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_COVER_URL).orEmpty()
         if (coverUrl.isNotEmpty()) {
             viewLifecycleOwner.lifecycleScope.launch {
-                NetworkImage.download(requireContext(), MusicBrainzApi.fullResCoverUrl(coverUrl))?.let { uri ->
+                NetworkImage.download(requireContext(), coverUrl)?.let { uri ->
                     pickedImage = uri
                     cover.load(uri)
                 }
             }
         }
+    }
+
+    /** Sustituye el contenido de un campo multivalor (artistas, productores) por el que traiga la
+     * sugerencia, normalizando de paso el separador al del editor. Un valor vacío no borra nada: la
+     * fuente no sabía de ese campo, que no es lo mismo que decir que está vacío. Es el mismo
+     * criterio para los dos porque, como dice el proyecto, artistas y productores se tratan igual. */
+    private fun replaceValues(field: MaterialAutoCompleteTextView, incoming: String) {
+        val values = incoming.split(SEPARATOR_CHAR).map { it.trim() }.filter { it.isNotEmpty() }
+        if (values.isEmpty()) return
+        field.setText(values.joinToString(SEPARATOR), false)
     }
 
     private fun save() {
@@ -547,10 +768,11 @@ class MetadataEditorDialogFragment : DialogFragment() {
                 year = inputYear.intOrNull(),
                 genres = inputGenres.splitValues(),
                 lyrics = inputLyrics.textOrNull(),
-                country = inputCountry.textOrNull(),
                 language = inputLanguage.textOrNull(),
                 comment = inputComment.textOrNull(),
                 videoUrl = inputVideoUrl.textOrNull(),
+                videoOffsetMs = clampedOffsetOrZero(offsetValue).toLong(),
+                lyricsOffsetMs = clampedOffsetOrZero(lyricsOffsetValue).toLong(),
                 trackNumber = inputTrackNumber.intOrNull(),
                 discNumber = inputDiscNumber.intOrNull(),
                 ogTitle = inputOgTitle.textOrNull(),
@@ -588,6 +810,18 @@ class MetadataEditorDialogFragment : DialogFragment() {
         private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
         private const val SEPARATOR = ", "
         private const val SEPARATOR_CHAR = ','
+
+        /**
+         * Tope del desplazamiento (vídeo/audio o letra/audio), en cada sentido. Como el del
+         * amplificador de volumen sin límite, no está para proteger al usuario sino porque
+         * [ValueRuler] necesita un máximo (ver su cabecera): 30 segundos son muchísimo más que
+         * cualquier desincronización real, así que arrastrando no se llega nunca por accidente.
+         */
+        private const val OFFSET_MAX_MS = 30_000
+
+        /** Cuántos milisegundos avanza cada regla de desplazamiento por cada muesca (ver
+         * [showOffset]). */
+        private const val OFFSET_STEP_MS = 100
 
         fun newInstance(songId: Long): MetadataEditorDialogFragment =
             MetadataEditorDialogFragment().apply {

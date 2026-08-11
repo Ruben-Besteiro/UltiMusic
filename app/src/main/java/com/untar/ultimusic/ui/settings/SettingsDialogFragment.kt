@@ -53,8 +53,10 @@ import com.untar.ultimusic.util.Headphones
 import kotlinx.coroutines.launch
 
 /**
- * Pantalla de ajustes, la del engranaje de la barra superior. Tiene el **amplificador de volumen**,
- * la **lista gris** de subcarpetas y el **ecualizador**.
+ * Pantalla de ajustes, la del engranaje de la barra superior. Está dividida en dos grupos, uno
+ * detrás de otro: **ajustes auditivos** (el **amplificador de volumen** y el **ecualizador**) y
+ * **ajustes visuales** (la **lista gris** de subcarpetas y "Usar carátula del álbum siempre", ver
+ * [com.untar.ultimusic.util.DisplaySettings]).
  *
  * Es un [DialogFragment] a pantalla completa, como el buscador o el editor de metadatos: se abre
  * encima de la principal sin cambiar de Activity, así que la música no se corta y el botón "atrás"
@@ -102,6 +104,8 @@ class SettingsDialogFragment : DialogFragment() {
     private val playerViewModel: PlayerViewModel by activityViewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
 
+    private lateinit var audioSectionTitle: TextView
+    private lateinit var visualSectionTitle: TextView
     private lateinit var boostTitle: TextView
     private lateinit var slider: Slider
     private lateinit var ruler: ValueRuler
@@ -109,6 +113,7 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var noLimitCheck: MaterialCheckBox
     private lateinit var greylistTitle: TextView
     private lateinit var greylistAdapter: GreylistAdapter
+    private lateinit var useAlbumCoverAlwaysCheck: MaterialCheckBox
 
     private lateinit var eqTitle: TextView
     private lateinit var eqUnavailable: View
@@ -181,6 +186,8 @@ class SettingsDialogFragment : DialogFragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val root = view.findViewById<View>(R.id.settingsRoot)
         val toolbar = view.findViewById<MaterialToolbar>(R.id.settingsToolbar)
+        audioSectionTitle = view.findViewById(R.id.audioSectionTitle)
+        visualSectionTitle = view.findViewById(R.id.visualSectionTitle)
         boostTitle = view.findViewById(R.id.boostTitle)
         slider = view.findViewById(R.id.boostSlider)
         ruler = view.findViewById(R.id.boostRuler)
@@ -189,6 +196,7 @@ class SettingsDialogFragment : DialogFragment() {
         greylistTitle = view.findViewById(R.id.greylistTitle)
         val greylistRecycler = view.findViewById<RecyclerView>(R.id.greylistRecycler)
         val addGreylistFolderButton = view.findViewById<View>(R.id.btnAddGreylistFolder)
+        useAlbumCoverAlwaysCheck = view.findViewById(R.id.useAlbumCoverAlwaysCheck)
         eqTitle = view.findViewById(R.id.eqTitle)
         eqUnavailable = view.findViewById(R.id.eqUnavailable)
         eqSwitch = view.findViewById(R.id.eqSwitch)
@@ -231,6 +239,7 @@ class SettingsDialogFragment : DialogFragment() {
         setupBoostControls()
         setupGreylist(greylistRecycler, addGreylistFolderButton)
         setupEqualizer(eqBandsContainer)
+        setupVisualSettings()
         observeState()
     }
 
@@ -256,6 +265,26 @@ class SettingsDialogFragment : DialogFragment() {
             viewLifecycleOwner
         ) { _, bundle ->
             bundle.getString(FolderPickerDialogFragment.RESULT_PATH)?.let(settingsViewModel::addGreylistFolder)
+        }
+    }
+
+    /**
+     * Casilla "Usar carátula del álbum siempre" (ver la cabecera larga de esto en
+     * [com.untar.ultimusic.util.CoverArt.cover] y en [com.untar.ultimusic.util.DisplaySettings]).
+     *
+     * Tras guardar el cambio, se refresca la canción que suena ahora mismo (si hay una) para que el
+     * mini-reproductor, la pantalla del iPod y el color dinámico reflejen el nuevo criterio sin
+     * esperar a que cambie de canción. El resto de listas (canciones, álbumes, búsqueda...) recogen
+     * el cambio solas la próxima vez que se recicle o repinte cada fila.
+     */
+    private fun setupVisualSettings() {
+        // Nada más en la aplicación cambia este ajuste por su cuenta (a diferencia de boostNoLimit,
+        // que los auriculares pueden forzar), así que basta con un isChecked inicial de su valor
+        // guardado y un simple listener, sin la vuelta de setOnClickListener + observeState.
+        useAlbumCoverAlwaysCheck.isChecked = settingsViewModel.useAlbumCoverAlways.value
+        useAlbumCoverAlwaysCheck.setOnCheckedChangeListener { _, checked ->
+            settingsViewModel.setUseAlbumCoverAlways(checked)
+            playerViewModel.currentSong.value?.let(playerViewModel::refreshSong)
         }
     }
 
@@ -714,6 +743,8 @@ class SettingsDialogFragment : DialogFragment() {
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         val tint = ColorStateList.valueOf(accent)
+                        audioSectionTitle.setTextColor(accent)
+                        visualSectionTitle.setTextColor(accent)
                         boostTitle.setTextColor(accent)
                         slider.trackActiveTintList = tint
                         slider.thumbTintList = tint
@@ -722,6 +753,7 @@ class SettingsDialogFragment : DialogFragment() {
                         additionalOptionsCheck.buttonTintList = tint
                         greylistTitle.setTextColor(accent)
                         greylistAdapter.setAccent(accent)
+                        useAlbumCoverAlwaysCheck.buttonTintList = tint
                         eqTitle.setTextColor(accent)
                         // Solo se tiñe la pista (parte exterior) y solo en el estado encendido; el
                         // pomo se deja con el tinte por defecto del tema y el estado apagado

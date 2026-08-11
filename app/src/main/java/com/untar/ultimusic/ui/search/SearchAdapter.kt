@@ -20,6 +20,7 @@ import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.joinNonBlank
 
 /**
  * Lista de resultados del buscador. A diferencia del resto de adaptadores de la app, aquí las filas
@@ -119,9 +120,9 @@ class SearchAdapter(
             val context = itemView.context
             title.text = song.title
 
-            val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
+            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
             val album = song.albums.firstOrNull()?.title ?: MusicScanner.UNKNOWN_ALBUM
-            subtitle.text = context.getString(R.string.song_subtitle_format, artist, album)
+            subtitle.text = joinNonBlank(artist, album)
 
             cover.load(CoverArt.cover(context, song), CoverLoader.get(context))
 
@@ -156,11 +157,7 @@ class SearchAdapter(
             val songsText = context.resources.getQuantityString(
                 R.plurals.song_count, album.songCount, album.songCount
             )
-            subtitle.text = context.getString(
-                R.string.song_subtitle_format,
-                album.artistName ?: MusicScanner.UNKNOWN_ARTIST,
-                songsText
-            )
+            subtitle.text = joinNonBlank(album.artistName ?: MusicScanner.UNKNOWN_ARTIST, songsText)
 
             cover.load(CoverArt.cover(context, album.cover), CoverLoader.get(context)) {
                 error(R.drawable.cover_placeholder)

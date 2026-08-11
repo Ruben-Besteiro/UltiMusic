@@ -133,9 +133,9 @@ object AccentTint {
      *
      * Ese gris no es un color inventado nuestro: se lee `colorControlNormal` del tema, el mismo
      * atributo que usa Android de fábrica para pintar esa rayita cuando nadie la toca. Es literalmente
-     * el mismo gris que ya se ve, sin que nadie lo toque, en el campo del vídeo de los ajustes de
-     * reproducción (`inputVideoUrl` en dialog_video_settings.xml): ese campo es de solo lectura, nunca
-     * se enfoca, así que se queda siempre en ese estado por defecto.
+     * el mismo gris que ya se ve, sin que nadie lo toque, en campos de solo lectura como el del
+     * vídeo del editor de metadatos (`inputVideoUrl` en dialog_metadata_editor.xml): nunca se
+     * enfocan, así que se quedan siempre en ese estado por defecto.
      */
     fun underline(context: Context, @ColorInt accent: Int): ColorStateList {
         val typedValue = TypedValue()

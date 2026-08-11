@@ -19,6 +19,8 @@ recyclerview = "1.4.0"
 coil = "2.7.0"
 palette = "1.0.0"
 youtubePlayer = "13.0.0"
+browser = "1.8.0"
+mlkitLanguageId = "17.0.6"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -43,6 +45,8 @@ androidx-recyclerview = { group = "androidx.recyclerview", name = "recyclerview"
 coil = { group = "io.coil-kt", name = "coil", version.ref = "coil" }
 androidx-palette = { group = "androidx.palette", name = "palette-ktx", version.ref = "palette" }
 youtube-player = { group = "com.pierfrancescosoffritti.androidyoutubeplayer", name = "core", version.ref = "youtubePlayer" }
+androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
+mlkit-language-id = { group = "com.google.mlkit", name = "language-id", version.ref = "mlkitLanguageId" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

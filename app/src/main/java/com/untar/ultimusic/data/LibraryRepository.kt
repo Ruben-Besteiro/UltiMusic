@@ -10,7 +10,6 @@ import com.untar.ultimusic.data.db.LibraryDao
 import com.untar.ultimusic.data.db.UltiMusicDatabase
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
-import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.toDomain
@@ -150,6 +149,11 @@ class LibraryRepository private constructor(
         return ids.mapNotNull { byId[it]?.toDomain() }
     }
 
+    /** Canción de la fonoteca con esa ruta exacta, o null si no está catalogada. Ver [LibraryDao.findSongByPath]. */
+    suspend fun songByPath(path: String): Song? = withContext(Dispatchers.IO) {
+        dao.findSongByPath(path)?.toDomain()
+    }
+
     /**
      * Reconcilia lo que hay en disco con lo guardado: escanea (lento, fuera de transacción) y
      * delega en el DAO la inserción de novedades y el borrado de lo que ya no existe. Las
@@ -186,7 +190,7 @@ class LibraryRepository private constructor(
     // UPDATE en bloque sobre lo ya guardado (ver LibraryDao), instantáneo y sin reescanear nada.
 
     suspend fun addGreylistFolder(path: String) = withContext(Dispatchers.IO) {
-        dao.insertGreylistFolder(GreylistFolderEntity(path = path, excluded = false))
+        dao.addGreylistFolder(path)
     }
 
     suspend fun removeGreylistFolder(path: String) = withContext(Dispatchers.IO) {
@@ -259,13 +263,14 @@ class LibraryRepository private constructor(
     }
 
     /**
-     * Guarda el desplazamiento de vídeo/audio elegido en los ajustes del reproductor de vídeo del
-     * iPod (ver [Song.videoOffsetMs]). Se llama en cada cambio mientras se arrastra la regla o se
-     * escribe el número a mano, igual que el amplificador de volumen guarda en cada cambio.
+     * Guarda la letra elegida en el buscador de lrclib.net que abre el iPod al tocar el recuadro
+     * de letra estando vacío (ver [IPodDialogFragment][com.untar.ultimusic.ui.player.IPodDialogFragment]).
+     * Al escribir en Room, el flujo [songs] reemite solo y la canción que suena vuelve a llegar al
+     * reproductor ya con su `lyrics`, igual que [setVideoUrl] con el enlace del videoclip.
      */
-    suspend fun setVideoOffsetMs(song: Song, offsetMs: Long) = withContext(Dispatchers.IO) {
-        if (offsetMs == song.videoOffsetMs) return@withContext
-        dao.setVideoOffsetMs(songId = song.id, offsetMs = offsetMs)
+    suspend fun setLyrics(song: Song, lyrics: String?) = withContext(Dispatchers.IO) {
+        if (lyrics == song.lyrics) return@withContext
+        dao.setLyrics(songId = song.id, lyrics = lyrics)
     }
 
     /** Pista y disco de una canción (viven en la tabla de cruce, no en la fila de la canción). */

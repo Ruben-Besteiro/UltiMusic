@@ -10,11 +10,12 @@ import androidx.room.PrimaryKey
  *
  * [excluded] es lo que marca el switch de esa fila: `true` (switch encendido) significa que la
  * carpeta está fuera de la biblioteca y sus canciones se ocultan (ver [SongEntity.hiddenByGreylist])
- * sin borrarse; `false` (switch apagado) significa que cuenta con normalidad. Nace en `false`: añadir
- * una carpeta no la oculta de golpe, el switch es para excluirla después.
+ * sin borrarse; `false` (switch apagado) significa que cuenta con normalidad. Nace en `true`: si el
+ * usuario añade una carpeta a la lista gris es porque quiere excluirla, el switch es para volver a
+ * contarla después.
  */
 @Entity(tableName = "greylist_folders")
 data class GreylistFolderEntity(
     @PrimaryKey val path: String,
-    val excluded: Boolean = false
+    val excluded: Boolean = true
 )

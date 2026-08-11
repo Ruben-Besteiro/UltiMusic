@@ -16,6 +16,7 @@ import com.untar.ultimusic.R
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.joinNonBlank
 import java.util.Collections
 
 /**
@@ -155,10 +156,8 @@ class PlaylistQueueAdapter(
             accent: Int,
             reorderable: Boolean
         ) {
-            val artist = song.artists.firstOrNull()?.name ?: MusicScanner.UNKNOWN_ARTIST
-            subtitle.text = itemView.context.getString(
-                R.string.queue_subtitle_format, song.title, artist
-            )
+            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
+            subtitle.text = joinNonBlank(song.title, artist)
             ImageViewCompat.setImageTintList(speaker, ColorStateList.valueOf(accent))
 
             if (nowPlayingIndex >= 0) {

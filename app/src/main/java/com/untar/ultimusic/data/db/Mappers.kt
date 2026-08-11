@@ -4,6 +4,8 @@ import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
+import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
+import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.PersonSummaryRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
@@ -56,20 +58,20 @@ fun SongWithRelations.toDomain(): Song = Song(
     id = song.id,
     filePath = song.filePath,
     title = song.title,
-    artists = artists.map { it.toDomain() },
+    artists = artists.sortedByArtistLink(artistLinks).map { it.toDomain() },
     albums = albums.map { it.toDomain() },
-    producers = producers.map { it.toDomain() },
+    producers = producers.sortedByProducerLink(producerLinks).map { it.toDomain() },
     duration = song.duration,
     year = song.year,
     genres = song.genres,
     lyrics = song.lyrics,
     language = song.language,
-    country = song.country,
     imageName = song.imageName,
     comment = song.comment,
     videoUrl = song.videoUrl,
     videoThumbnailName = song.videoThumbnailName,
     videoOffsetMs = song.videoOffsetMs,
+    lyricsOffsetMs = song.lyricsOffsetMs,
     ogTitle = song.ogTitle,
     ogArtist = song.ogArtist,
     ogAlbum = song.ogAlbum,
@@ -106,3 +108,21 @@ fun PersonSummaryRow.toDomain(): PersonSummary = PersonSummary(
         videoThumbnail = sampleSongVideoThumbnail
     )
 )
+
+// --- Orden de artistas/productores dentro de una canción ---
+//
+// Un `@Relation` de Room (ver [SongWithRelations]) no garantiza NINGÚN orden en la lista que
+// devuelve: en la práctica sale por el id del artista/productor, no por el orden en que el usuario
+// los escribió. Estas dos funciones reordenan con la posición guardada en la fila de cruce
+// ([SongArtistCrossRef.position]/[SongProducerCrossRef.position]), que sí se escribe respetando ese
+// orden (ver `LibraryDao.saveSongEdits`/`LibraryDao.reconcile`).
+
+private fun List<ArtistEntity>.sortedByArtistLink(links: List<SongArtistCrossRef>): List<ArtistEntity> {
+    val order = links.associate { it.artistId to it.position }
+    return sortedBy { order[it.id] ?: Int.MAX_VALUE }
+}
+
+private fun List<ProducerEntity>.sortedByProducerLink(links: List<SongProducerCrossRef>): List<ProducerEntity> {
+    val order = links.associate { it.producerId to it.position }
+    return sortedBy { order[it.id] ?: Int.MAX_VALUE }
+}

@@ -8,6 +8,7 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
 import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -26,13 +27,18 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.remote.ApiRateLimitException
+import com.untar.ultimusic.data.remote.ApiUnauthorizedException
+import com.untar.ultimusic.data.remote.GeniusApi
+import com.untar.ultimusic.data.remote.ItunesApi
+import com.untar.ultimusic.data.remote.retryInSeconds
 import com.untar.ultimusic.model.MetadataSuggestion
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Diálogo de sugerencias del autorrelleno de metadatos: busca en MusicBrainz (a través de
+ * Diálogo de sugerencias del autorrelleno de metadatos: busca en iTunes (a través de
  * [MetadataSuggestionsViewModel]) y deja al usuario elegir un candidato, que se devuelve a quien
  * abrió el diálogo — [MetadataEditorDialogFragment] o [AlbumEditorDialogFragment] — para que
  * rellene sus campos. Nunca guarda nada por su cuenta: solo entrega datos.
@@ -53,8 +59,14 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
     private val viewModel: MetadataSuggestionsViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
-    /** Evita devolver dos veces el resultado si el usuario llega a tocar dos filas antes de que
-     * se cierre el diálogo (p. ej. mientras se están pidiendo los géneros de la primera). */
+    /** Si se buscan canciones o álbumes. Decide qué se busca en iTunes y si se le pregunta a
+     * Genius al elegir (ver [MetadataSuggestionsViewModel.enrich]). */
+    private val kind: SuggestionKind by lazy {
+        SuggestionKind.valueOf(requireArguments().getString(ARG_KIND)!!)
+    }
+
+    /** Evita devolver dos veces el resultado si el usuario llega a tocar dos filas en el mismo
+     * instante, antes de que el diálogo termine de cerrarse. */
     private var resultSent = false
 
     private lateinit var list: RecyclerView
@@ -98,7 +110,15 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
         message = view.findViewById(R.id.suggestionsMessage)
         retryButton = view.findViewById(R.id.suggestionsRetry)
 
-        val adapter = MetadataSuggestionsAdapter { onSuggestionPicked(it) }
+        // Genius solo entra en juego en sugerencias de CANCIÓN y con token utilizable; en cualquier
+        // otro caso la carátula es la de iTunes y se sabe ya, sin esperar a nada (ver la cabecera
+        // del adaptador y MetadataSuggestionsViewModel.coverArtOverride).
+        val adapter = MetadataSuggestionsAdapter(
+            usesGenius = kind == SuggestionKind.SONG && viewModel.geniusAvailable,
+            scope = viewLifecycleOwner.lifecycleScope,
+            coverOverride = { suggestion -> viewModel.coverArtOverride(suggestion) },
+            onPicked = { onSuggestionPicked(it) }
+        )
         list.layoutManager = LinearLayoutManager(requireContext())
         list.adapter = adapter
         retryButton.setOnClickListener { viewModel.retry() }
@@ -116,7 +136,6 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
             }
         })
 
-        val kind = SuggestionKind.valueOf(requireArguments().getString(ARG_KIND)!!)
         viewModel.search(
             kind,
             requireArguments().getString(ARG_PRIMARY_QUERY).orEmpty(),
@@ -147,22 +166,42 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
     private fun render(state: SuggestionsUiState, adapter: MetadataSuggestionsAdapter) {
         loading.isVisible = state is SuggestionsUiState.Loading
         list.isVisible = state is SuggestionsUiState.Success
-        messageGroup.isVisible = state is SuggestionsUiState.Empty || state is SuggestionsUiState.Error
+        messageGroup.isVisible = state is SuggestionsUiState.Empty ||
+            state is SuggestionsUiState.Error ||
+            state is SuggestionsUiState.RateLimited
+        // Sin botón de reintentar con un rate limit: reintentar es justo lo que no hay que hacer, y
+        // el freno lo denegaría igualmente sin llegar a salir a la red (ver RateLimitGuard).
         retryButton.isVisible = state is SuggestionsUiState.Error
 
         when (state) {
             is SuggestionsUiState.Success -> adapter.submit(state.suggestions, state.loadingMore)
             is SuggestionsUiState.Empty -> message.setText(R.string.suggestions_empty)
             is SuggestionsUiState.Error -> message.setText(R.string.suggestions_error)
+            is SuggestionsUiState.RateLimited ->
+                message.text = getString(R.string.suggestions_rate_limited, state.retryInSeconds)
             SuggestionsUiState.Loading -> Unit
         }
     }
 
     /**
-     * Al elegir una fila, se piden sus géneros (única petición aparte, ver
-     * [MetadataSuggestionsViewModel.genresOf]) y SOLO ENTONCES se devuelve el resultado completo:
-     * así el editor recibe los géneros ya listos en la misma entrega, en vez de tener que pedirlos
-     * él por su cuenta.
+     * Al elegir una fila se le pide a Genius lo que iTunes no sabe de esa canción (ver
+     * [MetadataSuggestionsViewModel.enrich]) y SOLO ENTONCES se devuelve el resultado completo, para
+     * que el editor lo reciba todo junto en la misma entrega. Mientras tanto se tapa la lista con el
+     * spinner, porque son dos peticiones y se nota.
+     *
+     * Si Genius no está configurado o no encuentra la canción, `enrich` devuelve null y el resultado
+     * es exactamente el que daría iTunes por su cuenta: este paso solo puede añadir campos, nunca
+     * quitar ni empeorar los que ya había.
+     *
+     * De Genius solo se avisa de los dos fallos ante los que el usuario puede hacer algo (ver
+     * [com.untar.ultimusic.data.remote.GeniusApi.detailsFor]), y **ninguno de los dos interrumpe la
+     * entrega**: el candidato que eligió se aplica igual con lo que dio iTunes, porque su elección no
+     * tiene la culpa de que Genius falle.
+     * - **Rate limit**: un aviso pasajero ([android.widget.Toast]) diciendo cuánto esperar.
+     * - **Token inválido**: no cabe en un Toast (hay que crear otro API Client), así que en vez de
+     *   avisar aquí se marca [RESULT_GENIUS_TOKEN_INVALID] en el resultado y es el editor quien
+     *   encadena los diálogos DESPUÉS de aplicar la sugerencia. Para cuando esto pasa, `GeniusApi` ya
+     *   ha borrado el token guardado.
      */
     private fun onSuggestionPicked(suggestion: MetadataSuggestion) {
         if (resultSent) return
@@ -172,29 +211,90 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
         messageGroup.isVisible = false
 
         viewLifecycleOwner.lifecycleScope.launch {
-            val genres = viewModel.genresOf(suggestion)
+            var tokenInvalid = false
+            val details = try {
+                viewModel.enrich(kind, suggestion)
+            } catch (limited: ApiRateLimitException) {
+                Toast.makeText(
+                    requireContext(),
+                    getString(R.string.suggestions_genius_rate_limited, limited.retryInSeconds()),
+                    Toast.LENGTH_LONG
+                ).show()
+                null
+            } catch (unauthorized: ApiUnauthorizedException) {
+                tokenInvalid = true
+                null
+            }
             setFragmentResult(
                 RESULT_KEY,
                 bundleOf(
                     RESULT_TITLE to suggestion.title,
-                    RESULT_ARTIST to suggestion.artist,
+                    RESULT_ARTIST to artistsFor(suggestion, details),
                     RESULT_ALBUM to suggestion.albumTitle.orEmpty(),
                     RESULT_YEAR to (suggestion.year ?: NO_VALUE),
-                    RESULT_GENRES to genres.joinToString(", "),
+                    RESULT_GENRES to suggestion.genre.orEmpty(),
                     RESULT_TRACK_NUMBER to (suggestion.trackNumber ?: NO_VALUE),
                     RESULT_DISC_NUMBER to (suggestion.discNumber ?: NO_VALUE),
-                    RESULT_COVER_URL to suggestion.coverUrl.orEmpty(),
-                    RESULT_COUNTRY to suggestion.country.orEmpty()
+                    RESULT_COVER_URL to coverUrlFor(suggestion, details).orEmpty(),
+                    RESULT_PRODUCERS to details?.producers?.joinToString(", ").orEmpty(),
+                    RESULT_VIDEO_URL to details?.videoUrl.orEmpty(),
+                    RESULT_OG_TITLE to details?.ogTitle.orEmpty(),
+                    RESULT_OG_ARTIST to details?.ogArtist.orEmpty(),
+                    RESULT_OG_ALBUM to details?.ogAlbum.orEmpty(),
+                    RESULT_OG_YEAR to (details?.ogYear ?: NO_VALUE),
+                    RESULT_GENIUS_TOKEN_INVALID to tokenInvalid
                 )
             )
             dismiss()
         }
     }
 
+    /**
+     * Los artistas acreditados, separados por comas como espera el campo multivalor del editor.
+     *
+     * Se prefiere SIEMPRE la lista de Genius, aunque el resto de campos vengan de iTunes: Genius
+     * los da uno a uno ([GeniusApi.SongDetails.artists]), mientras que iTunes acredita una única
+     * cadena con todos pegados ("The Weeknd & ROSALÍA") que no hay forma de partir sin romper a los
+     * grupos que llevan "&" en su propio nombre. Como el editor sustituye este campo por lo que
+     * llegue aquí, esa diferencia decide si acaban tres artistas bien separados o un artista
+     * inventado con el nombre de dos.
+     *
+     * Sin Genius (sin token, o canción que no tiene) se manda la cadena de iTunes tal cual: es lo
+     * único que hay, y el usuario puede separarla a mano en el formulario antes de guardar.
+     */
+    private fun artistsFor(
+        suggestion: MetadataSuggestion,
+        details: GeniusApi.SongDetails?
+    ): String {
+        val fromGenius = details?.artists.orEmpty()
+        return if (fromGenius.isNotEmpty()) fromGenius.joinToString(", ") else suggestion.artist
+    }
+
+    /**
+     * Qué carátula se lleva el editor, ya en la resolución final (lista para descargarla tal cual,
+     * sin que quien la reciba tenga que saber de qué fuente vino).
+     *
+     * La regla es simple y es **la misma que aplica la lista** (ver
+     * [MetadataSuggestionsViewModel.coverArtOverride], que es quien pinta las filas): con token de
+     * Genius manda la carátula de Genius, que es la de la canción concreta y no la del disco entero;
+     * sin token —o si Genius no tiene arte propio para esa canción— manda la de iTunes, que siempre
+     * está.
+     *
+     * Que las dos funciones coincidan no es cosmético: si discreparan, el usuario elegiría una fila
+     * viendo una carátula y el editor acabaría rellenado con otra distinta.
+     */
+    private fun coverUrlFor(
+        suggestion: MetadataSuggestion,
+        details: GeniusApi.SongDetails?
+    ): String? {
+        val itunesCover = suggestion.coverUrl?.let { ItunesApi.fullResCoverUrl(it) }
+        return details?.songArtUrl ?: itunesCover
+    }
+
     companion object {
         /** Filas antes del final desde las que ya se pide la página siguiente, para que llegue a
          * tiempo (cargarla de golpe) antes de que el usuario alcance el final de verdad y vea un
-         * hueco en blanco esperando la respuesta de MusicBrainz. */
+         * hueco en blanco esperando la respuesta de iTunes. */
         private const val LOAD_MORE_THRESHOLD = 5
 
         /** Clave con la que el editor escucha el resultado. */
@@ -204,13 +304,36 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
         const val RESULT_ALBUM = "album"
         const val RESULT_YEAR = "year"
 
-        /** Géneros ya unidos por ", " — el mismo separador que usan los campos multivalor de los
-         * editores, para poder volcarlos tal cual en el `EditText` de géneros. */
+        /** El género del candidato, listo para volcarlo tal cual en el `EditText` de géneros.
+         * iTunes solo da uno por publicación, así que aquí nunca hay varios que unir con el ", "
+         * de los campos multivalor de los editores — la clave conserva el nombre en plural porque
+         * el campo del editor sí admite varios, escritos a mano. */
         const val RESULT_GENRES = "genres"
         const val RESULT_TRACK_NUMBER = "trackNumber"
         const val RESULT_DISC_NUMBER = "discNumber"
+
+        /** URL de la carátula **ya en resolución final**: quien la recibe solo tiene que
+         * descargarla. Se resuelve aquí, y no en el editor, porque el tamaño se pide de forma
+         * distinta según de qué fuente venga y solo este diálogo sabe cuál ganó (ver
+         * [coverUrlFor]). */
         const val RESULT_COVER_URL = "coverUrl"
-        const val RESULT_COUNTRY = "country"
+
+        /** Los cuatro campos que aporta Genius y que iTunes no conoce (ver [GeniusApi]). Llegan
+         * vacíos, o con [NO_VALUE] en el año, cuando no hay token configurado, cuando Genius no
+         * tiene la canción, o en una sugerencia de álbum (donde no se le pregunta). */
+        const val RESULT_PRODUCERS = "producers"
+        const val RESULT_VIDEO_URL = "videoUrl"
+        const val RESULT_OG_TITLE = "ogTitle"
+        const val RESULT_OG_ARTIST = "ogArtist"
+        const val RESULT_OG_ALBUM = "ogAlbum"
+        const val RESULT_OG_YEAR = "ogYear"
+
+        /**
+         * `true` si al enriquecer este candidato Genius rechazó el token por inválido. No es un dato
+         * de la sugerencia: viaja aquí para que el editor pueda aplicar primero lo que sí se ha
+         * conseguido y avisar después (ver [onSuggestionPicked] y `MetadataEditorDialogFragment`).
+         */
+        const val RESULT_GENIUS_TOKEN_INVALID = "geniusTokenInvalid"
 
         /** Centinela de "sin valor" para año/pista/disco en el [Bundle] del resultado: los reales
          * son siempre positivos, así que no hay ambigüedad posible. */

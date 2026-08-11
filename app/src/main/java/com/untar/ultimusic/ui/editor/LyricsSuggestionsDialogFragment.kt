@@ -41,9 +41,8 @@ import kotlinx.coroutines.launch
  * completa que devuelve su resultado con la API de resultados entre fragmentos
  * (`setFragmentResult`/`setFragmentResultListener`).
  *
- * A diferencia del de MusicBrainz, aquí el resultado es un único texto (la letra elegida, ya
- * sincronizada o plana): la búsqueda de [com.untar.ultimusic.data.remote.LrcLibApi] trae la letra
- * completa de cada candidato, así que no hace falta pedir nada más al elegirlo.
+ * A diferencia del de metadatos, aquí el resultado es un único texto (la letra elegida, ya
+ * sincronizada o plana) en vez de un formulario entero de campos que volcar.
  */
 class LyricsSuggestionsDialogFragment : DialogFragment() {
 
@@ -102,7 +101,8 @@ class LyricsSuggestionsDialogFragment : DialogFragment() {
 
         viewModel.search(
             requireArguments().getString(ARG_TITLE).orEmpty(),
-            requireArguments().getString(ARG_ARTIST).orEmpty()
+            requireArguments().getString(ARG_ARTIST).orEmpty(),
+            requireArguments().getLong(ARG_DURATION_MS)
         )
 
         viewLifecycleOwner.lifecycleScope.launch {
@@ -125,13 +125,19 @@ class LyricsSuggestionsDialogFragment : DialogFragment() {
     private fun render(state: LyricsSuggestionsUiState, adapter: LyricsSuggestionsAdapter) {
         loading.isVisible = state is LyricsSuggestionsUiState.Loading
         list.isVisible = state is LyricsSuggestionsUiState.Success
-        messageGroup.isVisible = state is LyricsSuggestionsUiState.Empty || state is LyricsSuggestionsUiState.Error
+        messageGroup.isVisible = state is LyricsSuggestionsUiState.Empty ||
+            state is LyricsSuggestionsUiState.Error ||
+            state is LyricsSuggestionsUiState.RateLimited
+        // Sin botón de reintentar con un rate limit: reintentar es justo lo que no hay que hacer, y
+        // el freno lo denegaría igualmente sin llegar a salir a la red (ver RateLimitGuard).
         retryButton.isVisible = state is LyricsSuggestionsUiState.Error
 
         when (state) {
             is LyricsSuggestionsUiState.Success -> adapter.submit(state.suggestions)
             is LyricsSuggestionsUiState.Empty -> message.setText(R.string.lyrics_suggestions_empty)
             is LyricsSuggestionsUiState.Error -> message.setText(R.string.lyrics_suggestions_error)
+            is LyricsSuggestionsUiState.RateLimited ->
+                message.text = getString(R.string.suggestions_rate_limited, state.retryInSeconds)
             LyricsSuggestionsUiState.Loading -> Unit
         }
     }
@@ -155,9 +161,18 @@ class LyricsSuggestionsDialogFragment : DialogFragment() {
 
         private const val ARG_TITLE = "title"
         private const val ARG_ARTIST = "artist"
+        private const val ARG_DURATION_MS = "duration_ms"
 
-        fun newInstance(title: String, artist: String) = LyricsSuggestionsDialogFragment().apply {
-            arguments = bundleOf(ARG_TITLE to title, ARG_ARTIST to artist)
-        }
+        /** [durationMs] es la duración del archivo que se está editando, para marcar y subir en la
+         * lista los candidatos que sean de la misma grabación (ver
+         * [com.untar.ultimusic.data.remote.LrcLibApi.search]); 0 si se desconoce. */
+        fun newInstance(title: String, artist: String, durationMs: Long) =
+            LyricsSuggestionsDialogFragment().apply {
+                arguments = bundleOf(
+                    ARG_TITLE to title,
+                    ARG_ARTIST to artist,
+                    ARG_DURATION_MS to durationMs
+                )
+            }
     }
 }
