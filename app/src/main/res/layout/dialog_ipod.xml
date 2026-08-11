@@ -340,5 +340,53 @@
             android:clipToPadding="false"
             android:padding="14dp" />
 
+        <!-- Regla de desplazamiento vídeo/audio del modo vídeo (ver IPodDialogFragment.startVideo /
+             ValueRuler.onReleased): mismo aspecto que infoBox (fondo y contorno ipod_info_box) pero
+             sin título y wrap_content. Solo se ve en modo vídeo. La cifra exacta de la derecha es
+             editable a mano, igual que offsetValue en el editor de metadatos (ver
+             IPodDialogFragment.showIpodOffset). Arrastrar la regla o editar la cifra se nota al
+             instante en el vídeo (VideoScreenController.setOffset) y, al soltar/confirmar, se
+             guarda en la canción (LibraryRepository.setVideoOffsetMs). -->
+        <LinearLayout
+            android:id="@+id/videoOffsetBox"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:background="@drawable/ipod_info_box"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingHorizontal="12dp"
+            android:visibility="gone">
+
+            <com.untar.ultimusic.ui.common.ValueRuler
+                android:id="@+id/ipodOffsetRuler"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:contentDescription="@string/video_settings_offset_title" />
+
+            <EditText
+                android:id="@+id/ipodOffsetValue"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:background="@null"
+                android:gravity="end"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="numberSigned"
+                android:maxLength="6"
+                android:maxLines="1"
+                android:textColor="@color/um_on_background"
+                android:textSize="16sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="4dp"
+                android:text="@string/video_settings_offset_unit"
+                android:textColor="@color/um_on_background" />
+        </LinearLayout>
+
     </LinearLayout>
 </FrameLayout>

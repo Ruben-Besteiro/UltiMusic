@@ -76,6 +76,15 @@ class ValueRuler @JvmOverloads constructor(
     /** Se avisa cada vez que cambia el valor bajo el indicador, arrastrando o por inercia. */
     var onValueChanged: ((Int) -> Unit)? = null
 
+    /**
+     * Se avisa UNA vez cuando el usuario suelta el dedo y la cinta ha terminado de asentarse del
+     * todo (inercia y encaje a la marca más cercana incluidos, ver [pendingSnap]): es el momento en
+     * el que [currentValue] es definitivo. Lo usa quien quiera persistir el valor solo al soltar
+     * (ver `IPodDialogFragment`, que guarda el desplazamiento del vídeo en Room aquí en vez de en
+     * cada tick de [onValueChanged], que dispararía una escritura por cada píxel arrastrado).
+     */
+    var onReleased: (() -> Unit)? = null
+
     /** Color del indicador central y de las marcas grandes. Lo fija el acento de la canción. */
     var accentColor: Int = Color.WHITE
         set(newColor) {
@@ -134,6 +143,10 @@ class ValueRuler @JvmOverloads constructor(
      * que se reprogramaba a sí mismo sin fin.
      */
     private var pendingSnap = false
+
+    /** Igual que [pendingSnap] pero para [onReleased]: se pone al soltar el dedo y se consume la
+     * primera vez que [computeScroll] encuentra que ya no queda ni inercia ni encaje pendientes. */
+    private var awaitingRelease = false
 
     /**
      * Traduce los toques a gestos con sentido (arrastre, lanzamiento). Sin esto habría que medir a
@@ -214,6 +227,7 @@ class ValueRuler @JvmOverloads constructor(
             // Al soltar hay que cuadrar la cinta con la marca más cercana, pero puede que el gesto
             // haya dejado inercia: se apunta como pendiente y se hace cuando esta se agote.
             pendingSnap = true
+            awaitingRelease = true
             ViewCompat.postInvalidateOnAnimation(this)
         }
         return handled || super.onTouchEvent(event)
@@ -232,6 +246,10 @@ class ValueRuler @JvmOverloads constructor(
         } else if (pendingSnap) {
             pendingSnap = false
             snapToNearest()
+        } else if (awaitingRelease) {
+            // Ni inercia ni encaje pendientes: currentValue ya no va a volver a moverse solo.
+            awaitingRelease = false
+            onReleased?.invoke()
         }
     }
 

@@ -1,0 +1,14 @@
+<!-- Insignia de YouTube: rectángulo redondeado con un triángulo hueco dentro. El triángulo no es
+     un segundo trazo encima, es un recorte: los dos subcaminos comparten el mismo "d" y
+     fillType="evenOdd" hace transparente la zona donde se pisan. Así un solo tinte (el color
+     dinámico, ver AccentTint) colorea toda la insignia de una vez. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:fillType="evenOdd"
+        android:pathData="M6,5H18A4,4 0 0 1 22,9V15A4,4 0 0 1 18,19H6A4,4 0 0 1 2,15V9A4,4 0 0 1 6,5Z M10,9L16,12L10,15Z" />
+</vector>

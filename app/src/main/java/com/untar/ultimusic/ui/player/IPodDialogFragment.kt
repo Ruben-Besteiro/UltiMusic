@@ -1,6 +1,7 @@
 package com.untar.ultimusic.ui.player
 
 import android.app.Dialog
+import android.content.Context
 import android.content.res.ColorStateList
 import android.graphics.Outline
 import android.os.Bundle
@@ -12,6 +13,8 @@ import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewOutlineProvider
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.PopupMenu
 import android.widget.SeekBar
@@ -23,6 +26,7 @@ import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import androidx.lifecycle.Lifecycle
@@ -43,6 +47,8 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.SquareFrameLayout
+import com.untar.ultimusic.ui.common.TouchBlockerFrameLayout
+import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.common.attachVerticalDrag
 import com.untar.ultimusic.ui.editor.LyricsSuggestionsDialogFragment
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
@@ -356,9 +362,14 @@ class IPodDialogFragment : DialogFragment() {
         val youtubePlayer = view.findViewById<YouTubePlayerView>(R.id.youtubePlayer)
         // Envuelve a youtubePlayer y le traga los toques (ver TouchBlockerFrameLayout); por eso
         // tiene que estar tan oculto como él fuera de modo vídeo, o se queda tapando a `cover` y
-        // `queueList` (que están debajo en topBox) y sus filas dejan de responder al tacto.
-        val videoContainer = view.findViewById<View>(R.id.videoContainer)
+        // `queueList` (que están debajo en topBox) y sus filas dejan de responder al tacto. El
+        // toque simple sobre el vídeo se reconoce igualmente (ver onTap más abajo, junto a
+        // btnPlayPause): así el vídeo es interactuable sin dejar pasar el toque al reproductor.
+        val videoContainer = view.findViewById<TouchBlockerFrameLayout>(R.id.videoContainer)
         val videoLoadingSpinner = view.findViewById<CircularProgressIndicator>(R.id.videoLoadingSpinner)
+        val videoOffsetBox = view.findViewById<View>(R.id.videoOffsetBox)
+        val videoOffsetRuler = view.findViewById<ValueRuler>(R.id.ipodOffsetRuler)
+        val videoOffsetValue = view.findViewById<EditText>(R.id.ipodOffsetValue)
 
         val loader = CoverLoader.get(requireContext())
 
@@ -467,6 +478,7 @@ class IPodDialogFragment : DialogFragment() {
             youtubePlayer.isVisible = false
             videoContainer.isVisible = false
             videoLoadingSpinner.isVisible = false
+            videoOffsetBox.isVisible = false
             // La carátula vuelve a verse siempre (en modo vídeo era lo único que se ocultaba del
             // todo, ver [startVideo]); lo que decide si además se ve la cola encima, semitransparente,
             // es queueWasVisible.
@@ -490,6 +502,104 @@ class IPodDialogFragment : DialogFragment() {
         )
         videoController = controller
 
+        // Regla (+ cifra editable a su derecha) de desplazamiento del modo vídeo. Viven fuera de
+        // startVideo/exitVideo porque solo hace falta engancharlas una vez; esas dos funciones solo
+        // las muestran/ocultan y les ponen el valor de la canción (ver [showIpodOffset]).
+        //
+        // [updatingIpodOffsetUi] evita que sincronizar la regla y la cifra entre sí se confunda con
+        // un cambio del usuario y entre en bucle; es el mismo patrón que
+        // MetadataEditorDialogFragment.updatingOffsetUi, del que esta caja es una versión reducida
+        // (sin guardado explícito: aquí no hay botón "Guardar", así que se aplica y se guarda solo).
+        var updatingIpodOffsetUi = false
+
+        /** Refleja [ms] en la regla y en la cifra a la vez, cuadrando la regla a su muesca de
+         * [MetadataEditorDialogFragment.OFFSET_STEP_MS] más cercana. Calco de
+         * MetadataEditorDialogFragment.showOffset. */
+        fun showIpodOffset(ms: Int) {
+            updatingIpodOffsetUi = true
+            val notch = Math.round(ms / MetadataEditorDialogFragment.OFFSET_STEP_MS.toFloat())
+            if (videoOffsetRuler.currentValue != notch) videoOffsetRuler.setValue(notch, notify = false)
+            if (videoOffsetValue.text.toString() != ms.toString()) {
+                videoOffsetValue.setText(ms.toString())
+                videoOffsetValue.setSelection(videoOffsetValue.text.length)
+            }
+            updatingIpodOffsetUi = false
+        }
+
+        /** Lo escrito en la cifra, dentro del rango permitido; 0 si está vacío o a medio escribir.
+         * Calco de MetadataEditorDialogFragment.clampedOffsetOrZero. */
+        fun clampedIpodOffsetOrZero(): Int =
+            videoOffsetValue.text.toString().toIntOrNull()
+                ?.coerceIn(-MetadataEditorDialogFragment.OFFSET_MAX_MS, MetadataEditorDialogFragment.OFFSET_MAX_MS)
+                ?: 0
+
+        /** Aplica [offsetMs] al vídeo en directo y lo guarda en la canción (ver
+         * LibraryRepository.setVideoOffsetMs), tanto si viene de soltar la regla como de confirmar
+         * la cifra escrita a mano. */
+        fun applyIpodOffset(offsetMs: Long) {
+            controller.setOffset(offsetMs, playerViewModel.currentPositionMs())
+            val song = playerViewModel.currentSong.value ?: return
+            viewLifecycleOwner.lifecycleScope.launch {
+                LibraryRepository.get(requireContext()).setVideoOffsetMs(song, offsetMs)
+                playerViewModel.refreshSong(song.copy(videoOffsetMs = offsetMs))
+            }
+        }
+
+        videoOffsetRuler.minValue = -MetadataEditorDialogFragment.OFFSET_MAX_MS / MetadataEditorDialogFragment.OFFSET_STEP_MS
+        videoOffsetRuler.maxValue = MetadataEditorDialogFragment.OFFSET_MAX_MS / MetadataEditorDialogFragment.OFFSET_STEP_MS
+        videoOffsetRuler.onValueChanged = { notch ->
+            if (!updatingIpodOffsetUi) {
+                val ms = notch * MetadataEditorDialogFragment.OFFSET_STEP_MS
+                showIpodOffset(ms)
+                // En caliente, en cada muesca arrastrada: se nota al instante en el vídeo (ver
+                // VideoScreenController.setOffset), sin esperar a soltar el dedo ni al siguiente
+                // tick de sync(). El guardado en Room, en cambio, espera a [onReleased].
+                controller.setOffset(ms.toLong(), playerViewModel.currentPositionMs())
+            }
+        }
+        videoOffsetRuler.onReleased = {
+            // Solo se guarda al soltar (ver ValueRuler.onReleased): arrastrar no debe escribir en
+            // Room en cada píxel, solo el valor definitivo.
+            applyIpodOffset((videoOffsetRuler.currentValue * MetadataEditorDialogFragment.OFFSET_STEP_MS).toLong())
+        }
+
+        // La caja admite cualquier milisegundo exacto escrito a mano. Mientras se escribe, se
+        // refleja en la regla (cuadrando a la muesca de 100 ms más cercana) Y se previsualiza en el
+        // vídeo al instante, igual que arrastrar la regla (setValue va con notify=false para no
+        // duplicar esa previsualización a través de onValueChanged). Lo que SÍ espera a confirmar
+        // (ver más abajo) es el guardado en Room: aplicarlo ya en cada tecla es barato (un seekTo
+        // más), pero escribir en la base de datos en cada pulsación sería tan ruidoso como guardar
+        // en cada píxel arrastrado.
+        videoOffsetValue.doAfterTextChanged { text ->
+            if (updatingIpodOffsetUi) return@doAfterTextChanged
+            val typed = text?.toString()?.toIntOrNull() ?: return@doAfterTextChanged
+            updatingIpodOffsetUi = true
+            val notch = Math.round(typed / MetadataEditorDialogFragment.OFFSET_STEP_MS.toFloat())
+            if (videoOffsetRuler.currentValue != notch) videoOffsetRuler.setValue(notch, notify = false)
+            updatingIpodOffsetUi = false
+            val clamped = typed.coerceIn(-MetadataEditorDialogFragment.OFFSET_MAX_MS, MetadataEditorDialogFragment.OFFSET_MAX_MS)
+            controller.setOffset(clamped.toLong(), playerViewModel.currentPositionMs())
+        }
+        // Al pulsar "hecho" la caja se cuadra dentro del rango (por si quedó a medio escribir un
+        // "-" o se pasó del tope), se aplica de una vez y se cierra el teclado, igual que
+        // MetadataEditorDialogFragment.setupOffsetControls.
+        videoOffsetValue.setOnEditorActionListener { _, _, _ ->
+            val clamped = clampedIpodOffsetOrZero()
+            showIpodOffset(clamped)
+            applyIpodOffset(clamped.toLong())
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(videoOffsetValue.windowToken, 0)
+            videoOffsetValue.clearFocus()
+            true
+        }
+        videoOffsetValue.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) {
+                val clamped = clampedIpodOffsetOrZero()
+                showIpodOffset(clamped)
+                applyIpodOffset(clamped.toLong())
+            }
+        }
+
         /**
          * Muestra el videoclip (mudo) arrancando justo donde va el audio local, sin tocarlo. Por eso
          * no hay hueco de silencio: el audio nunca se pausa para esperar al vídeo.
@@ -506,6 +616,8 @@ class IPodDialogFragment : DialogFragment() {
             val playingNow = playerViewModel.isPlaying.value
             youtubePlayer.isVisible = true
             videoContainer.isVisible = true
+            videoOffsetBox.isVisible = true
+            showIpodOffset(song.videoOffsetMs.toInt())
 
             btnVideo.setImageResource(R.drawable.ic_music_note)
             // La pantalla del iPod pasa de cuadrada a 16:9 para no dejar bandas vacías arriba y
@@ -663,12 +775,16 @@ class IPodDialogFragment : DialogFragment() {
                         // en pantalla, se reposiciona al instante con el offset nuevo, en vez de esperar
                         // a salir y volver a entrar en modo vídeo. La comparación con
                         // [appliedVideoOffsetMs] evita reposicionar (con el saltito que eso da) en cada
-                        // guardado que no toque el offset, p. ej. al editar solo la letra.
+                        // guardado que no toque el offset, p. ej. al editar solo la letra. La misma
+                        // rama recoloca la regla y la cifra propias del iPod (ver [showIpodOffset]
+                        // más arriba): así se refleja tanto un cambio hecho en el editor de
+                        // metadatos como el que acaban de guardar ellas mismas al soltar/confirmar.
                         if (videoMode && song != null && song.id == videoSongId &&
                             song.videoOffsetMs != appliedVideoOffsetMs
                         ) {
                             appliedVideoOffsetMs = song.videoOffsetMs
                             videoController?.setOffset(song.videoOffsetMs, playerViewModel.currentPositionMs())
+                            showIpodOffset(song.videoOffsetMs.toInt())
                         }
                         if (song != null) {
                             cover.load(CoverArt.cover(requireContext(), song), loader) {
@@ -1083,6 +1199,9 @@ class IPodDialogFragment : DialogFragment() {
         )
         view.findViewById<SeekBar>(R.id.ipodProgress).progressTintList =
             ColorStateList.valueOf(accent)
+        // ValueRuler no es un GradientDrawable de fondo (ver AccentTint.stroke): su color propio se
+        // fija directo, igual que offsetRuler en el editor de metadatos.
+        view.findViewById<ValueRuler>(R.id.ipodOffsetRuler).accentColor = accent
 
         val strokeWidths = listOf(
             R.id.ipodBody to R.dimen.ipod_stroke_body,
@@ -1090,6 +1209,7 @@ class IPodDialogFragment : DialogFragment() {
             R.id.infoBox to R.dimen.ipod_stroke_info_box,
             R.id.buttonRow to R.dimen.ipod_stroke_info_box,
             R.id.lyricsBox to R.dimen.ipod_stroke_info_box,
+            R.id.videoOffsetBox to R.dimen.ipod_stroke_info_box,
             R.id.btnMenu to R.dimen.ipod_stroke_button_ring,
             R.id.btnPrev to R.dimen.ipod_stroke_button_ring,
             R.id.btnPlayPauseBig to R.dimen.ipod_stroke_button_ring,

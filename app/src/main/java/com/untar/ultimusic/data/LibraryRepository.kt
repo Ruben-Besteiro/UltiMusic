@@ -273,6 +273,17 @@ class LibraryRepository private constructor(
         dao.setLyrics(songId = song.id, lyrics = lyrics)
     }
 
+    /**
+     * Guarda el desplazamiento vídeo/audio elegido con la regla del modo vídeo del iPod (ver
+     * `IPodDialogFragment`, `ValueRuler.onReleased`). Al escribir en Room, el flujo [songs] reemite
+     * solo y la canción que suena vuelve a llegar ya con su `videoOffsetMs` nuevo, igual que
+     * [setVideoUrl] y [setLyrics].
+     */
+    suspend fun setVideoOffsetMs(song: Song, offsetMs: Long) = withContext(Dispatchers.IO) {
+        if (offsetMs == song.videoOffsetMs) return@withContext
+        dao.setVideoOffsetMs(songId = song.id, offsetMs = offsetMs)
+    }
+
     /** Pista y disco de una canción (viven en la tabla de cruce, no en la fila de la canción). */
     suspend fun trackAndDisc(songId: Long): Pair<Int?, Int?> =
         dao.trackNumberOf(songId) to dao.discNumberOf(songId)

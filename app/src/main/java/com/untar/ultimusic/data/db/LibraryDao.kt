@@ -457,6 +457,14 @@ abstract class LibraryDao {
     @Query("UPDATE songs SET lyrics = :lyrics WHERE id = :songId")
     abstract suspend fun setLyrics(songId: Long, lyrics: String?)
 
+    /**
+     * Guarda el desplazamiento vídeo/audio, mismo motivo que [setVideoUrl]: lo llama el iPod al
+     * soltar la regla de desplazamiento del modo vídeo (ver `ValueRuler.onReleased`), sin ningún
+     * formulario abierto de por medio.
+     */
+    @Query("UPDATE songs SET videoOffsetMs = :offsetMs WHERE id = :songId")
+    abstract suspend fun setVideoOffsetMs(songId: Long, offsetMs: Long)
+
     /** Reapunta una canción a su nueva ruta cuando el usuario ha movido el archivo (ver [reconcile]). */
     @Query("UPDATE songs SET filePath = :newPath WHERE filePath = :oldPath")
     abstract suspend fun updateSongPath(oldPath: String, newPath: String)

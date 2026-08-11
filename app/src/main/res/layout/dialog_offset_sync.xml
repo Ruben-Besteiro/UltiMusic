@@ -1,0 +1,161 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Calibración del desplazamiento vídeo/audio por oído (ver OffsetSyncDialogFragment).
+
+  Dos pasos que nunca se ven a la vez (stepAudioGroup / stepVideoGroup, alternados por el
+  fragmento): primero se reproduce el audio local solo, y al pausarlo en un momento reconocible se
+  pasa al vídeo solo, que se pausa en ese mismo momento. Con las dos posiciones capturadas, el
+  fragmento calcula el desplazamiento y lo devuelve al editor: no hace falta ir probando números a
+  ciegas en la regla.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/offsetSyncRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/offsetSyncToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_background"
+        app:navigationContentDescription="@string/editor_close"
+        app:navigationIcon="@drawable/ic_close"
+        app:title="@string/offset_sync_title"
+        app:titleTextColor="@color/um_on_background" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <!-- Paso 1: solo audio (ver PlayerViewModel, el reproductor real de la app). -->
+    <LinearLayout
+        android:id="@+id/stepAudioGroup"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp">
+
+        <TextView
+            android:id="@+id/syncStep1Instructions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/offset_sync_step1_instructions"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+
+        <ImageButton
+            android:id="@+id/btnAudioPlayPause"
+            android:layout_width="64dp"
+            android:layout_height="64dp"
+            android:layout_marginTop="32dp"
+            android:background="@drawable/ipod_round_button"
+            android:foreground="@drawable/ipod_round_button_ripple"
+            android:contentDescription="@string/play_pause"
+            android:padding="16dp"
+            android:src="@drawable/ic_play"
+            app:tint="@color/um_yellow" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tvAudioPosition"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText"
+                tools:text="0:00" />
+
+            <SeekBar
+                android:id="@+id/audioProgress"
+                android:layout_width="0dp"
+                android:layout_height="16dp"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:layout_marginHorizontal="4dp"
+                android:layout_weight="1"
+                android:max="1000"
+                android:progress="0"
+                android:progressDrawable="@drawable/seekbar_line"
+                android:progressBackgroundTint="@color/um_divider"
+                android:progressTint="@color/um_yellow"
+                android:thumb="@null"
+                android:background="@null"
+                android:splitTrack="false" />
+
+            <TextView
+                android:id="@+id/tvAudioDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp"
+                tools:ignore="HardcodedText"
+                tools:text="3:24" />
+        </LinearLayout>
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSyncNext"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/offset_sync_next" />
+
+    </LinearLayout>
+
+    <!-- Paso 2: solo vídeo, mudo (el vídeo nunca suena en esta app: ver VideoScreenController). A
+         diferencia del modo vídeo del iPod (ver TouchBlockerFrameLayout), aquí SÍ dejamos que los
+         toques lleguen al WebView y con los mandos propios de YouTube visibles (controls(1) en
+         [playerOptions]): esta pantalla es una herramienta de calibración de un solo uso, no la
+         reproducción pulida de siempre, y reaprovechar la barra de arrastre y el play/pausa nativos
+         de YouTube es más fiable que reinventar el arrastre nosotros. Que aparezca la capa de marca
+         de YouTube al pausar (título, compartir, logo) es un precio asumido aquí. -->
+    <LinearLayout
+        android:id="@+id/stepVideoGroup"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:padding="32dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/syncStep2Instructions"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/offset_sync_step2_instructions"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp" />
+
+        <com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
+            android:id="@+id/offsetSyncYoutubePlayer"
+            android:layout_width="match_parent"
+            android:layout_height="200dp"
+            android:layout_marginTop="24dp"
+            app:autoPlay="false"
+            app:enableAutomaticInitialization="false" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/btnSyncFinish"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/offset_sync_finish" />
+
+    </LinearLayout>
+
+</LinearLayout>

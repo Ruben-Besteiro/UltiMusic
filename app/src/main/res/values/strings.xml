@@ -176,6 +176,7 @@
     <string name="field_comment">Comentario</string>
     <string name="field_video_url">URL del vídeo</string>
     <string name="field_video_url_hint">Toca para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo</string>
+    <string name="field_video_url_open">Abrir</string>
     <string name="field_track_number">Nº de pista</string>
     <string name="field_disc_number">Nº de disco</string>
     <string name="field_og_title">Título original</string>
@@ -239,6 +240,17 @@
     <string name="video_settings_offset_title">Desplazamiento del vídeo</string>
     <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar el vídeo y en negativo para atrasarlo</string>
     <string name="video_settings_offset_unit">ms</string>
+    <!-- Calibración del desplazamiento vídeo/audio por oído (ver OffsetSyncDialogFragment): reproduce
+         primero el audio solo y luego el vídeo solo, y calcula el desplazamiento a partir del
+         instante en que el usuario pausa cada uno en el mismo momento reconocible, en vez de tener
+         que ir probando números a ciegas en la regla. -->
+    <string name="offset_sync_button">Sincronizar</string>
+    <string name="offset_sync_missing_video">Primero tienes que elegir un videoclip</string>
+    <string name="offset_sync_title">Sincronizar vídeo</string>
+    <string name="offset_sync_step1_instructions">Paso 1 de 2 — Suena el audio. Pausa en un momento reconocible y pulsa Siguiente.</string>
+    <string name="offset_sync_step2_instructions">Paso 2 de 2 — Ahora el vídeo. Pausa en ese mismo momento y pulsa Finalizar.</string>
+    <string name="offset_sync_next">Siguiente</string>
+    <string name="offset_sync_finish">Finalizar</string>
     <!-- Desplazamiento letra/audio, debajo del campo de la letra en el editor de metadatos. Solo
          tiene efecto con letra sincronizada (ver LrcParser); reutiliza video_settings_offset_unit
          para la unidad (ms), igual para los dos desplazamientos. -->

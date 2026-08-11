@@ -379,6 +379,28 @@
                             android:tint="@color/um_on_surface_muted" />
                     </FrameLayout>
 
+                    <!-- Enlace para abrir en YouTube el vídeo del campo de arriba. Solo aparece con
+                         una URL reconocible dentro (ver YouTubeUrl.videoId); el color del texto y
+                         del icono es el dinámico, igual que el resto de amarillos de esta pantalla
+                         (ver el collect de accentColor). -->
+                    <TextView
+                        android:id="@+id/linkVideoUrl"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:clickable="true"
+                        android:drawablePadding="6dp"
+                        android:drawableStart="@drawable/ic_youtube"
+                        android:focusable="true"
+                        android:gravity="center_vertical"
+                        android:paddingHorizontal="4dp"
+                        android:paddingVertical="4dp"
+                        android:text="@string/field_video_url_open"
+                        android:textSize="14sp"
+                        android:textStyle="bold"
+                        android:visibility="gone" />
+
                     <!-- Desplazamiento vídeo/audio del modo vídeo del iPod (ver Song.videoOffsetMs):
                          regla arrastrable igual que el amplificador de volumen sin límite (ver
                          ValueRuler). Antes vivía en unos ajustes aparte del propio iPod; ahora es un
@@ -437,6 +459,16 @@
                             android:textColor="@color/um_on_background" />
 
                     </LinearLayout>
+
+                    <!-- Calcula el desplazamiento por oído en vez de ir probando números a ciegas en
+                         la regla de arriba (ver OffsetSyncDialogFragment). -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnSyncOffset"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:layout_gravity="end"
+                        android:text="@string/offset_sync_button" />
                 </LinearLayout>
 
                 <!-- ===== Posición en el álbum ===== -->
