@@ -14,6 +14,8 @@ import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
+import com.untar.ultimusic.util.CoverArt
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -59,7 +61,11 @@ class PeopleFragment : Fragment(R.layout.fragment_library_list) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    source.collect { list ->
+                    // Ver el comentario de CoverArt.revision (mismo motivo que en SongsFragment): la
+                    // carátula de una persona sin imagen propia sale de sus canciones (ver
+                    // GroupCoverFetcher en CoverArt.kt), así que editar solo esa carátula tampoco
+                    // cambiaría nada en el PersonSummary sin esto.
+                    combine(source, CoverArt.revision) { list, _ -> list }.collect { list ->
                         adapter.submit(list)
                         emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
                     }

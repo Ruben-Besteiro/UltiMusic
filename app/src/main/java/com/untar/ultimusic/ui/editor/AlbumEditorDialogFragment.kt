@@ -10,14 +10,16 @@ import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.view.MenuItem
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.Toast
+import androidx.activity.ComponentDialog
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.content.res.AppCompatResources
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
@@ -40,6 +42,7 @@ import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.db.entities.AlbumEntity
+import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.util.AccentTint
@@ -51,8 +54,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Editor de metadatos de un ÁLBUM, a pantalla completa. Gemelo de [MetadataEditorDialogFragment]
- * (mismo tipo de [DialogFragment] a pantalla completa, mismo icono de guardar que se amarillea con
- * cambios sin guardar, mismo tintado de acento en los campos), pero con los campos que tiene un
+ * (mismo tipo de [DialogFragment] a pantalla completa, mismo aviso de cambios sin guardar al
+ * intentar salir, mismo tintado de acento en los campos), pero con los campos que tiene un
  * álbum en vez de una canción suelta: título, artista(s), año, género(s) y portada.
  *
  * Lo abre el botón de 3 puntos de la ficha de álbum (ver
@@ -74,11 +77,10 @@ class AlbumEditorDialogFragment : DialogFragment() {
      * confunda con un cambio del usuario y marque el formulario como sucio. */
     private var isFillingForm = false
 
-    /** True en cuanto el usuario cambia algo. El icono de guardar se pinta de amarillo dinámico
-     * mientras esto sea true, para señalar que esa es la opción recomendada. */
+    /** True en cuanto el usuario cambia algo (texto o portada). Controla si al intentar salir
+     * (flecha de la toolbar o "atrás") hace falta pedir confirmación, ver [attemptClose]. */
     private var isDirty = false
 
-    private lateinit var saveMenuItem: MenuItem
     private var accentColor: Int = 0
 
     private lateinit var inputTitle: EditText
@@ -132,6 +134,7 @@ class AlbumEditorDialogFragment : DialogFragment() {
 
         bindViews(view)
         setupToolbar(view)
+        setupBackHandling()
 
         val textFields = mutableListOf<TextInputLayout>()
         collectTextInputLayouts(view, textFields)
@@ -166,8 +169,8 @@ class AlbumEditorDialogFragment : DialogFragment() {
                                 requireContext(), R.string.editor_saved, Toast.LENGTH_SHORT
                             ).show()
                             isDirty = false
-                            updateSaveIcon()
                             pickedImage = null
+                            refreshQueuedAlbumSongs(result.songs)
                             viewModel.consumeSaved()
                         }
                     }
@@ -178,7 +181,6 @@ class AlbumEditorDialogFragment : DialogFragment() {
                     val defaultStroke = ContextCompat.getColor(requireContext(), R.color.um_divider)
                     playerViewModel.accentColor.collect { accent ->
                         accentColor = accent
-                        updateSaveIcon()
                         AccentTint.fill(view, R.id.btnPickCover, accent)
                         AccentTint.contentOnAccent(btnPickCover, accent)
                         fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
@@ -235,9 +237,8 @@ class AlbumEditorDialogFragment : DialogFragment() {
 
     private fun setupToolbar(view: View) {
         val toolbar = view.findViewById<MaterialToolbar>(R.id.editorToolbar)
-        toolbar.setNavigationOnClickListener { dismiss() }
+        toolbar.setNavigationOnClickListener { attemptClose() }
         toolbar.inflateMenu(R.menu.menu_metadata_editor)
-        saveMenuItem = toolbar.menu.findItem(R.id.action_save)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_save -> { save(); true }
@@ -246,19 +247,47 @@ class AlbumEditorDialogFragment : DialogFragment() {
         }
     }
 
-    private fun markDirty() {
-        if (isDirty) return
-        isDirty = true
-        updateSaveIcon()
+    /** El botón "atrás" del sistema/gesto tiene que pasar por la misma confirmación que la flecha
+     * de la toolbar (ver [attemptClose]). El despachador es el del DIÁLOGO, no el de la actividad:
+     * ver [MetadataEditorDialogFragment.setupBackHandling], mismo motivo. */
+    private fun setupBackHandling() {
+        (dialog as? ComponentDialog)?.onBackPressedDispatcher?.addCallback(
+            viewLifecycleOwner,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() = attemptClose()
+            }
+        )
     }
 
-    private fun updateSaveIcon() {
-        if (!::saveMenuItem.isInitialized) return
-        val drawable = AppCompatResources.getDrawable(requireContext(), R.drawable.ic_save)?.mutate()
-        if (isDirty) {
-            drawable?.let { DrawableCompat.setTint(it, accentColor) }
-        }
-        saveMenuItem.icon = drawable
+    /** Punto único de salida del editor: si hay cambios sin guardar pide confirmación antes de
+     * cerrar (ver [showUnsavedChangesDialog]); si no, cierra directamente. */
+    private fun attemptClose() {
+        if (isDirty) showUnsavedChangesDialog() else closeNow()
+    }
+
+    /** Los botones siguen el color dinámico de la canción que suena, como manda el proyecto para
+     * todo lo amarillo (ver [AccentTint.buttons]). */
+    private fun showUnsavedChangesDialog() {
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.editor_unsaved_changes_title)
+            .setMessage(R.string.editor_unsaved_changes_message)
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.editor_leave) { _, _ -> closeNow() }
+            .show()
+        AccentTint.buttons(dialog, accentColor)
+    }
+
+    /** Cierra de verdad, sin pedir confirmación (ya se ha hecho o no hacía falta, ver
+     * [attemptClose]). La animación de salida la pone el tema
+     * ([R.style.Theme_UltiMusic_FullScreenDialog]). */
+    private fun closeNow() {
+        dismiss()
+    }
+
+    /** El usuario ha cambiado algo desde que se abrió el editor: si intenta salir ahora, hará
+     * falta pedir confirmación (ver [attemptClose]). */
+    private fun markDirty() {
+        isDirty = true
     }
 
     /** Vuelca el álbum en los campos. Solo la primera vez (ver [formLoaded]). */
@@ -358,6 +387,26 @@ class AlbumEditorDialogFragment : DialogFragment() {
             ),
             pickedImage
         )
+    }
+
+    /**
+     * Sustituye, en la canción que suena y en la cola, las canciones de [songs] (todas las del
+     * álbum ya recién guardado) por su versión al día — mismo motivo que
+     * [MetadataEditorDialogFragment] llama a [PlayerViewModel.refreshSong] tras guardar una canción
+     * suelta: [PlaybackService][com.untar.ultimusic.playback.PlaybackService] guarda su propia copia
+     * de cada [Song] en `currentSong`/`queue`, así que editar el álbum en Room no la actualiza ahí
+     * sola. Sin esto, el título del álbum en el subtítulo "Artista | Álbum | Año" del iPod (tanto en
+     * la canción actual como en cada fila de la cola) se quedaría con el valor viejo hasta que esa
+     * canción concreta volviera a arrancar.
+     *
+     * Se filtra ANTES a las que de verdad estén sonando o en cola: [PlayerViewModel.refreshSong]
+     * recorre la cola entera en cada llamada, y la mayoría de las canciones de un álbum no van a
+     * estar ahí.
+     */
+    private fun refreshQueuedAlbumSongs(songs: List<Song>) {
+        val relevantIds = playerViewModel.queue.value.mapTo(mutableSetOf()) { it.id }
+        playerViewModel.currentSong.value?.let { relevantIds.add(it.id) }
+        songs.filter { it.id in relevantIds }.forEach { playerViewModel.refreshSong(it) }
     }
 
     /**

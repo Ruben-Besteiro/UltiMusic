@@ -23,6 +23,7 @@ import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.GroupKind
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -68,10 +69,10 @@ class LibraryRepository private constructor(
         dao.observeAlbumSummaries(null).map { rows -> rows.map { it.toDomain() } }
 
     val artists: Flow<List<PersonSummary>> =
-        dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain() } }
+        dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain(GroupKind.ARTIST) } }
 
     val producers: Flow<List<PersonSummary>> =
-        dao.observeProducerSummaries(null).map { rows -> rows.map { it.toDomain() } }
+        dao.observeProducerSummaries(null).map { rows -> rows.map { it.toDomain(GroupKind.PRODUCER) } }
 
     /**
      * Pestaña de Géneros. A diferencia de las tres de arriba, no sale de una consulta SQL: el
@@ -111,10 +112,10 @@ class LibraryRepository private constructor(
         }
 
     fun artist(id: Long): Flow<PersonSummary?> =
-        dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
+        dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain(GroupKind.ARTIST) }
 
     fun producer(id: Long): Flow<PersonSummary?> =
-        dao.observeProducerSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
+        dao.observeProducerSummaries(id).map { rows -> rows.firstOrNull()?.toDomain(GroupKind.PRODUCER) }
 
     /**
      * Canciones de un álbum, ya ordenadas por número de pista y con ese número al lado.

@@ -7,7 +7,9 @@ import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.YouTubeUrl
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,6 +18,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Estado y guardado del editor de metadatos de una canción.
@@ -77,74 +80,87 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
      * Escribe todos los cambios. La imagen se importa AQUÍ (no al elegirla) para no dejar archivos
      * sueltos en el almacenamiento si el usuario acaba cerrando el editor sin guardar. Lo mismo
      * para la miniatura de YouTube: se descarga aquí, solo si el enlace ha cambiado de verdad.
+     *
+     * Envuelto en [NonCancellable]: si el usuario pulsa "Guardar" y cierra el editor enseguida (antes
+     * de que la copia de la carátula o la escritura en Room hayan terminado), `viewModelScope` se
+     * cancela al destruirse este ViewModel -y con él, sin esto, la corrutina a medias-, dejando la
+     * carátula sin importar o la fila sin actualizar aunque el usuario ya hubiera pulsado "Guardar".
+     * Con [NonCancellable] el guardado sigue corriendo hasta el final aunque la pantalla ya se haya
+     * cerrado.
      */
     fun save(form: EditorForm, pickedImage: Uri?) {
         val current = song.value ?: return
         val titleChanged = form.title != current.title
         viewModelScope.launch {
-            val imageName = when {
-                pickedImage != null -> {
-                    current.imageName?.let { old -> repository.deleteCoverImage(old) }
-                    runCatching { repository.importCoverImage(pickedImage, form.title) }
-                        .getOrElse { current.imageName }
+            withContext(NonCancellable) {
+                val imageName = when {
+                    pickedImage != null -> {
+                        current.imageName?.let { old -> repository.deleteCoverImage(old) }
+                        runCatching { repository.importCoverImage(pickedImage, form.title) }
+                            .getOrElse { current.imageName }
+                    }
+                    current.imageName != null && titleChanged ->
+                        repository.renameImage(current.imageName, form.title, "", "img")
+                    else -> current.imageName
                 }
-                current.imageName != null && titleChanged ->
-                    repository.renameImage(current.imageName, form.title, "", "img")
-                else -> current.imageName
+
+                var thumbnailName = current.videoThumbnailName
+                when {
+                    form.videoUrl == null -> {
+                        current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
+                        thumbnailName = null
+                    }
+                    form.videoUrl != current.videoUrl -> {
+                        current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
+                        val videoId = YouTubeUrl.videoId(form.videoUrl)
+                        thumbnailName = videoId?.let { repository.downloadVideoThumbnail(it, form.title) }
+                    }
+                    current.videoThumbnailName != null && titleChanged ->
+                        thumbnailName =
+                            repository.renameImage(current.videoThumbnailName, form.title, " (video)", "jpg")
+                }
+
+                val entity = SongEntity(
+                    id = current.id,
+                    filePath = current.filePath,
+                    title = form.title,
+                    duration = current.duration,
+                    year = form.year,
+                    genres = form.genres,
+                    lyrics = form.lyrics,
+                    language = form.language,
+                    imageName = imageName,
+                    comment = form.comment,
+                    videoUrl = form.videoUrl,
+                    videoThumbnailName = thumbnailName,
+                    videoOffsetMs = form.videoOffsetMs,
+                    lyricsOffsetMs = form.lyricsOffsetMs,
+                    ogTitle = form.ogTitle,
+                    ogArtist = form.ogArtist,
+                    ogAlbum = form.ogAlbum,
+                    ogYear = form.ogYear
+                )
+
+                repository.saveSongEdits(
+                    song = entity,
+                    artistNames = form.artists,
+                    albumTitles = form.albums,
+                    producerNames = form.producers,
+                    trackNumber = form.trackNumber,
+                    discNumber = form.discNumber
+                )
+                // Ver CoverArt.revision: sin esto, una carátula que reutiliza el nombre de archivo de
+                // la anterior no cambiaría nada en el Song que sale de Room, y las listas de la app
+                // no se enterarían de que hay una imagen nueva que cargar.
+                CoverArt.touch()
+                // Se relee de Room en vez de construirla a mano aquí: artistas/álbumes/productores son
+                // relaciones que saveSongEdits acaba de resolver (nombre -> fila existente o nueva), y
+                // reconstruir eso a mano duplicaría esa lógica. Por si acaso no apareciera (no debería:
+                // se acaba de guardar), se cae de vuelta a un parche mínimo sobre lo que ya había.
+                val fresh = repository.songs.first().firstOrNull { it.id == current.id }
+                    ?: current.copy(imageName = imageName, videoThumbnailName = thumbnailName)
+                _saved.value = SaveResult(fresh)
             }
-
-            var thumbnailName = current.videoThumbnailName
-            when {
-                form.videoUrl == null -> {
-                    current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
-                    thumbnailName = null
-                }
-                form.videoUrl != current.videoUrl -> {
-                    current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
-                    val videoId = YouTubeUrl.videoId(form.videoUrl)
-                    thumbnailName = videoId?.let { repository.downloadVideoThumbnail(it, form.title) }
-                }
-                current.videoThumbnailName != null && titleChanged ->
-                    thumbnailName =
-                        repository.renameImage(current.videoThumbnailName, form.title, " (video)", "jpg")
-            }
-
-            val entity = SongEntity(
-                id = current.id,
-                filePath = current.filePath,
-                title = form.title,
-                duration = current.duration,
-                year = form.year,
-                genres = form.genres,
-                lyrics = form.lyrics,
-                language = form.language,
-                imageName = imageName,
-                comment = form.comment,
-                videoUrl = form.videoUrl,
-                videoThumbnailName = thumbnailName,
-                videoOffsetMs = form.videoOffsetMs,
-                lyricsOffsetMs = form.lyricsOffsetMs,
-                ogTitle = form.ogTitle,
-                ogArtist = form.ogArtist,
-                ogAlbum = form.ogAlbum,
-                ogYear = form.ogYear
-            )
-
-            repository.saveSongEdits(
-                song = entity,
-                artistNames = form.artists,
-                albumTitles = form.albums,
-                producerNames = form.producers,
-                trackNumber = form.trackNumber,
-                discNumber = form.discNumber
-            )
-            // Se relee de Room en vez de construirla a mano aquí: artistas/álbumes/productores son
-            // relaciones que saveSongEdits acaba de resolver (nombre -> fila existente o nueva), y
-            // reconstruir eso a mano duplicaría esa lógica. Por si acaso no apareciera (no debería:
-            // se acaba de guardar), se cae de vuelta a un parche mínimo sobre lo que ya había.
-            val fresh = repository.songs.first().firstOrNull { it.id == current.id }
-                ?: current.copy(imageName = imageName, videoThumbnailName = thumbnailName)
-            _saved.value = SaveResult(fresh)
         }
     }
 

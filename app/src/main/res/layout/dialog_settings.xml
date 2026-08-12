@@ -5,7 +5,7 @@
   como una lista vertical para que ir añadiendo ajustes debajo no obligue a rehacerla):
 
     - "Ajustes auditivos": el amplificador de volumen y el ecualizador.
-    - "Ajustes visuales": la lista gris de subcarpetas y "Usar carátula del álbum siempre".
+    - "Ajustes visuales": la lista gris de subcarpetas.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -575,18 +575,6 @@
                 android:text="@string/settings_greylist_add"
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold" />
-
-            <!-- ===== Ajuste: usar carátula del álbum siempre ===== -->
-
-            <com.google.android.material.checkbox.MaterialCheckBox
-                android:id="@+id/useAlbumCoverAlwaysCheck"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="@string/settings_visual_use_album_cover_always"
-                android:textColor="@color/um_on_background"
-                android:textSize="15sp"
-                app:rippleColor="@color/um_ripple_white" />
 
         </LinearLayout>
 

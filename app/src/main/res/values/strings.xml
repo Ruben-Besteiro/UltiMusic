@@ -100,6 +100,23 @@
     <string name="suggestions_genius_rate_limited">Genius ha limitado las peticiones (%1$d s): se han rellenado los datos de iTunes, pero sin productores ni datos del remix</string>
     <string name="suggestions_retry">Reintentar</string>
 
+    <!-- Diálogo "Elige qué quieres sobrescribir" que sale al elegir una sugerencia (de canción o de
+         álbum), antes de aplicarla de verdad. Ver
+         MetadataSuggestionsDialogFragment.showOverwritePicker. Las etiquetas de las casillas
+         reutilizan los mismos field_* que ya rotulan esos campos en los editores (mismo campo,
+         mismo nombre en todas partes); solo "Portada" y "Canción original" son nuevas, porque no
+         hay un field_* con el que casen: la portada no es un EditText con hint, y "Canción
+         original" agrupa en UNA casilla los cuatro campos og* (ver el javadoc del método). -->
+    <string name="overwrite_picker_title">Elige qué quieres sobrescribir</string>
+    <string name="overwrite_check_all">Marcar todo</string>
+    <string name="overwrite_uncheck_all">Desmarcar todo</string>
+    <string name="overwrite_field_cover">Portada</string>
+    <string name="overwrite_field_original_song">Canción original</string>
+    <!-- Aviso en gris al pie del diálogo, solo en una sugerencia de canción sin datos de Genius (sin
+         token, o Genius no tiene esa canción): %1$s es la lista de campos que solo aporta Genius,
+         ya unidos en una frase ("Productor(es), URL del vídeo y Canción original"). -->
+    <string name="overwrite_missing_fields">No se han podido obtener los campos %1$s ni la carátula de la canción (se utilizará la del álbum)</string>
+
     <!-- Diálogo de "Acción requerida" que sale al tocar la varita del editor de CANCIÓN sin token de
          Genius configurado (ver GeniusTokenDialogFragment). No sale en el editor de álbum: ese
          autorrelleno solo usa iTunes, que no pide clave. -->
@@ -240,17 +257,6 @@
     <string name="video_settings_offset_title">Desplazamiento del vídeo</string>
     <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar el vídeo y en negativo para atrasarlo</string>
     <string name="video_settings_offset_unit">ms</string>
-    <!-- Calibración del desplazamiento vídeo/audio por oído (ver OffsetSyncDialogFragment): reproduce
-         primero el audio solo y luego el vídeo solo, y calcula el desplazamiento a partir del
-         instante en que el usuario pausa cada uno en el mismo momento reconocible, en vez de tener
-         que ir probando números a ciegas en la regla. -->
-    <string name="offset_sync_button">Sincronizar</string>
-    <string name="offset_sync_missing_video">Primero tienes que elegir un videoclip</string>
-    <string name="offset_sync_title">Sincronizar vídeo</string>
-    <string name="offset_sync_step1_instructions">Paso 1 de 2 — Suena el audio. Pausa en un momento reconocible y pulsa Siguiente.</string>
-    <string name="offset_sync_step2_instructions">Paso 2 de 2 — Ahora el vídeo. Pausa en ese mismo momento y pulsa Finalizar.</string>
-    <string name="offset_sync_next">Siguiente</string>
-    <string name="offset_sync_finish">Finalizar</string>
     <!-- Desplazamiento letra/audio, debajo del campo de la letra en el editor de metadatos. Solo
          tiene efecto con letra sincronizada (ver LrcParser); reutiliza video_settings_offset_unit
          para la unidad (ms), igual para los dos desplazamientos. -->
@@ -282,7 +288,6 @@
     <string name="settings_back">Cerrar los ajustes</string>
     <string name="settings_audio_section_title">Ajustes auditivos</string>
     <string name="settings_visual_section_title">Ajustes visuales</string>
-    <string name="settings_visual_use_album_cover_always">Usar carátula del álbum siempre</string>
     <string name="settings_boost_title">Amplificador de volumen</string>
     <string name="settings_boost_subtitle">Untar Technologies no se hace legalmente responsable de cualquier pérdida auditiva causada por su uso</string>
     <string name="settings_boost_no_limit">Desactivar límite</string>

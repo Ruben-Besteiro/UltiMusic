@@ -25,6 +25,8 @@ import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
+import com.untar.ultimusic.util.CoverArt
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -63,7 +65,11 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    songsViewModel.songs.collect { list ->
+                    // Se combina con CoverArt.revision (ver su comentario) para que editar SOLO la
+                    // carátula de una canción -reutilizando su nombre de archivo, el caso normal-
+                    // repinte esta lista igual: sin esto, songsViewModel.songs no reemitiría nada
+                    // porque el Song que sale de Room sería idéntico al de antes.
+                    combine(songsViewModel.songs, CoverArt.revision) { list, _ -> list }.collect { list ->
                         adapter.submit(list)
                         if (list.isEmpty() && !songsViewModel.loading.value) {
                             emptyView.text = requireContext().getString(R.string.nothing_playing)

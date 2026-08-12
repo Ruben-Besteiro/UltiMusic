@@ -1,19 +1,34 @@
 package com.untar.ultimusic.util
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Rect
+import android.graphics.drawable.BitmapDrawable
 import android.media.MediaMetadataRetriever
 import android.os.Environment
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.decode.ImageSource
+import coil.fetch.DrawableResult
 import coil.fetch.FetchResult
 import coil.fetch.Fetcher
 import coil.fetch.SourceResult
 import coil.key.Keyer
 import coil.request.Options
+import coil.size.Dimension
+import com.untar.ultimusic.data.db.UltiMusicDatabase
+import com.untar.ultimusic.data.db.relations.CollageCandidateRow
 import com.untar.ultimusic.model.Song
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import okio.Buffer
 import java.io.File
+import java.security.MessageDigest
+import kotlin.math.min
+import kotlin.math.sqrt
 
 /**
  * Resolución de carátulas con la cadena de failsafe de UltiMusic:
@@ -31,11 +46,43 @@ import java.io.File
  * Coil cae en el drawable de error (recuadro negro) configurado en cada ImageView.
  *
  * Para un álbum, artista o productor la cadena tiene un eslabón más, porque ellos no son un archivo
- * de audio: imagen propia → imagen personalizada de una de sus canciones → arte embebido de una de
- * sus canciones → miniatura de YouTube de una de sus canciones → recuadro negro. Eso es lo que
- * describe un [CoverRef].
+ * de audio: imagen propia → COLLAGE con las carátulas de varias de sus canciones (si hay al menos
+ * 4 distintas) → carátula de la primera de esas canciones que tenga alguna → recuadro negro. El
+ * collage y ese último eslabón los resuelve [GroupCoverFetcher] bajo demanda (consulta la base de
+ * datos y lee los archivos, así que no puede hacerse aquí, que es síncrono); [cover] solo entrega
+ * el [GroupCoverSource] que le indica qué álbum/artista/productor resolver. Eso es lo que describe
+ * un [CoverRef].
  */
 object CoverArt {
+
+    /**
+     * Sube cada vez que un editor de metadatos (canción o álbum) termina de guardar una carátula.
+     *
+     * Hace falta porque las listas de la app (Canciones, Álbumes, Artistas/Productores, la ficha de
+     * detalle, el buscador...) salen de Room a través de un `StateFlow`, y un `StateFlow` NUNCA
+     * reemite un valor estructuralmente IGUAL al anterior. Si la carátula se reemplaza reutilizando
+     * el mismo nombre de archivo (el caso normal: ver [reserveFileName]), el `Song`/`Album` que sale
+     * de la base de datos es idéntico campo a campo al de antes -solo ha cambiado el CONTENIDO del
+     * archivo en disco-, así que ese `StateFlow` se queda callado y ninguna lista se repinta.
+     *
+     * Quien pinte una de esas listas debe combinar su flujo con [revision] (ver
+     * [com.untar.ultimusic.ui.songs.SongsFragment] para el patrón) para forzar ese repintado igual
+     * si la lista en sí no ha cambiado: como los nombres de archivo de las carátulas ya llevan la
+     * fecha de modificación en la clave de caché de Coil (ver [CoverFileKeyer]/[AudioCoverKeyer]),
+     * un repintado de más solo cuesta un `notifyDataSetChanged` y una consulta a la caché en
+     * memoria, nunca releer el archivo entero de disco.
+     *
+     * Es el mismo truco que ya usaba
+     * [PlaybackService.coverRevision][com.untar.ultimusic.playback.PlaybackService.coverRevision]
+     * para el mini-reproductor y el iPod; este es su equivalente para el resto de la app.
+     */
+    private val _revision = MutableStateFlow(0)
+    val revision: StateFlow<Int> = _revision.asStateFlow()
+
+    /** Ver [revision]. Lo llama cada editor justo después de guardar. */
+    fun touch() {
+        _revision.value++
+    }
 
     /**
      * Carpeta `~/UltiMusic/images`, donde viven TODAS las imágenes de la app: las portadas
@@ -74,24 +121,9 @@ object CoverArt {
         }
     }
 
-    /**
-     * Dato que se pasa a Coil para cargar la carátula de una canción.
-     *
-     * Con el ajuste "Usar carátula del álbum siempre" activo (ver [DisplaySettings]) y la canción
-     * perteneciendo a un álbum, la cadena tira primero de la imagen propia del ÁLBUM en vez de la de
-     * la canción; el resto de eslabones (imagen propia de la canción, arte embebido, miniatura de
-     * YouTube) se mantienen como reserva, así que una canción sin nada propio de todos modos no
-     * queda en negro. Como [com.untar.ultimusic.playback.PlaybackService.updateAccent] calcula el
-     * color dinámico a partir de este mismo dato, activar el ajuste también hace que el color
-     * dinámico salga de la carátula del álbum en vez de la de la canción.
-     */
+    /** Dato que se pasa a Coil para cargar la carátula de una canción. */
     fun cover(context: Context, song: Song): Any {
-        val album = song.albums.firstOrNull()
-        val ref = if (album != null && DisplaySettings.useAlbumCoverAlways) {
-            CoverRef(album.imageName, song.imageName, song.filePath, song.videoThumbnailName)
-        } else {
-            CoverRef(song.imageName, null, song.filePath, song.videoThumbnailName)
-        }
+        val ref = CoverRef(song.imageName, null, song.filePath, song.videoThumbnailName)
         return cover(context, ref)
     }
 
@@ -99,10 +131,19 @@ object CoverArt {
      * Ídem para un álbum/artista/productor. Devuelve el primer eslabón disponible de la cadena; el
      * último (el recuadro negro) lo pone Coil como `error(...)` en cada ImageView, porque solo al
      * intentar leer el archivo de audio se sabe si tiene arte embebido o no.
+     *
+     * Con [CoverRef.group] (siempre presente salvo en el [CoverRef] de una canción suelta), si no
+     * hay imagen propia se entrega el propio [GroupCoverSource]: es [GroupCoverFetcher] quien
+     * decide, ya de forma asíncrona, si hay collage o toca caer a la carátula de una sola canción.
      */
     fun cover(context: Context, ref: CoverRef): Any {
         val dir = imagesDir(context)
-        for (name in listOfNotNull(ref.ownImage, ref.songImage)) {
+        ref.ownImage?.let { name ->
+            val file = File(dir, name)
+            if (file.exists()) return file
+        }
+        ref.group?.let { return it }
+        ref.songImage?.let { name ->
             val file = File(dir, name)
             if (file.exists()) return file
         }
@@ -112,21 +153,35 @@ object CoverArt {
 }
 
 /**
- * Los cuatro eslabones "de datos" de la cadena de carátulas, para poder resolverla igual sea de una
+ * Los eslabones "de datos" de la cadena de carátulas, para poder resolverla igual sea de una
  * canción, un álbum, un artista o un productor.
  *
  * @param ownImage nombre de la imagen personalizada del propio elemento, si la tiene.
- * @param songImage nombre de la imagen personalizada de una de sus canciones (solo álbum/persona).
- * @param songPath ruta de un archivo de audio suyo, del que extraer el arte embebido.
+ * @param songImage nombre de la imagen personalizada de una de sus canciones (solo álbum/persona,
+ *   y solo si [group] es null: hoy no se usa, ver [GroupCoverFetcher]).
+ * @param songPath ruta de un archivo de audio suyo, del que extraer el arte embebido (solo si
+ *   [group] es null).
  * @param videoThumbnail nombre de la miniatura de YouTube de una de sus canciones (o de la propia
- *   canción, si es un [CoverRef] de canción), por si no hay arte embebido.
+ *   canción, si es un [CoverRef] de canción), por si no hay arte embebido (solo si [group] es
+ *   null).
+ * @param group presente SOLO en un [CoverRef] de álbum/artista/productor (nunca en el de una
+ *   canción): qué collage resolver si no hay imagen propia. Ver [GroupCoverSource].
  */
 data class CoverRef(
     val ownImage: String?,
-    val songImage: String?,
-    val songPath: String?,
-    val videoThumbnail: String? = null
+    val songImage: String? = null,
+    val songPath: String? = null,
+    val videoThumbnail: String? = null,
+    val group: GroupCoverSource? = null
 )
+
+/** Qué álbum/artista/productor resolver en [GroupCoverFetcher]: sus canciones salen de una tabla
+ * de cruce distinta según [kind] (ver `LibraryDao.collageCandidatesForAlbum`/`...ForArtist`/
+ * `...ForProducer`). Artista y productor se tratan igual, como manda el proyecto; solo cambia a
+ * qué tabla de cruce se pregunta. */
+data class GroupCoverSource(val kind: GroupKind, val id: Long)
+
+enum class GroupKind { ALBUM, ARTIST, PRODUCER }
 
 /** Envoltorio para indicarle a Coil que debe extraer el arte embebido de un archivo de audio, con
  * la miniatura de YouTube como reserva si ese archivo no tiene arte embebido. */
@@ -141,17 +196,9 @@ class AudioCoverFetcher(
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? {
-        val embedded = runCatching {
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(file.absolutePath)
-                retriever.embeddedPicture
-            } finally {
-                runCatching { retriever.release() }
-            }
-        }.getOrNull()
-
-        val bytes = embedded ?: fallbackThumbnail?.takeIf { it.exists() }?.readBytes() ?: return null
+        val bytes = extractEmbeddedArt(file.absolutePath)
+            ?: fallbackThumbnail?.takeIf { it.exists() }?.readBytes()
+            ?: return null
         return SourceResult(
             source = ImageSource(
                 source = Buffer().apply { write(bytes) },
@@ -167,6 +214,155 @@ class AudioCoverFetcher(
             AudioCoverFetcher(data.file, data.fallbackThumbnail, options)
     }
 }
+
+/** Arte embebido de un archivo de audio, o null si no tiene (o no se ha podido leer). Lo usan
+ * tanto [AudioCoverFetcher] (una sola canción) como [GroupCoverFetcher] (varias, para el
+ * collage), así que vive aparte en vez de duplicarse en los dos. */
+private fun extractEmbeddedArt(path: String): ByteArray? = runCatching {
+    val retriever = MediaMetadataRetriever()
+    try {
+        retriever.setDataSource(path)
+        retriever.embeddedPicture
+    } finally {
+        runCatching { retriever.release() }
+    }
+}.getOrNull()
+
+/**
+ * Fetcher de Coil que resuelve la carátula de un álbum/artista/productor SIN imagen propia (ver
+ * [CoverArt.cover]): intenta un collage con las carátulas de varias de sus canciones y, si no da
+ * para uno, cae en la de una sola. Va en un Fetcher (no en [CoverArt.cover], que es síncrona)
+ * porque hace falta consultar la base de datos y leer archivos, y así ese trabajo queda fuera del
+ * hilo principal y se cancela solo si la vista que lo pidió se recicla (Coil ya se encarga).
+ *
+ * Las canciones candidatas llegan YA en el orden en que el usuario las vería al entrar en la
+ * ficha (ver `LibraryDao.collageCandidatesForAlbum`/`...ForArtist`/`...ForProducer`): el collage
+ * se forma con las primeras que tengan carátula, sin contar duplicadas.
+ *
+ * Sin tope de tamaño a propósito: sigue creciendo (2×2, 3×3, 4×4...) mientras haya suficientes
+ * canciones con carátula DISTINTA. "Distinta" se decide por el CONTENIDO (hash de los bytes), no
+ * por de qué canción viene: así un álbum entero con el mismo arte embebido en cada pista no
+ * repite la misma imagen varias veces en el collage.
+ */
+class GroupCoverFetcher(
+    private val source: GroupCoverSource,
+    private val options: Options
+) : Fetcher {
+
+    override suspend fun fetch(): FetchResult? {
+        val context = options.context
+        val dao = UltiMusicDatabase.get(context).libraryDao()
+        val candidates = when (source.kind) {
+            GroupKind.ALBUM -> dao.collageCandidatesForAlbum(source.id)
+            GroupKind.ARTIST -> dao.collageCandidatesForArtist(source.id)
+            GroupKind.PRODUCER -> dao.collageCandidatesForProducer(source.id)
+        }
+
+        val dir = CoverArt.imagesDir(context)
+        val seenHashes = HashSet<String>()
+        val distinctCovers = ArrayList<ByteArray>()
+        for (candidate in candidates) {
+            val bytes = resolveCandidateBytes(dir, candidate) ?: continue
+            if (seenHashes.add(md5(bytes))) distinctCovers.add(bytes)
+        }
+
+        val side = sqrt(distinctCovers.size.toDouble()).toInt()
+        val targetPx = targetSidePx(options)
+        val bitmap = if (side >= 2) {
+            composeCollage(distinctCovers.take(side * side), side, targetPx)
+        } else {
+            distinctCovers.firstOrNull()?.let { decodeSampled(it, targetPx) }
+        } ?: return null
+
+        return DrawableResult(
+            drawable = BitmapDrawable(context.resources, bitmap),
+            isSampled = true,
+            dataSource = DataSource.DISK
+        )
+    }
+
+    /** Carátula de UNA canción candidata: misma cadena que [CoverArt.cover] usa para una canción
+     * suelta (imagen propia de la canción → arte embebido de su archivo → su miniatura de
+     * YouTube), pero devolviendo los BYTES en vez de un dato para Coil, porque aquí hace falta
+     * decidir duplicados y componer el collage a mano. */
+    private fun resolveCandidateBytes(dir: File, candidate: CollageCandidateRow): ByteArray? {
+        candidate.imageName?.let { name ->
+            val file = File(dir, name)
+            if (file.exists()) runCatching { file.readBytes() }.getOrNull()?.let { return it }
+        }
+        extractEmbeddedArt(candidate.filePath)?.let { return it }
+        candidate.videoThumbnailName?.let { name ->
+            val file = File(dir, name)
+            if (file.exists()) runCatching { file.readBytes() }.getOrNull()?.let { return it }
+        }
+        return null
+    }
+
+    class Factory : Fetcher.Factory<GroupCoverSource> {
+        override fun create(data: GroupCoverSource, options: Options, imageLoader: ImageLoader): Fetcher =
+            GroupCoverFetcher(data, options)
+    }
+}
+
+/** Huella MD5 de [bytes], en hexadecimal: suficiente para decidir "misma imagen" sin tener que
+ * comparar arrays enteros a mano. */
+private fun md5(bytes: ByteArray): String =
+    MessageDigest.getInstance("MD5").digest(bytes).joinToString("") { "%02x".format(it) }
+
+/** Lado en píxeles con el que componer el collage (o decodificar la carátula única de reserva):
+ * el que pida la vista que lo carga ([Options.size]), o [DEFAULT_COLLAGE_SIDE_PX] si la pide
+ * "original" (no tiene sentido componer una imagen sintética a resolución de pantalla completa). */
+private fun targetSidePx(options: Options): Int {
+    val width = (options.size.width as? Dimension.Pixels)?.px
+    val height = (options.size.height as? Dimension.Pixels)?.px
+    return (listOfNotNull(width, height).minOrNull() ?: DEFAULT_COLLAGE_SIDE_PX)
+        .coerceAtLeast(MIN_COLLAGE_SIDE_PX)
+}
+
+/** Decodifica [bytes] recortados al cuadrado central, reduciendo la resolución de origen (con
+ * `inSampleSize`) para no cargar una imagen entera cuando la casilla de destino es mucho más
+ * pequeña. */
+private fun decodeSampled(bytes: ByteArray, targetPx: Int): Bitmap? {
+    val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+    var sample = 1
+    while (bounds.outWidth / (sample * 2) >= targetPx && bounds.outHeight / (sample * 2) >= targetPx) {
+        sample *= 2
+    }
+    val bitmap = BitmapFactory.decodeByteArray(
+        bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample }
+    ) ?: return null
+    return bitmap.centerCropSquare()
+}
+
+/** Recorta [this] al cuadrado central, mismo criterio que
+ * [com.untar.ultimusic.data.LibraryRepository.downloadVideoThumbnail] para la miniatura de
+ * YouTube: así ninguna carátula no cuadrada queda estirada. */
+private fun Bitmap.centerCropSquare(): Bitmap {
+    val side = min(width, height)
+    return Bitmap.createBitmap(this, (width - side) / 2, (height - side) / 2, side, side)
+}
+
+/** Compone [cells] (ya cuadradas, ver [decodeSampled]) en un único bitmap de [side] × [side]
+ * casillas, cada una de [targetSidePx] / [side] píxeles de lado. */
+private fun composeCollage(cells: List<ByteArray>, side: Int, targetSidePx: Int): Bitmap {
+    val cellPx = (targetSidePx / side).coerceAtLeast(1)
+    val collage = Bitmap.createBitmap(cellPx * side, cellPx * side, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(collage)
+    cells.forEachIndexed { index, bytes ->
+        val cell = decodeSampled(bytes, cellPx) ?: return@forEachIndexed
+        val row = index / side
+        val col = index % side
+        val dest = Rect(col * cellPx, row * cellPx, (col + 1) * cellPx, (row + 1) * cellPx)
+        canvas.drawBitmap(cell, null, dest, null)
+    }
+    return collage
+}
+
+private const val DEFAULT_COLLAGE_SIDE_PX = 512
+private const val MIN_COLLAGE_SIDE_PX = 64
 
 /**
  * Claves de caché de Coil que incluyen la fecha de modificación del archivo.
@@ -192,6 +388,25 @@ class AudioCoverKeyer : Keyer<AudioCover> {
     }
 }
 
+/**
+ * Clave de caché para [GroupCoverSource]. Sin ella, Coil no le pone ninguna clave a este tipo de
+ * dato (solo sabe derivarla de un [File]/[AudioCover]: ver [CoverFileKeyer]/[AudioCoverKeyer]) y
+ * por tanto NO cachea el collage en memoria: [GroupCoverFetcher] se ejecutaría entero (consulta a
+ * la base de datos, lectura de archivos, hash y composición del bitmap) en cada bind de la vista,
+ * aunque nada haya cambiado -por ejemplo, al hacer scroll arriba y abajo por la rejilla de álbumes.
+ *
+ * Se incluye [CoverArt.revision] en la clave para que la caché siga siendo correcta: es el mismo
+ * contador que ya sube cada vez que un editor guarda una carátula (ver su comentario), así que
+ * editar la carátula de una canción invalida al instante el collage de su álbum/artista/productor
+ * -y el de cualquier otro, ya que el contador es único para toda la app-, mientras que cualquier
+ * repintado que NO venga de una edición (scroll, rotar la pantalla...) sí reaprovecha el bitmap ya
+ * compuesto.
+ */
+class GroupCoverKeyer : Keyer<GroupCoverSource> {
+    override fun key(data: GroupCoverSource, options: Options): String =
+        "${data.kind}:${data.id}:${CoverArt.revision.value}"
+}
+
 /** Provee un [ImageLoader] compartido con soporte para carátulas embebidas de audio. */
 object CoverLoader {
     @Volatile
@@ -202,8 +417,10 @@ object CoverLoader {
             instance ?: ImageLoader.Builder(context.applicationContext)
                 .components {
                     add(AudioCoverFetcher.Factory())
+                    add(GroupCoverFetcher.Factory())
                     add(CoverFileKeyer())
                     add(AudioCoverKeyer())
+                    add(GroupCoverKeyer())
                 }
                 .build()
                 .also { instance = it }

@@ -14,6 +14,8 @@ import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
+import com.untar.ultimusic.util.CoverArt
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /** Segunda pestaña: rejilla de álbumes. Al pulsar uno se abre su ficha ([DetailDialogFragment]). */
@@ -41,7 +43,10 @@ class AlbumsFragment : Fragment(R.layout.fragment_library_grid) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    libraryViewModel.albums.collect { list ->
+                    // Ver el comentario de CoverArt.revision (mismo motivo que en SongsFragment):
+                    // sin esto, editar solo la portada de un álbum reutilizando su nombre de archivo
+                    // no repintaría esta rejilla.
+                    combine(libraryViewModel.albums, CoverArt.revision) { list, _ -> list }.collect { list ->
                         adapter.submit(list)
                         emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
                     }

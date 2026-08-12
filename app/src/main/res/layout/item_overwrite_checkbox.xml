@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una fila del diálogo "Elige qué quieres sobrescribir" (dialog_suggestion_overwrite.xml). Se
+     infla una por cada campo que haya traído la sugerencia; ver
+     MetadataSuggestionsDialogFragment.showOverwritePicker. -->
+<com.google.android.material.checkbox.MaterialCheckBox xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="4dp"
+    android:checked="true"
+    android:textColor="@color/um_on_background"
+    android:textSize="15sp"
+    app:rippleColor="@color/um_ripple_white" />

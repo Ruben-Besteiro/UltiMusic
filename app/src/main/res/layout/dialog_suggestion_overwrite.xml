@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Contenido del diálogo "Elige qué quieres sobrescribir" que sale al elegir una sugerencia de
+    metadatos (canción o álbum), antes de aplicarla de verdad. Ver
+    MetadataSuggestionsDialogFragment.showOverwritePicker.
+
+    Las casillas de @+id/overwriteFields se crean por código (item_overwrite_checkbox.xml), una por
+    cada campo que haya traído la sugerencia: cuántas y cuáles cambian entre canción y álbum, y con
+    o sin Genius disponible, así que no hay forma de dejarlas fijas aquí.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:maxHeight="420dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp">
+
+        <LinearLayout
+            android:id="@+id/overwriteFields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical" />
+
+        <!-- "Desmarcar todo" / "Marcar todo", según haya o no alguna casilla marcada (ver
+             MetadataSuggestionsDialogFragment.updateToggleAllText). -->
+        <TextView
+            android:id="@+id/overwriteToggleAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="?attr/selectableItemBackground"
+            android:clickable="true"
+            android:focusable="true"
+            android:padding="4dp"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:text="Desmarcar todo" />
+
+        <!-- Solo visible en una sugerencia de canción sin Genius disponible (ver
+             MetadataSuggestionsDialogFragment.showOverwritePicker). -->
+        <TextView
+            android:id="@+id/overwriteMissingFields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="13sp"
+            android:visibility="gone"
+            tools:text="No se han podido obtener los campos Productores, Vídeo musical y Canción original ni la carátula de la canción (se utilizará la del álbum)"
+            tools:visibility="visible" />
+
+    </LinearLayout>
+</ScrollView>

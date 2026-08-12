@@ -16,6 +16,7 @@ import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
+import com.untar.ultimusic.data.db.relations.CollageCandidateRow
 import com.untar.ultimusic.data.db.relations.PersonSummaryRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
 import com.untar.ultimusic.data.db.relations.TrackPosition
@@ -61,19 +62,7 @@ abstract class LibraryDao {
                 WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_album sa
                 JOIN songs s ON s.id = sa.songId
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration,
-            (SELECT s.imageName FROM song_album sa
-                JOIN songs s ON s.id = sa.songId
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
-                AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
-            (SELECT s.filePath FROM song_album sa
-                JOIN songs s ON s.id = sa.songId
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY sa.trackNumber IS NULL, sa.trackNumber LIMIT 1) AS sampleSongPath,
-            (SELECT s.videoThumbnailName FROM song_album sa
-                JOIN songs s ON s.id = sa.songId
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.videoThumbnailName IS NOT NULL
-                LIMIT 1) AS sampleSongVideoThumbnail
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
         FROM albums a
         WHERE (:id IS NULL OR a.id = :id)
           AND EXISTS (
@@ -121,19 +110,7 @@ abstract class LibraryDao {
                 WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS albumCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS totalDuration,
-            (SELECT s.imageName FROM song_artist x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0
-                AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
-            (SELECT s.filePath FROM song_artist x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0
-                ORDER BY LOWER(s.title) LIMIT 1) AS sampleSongPath,
-            (SELECT s.videoThumbnailName FROM song_artist x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0 AND s.videoThumbnailName IS NOT NULL
-                LIMIT 1) AS sampleSongVideoThumbnail
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS totalDuration
         FROM artists ar
         WHERE (:id IS NULL OR ar.id = :id)
           AND EXISTS (
@@ -161,19 +138,7 @@ abstract class LibraryDao {
                 WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS albumCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_producer x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS totalDuration,
-            (SELECT s.imageName FROM song_producer x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0
-                AND s.imageName IS NOT NULL LIMIT 1) AS sampleSongImage,
-            (SELECT s.filePath FROM song_producer x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0
-                ORDER BY LOWER(s.title) LIMIT 1) AS sampleSongPath,
-            (SELECT s.videoThumbnailName FROM song_producer x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0 AND s.videoThumbnailName IS NOT NULL
-                LIMIT 1) AS sampleSongVideoThumbnail
+                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS totalDuration
         FROM producers p
         WHERE (:id IS NULL OR p.id = :id)
           AND EXISTS (
@@ -209,13 +174,29 @@ abstract class LibraryDao {
     @Query("SELECT songId, trackNumber FROM song_album WHERE albumId = :albumId")
     abstract fun observeTrackPositions(albumId: Long): Flow<List<TrackPosition>>
 
+    /**
+     * Canciones de un artista/productor: primero por el año del álbum al que pertenecen (sin año al
+     * final), luego por el título de ese álbum, luego por su número de pista (sin pista al final de
+     * ese álbum) y por último por el título de la canción. Año, título de álbum y pista viven fuera
+     * de `songs`, así que se piden con subconsultas; si una canción estuviera en varios álbumes se
+     * coge el primero, igual que en [trackNumberOf].
+     */
     @Transaction
     @Query(
         """
         SELECT s.* FROM songs s
         JOIN song_artist x ON x.songId = s.id
         WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
-        ORDER BY LOWER(s.title)
+        ORDER BY
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT LOWER(al.title) FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1),
+            LOWER(s.title)
         """
     )
     abstract fun observeSongsOfArtist(artistId: Long): Flow<List<SongWithRelations>>
@@ -226,10 +207,83 @@ abstract class LibraryDao {
         SELECT s.* FROM songs s
         JOIN song_producer x ON x.songId = s.id
         WHERE x.producerId = :producerId AND s.hiddenByGreylist = 0
-        ORDER BY LOWER(s.title)
+        ORDER BY
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT LOWER(al.title) FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1),
+            LOWER(s.title)
         """
     )
     abstract fun observeSongsOfProducer(producerId: Long): Flow<List<SongWithRelations>>
+
+    // --- Candidatas al collage de carátulas (álbum/artista/productor sin imagen propia) ---
+    //
+    // Lectura puntual (suspend, no Flow): las pide bajo demanda `GroupCoverFetcher` (ver
+    // CoverArt.kt) al resolver la carátula, no la observa ninguna pantalla. Solo trae las tres
+    // columnas de las que sale la carátula de cada canción (ver CoverArt.cover(context, song)),
+    // en el mismo orden que vería el usuario al entrar en la ficha (mismo ORDER BY que
+    // observeSongsOfAlbum/observeSongsOfArtist/observeSongsOfProducer), para que el collage se
+    // forme con las primeras canciones que se listan. Sin LIMIT a propósito: el collage no tiene
+    // tope de tamaño, así que hace falta poder mirar todas las candidatas si hiciera falta.
+
+    @Query(
+        """
+        SELECT s.imageName AS imageName, s.filePath AS filePath,
+            s.videoThumbnailName AS videoThumbnailName
+        FROM songs s
+        JOIN song_album sa ON sa.songId = s.id
+        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0
+        ORDER BY sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
+        """
+    )
+    abstract suspend fun collageCandidatesForAlbum(albumId: Long): List<CollageCandidateRow>
+
+    @Query(
+        """
+        SELECT s.imageName AS imageName, s.filePath AS filePath,
+            s.videoThumbnailName AS videoThumbnailName
+        FROM songs s
+        JOIN song_artist x ON x.songId = s.id
+        WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
+        ORDER BY
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT LOWER(al.title) FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1),
+            LOWER(s.title)
+        """
+    )
+    abstract suspend fun collageCandidatesForArtist(artistId: Long): List<CollageCandidateRow>
+
+    @Query(
+        """
+        SELECT s.imageName AS imageName, s.filePath AS filePath,
+            s.videoThumbnailName AS videoThumbnailName
+        FROM songs s
+        JOIN song_producer x ON x.songId = s.id
+        WHERE x.producerId = :producerId AND s.hiddenByGreylist = 0
+        ORDER BY
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT al.year FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT LOWER(al.title) FROM song_album sa JOIN albums al ON al.id = sa.albumId
+                WHERE sa.songId = s.id LIMIT 1),
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1) IS NULL,
+            (SELECT sa.trackNumber FROM song_album sa WHERE sa.songId = s.id LIMIT 1),
+            LOWER(s.title)
+        """
+    )
+    abstract suspend fun collageCandidatesForProducer(producerId: Long): List<CollageCandidateRow>
 
     /**
      * Canciones sueltas por id, sin orden garantizado (quien llame debe reordenarlas). La usa

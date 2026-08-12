@@ -459,16 +459,6 @@
                             android:textColor="@color/um_on_background" />
 
                     </LinearLayout>
-
-                    <!-- Calcula el desplazamiento por oído en vez de ir probando números a ciegas en
-                         la regla de arriba (ver OffsetSyncDialogFragment). -->
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/btnSyncOffset"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:layout_gravity="end"
-                        android:text="@string/offset_sync_button" />
                 </LinearLayout>
 
                 <!-- ===== Posición en el álbum ===== -->

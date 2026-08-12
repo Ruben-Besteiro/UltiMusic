@@ -6,9 +6,11 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.core.os.bundleOf
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -26,6 +28,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.remote.ApiRateLimitException
 import com.untar.ultimusic.data.remote.ApiUnauthorizedException
@@ -35,6 +38,7 @@ import com.untar.ultimusic.data.remote.retryInSeconds
 import com.untar.ultimusic.model.MetadataSuggestion
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.util.AccentTint
 import kotlinx.coroutines.launch
 
 /**
@@ -185,18 +189,18 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
 
     /**
      * Al elegir una fila se le pide a Genius lo que iTunes no sabe de esa canción (ver
-     * [MetadataSuggestionsViewModel.enrich]) y SOLO ENTONCES se devuelve el resultado completo, para
-     * que el editor lo reciba todo junto en la misma entrega. Mientras tanto se tapa la lista con el
-     * spinner, porque son dos peticiones y se nota.
+     * [MetadataSuggestionsViewModel.enrich]) y SOLO ENTONCES se abre [showOverwritePicker], para que
+     * el usuario decida qué campos de todo lo recopilado quiere aplicar. Mientras tanto se tapa la
+     * lista con el spinner, porque son dos peticiones y se nota.
      *
-     * Si Genius no está configurado o no encuentra la canción, `enrich` devuelve null y el resultado
-     * es exactamente el que daría iTunes por su cuenta: este paso solo puede añadir campos, nunca
-     * quitar ni empeorar los que ya había.
+     * Si Genius no está configurado o no encuentra la canción, `enrich` devuelve null y lo que se le
+     * ofrece al usuario es exactamente lo que daría iTunes por su cuenta: este paso solo puede añadir
+     * campos, nunca quitar ni empeorar los que ya había.
      *
      * De Genius solo se avisa de los dos fallos ante los que el usuario puede hacer algo (ver
      * [com.untar.ultimusic.data.remote.GeniusApi.detailsFor]), y **ninguno de los dos interrumpe la
-     * entrega**: el candidato que eligió se aplica igual con lo que dio iTunes, porque su elección no
-     * tiene la culpa de que Genius falle.
+     * entrega**: el candidato que eligió se sigue ofreciendo igual con lo que dio iTunes, porque su
+     * elección no tiene la culpa de que Genius falle.
      * - **Rate limit**: un aviso pasajero ([android.widget.Toast]) diciendo cuánto esperar.
      * - **Token inválido**: no cabe en un Toast (hay que crear otro API Client), así que en vez de
      *   avisar aquí se marca [RESULT_GENIUS_TOKEN_INVALID] en el resultado y es el editor quien
@@ -225,28 +229,191 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
                 tokenInvalid = true
                 null
             }
-            setFragmentResult(
-                RESULT_KEY,
-                bundleOf(
-                    RESULT_TITLE to suggestion.title,
-                    RESULT_ARTIST to artistsFor(suggestion, details),
-                    RESULT_ALBUM to suggestion.albumTitle.orEmpty(),
-                    RESULT_YEAR to (suggestion.year ?: NO_VALUE),
-                    RESULT_GENRES to suggestion.genre.orEmpty(),
-                    RESULT_TRACK_NUMBER to (suggestion.trackNumber ?: NO_VALUE),
-                    RESULT_DISC_NUMBER to (suggestion.discNumber ?: NO_VALUE),
-                    RESULT_COVER_URL to coverUrlFor(suggestion, details).orEmpty(),
-                    RESULT_PRODUCERS to details?.producers?.joinToString(", ").orEmpty(),
-                    RESULT_VIDEO_URL to details?.videoUrl.orEmpty(),
-                    RESULT_OG_TITLE to details?.ogTitle.orEmpty(),
-                    RESULT_OG_ARTIST to details?.ogArtist.orEmpty(),
-                    RESULT_OG_ALBUM to details?.ogAlbum.orEmpty(),
-                    RESULT_OG_YEAR to (details?.ogYear ?: NO_VALUE),
-                    RESULT_GENIUS_TOKEN_INVALID to tokenInvalid
-                )
-            )
-            dismiss()
+            // Se destapa la lista antes de abrir el diálogo de casillas: si el usuario cancela ahí,
+            // vuelve a ver la lista de sugerencias tal cual la dejó, en vez de un spinner colgado.
+            loading.isVisible = false
+            list.isVisible = true
+            showOverwritePicker(suggestion, details, tokenInvalid)
         }
+    }
+
+    /** Un campo ofrecido en [showOverwritePicker]: su etiqueta, si la sugerencia trajo algo que
+     * enseñar y qué hay que vaciar en el bundle de salida si el usuario lo desmarca. */
+    private class OverwriteField(val label: String, val present: Boolean, val clear: (Bundle) -> Unit)
+
+    /**
+     * Diálogo "Elige qué quieres sobrescribir": una casilla por cada campo que la sugerencia haya
+     * traído de verdad (las que no trajeron nada ni se enseñan, no hay nada que ofrecer sobrescribir
+     * con ellas), todas marcadas por defecto. Solo al confirmar se manda [RESULT_KEY] con los campos
+     * desmarcados vaciados —lo que para [MetadataEditorDialogFragment.applySuggestion]/
+     * [AlbumEditorDialogFragment.applySuggestion] significa "no toques esto"—, y solo entonces se
+     * cierra este diálogo entero. Al cancelar no se manda nada y se libera [resultSent] para poder
+     * elegir otra fila.
+     *
+     * Los cuatro campos `og*` (canción original de un remix) viajan bajo UNA sola casilla: Genius los
+     * da siempre los cuatro juntos o ninguno (ver [GeniusApi.SongDetails.ogTitle]), así que separarlos
+     * no tendría sentido.
+     */
+    private fun showOverwritePicker(
+        suggestion: MetadataSuggestion,
+        details: GeniusApi.SongDetails?,
+        tokenInvalid: Boolean
+    ) {
+        val title = suggestion.title
+        val album = suggestion.albumTitle.orEmpty()
+        val artists = artistsFor(suggestion, details)
+        val genres = suggestion.genre.orEmpty()
+        val year = suggestion.year ?: NO_VALUE
+        val trackNumber = suggestion.trackNumber ?: NO_VALUE
+        val discNumber = suggestion.discNumber ?: NO_VALUE
+        val coverUrl = coverUrlFor(suggestion, details).orEmpty()
+        val producers = details?.producers?.joinToString(", ").orEmpty()
+        val videoUrl = details?.videoUrl.orEmpty()
+        val ogTitle = details?.ogTitle.orEmpty()
+        val ogArtist = details?.ogArtist.orEmpty()
+        val ogAlbum = details?.ogAlbum.orEmpty()
+        val ogYear = details?.ogYear ?: NO_VALUE
+
+        val fullResult = bundleOf(
+            RESULT_TITLE to title,
+            RESULT_ARTIST to artists,
+            RESULT_ALBUM to album,
+            RESULT_YEAR to year,
+            RESULT_GENRES to genres,
+            RESULT_TRACK_NUMBER to trackNumber,
+            RESULT_DISC_NUMBER to discNumber,
+            RESULT_COVER_URL to coverUrl,
+            RESULT_PRODUCERS to producers,
+            RESULT_VIDEO_URL to videoUrl,
+            RESULT_OG_TITLE to ogTitle,
+            RESULT_OG_ARTIST to ogArtist,
+            RESULT_OG_ALBUM to ogAlbum,
+            RESULT_OG_YEAR to ogYear,
+            RESULT_GENIUS_TOKEN_INVALID to tokenInvalid
+        )
+
+        // Las etiquetas son las mismas que ya rotulan cada campo en los editores (ver el bloque
+        // field_* de strings.xml): álbum es "Álbum(es)" porque es EL MISMO campo multivalor que
+        // inputAlbums, no un campo nuevo con nombre propio. El título es distinto según el tipo de
+        // ficha, porque así lo es también en cada editor (canción vs. álbum).
+        //
+        // Pista, disco, productores, vídeo y og* no existen en el editor de ÁLBUM (ver el javadoc de
+        // AlbumEditorDialogFragment.applySuggestion), así que no se ofrecen ahí; en la práctica ya
+        // llegarían vacíos (enrich() no llama a Genius fuera de SONG), pero omitir la casilla entera
+        // es más claro que enseñar una que nunca puede traer nada.
+        val titleLabel = if (kind == SuggestionKind.SONG) R.string.field_title else R.string.field_album_title
+        val fields = buildList {
+            add(OverwriteField(getString(titleLabel), title.isNotEmpty()) {
+                it.putString(RESULT_TITLE, "")
+            })
+            if (kind == SuggestionKind.SONG) {
+                add(OverwriteField(getString(R.string.field_albums), album.isNotEmpty()) {
+                    it.putString(RESULT_ALBUM, "")
+                })
+            }
+            add(OverwriteField(getString(R.string.field_artists), artists.isNotEmpty()) {
+                it.putString(RESULT_ARTIST, "")
+            })
+            add(OverwriteField(getString(R.string.field_year), year > 0) {
+                it.putInt(RESULT_YEAR, NO_VALUE)
+            })
+            add(OverwriteField(getString(R.string.field_genres), genres.isNotEmpty()) {
+                it.putString(RESULT_GENRES, "")
+            })
+            if (kind == SuggestionKind.SONG) {
+                add(OverwriteField(getString(R.string.field_track_number), trackNumber > 0) {
+                    it.putInt(RESULT_TRACK_NUMBER, NO_VALUE)
+                })
+                add(OverwriteField(getString(R.string.field_disc_number), discNumber > 0) {
+                    it.putInt(RESULT_DISC_NUMBER, NO_VALUE)
+                })
+            }
+            add(OverwriteField(getString(R.string.overwrite_field_cover), coverUrl.isNotEmpty()) {
+                it.putString(RESULT_COVER_URL, "")
+            })
+            if (kind == SuggestionKind.SONG) {
+                add(OverwriteField(getString(R.string.field_producers), producers.isNotEmpty()) {
+                    it.putString(RESULT_PRODUCERS, "")
+                })
+                add(OverwriteField(getString(R.string.field_video_url), videoUrl.isNotEmpty()) {
+                    it.putString(RESULT_VIDEO_URL, "")
+                })
+                add(OverwriteField(getString(R.string.overwrite_field_original_song), ogTitle.isNotEmpty()) {
+                    it.putString(RESULT_OG_TITLE, "")
+                    it.putString(RESULT_OG_ARTIST, "")
+                    it.putString(RESULT_OG_ALBUM, "")
+                    it.putInt(RESULT_OG_YEAR, NO_VALUE)
+                })
+            }
+        }.filter { it.present }
+
+        val content = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_suggestion_overwrite, null, false)
+        val fieldsContainer = content.findViewById<LinearLayout>(R.id.overwriteFields)
+        val toggleAll = content.findViewById<TextView>(R.id.overwriteToggleAll)
+        val missingFields = content.findViewById<TextView>(R.id.overwriteMissingFields)
+
+        val checkboxes = fields.map { field ->
+            (LayoutInflater.from(requireContext())
+                .inflate(R.layout.item_overwrite_checkbox, fieldsContainer, false) as MaterialCheckBox)
+                .apply { text = field.label }
+                .also { fieldsContainer.addView(it) }
+        }
+
+        fun updateToggleAllText() {
+            val anyChecked = checkboxes.any { it.isChecked }
+            toggleAll.setText(if (anyChecked) R.string.overwrite_uncheck_all else R.string.overwrite_check_all)
+        }
+        checkboxes.forEach { it.setOnCheckedChangeListener { _, _ -> updateToggleAllText() } }
+        updateToggleAllText()
+        toggleAll.setOnClickListener {
+            // Si no hay ninguna marcada la próxima acción es marcarlas todas; en cualquier otro
+            // caso (todas o solo alguna) es desmarcarlas todas, como dice el propio texto del enlace.
+            val checkAll = checkboxes.none { it.isChecked }
+            checkboxes.forEach { it.isChecked = checkAll }
+        }
+
+        // Solo en una sugerencia de CANCIÓN sin nada de Genius (sin token, sin conexión, o Genius no
+        // la tiene): ahí es donde de verdad faltan campos que pedir, y la carátula cae de vuelta a la
+        // del álbum (ver coverUrlFor). Que Genius SÍ responda pero esta canción en concreto no tenga
+        // productor, vídeo o no sea un remix es normal (ver los campos og* en CLAUDE.md) y no un fallo
+        // que avisar aquí; por eso el disparador es "no hay `details`", no "falta este campo suelto".
+        if (kind == SuggestionKind.SONG && details == null) {
+            val missingLabels = listOf(
+                getString(R.string.field_producers),
+                getString(R.string.field_video_url),
+                getString(R.string.overwrite_field_original_song)
+            )
+            val joined = missingLabels.dropLast(1).joinToString(", ") + " y " + missingLabels.last()
+            missingFields.text = getString(R.string.overwrite_missing_fields, joined)
+            missingFields.isVisible = true
+        } else {
+            missingFields.isVisible = false
+        }
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.overwrite_picker_title)
+            .setView(content)
+            .setNegativeButton(R.string.dialog_cancel) { _, _ -> resultSent = false }
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val outgoing = Bundle(fullResult)
+                fields.forEachIndexed { index, field ->
+                    if (!checkboxes[index].isChecked) field.clear(outgoing)
+                }
+                setFragmentResult(RESULT_KEY, outgoing)
+                dismiss()
+            }
+            .setOnCancelListener { resultSent = false }
+            .create()
+
+        // Mismo amarillo dinámico que el resto del diálogo (spinner, botón de reintentar): ver el
+        // `collect` de accentColor en onViewCreated.
+        val accent = playerViewModel.accentColor.value
+        val tint = ColorStateList.valueOf(accent)
+        checkboxes.forEach { it.buttonTintList = tint }
+        toggleAll.setTextColor(accent)
+        dialog.setOnShowListener { AccentTint.buttons(dialog, accent) }
+        dialog.show()
     }
 
     /**

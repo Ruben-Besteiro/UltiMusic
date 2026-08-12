@@ -29,6 +29,8 @@ import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.CoverArt
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -132,10 +134,14 @@ class SearchBarController(
         lifecycleOwner.lifecycleScope.launch {
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    viewModel.results.collect { results ->
-                        adapter.submit(results)
-                        showEmptyMessage(results.isEmpty())
-                    }
+                    // Ver el comentario de CoverArt.revision: los resultados salen de las mismas
+                    // listas de Canciones/Álbumes/Artistas/Productores, así que sufren la misma
+                    // laguna si solo cambia una carátula reutilizando su nombre de archivo.
+                    combine(viewModel.results, CoverArt.revision) { results, _ -> results }
+                        .collect { results ->
+                            adapter.submit(results)
+                            showEmptyMessage(results.isEmpty())
+                        }
                 }
                 // Los títulos de sección y la barra de scroll van con el color de la canción que
                 // suena, como en las pestañas.

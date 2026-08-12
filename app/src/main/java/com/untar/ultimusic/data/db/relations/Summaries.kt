@@ -10,10 +10,9 @@ package com.untar.ultimusic.data.db.relations
  * que pintar son CUENTAS y SUMAS (nº de canciones, duración total), y calcularlas en SQLite es
  * muchísimo más barato que traerse todas las canciones a memoria para contarlas en Kotlin.
  *
- * Los campos `sample*` sostienen la cadena de failsafe de la carátula: si el álbum/artista/productor
- * no tiene imagen propia, se usa la de una de sus canciones; si esa tampoco la tiene, se extrae el
- * arte embebido del archivo de audio (`sampleSongPath`); y si tampoco hay, se usa la miniatura de
- * YouTube de una de sus canciones (`sampleSongVideoThumbnail`). Ver `CoverArt.cover(...)`.
+ * Si el álbum/artista/productor no tiene imagen propia, la carátula sale de sus canciones: ver
+ * `GroupCoverSource`/`GroupCoverFetcher` en `CoverArt.kt`, que resuelven bajo demanda el collage
+ * (o, si no da para uno, la carátula de una sola canción) a partir de [CollageCandidateRow].
  *
  * El sufijo `Row` los distingue de los modelos de DOMINIO del mismo nombre (`model/Summaries.kt`),
  * que son los que consume la interfaz; los mappers convierten unos en otros.
@@ -26,10 +25,7 @@ data class AlbumSummaryRow(
     val year: Int?,
     val artistName: String?,
     val songCount: Int,
-    val totalDuration: Long,
-    val sampleSongImage: String?,
-    val sampleSongPath: String?,
-    val sampleSongVideoThumbnail: String?
+    val totalDuration: Long
 )
 
 /**
@@ -42,14 +38,24 @@ data class PersonSummaryRow(
     val imageName: String?,
     val songCount: Int,
     val albumCount: Int,
-    val totalDuration: Long,
-    val sampleSongImage: String?,
-    val sampleSongPath: String?,
-    val sampleSongVideoThumbnail: String?
+    val totalDuration: Long
 )
 
 /** Número de pista de una canción dentro de un álbum concreto (vive en la tabla de cruce). */
 data class TrackPosition(
     val songId: Long,
     val trackNumber: Int?
+)
+
+/**
+ * Una canción candidata al collage de carátulas de un álbum/artista/productor, con solo las tres
+ * columnas de las que sale su carátula individual (mismos campos que resuelve
+ * `CoverArt.cover(context, song: Song)`). La usa `GroupCoverFetcher` (ver `CoverArt.kt`), que pide
+ * estas filas ya en el orden en que el usuario vería esas canciones en la ficha (ver
+ * `LibraryDao.collageCandidatesForAlbum`/`collageCandidatesForArtist`/`collageCandidatesForProducer`).
+ */
+data class CollageCandidateRow(
+    val imageName: String?,
+    val filePath: String,
+    val videoThumbnailName: String?
 )

@@ -43,7 +43,6 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import coil.load
 import com.google.android.material.appbar.MaterialToolbar
-import com.google.android.material.button.MaterialButton
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
@@ -121,7 +120,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private lateinit var linkVideoUrl: TextView
     private lateinit var offsetRuler: ValueRuler
     private lateinit var offsetValue: EditText
-    private lateinit var btnSyncOffset: MaterialButton
     private lateinit var inputTrackNumber: EditText
     private lateinit var inputDiscNumber: EditText
     private lateinit var inputOgTitle: EditText
@@ -281,18 +279,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
             runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
         }
 
-        // Calibra offsetRuler por oído en vez de a ciegas (ver [OffsetSyncDialogFragment]).
-        btnSyncOffset.setOnClickListener { openOffsetSync() }
-        childFragmentManager.setFragmentResultListener(
-            OffsetSyncDialogFragment.RESULT_KEY,
-            viewLifecycleOwner
-        ) { _, bundle ->
-            // Solo rellena la regla, igual que si el usuario hubiera escrito el número a mano: no
-            // se guarda hasta que se pulse "Guardar" (ver [save]).
-            showOffset(offsetRuler, offsetValue, bundle.getInt(OffsetSyncDialogFragment.RESULT_OFFSET_MS))
-            markDirty()
-        }
-
         // Igual que el campo de vídeo: no se escribe a mano, se pulsa y abre el buscador de
         // lrclib.net (ver [LyricsSuggestionsDialogFragment]); al elegir una letra se rellena con
         // ella. Es la ÚNICA forma de poner letra a una canción.
@@ -374,7 +360,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
                         AccentTint.contentOnAccent(btnPickCover, accent)
                         fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
                         AccentTint.contentOnAccent(fabAutofill, accent)
-                        btnSyncOffset.backgroundTintList = ColorStateList.valueOf(accent)
                         linkVideoUrl.setTextColor(accent)
                         linkVideoUrl.compoundDrawableTintList = ColorStateList.valueOf(accent)
                         val strokeColors = ColorStateList(
@@ -454,7 +439,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         linkVideoUrl = view.findViewById(R.id.linkVideoUrl)
         offsetRuler = view.findViewById(R.id.offsetRuler)
         offsetValue = view.findViewById(R.id.offsetValue)
-        btnSyncOffset = view.findViewById(R.id.btnSyncOffset)
         inputTrackNumber = view.findViewById(R.id.inputTrackNumber)
         inputDiscNumber = view.findViewById(R.id.inputDiscNumber)
         inputOgTitle = view.findViewById(R.id.inputOgTitle)
@@ -701,31 +685,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
     }
 
     /**
-     * Punto de entrada de la calibración por oído del desplazamiento vídeo/audio (ver
-     * [OffsetSyncDialogFragment]). Hace falta un vídeo ya elegido (sin él no hay nada que
-     * sincronizar) y la canción ya cargada (para poder reproducirla: ver [PlayerViewModel.play]).
-     *
-     * Sin diálogo previo de instrucciones: ya lo explica el propio paso 1 de
-     * [OffsetSyncDialogFragment] (ver `offset_sync_step1_instructions`), así que uno aparte antes
-     * solo repetiría la misma información dos veces.
-     */
-    private fun openOffsetSync() {
-        val videoId = YouTubeUrl.videoId(inputVideoUrl.text?.toString())
-        if (videoId == null) {
-            Toast.makeText(requireContext(), R.string.offset_sync_missing_video, Toast.LENGTH_SHORT)
-                .show()
-            return
-        }
-        val song = viewModel.song.value ?: return
-
-        // Reproductor real de la app (ver la cabecera de OffsetSyncDialogFragment): suena con el
-        // ecualizador/amplificador del usuario, tal cual sonará de verdad, a costa de sustituir lo
-        // que estuviera sonando y la cola, igual que tocar esta canción en la biblioteca.
-        playerViewModel.play(song)
-        OffsetSyncDialogFragment.newInstance(videoId).show(childFragmentManager, TAG_OFFSET_SYNC)
-    }
-
-    /**
      * Vuelca en el formulario la sugerencia elegida en [MetadataSuggestionsDialogFragment]. El
      * grueso viene de iTunes; productores, canción original y videoclip los aporta Genius cuando
      * está configurado (ver [com.untar.ultimusic.data.remote.GeniusApi]), y llegan vacíos si no.
@@ -869,7 +828,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         private const val TAG_VIDEO_PICKER = "video_picker"
         private const val TAG_SUGGESTIONS = "metadata_suggestions"
         private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
-        private const val TAG_OFFSET_SYNC = "offset_sync"
         private const val SEPARATOR = ", "
         private const val SEPARATOR_CHAR = ','
 
@@ -879,8 +837,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
          * [ValueRuler] necesita un máximo (ver su cabecera): 30 segundos son muchísimo más que
          * cualquier desincronización real, así que arrastrando no se llega nunca por accidente.
          *
-         * `internal` (no `private`) porque [OffsetSyncDialogFragment] también lo necesita para
-         * acotar el desplazamiento que calcula, y así los dos topes no se pueden desincronizar.
+         * `internal` (no `private`) porque `IPodDialogFragment` también lo necesita para su
+         * propia regla de desplazamiento del modo vídeo.
          */
         internal const val OFFSET_MAX_MS = 30_000
 

@@ -20,3 +20,7 @@ Todo lo referente a los artistas y a los productores se hará de la misma manera
 
 Todos los elementos que sean de color amarillo o amarillo oscuro deben usar el color dinámico.
 
+
+
+Al editar una imagen, la imagen nueva debe aparecer instantáneamente a lo largo de toda la aplicación, no se puede ver la imagen antigua (salvo en la notificación)
+

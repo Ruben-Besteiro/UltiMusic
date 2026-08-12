@@ -46,6 +46,7 @@ import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -160,12 +161,16 @@ class DetailDialogFragment : DialogFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    viewModel.header.collect { header ->
+                    // Ver el comentario de CoverArt.revision: editar solo la carátula del álbum (o de
+                    // una de sus canciones, de la que puede salir la de un artista/productor) no
+                    // cambia nada en el DetailHeader que sale de Room si el nombre de archivo se
+                    // reutiliza, así que sin esto la cabecera no se enteraría.
+                    combine(viewModel.header, CoverArt.revision) { header, _ -> header }.collect { header ->
                         if (header != null) bindHeader(header, toolbar, cover, infoLines)
                     }
                 }
                 launch {
-                    viewModel.tracks.collect { list ->
+                    combine(viewModel.tracks, CoverArt.revision) { list, _ -> list }.collect { list ->
                         adapter.submit(list)
                         emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
                     }

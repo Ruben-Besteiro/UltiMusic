@@ -17,6 +17,8 @@ import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverRef
+import com.untar.ultimusic.util.GroupCoverSource
+import com.untar.ultimusic.util.GroupKind
 
 /**
  * Mapeo de las entidades/relaciones de Room a los modelos de DOMINIO que consume la UI.
@@ -89,13 +91,14 @@ fun AlbumSummaryRow.toDomain(): AlbumSummary = AlbumSummary(
     totalDuration = totalDuration,
     cover = CoverRef(
         ownImage = imageName,
-        songImage = sampleSongImage,
-        songPath = sampleSongPath,
-        videoThumbnail = sampleSongVideoThumbnail
+        group = GroupCoverSource(GroupKind.ALBUM, id)
     )
 )
 
-fun PersonSummaryRow.toDomain(): PersonSummary = PersonSummary(
+/** [kind] distingue si esta fila viene de la pestaña de Artistas o de la de Productores: la fila en
+ * sí ([PersonSummaryRow]) es idéntica para las dos (se tratan igual), pero el collage de carátulas
+ * necesita saber en qué tabla de cruce buscar las canciones (ver [GroupCoverSource]). */
+fun PersonSummaryRow.toDomain(kind: GroupKind): PersonSummary = PersonSummary(
     id = id,
     name = name,
     songCount = songCount,
@@ -103,9 +106,7 @@ fun PersonSummaryRow.toDomain(): PersonSummary = PersonSummary(
     totalDuration = totalDuration,
     cover = CoverRef(
         ownImage = imageName,
-        songImage = sampleSongImage,
-        songPath = sampleSongPath,
-        videoThumbnail = sampleSongVideoThumbnail
+        group = GroupCoverSource(kind, id)
     )
 )
 
