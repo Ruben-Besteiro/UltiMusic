@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fila de la lista de Géneros: como la de Playlists (nombre + recuento, sin imagen), pero sin
+<!-- Fila de la lista de Géneros: como la de Listas (nombre + recuento, sin imagen), pero sin
      botón de 3 puntos: un género no se puede renombrar ni borrar, es solo lo que traen las
      canciones (ver GenresAdapter). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"

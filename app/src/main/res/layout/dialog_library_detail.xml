@@ -69,6 +69,30 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!--
+      Carrusel horizontal de álbumes: solo en la ficha de un artista/productor (ver
+      DetailDialogFragment), oculto por defecto y en la de un álbum. Cada elemento es una versión
+      pequeña de la tarjeta de la pestaña de Álbumes (item_detail_album_card.xml).
+    -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerDetailAlbums"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:orientation="horizontal"
+        android:paddingHorizontal="12dp"
+        android:paddingVertical="12dp"
+        android:scrollbars="none"
+        android:visibility="gone"
+        tools:listitem="@layout/item_detail_album_card" />
+
+    <View
+        android:id="@+id/detailAlbumsDivider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider"
+        android:visibility="gone" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

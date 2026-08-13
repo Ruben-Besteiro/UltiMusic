@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Vista personalizada de cada pestaña de la barra de navegación (ver MainActivity.setupPager):
+  solo icono normalmente; en la pestaña actual además aparece la etiqueta debajo, y al ser esta
+  LinearLayout vertical centrada, el icono sube solo para dejarle sitio, sin animación manual.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:clickable="false"
+    android:duplicateParentState="false">
+
+    <ImageView
+        android:id="@+id/navIcon"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:importantForAccessibility="no" />
+
+    <TextView
+        android:id="@+id/navLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:maxLines="1"
+        android:ellipsize="end"
+        android:textSize="11sp"
+        android:visibility="gone"
+        tools:text="Canciones" />
+
+</LinearLayout>

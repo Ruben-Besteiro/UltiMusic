@@ -54,6 +54,12 @@ class AlbumEditorViewModel(app: Application) : AndroidViewModel(app) {
     private val _saved = MutableStateFlow<AlbumSaveResult?>(null)
     val saved = _saved.asStateFlow()
 
+    /** True mientras [save] está escribiendo (portada, fila en Room). El diálogo lo consulta al
+     * intentar salir para no dejar el guardado a medias: ver
+     * [AlbumEditorDialogFragment.attemptClose]. */
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving = _isSaving.asStateFlow()
+
     fun consumeSaved() {
         _saved.value = null
     }
@@ -78,6 +84,9 @@ class AlbumEditorViewModel(app: Application) : AndroidViewModel(app) {
     fun save(form: AlbumEditorForm, pickedImage: Uri?) {
         val (current, _) = album.value ?: return
         val titleChanged = form.title != current.title
+        // Se marca ANTES de lanzar la corrutina: ver el mismo comentario en
+        // MetadataEditorViewModel.save.
+        _isSaving.value = true
         viewModelScope.launch {
             withContext(NonCancellable) {
                 val imageName = when {
@@ -112,6 +121,7 @@ class AlbumEditorViewModel(app: Application) : AndroidViewModel(app) {
                 // álbum, así que ya ve el título/artistas/año/portada recién guardados.
                 val songs = repository.albumTracks(current.id).first().map { it.song }
                 _saved.value = AlbumSaveResult(current.id, imageName, songs)
+                _isSaving.value = false
             }
         }
     }

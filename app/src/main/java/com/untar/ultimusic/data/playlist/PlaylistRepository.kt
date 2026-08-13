@@ -8,14 +8,14 @@ import java.io.File
 
 /**
  * Almacén de listas de reproducción. A diferencia del resto de la biblioteca —que vive en una base
- * de datos Room— las playlists son **archivos de texto** en `~/UltiMusic/Playlists`, uno por lista:
+ * de datos Room— las listas son **archivos de texto** en `~/UltiMusic/Playlists`, uno por lista:
  *
- *   - El **nombre del archivo** (sin la extensión `.txt`) es el nombre de la playlist.
+ *   - El **nombre del archivo** (sin la extensión `.txt`) es el nombre de la lista.
  *   - El **contenido** es un nombre de archivo de canción por línea, en orden de reproducción. Se
  *     guarda solo el nombre del archivo (el "basename": `cancion.mp3`, no la ruta entera), tal como
  *     pidió el diseño del proyecto.
  *
- * Se eligió texto plano en disco (y no Room) porque una playlist es, conceptualmente, un documento
+ * Se eligió texto plano en disco (y no Room) porque una lista es, conceptualmente, un documento
  * del usuario que debe poder verse y editarse desde fuera de la app; además así sobrevive a
  * reinstalaciones sin tocar la base de datos.
  *
@@ -30,10 +30,10 @@ class PlaylistRepository private constructor() {
     private fun dir(): File =
         File(Environment.getExternalStorageDirectory(), "UltiMusic/Playlists").apply { mkdirs() }
 
-    /** El archivo que respalda una playlist. El nombre visible es el del archivo sin `.txt`. */
+    /** El archivo que respalda una lista. El nombre visible es el del archivo sin `.txt`. */
     private fun fileOf(name: String): File = File(dir(), "$name$EXT")
 
-    /** Nombres de todas las playlists (archivos `.txt`), en orden alfabético e ignorando mayúsculas. */
+    /** Nombres de todas las listas (archivos `.txt`), en orden alfabético e ignorando mayúsculas. */
     suspend fun listPlaylistNames(): List<String> = withContext(Dispatchers.IO) {
         dir().listFiles { f -> f.isFile && f.name.endsWith(EXT) }
             ?.map { it.name.removeSuffix(EXT) }
@@ -41,7 +41,7 @@ class PlaylistRepository private constructor() {
             ?: emptyList()
     }
 
-    /** Los nombres de archivo (basenames) que contiene una playlist, en orden. */
+    /** Los nombres de archivo (basenames) que contiene una lista, en orden. */
     suspend fun readFilenames(name: String): List<String> = withContext(Dispatchers.IO) {
         val file = fileOf(name)
         if (!file.exists()) return@withContext emptyList()
@@ -50,7 +50,7 @@ class PlaylistRepository private constructor() {
     }
 
     /**
-     * Reescribe entero el archivo de una playlist con [filenames] (para reordenar o para editar la
+     * Reescribe entero el archivo de una lista con [filenames] (para reordenar o para editar la
      * pertenencia). Una escritura completa es más simple y segura que parchear líneas sueltas.
      */
     suspend fun setFilenames(name: String, filenames: List<String>) = withContext(Dispatchers.IO) {
@@ -58,7 +58,7 @@ class PlaylistRepository private constructor() {
         Unit
     }
 
-    /** Crea una playlist vacía si no existía ya. Devuelve false si el nombre no es válido o chocaba. */
+    /** Crea una lista vacía si no existía ya. Devuelve false si el nombre no es válido o chocaba. */
     suspend fun createPlaylist(name: String): Boolean = withContext(Dispatchers.IO) {
         val clean = name.trim()
         if (clean.isEmpty() || !isValidName(clean)) return@withContext false
@@ -67,13 +67,13 @@ class PlaylistRepository private constructor() {
         runCatching { file.createNewFile() }.getOrDefault(false)
     }
 
-    /** Borra el archivo de la playlist (best-effort). */
+    /** Borra el archivo de la lista (best-effort). */
     suspend fun deletePlaylist(name: String) = withContext(Dispatchers.IO) {
         runCatching { fileOf(name).delete() }
         Unit
     }
 
-    /** Renombra la playlist (renombra su archivo). Devuelve false si el destino ya existe o falla. */
+    /** Renombra la lista (renombra su archivo). Devuelve false si el destino ya existe o falla. */
     suspend fun renamePlaylist(oldName: String, newName: String): Boolean = withContext(Dispatchers.IO) {
         val clean = newName.trim()
         if (clean.isEmpty() || !isValidName(clean)) return@withContext false
@@ -83,7 +83,7 @@ class PlaylistRepository private constructor() {
     }
 
     /**
-     * Añade una o varias canciones al final de la playlist, saltándose las que ya estuvieran.
+     * Añade una o varias canciones al final de la lista, saltándose las que ya estuvieran.
      * Sirve tanto para una canción suelta (lista de un elemento) como para un álbum entero de una
      * vez (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]): una sola escritura en vez
      * de una por canción evita reescribir el archivo N veces para lo mismo.
@@ -95,7 +95,7 @@ class PlaylistRepository private constructor() {
     }
 
     /**
-     * Quita una o varias canciones de la playlist. Si no queda ninguna, la playlist entera deja de
+     * Quita una o varias canciones de la lista. Si no queda ninguna, la lista entera deja de
      * tener sentido (una lista vacía no aporta nada) y se borra en vez de dejar un archivo a 0
      * canciones (ver [writeRemaining]).
      */
@@ -106,7 +106,7 @@ class PlaylistRepository private constructor() {
     }
 
     /**
-     * Quita [filename] de TODAS las playlists que lo contengan, y devuelve cuáles se han tocado.
+     * Quita [filename] de TODAS las listas que lo contengan, y devuelve cuáles se han tocado.
      *
      * Se usa cuando el archivo ha desaparecido de verdad de la fonoteca. Dejar la línea no serviría
      * de nada: la canción seguiría apareciendo en la lista y volvería a fallar cada vez que se
@@ -121,14 +121,14 @@ class PlaylistRepository private constructor() {
         }
     }
 
-    /** Guarda lo que quede tras quitar una canción, o borra la playlist si no queda ninguna. */
+    /** Guarda lo que quede tras quitar una canción, o borra la lista si no queda ninguna. */
     private suspend fun writeRemaining(name: String, remaining: List<String>) {
         if (remaining.isEmpty()) deletePlaylist(name) else setFilenames(name, remaining)
     }
 
     /**
-     * Nombres de las playlists que contienen TODAS las canciones de [filenames] (para marcar las
-     * casillas del diálogo de "Añadir a playlist"). Con una sola canción, "todas" es justo esa una;
+     * Nombres de las listas que contienen TODAS las canciones de [filenames] (para marcar las
+     * casillas del diálogo de "Añadir a lista"). Con una sola canción, "todas" es justo esa una;
      * así sirve igual para una canción suelta que para un álbum entero.
      */
     suspend fun playlistsContainingAll(filenames: List<String>): Set<String> = withContext(Dispatchers.IO) {
@@ -137,7 +137,7 @@ class PlaylistRepository private constructor() {
     }
 
     /**
-     * Resuelve los nombres de archivo de una playlist a objetos [Song] reales, en orden. [byFilename]
+     * Resuelve los nombres de archivo de una lista a objetos [Song] reales, en orden. [byFilename]
      * es un índice basename→canción que arma quien llama (a partir de la biblioteca cargada). Las
      * entradas que ya no existen en la biblioteca (archivo borrado) se descartan.
      *

@@ -90,7 +90,7 @@ import kotlin.math.roundToInt
  * de toda la vida de UltiMusic es cargar **una** canción cada vez (`player.setMediaItem`, no
  * `setMediaItems`) y decidir la siguiente con lógica propia — importante para la "cola suelta" que
  * sigue con una canción al azar al agotarse (ver [continueWithRandomSong]) y para que
- * [next]/[skipToNext]/[skipToPrevious] entiendan playlists, géneros, álbumes... Como el `ExoPlayer`
+ * [next]/[skipToNext]/[skipToPrevious] entiendan listas, géneros, álbumes... Como el `ExoPlayer`
  * de dentro por tanto NUNCA tiene más de un elemento en su propia lista, no sabe avanzar/retroceder
  * por sí solo; [QueueAwarePlayer] es el envoltorio que le enseña a la sesión (y por tanto a la
  * notificación y a la pantalla de bloqueo) a llamar a los métodos de aquí en vez de a los suyos.
@@ -425,7 +425,7 @@ class PlaybackService : MediaSessionService() {
      * Envuelve [player] para que la sesión (y por tanto la notificación y la pantalla de bloqueo)
      * use el "siguiente"/"anterior" de UltiMusic en vez del de ExoPlayer: como aquí solo se carga
      * UNA canción cada vez (ver la cabecera de la clase), el ExoPlayer de dentro nunca tiene una
-     * playlist real que recorrer. [ForwardingPlayer] es la clase de Media3 pensada para reenviar
+     * lista real que recorrer. [ForwardingPlayer] es la clase de Media3 pensada para reenviar
      * todo salvo lo que se pise aquí.
      */
     private inner class QueueAwarePlayer(player: Player) : ForwardingPlayer(player) {
@@ -604,8 +604,23 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch { _songsAddedToQueue.emit(toAppend.size) }
     }
 
+    /**
+     * Aplica el nuevo orden de [newOrder] a la cola tal cual está sonando (arrastrar y soltar una
+     * fila en [com.untar.ultimusic.ui.player.IPodQueueAdapter], modo normal del iPod). Mismas
+     * canciones que ya había, solo reordenadas: no toca al reproductor en sí (`player` sigue cargado
+     * con la misma canción, solo cambia su posición dentro de la lista), pero si el arrastre movió
+     * justo la fila que suena, [_currentIndex] tiene que seguirla a su nueva posición para no
+     * desincronizarse (mismo criterio que [addToQueue] al quitar de en medio una canción repetida).
+     */
+    fun reorderQueue(newOrder: List<Song>) {
+        val currentId = _queue.value.getOrNull(_currentIndex.value)?.id
+        _queue.value = newOrder
+        val newIndex = newOrder.indexOfFirst { it.id == currentId }
+        if (newIndex >= 0) _currentIndex.value = newIndex
+    }
+
     // ---------------------------------------------------------------------------------------------
-    // COLECCIONES: fichas de álbum/artista/productor, modo navegación del iPod para playlists y
+    // COLECCIONES: fichas de álbum/artista/productor, modo navegación del iPod para listas y
     // géneros — ver cabecera original.
     // ---------------------------------------------------------------------------------------------
 

@@ -54,7 +54,7 @@ object MusicScanner {            // OBJECT = SINGLETON
      *
      * Sirve para no sacar conclusiones precipitadas: si la carpeta no es accesible (permiso
      * revocado, almacenamiento no montado…), TODAS las canciones parecerían haber desaparecido.
-     * Antes de dar una por perdida —y borrarla de las playlists, que son archivos del usuario y no
+     * Antes de dar una por perdida —y borrarla de las listas, que son archivos del usuario y no
      * se pueden recuperar— hay que comprobar que el problema es de la canción y no de la carpeta.
      */
     suspend fun libraryFolderReadable(): Boolean = withContext(Dispatchers.IO) {

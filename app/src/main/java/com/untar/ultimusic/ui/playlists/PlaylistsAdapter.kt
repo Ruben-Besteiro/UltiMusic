@@ -11,9 +11,9 @@ import com.untar.ultimusic.model.PlaylistSummary
 import com.untar.ultimusic.util.TimeFormat
 
 /**
- * Lista de playlists. Cada fila enseña el nombre y, debajo, "N canciones | duración". El botón de 3
+ * Lista de listas. Cada fila enseña el nombre y, debajo, "N canciones | duración". El botón de 3
  * puntos abre el menú de renombrar/borrar. Es como [com.untar.ultimusic.ui.library.PeopleAdapter]
- * pero sin imagen, porque una playlist no tiene carátula propia.
+ * pero sin imagen, porque una lista no tiene carátula propia.
  */
 class PlaylistsAdapter(
     private val onPlaylistClick: (PlaylistSummary) -> Unit,

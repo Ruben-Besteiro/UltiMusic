@@ -12,21 +12,25 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.core.widget.ImageViewCompat
 import androidx.recyclerview.widget.RecyclerView
+import coil.load
+import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.CoverArt
+import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.joinNonBlank
 import java.util.Collections
 
 /**
  * Lista de una colección mostrada dentro del iPod en **modo navegación** (donde se elige qué sonará
- * después): una playlist o, desde que existe la pestaña de Géneros, también un género (ver
+ * después): una lista o, desde que existe la pestaña de Géneros, también un género (ver
  * [com.untar.ultimusic.ui.player.IPodDialogFragment.enterBrowseMode]). Cada fila enseña
  * "Título | Artista". La fila seleccionada con las flechas del iPod se resalta, para que se vea
  * cuál reproduciría el botón de play.
  *
- * Solo una playlist se puede reordenar arrastrando —tiene un orden propio guardado en su archivo—;
+ * Solo una lista se puede reordenar arrastrando —tiene un orden propio guardado en su archivo—;
  * un género no ([reorderable] a `false`), así que esa colección oculta el manejador de arrastre.
  *
  * Si la canción que suena de verdad en la app (venga de esta colección o de otro sitio) está entre
@@ -71,7 +75,7 @@ class PlaylistQueueAdapter(
     /**
      * Cambia qué canción es la que suena de verdad, comparando por ruta de archivo, y repinta para
      * mostrar el icono de altavoz y las posiciones relativas a ella (o volver a posiciones absolutas
-     * si [filePath] es null o no está en esta playlist).
+     * si [filePath] es null o no está en esta lista).
      */
     @SuppressLint("NotifyDataSetChanged")
     fun setNowPlaying(filePath: String?) {
@@ -86,7 +90,7 @@ class PlaylistQueueAdapter(
         nowPlayingIndex = if (path == null) -1 else songs.indexOfFirst { it.filePath == path }
     }
 
-    /** True si la canción que suena de verdad está en esta playlist (para decidir el botón de menú). */
+    /** True si la canción que suena de verdad está en esta lista (para decidir el botón de menú). */
     fun containsNowPlaying(): Boolean = nowPlayingIndex >= 0
 
     /** Índice dentro de [songs] de la canción que suena de verdad, o -1 si ninguna. */
@@ -138,11 +142,12 @@ class PlaylistQueueAdapter(
         private val row: View = itemView.findViewById(R.id.playlistQueueRow)
         private val speaker: ImageView = itemView.findViewById(R.id.queueSpeaker)
         private val number: TextView = itemView.findViewById(R.id.queueNumber)
+        private val cover: ShapeableImageView = itemView.findViewById(R.id.queueCover)
         private val subtitle: TextView = itemView.findViewById(R.id.queueSubtitle)
         private val handle: ImageView = itemView.findViewById(R.id.dragHandle)
 
         /**
-         * [nowPlayingIndex] = índice de la canción que suena de verdad en esta playlist, o -1 si
+         * [nowPlayingIndex] = índice de la canción que suena de verdad en esta lista, o -1 si
          * ninguna. Con ella presente, esta fila se numera igual que la cola real: altavoz si es la
          * que suena, y el resto con su posición relativa (negativa y en gris si ya sonó). Sin ella,
          * cada fila muestra sencillamente su posición absoluta.
@@ -158,6 +163,7 @@ class PlaylistQueueAdapter(
         ) {
             val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
             subtitle.text = joinNonBlank(song.title, artist)
+            cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
             ImageViewCompat.setImageTintList(speaker, ColorStateList.valueOf(accent))
 
             if (nowPlayingIndex >= 0) {

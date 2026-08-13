@@ -40,6 +40,9 @@ class SearchAdapter(
     private val onAddToPlaylist: (Song) -> Unit,
     private val onEditMetadata: (Song) -> Unit,
     private val onDeleteSong: (Song) -> Unit,
+    private val onGoToAlbum: (Song) -> Unit,
+    private val onGoToArtist: (Song) -> Unit,
+    private val onGoToProducer: (Song) -> Unit,
     private val onAlbumClick: (AlbumSummary) -> Unit,
     private val onPersonClick: (PersonKind, PersonSummary) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
@@ -84,7 +87,8 @@ class SearchAdapter(
         when (val item = items[position]) {
             is SearchResult.Header -> (holder as HeaderViewHolder).bind(item.titleRes, accent)
             is SearchResult.SongRow -> (holder as SongViewHolder).bind(
-                item.song, onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onDeleteSong
+                item.song, onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onDeleteSong,
+                onGoToAlbum, onGoToArtist, onGoToProducer
             )
             is SearchResult.AlbumRow -> (holder as AlbumViewHolder).bind(item.album, onAlbumClick)
             is SearchResult.PersonRow -> (holder as PersonViewHolder).bind(
@@ -115,13 +119,16 @@ class SearchAdapter(
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
             onEditMetadata: (Song) -> Unit,
-            onDeleteSong: (Song) -> Unit
+            onDeleteSong: (Song) -> Unit,
+            onGoToAlbum: (Song) -> Unit,
+            onGoToArtist: (Song) -> Unit,
+            onGoToProducer: (Song) -> Unit
         ) {
             val context = itemView.context
             title.text = song.title
 
             val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-            val album = song.albums.firstOrNull()?.title ?: MusicScanner.UNKNOWN_ALBUM
+            val album = song.albums.joinToString(", ") { it.title }.ifBlank { MusicScanner.UNKNOWN_ALBUM }
             subtitle.text = joinNonBlank(artist, album)
 
             cover.load(CoverArt.cover(context, song), CoverLoader.get(context))
@@ -130,10 +137,17 @@ class SearchAdapter(
             more.setOnClickListener { anchor ->
                 PopupMenu(anchor.context, anchor).apply {
                     menuInflater.inflate(R.menu.menu_song_item, menu)
+                    // Solo tiene sentido "ir a" lo que la canción de verdad tenga.
+                    menu.findItem(R.id.action_go_to_album)?.isVisible = song.albums.isNotEmpty()
+                    menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
+                    menu.findItem(R.id.action_go_to_producer)?.isVisible = song.producers.isNotEmpty()
                     setOnMenuItemClickListener { item ->
                         when (item.itemId) {
                             R.id.action_add_to_queue -> { onAddToQueue(song); true }
                             R.id.action_add_to_playlist -> { onAddToPlaylist(song); true }
+                            R.id.action_go_to_album -> { onGoToAlbum(song); true }
+                            R.id.action_go_to_artist -> { onGoToArtist(song); true }
+                            R.id.action_go_to_producer -> { onGoToProducer(song); true }
                             R.id.action_edit_metadata -> { onEditMetadata(song); true }
                             R.id.action_delete_song -> { onDeleteSong(song); true }
                             else -> false

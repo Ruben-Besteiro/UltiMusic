@@ -9,7 +9,8 @@
     android:layout_height="wrap_content"
     android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:paddingVertical="6dp">
+    android:paddingVertical="6dp"
+    android:background="?attr/selectableItemBackground">
 
     <ImageView
         android:id="@+id/infoIcon"
@@ -23,8 +24,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="12dp"
-        android:ellipsize="end"
-        android:maxLines="1"
         android:textSize="16sp"
         tools:text="Linkin Park" />
 

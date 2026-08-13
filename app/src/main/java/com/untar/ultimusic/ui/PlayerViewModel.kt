@@ -30,14 +30,14 @@ data class PlaybackProgress(val positionMs: Long = 0L, val durationMs: Long = 0L
 /**
  * Qué tipo de colección ocupa la cola cuando NO es una cola suelta (ver
  * [com.untar.ultimusic.playback.PlaybackService.isLooseQueue]). La usa el iPod para elegir la
- * palabra correcta al anunciar cuántas canciones quedan ("en la playlist", "en el álbum", "de este
+ * palabra correcta al anunciar cuántas canciones quedan ("en la lista", "en el álbum", "de este
  * artista"...) y qué decir al llegar a la última (ver
- * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [PLAYLIST] y [GENRE] los pone el modo
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [LISTA] y [GENRE] los pone el modo
  * navegación del iPod al empezar a reproducir esa colección (ver
  * [com.untar.ultimusic.ui.player.IPodDialogFragment.enterBrowseMode]); [ALBUM], [ARTIST] y
  * [PRODUCER] los pone la ficha de detalle (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
  */
-enum class CollectionKind { PLAYLIST, GENRE, ALBUM, ARTIST, PRODUCER }
+enum class CollectionKind { LISTA, GENRE, ALBUM, ARTIST, PRODUCER }
 
 /** Volumen normal: sin amplificar. Es el mínimo del amplificador y su valor por defecto. */
 const val BOOST_MIN_PERCENT = 100
@@ -365,6 +365,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     fun addToQueue(song: Song) = withService { it.addToQueue(song) }
 
     fun addToQueue(songs: List<Song>) = withService { it.addToQueue(songs) }
+
+    /** Ver `PlaybackService.reorderQueue` (arrastrar y soltar una fila de la cola en el iPod). */
+    fun reorderQueue(songs: List<Song>) = withService { it.reorderQueue(songs) }
 
     fun playCollection(
         collection: List<Song>,

@@ -7,7 +7,7 @@
     <string name="tab_artists">Artistas</string>
     <string name="tab_producers">Productores</string>
     <string name="tab_genres">Géneros</string>
-    <string name="tab_playlists">Listas de reproducción</string>
+    <string name="tab_playlists">Listas</string>
 
     <!-- Barra superior -->
     <string name="action_menu">Menú</string>
@@ -27,7 +27,10 @@
     <string name="song_subtitle_format">%1$s | %2$s</string>
     <string name="song_more">Más opciones de la canción</string>
     <string name="add_to_queue">Añadir a cola</string>
-    <string name="add_to_playlist">Añadir a playlist</string>
+    <string name="add_to_playlist">Añadir a lista</string>
+    <string name="go_to_album">Ir al álbum</string>
+    <string name="go_to_artist">Ir al artista</string>
+    <string name="go_to_producer">Ir al productor</string>
     <string name="delete_song">Eliminar</string>
     <string name="delete_song_confirm">¿Eliminar <b>^1</b> del dispositivo?</string>
     <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
@@ -79,8 +82,9 @@
     <string name="editor_saved">Cambios guardados</string>
     <string name="editor_title_required">El título no puede quedar vacío</string>
     <string name="editor_unsaved_changes_title">Cambios sin guardar</string>
-    <string name="editor_unsaved_changes_message">Tienes ediciones sin guardar. ¿Seguro que quieres irte?</string>
-    <string name="editor_leave">Irme</string>
+    <string name="editor_unsaved_changes_message">Tienes ediciones sin guardar. ¿Seguro que quieres salir?</string>
+    <string name="editor_leave">Salir</string>
+    <string name="editor_saving_wait">Un momento…</string>
     <string name="editor_clear_lyrics">Borrar la letra</string>
     <string name="editor_clear_video_url">Quitar el videoclip</string>
 
@@ -110,7 +114,7 @@
     <string name="overwrite_picker_title">Elige qué quieres sobrescribir</string>
     <string name="overwrite_check_all">Marcar todo</string>
     <string name="overwrite_uncheck_all">Desmarcar todo</string>
-    <string name="overwrite_field_cover">Portada</string>
+    <string name="overwrite_field_cover">Carátula</string>
     <string name="overwrite_field_original_song">Canción original</string>
     <!-- Aviso en gris al pie del diálogo, solo en una sugerencia de canción sin datos de Genius (sin
          token, o Genius no tiene esa canción): %1$s es la lista de campos que solo aporta Genius,
@@ -230,17 +234,17 @@
         <item quantity="other">Quedan %d canciones</item>
     </plurals>
     <!-- Aviso de la cola/lista, en @+id/tvMeta (ver IPodDialogFragment.updateInfoBox), cuando ya no
-         queda ninguna canción por sonar (la actual es la última): la cola suelta y la playlist
+         queda ninguna canción por sonar (la actual es la última): la cola suelta y la lista
          admiten seguir añadiendo canciones a mano, así que invitan a hacerlo;
          álbum/artista/productor/género son colecciones fijas, así que solo avisan de que se han
          acabado. -->
     <string name="queue_hint_loose">Puedes añadir más música a la cola dándole a los tres puntos y a \"Añadir a cola\"</string>
-    <string name="queue_hint_playlist">Puedes añadir más música a la playlist dándole a los tres puntos y a \"Añadir a playlist\"</string>
+    <string name="queue_hint_playlist">Puedes añadir más música a la lista dándole a los tres puntos y a \"Añadir a lista\"</string>
     <string name="queue_end">Has llegado al final</string>
-    <!-- Igual que queue_end, pero para cuando no es que se haya acabado la cola/playlist: es que
-         está vacía de por sí (cola real sin ninguna canción, o playlist navegada sin canciones). -->
+    <!-- Igual que queue_end, pero para cuando no es que se haya acabado la cola/lista: es que
+         está vacía de por sí (cola real sin ninguna canción, o lista navegada sin canciones). -->
     <string name="queue_empty">No hay cola de reproducción</string>
-    <!--<string name="playlist_empty">Esta playlist está vacía</string>-->
+    <!--<string name="playlist_empty">Esta lista está vacía</string>-->
     <!-- @+id/tvMeta en modo carátula (ver IPodDialogFragment.updateInfoBox) cuando no suena nada
          todavía (app recién abierta en frío): tvTitle se oculta igual que en modo cola/lista vacía,
          así que este texto ocupa toda la caja de info. -->
@@ -264,21 +268,21 @@
     <string name="lyrics_offset_subtitle">Ponlo en positivo para adelantar la letra y en negativo para atrasarla</string>
     <string name="queue_subtitle_format">%1$s | %2$s</string>
 
-    <!-- Playlists -->
-    <string name="no_playlists">Todavía no hay ninguna playlist. Usa el botón + o añade una canción a una playlist nueva</string>
+    <!-- Listas -->
+    <string name="no_playlists">Todavía no hay ninguna lista. Usa el botón + o añade una canción a una lista nueva</string>
     <string name="playlist_subtitle_format">%1$s | %2$s</string>
-    <string name="playlist_more">Más opciones de la playlist</string>
-    <string name="playlist_create">Nueva playlist</string>
-    <string name="playlist_new_option">Nueva playlist…</string>
-    <string name="playlist_name_hint">Nombre de la playlist</string>
+    <string name="playlist_more">Más opciones de la lista</string>
+    <string name="playlist_create">Nueva lista</string>
+    <string name="playlist_new_option">Nueva lista…</string>
+    <string name="playlist_name_hint">Nombre de la lista</string>
     <string name="playlist_rename">Renombrar</string>
     <string name="playlist_delete">Eliminar</string>
-    <string name="playlist_delete_confirm">¿Eliminar la playlist <b>^1</b>? Los archivos de audio no se tocarán</string>
-    <string name="playlist_add_button">Crear playlist</string>
+    <string name="playlist_delete_confirm">¿Eliminar la lista <b>^1</b>? Los archivos de audio no se tocarán</string>
+    <string name="playlist_add_button">Crear lista</string>
     <string name="playlist_reorder_desc">Arrastrar para reordenar</string>
-    <string name="playlist_name_taken">Ya existe una playlist con ese nombre</string>
-    <string name="playlist_empty">Esta playlist está vacía</string>
-    <string name="add_to_playlist_title">Añadir a playlist</string>
+    <string name="playlist_name_taken">Ya existe una lista con ese nombre</string>
+    <string name="playlist_empty">Esta lista está vacía</string>
+    <string name="add_to_playlist_title">Añadir a lista</string>
     <string name="ipod_shuffle_random">Reproducir una canción al azar</string>
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>

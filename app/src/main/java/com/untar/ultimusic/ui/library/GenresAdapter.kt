@@ -12,7 +12,7 @@ import com.untar.ultimusic.model.GenreSummary
  * Lista de géneros: solo el nombre y cuántas canciones lo llevan (ver item_genre.xml), sin imagen
  * —un género no tiene carátula propia— y sin menú de 3 puntos —no se puede renombrar ni borrar,
  * es solo lo que traen las canciones—. Al pinchar uno se abre el iPod en modo navegación con sus
- * canciones, igual que al pinchar una playlist (ver [GenresFragment]).
+ * canciones, igual que al pinchar una lista (ver [GenresFragment]).
  */
 class GenresAdapter(
     private val onGenreClick: (GenreSummary) -> Unit

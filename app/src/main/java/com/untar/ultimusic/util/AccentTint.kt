@@ -61,7 +61,7 @@ object AccentTint {
      * (ver [com.untar.ultimusic.ui.common.ScrollbarDrag]).
      *
      * Antes cada botón de estos llevaba su icono a un color FIJO en el XML (blanco el de la
-     * portada, negro el de la varita y el de crear playlist): se leían bien mientras el acento por
+     * portada, negro el de la varita y el de crear lista): se leían bien mientras el acento por
      * defecto (el amarillo) fuera claro, pero no con un acento oscuro. Con esto los tres siguen la
      * misma regla que la burbuja.
      */

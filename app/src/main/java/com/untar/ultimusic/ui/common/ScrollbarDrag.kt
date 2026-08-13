@@ -166,10 +166,24 @@ fun RecyclerView.attachScrollbarDrag(
 
     fun isScrollable(): Boolean = computeVerticalScrollRange() > computeVerticalScrollExtent()
 
-    // Mueve el pulgar cuando el scroll cambia por CUALQUIER vía (arrastre incluido, ya que
-    // `scrollToPositionWithOffset` también dispara `onScrolled`), no solo al arrastrar la barra.
+    // `computeVerticalScrollOffset()/Range()` de LinearLayoutManager son sólo una ESTIMACIÓN basada
+    // en la altura media de las filas actualmente visibles, no de la lista entera. Cuando nosotros
+    // mismos disparamos el scroll (arrastrando la barra, vía `scrollToPositionWithOffset` en
+    // `dragTo`), ya hemos colocado el pulgar con la fracción EXACTA del dedo; si encima dejamos que
+    // este listener lo vuelva a colocar con esa estimación, puede no coincidir (p. ej. si las filas
+    // donde soltaste tienen una altura media distinta a la del resto: títulos de 1 vs 2 líneas,
+    // cabeceras de sección...) y el pulgar "salta" solo justo después de soltar — que es tardío
+    // porque `scrollToPositionWithOffset` no aplica el scroll al instante, sino en el siguiente
+    // layout pass, así que este onScrolled puede llegar ya con el dedo levantado. Por eso ese caso
+    // se ignora aquí con [ignoreNextScrollSync]; el resto de scrolls (arrastre normal de la lista,
+    // saltos desde otro sitio) sí deben seguir sincronizando el pulgar.
+    var ignoreNextScrollSync = false
     addOnScrollListener(object : RecyclerView.OnScrollListener() {
         override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
+            if (ignoreNextScrollSync) {
+                ignoreNextScrollSync = false
+                return
+            }
             if (!isScrollable()) return
             val range = (computeVerticalScrollRange() - computeVerticalScrollExtent()).coerceAtLeast(1)
             moveThumbTo(computeVerticalScrollOffset().toFloat() / range)
@@ -187,6 +201,7 @@ fun RecyclerView.attachScrollbarDrag(
         val fraction = (touchY / height).coerceIn(0f, 1f)
         val targetPosition = (itemCount * fraction).toInt().coerceIn(0, (itemCount - 1).coerceAtLeast(0))
 
+        ignoreNextScrollSync = true
         layoutManager.scrollToPositionWithOffset(targetPosition, 0)
         // Mueve las dos vistas a la vez: la burbuja ya no se coloca a la altura del dedo por su
         // cuenta, va pegada al pulgar.

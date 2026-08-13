@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Pestaña de Playlists: la misma lista que Artistas/Productores (sin imágenes) más un botón "+"
-     flotante abajo a la derecha para crear una playlist nueva. -->
+<!-- Pestaña de Listas: la misma lista que Artistas/Productores (sin imágenes) más un botón "+"
+     flotante abajo a la derecha para crear una lista nueva. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"

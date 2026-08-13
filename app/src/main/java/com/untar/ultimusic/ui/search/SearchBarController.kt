@@ -27,6 +27,7 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
+import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
@@ -99,6 +100,24 @@ class SearchBarController(
                 }
             },
             onDeleteSong = ::showDeleteDialog,
+            onGoToAlbum = { song ->
+                song.albums.firstOrNull()?.let {
+                    hideKeyboard()
+                    DetailDialogFragment.showAlbum(activity, it.id)
+                }
+            },
+            onGoToArtist = { song ->
+                song.artists.firstOrNull()?.let {
+                    hideKeyboard()
+                    DetailDialogFragment.showPerson(activity, PersonKind.ARTIST, it.id)
+                }
+            },
+            onGoToProducer = { song ->
+                song.producers.firstOrNull()?.let {
+                    hideKeyboard()
+                    DetailDialogFragment.showPerson(activity, PersonKind.PRODUCER, it.id)
+                }
+            },
             onAlbumClick = { album ->
                 hideKeyboard()
                 DetailDialogFragment.showAlbum(activity, album.id)

@@ -22,6 +22,8 @@ import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
+import com.untar.ultimusic.ui.library.DetailDialogFragment
+import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
@@ -52,7 +54,16 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                         .show(parentFragmentManager, "metadataEditor")
                 }
             },
-            onDeleteSong = { song -> showDeleteDialog(song) }
+            onDeleteSong = { song -> showDeleteDialog(song) },
+            onGoToAlbum = { song ->
+                song.albums.firstOrNull()?.let { DetailDialogFragment.showAlbum(this, it.id) }
+            },
+            onGoToArtist = { song ->
+                song.artists.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.ARTIST, it.id) }
+            },
+            onGoToProducer = { song ->
+                song.producers.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.PRODUCER, it.id) }
+            }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
@@ -116,7 +127,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
     }
 
     /**
-     * Carga (en una corrutina, porque toca disco) qué playlists existen y en cuáles ya está la
+     * Carga (en una corrutina, porque toca disco) qué listas existen y en cuáles ya está la
      * canción, y abre el diálogo de casillas de pertenencia con esos datos.
      */
     private fun showAddToPlaylist(song: Song) {

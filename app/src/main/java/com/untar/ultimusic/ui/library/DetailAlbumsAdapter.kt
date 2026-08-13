@@ -8,19 +8,18 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
-import com.untar.ultimusic.util.joinNonBlank
 
 /**
- * Rejilla de álbumes: una carátula cuadrada grande con el título y el artista debajo. El número de
- * columnas no lo decide el adaptador, sino el `GridLayoutManager` que le pone [AlbumsFragment].
+ * Carrusel horizontal de álbumes de la ficha de un artista/productor: la misma tarjeta que
+ * [AlbumsAdapter] pero en pequeño y con el año en el subtítulo en vez del artista (aquí siempre es
+ * el mismo, no aporta nada repetirlo).
  */
-class AlbumsAdapter(
+class DetailAlbumsAdapter(
     private val onAlbumClick: (AlbumSummary) -> Unit
-) : RecyclerView.Adapter<AlbumsAdapter.AlbumViewHolder>() {
+) : RecyclerView.Adapter<DetailAlbumsAdapter.AlbumViewHolder>() {
 
     private var albums: List<AlbumSummary> = emptyList()
 
@@ -33,7 +32,7 @@ class AlbumsAdapter(
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AlbumViewHolder {
         val inflater = LayoutInflater.from(parent.context)
-        return AlbumViewHolder(inflater.inflate(R.layout.item_album_card, parent, false))
+        return AlbumViewHolder(inflater.inflate(R.layout.item_detail_album_card, parent, false))
     }
 
     override fun onBindViewHolder(holder: AlbumViewHolder, position: Int) {
@@ -47,9 +46,7 @@ class AlbumsAdapter(
 
         fun bind(album: AlbumSummary, onAlbumClick: (AlbumSummary) -> Unit) {
             title.text = album.title
-            // El año ya viene con su propio fallback resuelto en SQL (el más tardío de las
-            // canciones del álbum si no hay uno puesto a mano, ver LibraryDao.observeAlbumSummaries).
-            subtitle.text = joinNonBlank(album.artistName ?: MusicScanner.UNKNOWN_ARTIST, album.year?.toString())
+            subtitle.text = album.year?.toString().orEmpty()
 
             val context = itemView.context
             cover.load(CoverArt.cover(context, album.cover), CoverLoader.get(context)) {

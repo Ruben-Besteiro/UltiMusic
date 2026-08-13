@@ -540,9 +540,12 @@ class MetadataEditorDialogFragment : DialogFragment() {
     }
 
     /** Punto único de salida del editor: si hay cambios sin guardar pide confirmación antes de
-     * cerrar (ver [showUnsavedChangesDialog]); si no, cierra directamente. */
+     * cerrar (ver [showUnsavedChangesDialog]); si no, intenta cerrar directamente (ver
+     * [attemptCloseNow]). El aviso de guardado en curso NO se salta este diálogo: va en
+     * [attemptCloseNow], que es por donde pasa tanto esta salida directa como el botón "Salir" del
+     * propio diálogo, para que de ninguna de las dos formas se pueda interrumpir un guardado. */
     private fun attemptClose() {
-        if (isDirty) showUnsavedChangesDialog() else closeNow()
+        if (isDirty) showUnsavedChangesDialog() else attemptCloseNow()
     }
 
     /** Los botones siguen el color dinámico de la canción que suena, como manda el proyecto para
@@ -552,13 +555,25 @@ class MetadataEditorDialogFragment : DialogFragment() {
             .setTitle(R.string.editor_unsaved_changes_title)
             .setMessage(R.string.editor_unsaved_changes_message)
             .setNegativeButton(R.string.dialog_cancel, null)
-            .setPositiveButton(R.string.editor_leave) { _, _ -> closeNow() }
+            .setPositiveButton(R.string.editor_leave) { _, _ -> attemptCloseNow() }
             .show()
         AccentTint.buttons(dialog, accentColor)
     }
 
-    /** Cierra de verdad, sin pedir confirmación (ya se ha hecho o no hacía falta, ver
-     * [attemptClose]). La animación de salida la pone el tema
+    /** Último paso antes de cerrar de verdad: si el guardado sigue en marcha (ver
+     * [MetadataEditorViewModel.isSaving]) no se cierra -cerrar ahora no cortaría el guardado en sí,
+     * que sigue protegido con NonCancellable, pero sí dejaría a este fragmento sin oír el resultado-
+     * y solo se avisa con un toast en vez de dejar salir. */
+    private fun attemptCloseNow() {
+        if (viewModel.isSaving.value) {
+            Toast.makeText(requireContext(), R.string.editor_saving_wait, Toast.LENGTH_SHORT).show()
+            return
+        }
+        closeNow()
+    }
+
+    /** Cierra de verdad, sin ninguna comprobación más (ya se han hecho todas, ver
+     * [attemptCloseNow]). La animación de salida la pone el tema
      * ([R.style.Theme_UltiMusic_FullScreenDialog]). */
     private fun closeNow() {
         dismiss()

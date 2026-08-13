@@ -19,12 +19,12 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Estado de la pestaña de Playlists. Vive en el ámbito de la ACTIVIDAD (`by activityViewModels()`)
- * para que lo compartan la pestaña de Playlists, el diálogo de "añadir a playlist" y la pestaña de
+ * Estado de la pestaña de Listas. Vive en el ámbito de la ACTIVIDAD (`by activityViewModels()`)
+ * para que lo compartan la pestaña de Listas, el diálogo de "añadir a lista" y la pestaña de
  * Canciones (que la usa para [forgetSong] al eliminar una canción).
  *
  * A diferencia de [LibraryViewModel], la fuente aquí son ARCHIVOS ([PlaylistRepository]), que no
- * reemiten solos al cambiar. Por eso hay un [tick]: cada vez que algo muta una playlist se
+ * reemiten solos al cambiar. Por eso hay un [tick]: cada vez que algo muta una lista se
  * incrementa, y los flujos derivados se recalculan. Combinamos además con la lista de canciones de
  * la biblioteca para poder resolver los nombres de archivo a canciones reales (recuento y duración).
  */
@@ -38,7 +38,7 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     private val tick = MutableStateFlow(0)
 
     /**
-     * Resúmenes de todas las playlists (nombre, nº de canciones, duración total). Depende del [tick]
+     * Resúmenes de todas las listas (nombre, nº de canciones, duración total). Depende del [tick]
      * y de la biblioteca: si cambian los archivos o se reescanea la música, se repinta.
      */
     val playlists: StateFlow<List<PlaylistSummary>> =
@@ -58,7 +58,7 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    /** Índice basename→canción de la biblioteca actual (para resolver una playlist al abrirla). */
+    /** Índice basename→canción de la biblioteca actual (para resolver una lista al abrirla). */
     suspend fun songIndex(): Map<String, Song> =
         library.songs.first().associateBy { File(it.filePath).name }
 
@@ -72,11 +72,11 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     fun reorder(name: String, filenames: List<String>) = mutate { repository.setFilenames(name, filenames) }
 
     /**
-     * Saca una canción de TODAS las playlists porque su archivo ya no existe. Lo dispara
+     * Saca una canción de TODAS las listas porque su archivo ya no existe. Lo dispara
      * `MainActivity` cuando el reproductor no encuentra el archivo (ver `PlayerViewModel.missingFile`).
      *
      * Antes de tocar nada se comprueba que la carpeta de música sea legible: si no lo fuera, todas
-     * las canciones parecerían perdidas y vaciaríamos las playlists del usuario, que son archivos
+     * las canciones parecerían perdidas y vaciaríamos las listas del usuario, que son archivos
      * suyos y no se pueden deshacer.
      */
     fun forgetSong(filename: String) = mutate {

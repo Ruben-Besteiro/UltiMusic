@@ -41,6 +41,18 @@ data class PersonSummaryRow(
     val totalDuration: Long
 )
 
+/**
+ * Clave de agrupación para detectar álbumes duplicados (ver `LibraryDao.mergeDuplicateAlbums`):
+ * mismo [tagTitle] y mismo primer artista enlazado son, en la práctica, el mismo álbum.
+ * [firstArtistId] es null si el álbum no tiene ningún artista enlazado; esas filas no se agrupan
+ * entre sí (dos álbumes sin artista con el mismo título podrían ser homónimos de verdad distintos).
+ */
+data class AlbumGroupRow(
+    val id: Long,
+    val tagTitle: String,
+    val firstArtistId: Long?
+)
+
 /** Número de pista de una canción dentro de un álbum concreto (vive en la tabla de cruce). */
 data class TrackPosition(
     val songId: Long,

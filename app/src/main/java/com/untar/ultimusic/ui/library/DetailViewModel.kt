@@ -16,6 +16,7 @@ import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.TimeFormat
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.flatMapLatest
@@ -64,7 +65,10 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
         .flatMapLatest { t ->
             when (t?.first) {
                 null -> flowOf(null)
-                DetailKind.ALBUM -> repository.album(t.second).map { it?.toHeader() }
+                DetailKind.ALBUM -> combine(
+                    repository.album(t.second),
+                    repository.albumArtistNames(t.second)
+                ) { summary, artistNames -> summary?.toHeader(artistNames) }
                 DetailKind.ARTIST -> repository.artist(t.second).map { it?.toHeader() }
                 DetailKind.PRODUCER -> repository.producer(t.second).map { it?.toHeader() }
             }
@@ -90,8 +94,22 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     /** Las canciones sueltas, para pasárselas al reproductor al pulsar una. */
     val songs: List<Song> get() = tracks.value.map { it.song }
 
+    /**
+     * Álbumes del carrusel horizontal, solo para artista/productor (en un álbum va vacío: no tiene
+     * sentido enseñar el propio álbum dentro de su ficha).
+     */
+    val albums: StateFlow<List<AlbumSummary>> = target
+        .flatMapLatest { t ->
+            when (t?.first) {
+                DetailKind.ARTIST -> repository.artistAlbums(t.second)
+                DetailKind.PRODUCER -> repository.producerAlbums(t.second)
+                DetailKind.ALBUM, null -> flowOf(emptyList())
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     /** Qué tipo de ficha es esta. Lo necesita el fragmento para saber si el menú de 3 puntos (acciones
-     * de álbum: añadir todo a una playlist, editar el álbum...) tiene sentido aquí, porque solo existe
+     * de álbum: añadir todo a una lista, editar el álbum...) tiene sentido aquí, porque solo existe
      * para álbumes. */
     val currentKind: DetailKind? get() = target.value?.first
 
@@ -104,7 +122,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Borra TODAS las canciones del álbum, una a una, y las saca de cualquier playlist en la que
+     * Borra TODAS las canciones del álbum, una a una, y las saca de cualquier lista en la que
      * estuvieran — exactamente lo mismo que si se borraran sueltas desde la pestaña de Canciones (ver
      * [com.untar.ultimusic.ui.songs.SongsFragment.showDeleteDialog]).
      *
@@ -128,11 +146,22 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
 
     // --- Construcción de la cabecera ---
 
-    private fun AlbumSummary.toHeader() = DetailHeader(
+    private fun AlbumSummary.toHeader(artistNames: List<String>) = DetailHeader(
         title = title,
         cover = cover,
         lines = listOfNotNull(
-            InfoLine(R.drawable.ic_person, artistName ?: MusicScanner.UNKNOWN_ARTIST),
+            // [artistNames] es la lista cruda (sin fallback) de LibraryRepository.albumArtistNames.
+            // Si el álbum tiene artistas propios enlazados, [artistName] ya trae esos mismos nombres
+            // juntos en un string (ver LibraryDao.observeAlbumSummaries), pero se prefiere la lista
+            // cruda aquí porque no depende de ese join hecho en SQL. Si viniera vacía —álbum sin
+            // ningún artista propio enlazado— se cae a [artistName], que sí trae el resto de
+            // fallbacks (etiqueta original o el más repetido entre sus canciones).
+            InfoLine(
+                R.drawable.ic_person,
+                artistNames.takeIf { it.isNotEmpty() }?.joinToString(", ")
+                    ?: artistName
+                    ?: MusicScanner.UNKNOWN_ARTIST
+            ),
             InfoLine(R.drawable.ic_music_note, songsText(songCount)),
             InfoLine(R.drawable.ic_timer, TimeFormat.hhmmss(totalDuration)),
             // El año solo aparece si se conoce; una línea con un hueco quedaría peor que ninguna.

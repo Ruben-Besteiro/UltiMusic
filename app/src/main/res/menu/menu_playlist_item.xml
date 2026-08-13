@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Menú del botón de 3 puntos de cada playlist: renombrar y borrar. -->
+<!-- Menú del botón de 3 puntos de cada lista: renombrar y borrar. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_rename_playlist"

@@ -64,6 +64,12 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
     private val _saved = MutableStateFlow<SaveResult?>(null)
     val saved = _saved.asStateFlow()
 
+    /** True mientras [save] está escribiendo (carátula, miniatura del vídeo, fila en Room). El
+     * diálogo lo consulta al intentar salir para no dejar el guardado a medias: ver
+     * [MetadataEditorDialogFragment.attemptClose]. */
+    private val _isSaving = MutableStateFlow(false)
+    val isSaving = _isSaving.asStateFlow()
+
     /** El diálogo ya ha reaccionado a [saved]: se vuelve a poner a null para que un guardado
      * posterior (el editor ya no se cierra solo) también dispare la colecta. */
     fun consumeSaved() {
@@ -91,6 +97,9 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
     fun save(form: EditorForm, pickedImage: Uri?) {
         val current = song.value ?: return
         val titleChanged = form.title != current.title
+        // Se marca ANTES de lanzar la corrutina (no dentro): así, aunque el diálogo intente cerrarse
+        // en el mismo instante en que se pulsa "Guardar", ya ve isSaving a true.
+        _isSaving.value = true
         viewModelScope.launch {
             withContext(NonCancellable) {
                 val imageName = when {
@@ -160,6 +169,7 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
                 val fresh = repository.songs.first().firstOrNull { it.id == current.id }
                     ?: current.copy(imageName = imageName, videoThumbnailName = thumbnailName)
                 _saved.value = SaveResult(fresh)
+                _isSaving.value = false
             }
         }
     }

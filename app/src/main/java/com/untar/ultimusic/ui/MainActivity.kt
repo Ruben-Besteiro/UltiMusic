@@ -10,6 +10,7 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
 import android.provider.Settings
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
@@ -17,6 +18,7 @@ import android.widget.ImageView
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
+import androidx.core.widget.ImageViewCompat
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -68,7 +70,7 @@ class MainActivity : AppCompatActivity() {
     private val searchViewModel: SearchViewModel by viewModels()
 
     // Ámbito de actividad, así que es la MISMA instancia que obtienen los fragmentos con
-    // activityViewModels(). Aquí solo se usa para sacar de las playlists las canciones cuyo archivo
+    // activityViewModels(). Aquí solo se usa para sacar de las listas las canciones cuyo archivo
     // ha desaparecido; al pasar por el ViewModel, su `tick` se encarga de repintar las pestañas.
     private val playlistsViewModel: PlaylistsViewModel by viewModels()
 
@@ -83,8 +85,30 @@ class MainActivity : AppCompatActivity() {
         )
     }
 
+    /** Un icono por pestaña, en el mismo orden que [tabTitles] y que [MainPagerAdapter]. */
+    private val tabIcons: List<Int> = listOf(
+        R.drawable.ic_music_note,
+        R.drawable.ic_album,
+        R.drawable.ic_artist,
+        R.drawable.ic_producer,
+        R.drawable.ic_genre,
+        R.drawable.ic_playlist
+    )
+
     /** En caso de ser true, mostramos el "por favor concede el permiso de almacenamiento" **/
     private var permissionDialogPending = true
+
+    /** Gris de las pestañas no seleccionadas de la barra de navegación (ver applyTabAppearance). */
+    private val mutedTabColor: Int by lazy { ContextCompat.getColor(this, R.color.um_on_surface_muted) }
+
+    /**
+     * Último acento recibido de [PlayerViewModel.accentColor], usado para pintar la pestaña actual
+     * tanto al construirla (setupPager) como al cambiar de canción (setupDynamicColor). Empieza
+     * igual que [com.untar.ultimusic.util.DynamicColor.DEFAULT] (el amarillo de siempre, mientras
+     * no suena nada) sin llamar a `ContextCompat` aquí porque este campo se inicializa antes de que
+     * la Activity tenga Context (a diferencia de [mutedTabColor], que usa `by lazy`).
+     */
+    private var currentAccentColor: Int = 0xFFFFD000.toInt()
 
     /** Scope de proceso para tareas best-effort que deben sobrevivir a la Activity (exportar la BD). */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -257,13 +281,42 @@ class MainActivity : AppCompatActivity() {
         ).bind()
     }
 
+    /**
+     * A diferencia de una TabLayout normal, cada pestaña lleva una vista propia (ver
+     * item_nav_tab.xml): así el icono puede subir solo para dejarle sitio al nombre en la pestaña
+     * actual, algo que `tab.setText/setIcon` no permite. El color (acento vs. gris apagado) lo pone
+     * [applyTabAppearance], llamado aquí al construir cada pestaña y luego en cada cambio de
+     * selección; el de la pestaña actual se re-tiñe además cada vez que cambia el acento (ver
+     * setupDynamicColor).
+     */
     private fun setupPager() {
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
         viewPager.adapter = MainPagerAdapter(this, tabTitles)
         TabLayoutMediator(tabLayout, viewPager) { tab, position ->
-            tab.text = tabTitles[position]
+            val customView = LayoutInflater.from(this).inflate(R.layout.item_nav_tab, tabLayout, false)
+            customView.findViewById<ImageView>(R.id.navIcon).setImageResource(tabIcons[position])
+            customView.findViewById<TextView>(R.id.navLabel).text = tabTitles[position]
+            tab.customView = customView
+            applyTabAppearance(tab, selected = position == 0, currentAccentColor)
         }.attach()
+
+        tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
+            override fun onTabSelected(tab: TabLayout.Tab) = applyTabAppearance(tab, true, currentAccentColor)
+            override fun onTabUnselected(tab: TabLayout.Tab) = applyTabAppearance(tab, false, currentAccentColor)
+            override fun onTabReselected(tab: TabLayout.Tab) {}
+        })
+    }
+
+    /** Icono (y, si `selected`, nombre debajo) en gris apagado o en el color dinámico del acento. */
+    private fun applyTabAppearance(tab: TabLayout.Tab, selected: Boolean, accent: Int) {
+        val view = tab.customView ?: return
+        val icon = view.findViewById<ImageView>(R.id.navIcon)
+        val label = view.findViewById<TextView>(R.id.navLabel)
+        val color = if (selected) accent else mutedTabColor
+        ImageViewCompat.setImageTintList(icon, ColorStateList.valueOf(color))
+        label.visibility = if (selected) View.VISIBLE else View.GONE
+        label.setTextColor(color)
     }
 
     /**
@@ -281,7 +334,7 @@ class MainActivity : AppCompatActivity() {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 // Si al ir a reproducir resulta que el archivo ya no está, lo decimos (antes el
                 // reproductor se quedaba mudo en 0:00 sin explicar por qué) y además sacamos la
-                // canción de todas las playlists: dejarla ahí solo serviría para que reapareciera
+                // canción de todas las listas: dejarla ahí solo serviría para que reapareciera
                 // en la lista y volviera a fallar en cuanto se pulsara.
                 playerViewModel.missingFile.collect { song ->
                     Toast.makeText(
@@ -339,18 +392,18 @@ class MainActivity : AppCompatActivity() {
      */
     private fun setupDynamicColor() {
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
-        val mutedText = ContextCompat.getColor(this, R.color.um_on_surface_muted)
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 playerViewModel.accentColor.collect { accent ->
-                    val tint = ColorStateList.valueOf(accent)
-                    tabLayout.setSelectedTabIndicatorColor(accent)
-                    // Dos colores: el de las pestañas inactivas (gris) y el de la activa (acento).
-                    tabLayout.setTabTextColors(mutedText, accent)
+                    currentAccentColor = accent
                     // Sin esto, el ripple al tocar una pestaña se queda con el colorPrimary del
                     // tema (amarillo fijo) en vez de seguir el acento.
-                    tabLayout.tabRippleColor = tint
+                    tabLayout.tabRippleColor = ColorStateList.valueOf(accent)
+                    // Solo repintamos la pestaña actual: las demás ya están en gris y no cambian.
+                    tabLayout.getTabAt(tabLayout.selectedTabPosition)?.let { tab ->
+                        applyTabAppearance(tab, selected = true, accent)
+                    }
                 }
             }
         }

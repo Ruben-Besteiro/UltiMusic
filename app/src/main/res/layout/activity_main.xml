@@ -129,17 +129,9 @@
             android:layout_height="match_parent"
             android:orientation="vertical">
 
-            <com.google.android.material.tabs.TabLayout
-                android:id="@+id/tabLayout"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:background="@color/um_surface"
-                app:tabGravity="start"
-                app:tabIndicatorColor="@color/um_yellow"
-                app:tabMode="scrollable"
-                app:tabSelectedTextColor="@color/um_yellow"
-                app:tabTextColor="@color/um_on_surface_muted" />
-
+            <!-- Este divisor era antes el de debajo de la barra de pestañas; ahora que la
+                 navegación se ha bajado debajo del mini-reproductor, se queda aquí, debajo de la
+                 barra de búsqueda. -->
             <View
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
@@ -170,6 +162,23 @@
             <include
                 android:id="@+id/miniPlayer"
                 layout="@layout/view_mini_player" />
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/um_divider" />
+
+            <!-- Barra de navegación: solo iconos salvo en la pestaña actual, que además muestra su
+                 nombre debajo (ver MainActivity.setupPager). Sin indicador de Material (la propia
+                 pestaña ya se distingue por el color dinámico e icono desplazado). -->
+            <com.google.android.material.tabs.TabLayout
+                android:id="@+id/tabLayout"
+                android:layout_width="match_parent"
+                android:layout_height="64dp"
+                android:background="@color/um_surface"
+                app:tabGravity="center"
+                app:tabIndicatorHeight="0dp"
+                app:tabMode="scrollable" />
         </LinearLayout>
 
         <FrameLayout

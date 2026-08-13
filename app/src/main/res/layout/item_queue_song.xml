@@ -43,6 +43,15 @@
                 android:textSize="14sp" />
         </FrameLayout>
 
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/queueCover"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/cover_placeholder"
+            android:contentDescription="@string/album_cover_desc"
+            android:scaleType="centerCrop" />
+
         <TextView
             android:id="@+id/queueSubtitle"
             android:layout_width="0dp"
@@ -53,6 +62,17 @@
             android:maxLines="1"
             android:textColor="@color/um_on_background"
             android:textSize="15sp" />
+
+        <!-- Igual que en item_playlist_queue_song.xml: manejador para arrastrar y reordenar la cola
+             tal cual está sonando (ver IPodQueueAdapter). -->
+        <ImageView
+            android:id="@+id/dragHandle"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
+            android:layout_marginStart="8dp"
+            android:contentDescription="@string/playlist_reorder_desc"
+            android:src="@drawable/ic_drag_reorder"
+            android:tint="@color/um_on_surface_muted" />
     </LinearLayout>
 
     <!-- Divisor gris que marca el final de la cola (solo en la última fila, ver arriba). -->

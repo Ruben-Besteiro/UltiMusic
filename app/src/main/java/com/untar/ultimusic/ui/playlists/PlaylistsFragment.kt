@@ -27,7 +27,7 @@ import com.untar.ultimusic.util.AccentTint
 import kotlinx.coroutines.launch
 
 /**
- * Pestaña de listas de reproducción. Lista las playlists (archivos de `~/UltiMusic/Playlists`), deja
+ * Pestaña de listas de reproducción. Muestra las listas (archivos de `~/UltiMusic/Playlists`), deja
  * crearlas con el botón "+", renombrarlas/borrarlas desde el menú de 3 puntos de cada fila, y al
  * pinchar una abre el iPod en modo navegación mostrando su contenido sin reproducir nada.
  */
@@ -82,11 +82,11 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
 
     override fun onResume() {
         super.onResume()
-        // Por si el usuario editó los archivos de playlist desde fuera de la app.
+        // Por si el usuario editó los archivos de lista desde fuera de la app.
         viewModel.refresh()
     }
 
-    /** Diálogo con un campo de texto para crear una playlist vacía. */
+    /** Diálogo con un campo de texto para crear una lista vacía. */
     private fun showCreateDialog() {
         showNameDialog(
             title = getString(R.string.playlist_create),

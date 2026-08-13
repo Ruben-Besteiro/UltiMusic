@@ -101,6 +101,15 @@ class LibraryRepository private constructor(
         dao.observeAlbumSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
 
     /**
+     * Nombres de TODOS los artistas enlazados al álbum, en el orden en que se enlazaron: a
+     * diferencia de [AlbumSummary.artistName] —que junta esos mismos nombres en un solo string ya
+     * listo para pintar, con sus fallbacks si el álbum no tiene ninguno enlazado— esta lista viene
+     * cruda, sin fallback, porque la necesita el editor de metadatos para rellenar sus campos
+     * editables (ver [DetailViewModel] y [com.untar.ultimusic.ui.editor.AlbumEditorViewModel]).
+     */
+    fun albumArtistNames(id: Long): Flow<List<String>> = dao.observeAlbumArtistNames(id)
+
+    /**
      * El álbum tal cual está guardado (fila cruda + sus artistas), para el editor de metadatos de
      * álbum. A diferencia de [album] —que trae cifras agregadas de sus canciones, calculadas para la
      * ficha— aquí hace falta justo lo que el editor puede tocar: título editable, año, géneros,
@@ -138,6 +147,13 @@ class LibraryRepository private constructor(
 
     fun producerSongs(id: Long): Flow<List<Song>> =
         dao.observeSongsOfProducer(id).map { list -> list.map { it.toDomain() } }
+
+    /** Álbumes de un artista/productor, para el carrusel horizontal de su ficha. */
+    fun artistAlbums(id: Long): Flow<List<AlbumSummary>> =
+        dao.observeAlbumsOfArtist(id).map { rows -> rows.map { it.toDomain() } }
+
+    fun producerAlbums(id: Long): Flow<List<AlbumSummary>> =
+        dao.observeAlbumsOfProducer(id).map { rows -> rows.map { it.toDomain() } }
 
     /**
      * Canciones sueltas por id, en el mismo orden que [ids] (la consulta no lo garantiza). Las
@@ -371,7 +387,7 @@ class LibraryRepository private constructor(
     /**
      * Borra una canción de verdad: su archivo en disco, su fila en la base de datos (con los
      * artistas/álbumes/productores que se queden huérfanos), su carátula importada y su miniatura
-     * de YouTube cacheada, si tenía. No toca las playlists; quien llame debe sacarla también de
+     * de YouTube cacheada, si tenía. No toca las listas; quien llame debe sacarla también de
      * ahí con `PlaylistRepository.removeSongFromAll`, igual que cuando un archivo desaparece solo.
      */
     suspend fun deleteSong(song: Song) = withContext(Dispatchers.IO) {

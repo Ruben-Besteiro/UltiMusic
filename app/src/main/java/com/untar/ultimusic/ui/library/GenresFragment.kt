@@ -21,7 +21,7 @@ import kotlinx.coroutines.launch
  * Pestaña de Géneros. Lista de solo texto, igual que [PeopleFragment] pero sin imagen (ver
  * item_genre.xml): un género no tiene ficha de detalle propia, solo nombre y cuántas canciones lo
  * llevan. Al pinchar uno se abre el iPod en modo navegación mostrando sus canciones para elegir
- * qué sonará, EXACTAMENTE igual que al pinchar una playlist (ver
+ * qué sonará, EXACTAMENTE igual que al pinchar una lista (ver
  * [IPodDialogFragment.newInstanceForGenre]), salvo que no se puede reordenar: un género no es una
  * lista propia del usuario, así que no hay orden que guardar.
  */

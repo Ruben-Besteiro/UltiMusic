@@ -22,16 +22,16 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.util.AccentTint
 
 /**
- * Diálogo de "Añadir a playlist" para una o varias canciones a la vez. Muestra todas las playlists
- * con **casillas**: marcar añade las canciones a esa playlist y desmarcar las quita a todas. Abajo,
- * un botón "Nueva playlist…" crea una y mete las canciones en ella.
+ * Diálogo de "Añadir a lista" para una o varias canciones a la vez. Muestra todas las listas
+ * con **casillas**: marcar añade las canciones a esa lista y desmarcar las quita a todas. Abajo,
+ * un botón "Nueva lista…" crea una y mete las canciones en ella.
  *
  * Vale igual para una canción suelta (lista de un elemento, desde
  * [com.untar.ultimusic.ui.songs.SongsFragment] o el buscador) que para un álbum entero de una vez
  * (desde [com.untar.ultimusic.ui.library.DetailDialogFragment], en el orden de sus números de
- * pista): una casilla marcada significa que la playlist contiene TODAS las canciones pasadas.
+ * pista): una casilla marcada significa que la lista contiene TODAS las canciones pasadas.
  *
- * La lista de playlists y qué casillas van marcadas se calculan ANTES de abrir el diálogo (quien lo
+ * La lista de listas y qué casillas van marcadas se calculan ANTES de abrir el diálogo (quien lo
  * lanza hace la lectura de disco en una corrutina) y llegan aquí por argumentos. Así este diálogo se
  * construye de forma síncrona y sobrevive a un giro de pantalla sin volver a tocar disco. Las
  * modificaciones se delegan en [PlaylistsViewModel], que refresca el estado compartido.
@@ -82,7 +82,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
      *
      * Es un [ListView] (lo crea el propio `AlertDialog`, no se puede cambiar por un `RecyclerView`),
      * y un ListView **recicla** sus filas al hacer scroll: si solo tiñéramos las visibles al abrir el
-     * diálogo, una playlist que quedase fuera de pantalla aparecería sin teñir al bajar. Por eso se
+     * diálogo, una lista que quedase fuera de pantalla aparecería sin teñir al bajar. Por eso se
      * engancha un `OnHierarchyChangeListener`, que repite el tintado cada vez que una fila (nueva o
      * reciclada) entra en la jerarquía de vistas visible.
      */
@@ -100,7 +100,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         })
     }
 
-    /** Aviso de "N canciones añadidas a X" al marcar una casilla o crear la playlist desde aquí. */
+    /** Aviso de "N canciones añadidas a X" al marcar una casilla o crear la lista desde aquí. */
     private fun showAddedToast(playlistName: String, count: Int, context: Context = requireContext()) {
         Toast.makeText(
             context,
@@ -109,9 +109,9 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         ).show()
     }
 
-    /** Pide un nombre, crea la playlist y añade las canciones de una vez. */
+    /** Pide un nombre, crea la lista y añade las canciones de una vez. */
     private fun showCreateAndAdd(filenames: List<String>) {
-        // Al pulsar "Nueva playlist…" el AlertDialog de este diálogo se cierra, y con él se DESANCLA
+        // Al pulsar "Nueva lista…" el AlertDialog de este diálogo se cierra, y con él se DESANCLA
         // este DialogFragment. Por eso capturamos aquí (todavía anclados) el ViewModel de la actividad
         // y un contexto de la actividad: el segundo diálogo debe seguir funcionando aunque el fragmento
         // ya no esté attached cuando el usuario escriba el nombre y pulse Aceptar.

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fila de la lista de Playlists: como la de Artistas/Productores pero SIN imagen. Nombre +
+<!-- Fila de la lista de Listas: como la de Artistas/Productores pero SIN imagen. Nombre +
      recuento/duración + botón de 3 puntos (renombrar / borrar). -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"

@@ -103,6 +103,8 @@ class DetailDialogFragment : DialogFragment() {
         val headerBox = view.findViewById<View>(R.id.detailHeader)
         val cover = view.findViewById<ShapeableImageView>(R.id.detailCover)
         val infoLines = view.findViewById<LinearLayout>(R.id.detailInfoLines)
+        val recyclerAlbums = view.findViewById<RecyclerView>(R.id.recyclerDetailAlbums)
+        val albumsDivider = view.findViewById<View>(R.id.detailAlbumsDivider)
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerDetailSongs)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
         val miniPlayer = view.findViewById<View>(R.id.miniPlayer)
@@ -120,23 +122,44 @@ class DetailDialogFragment : DialogFragment() {
         }
 
         val adapter = DetailSongsAdapter(
+            // Se fija en onCreate (ver setTarget), antes de que este método se ejecute.
+            currentKind = viewModel.currentKind!!,
             onSongClick = { position ->
                 playerViewModel.playCollection(viewModel.songs, position, collectionKind = collectionKind())
             },
             onAddToQueue = { song -> playerViewModel.addToQueue(song) },
+            onAddToPlaylist = { song -> showAddToPlaylist(song) },
             onEditMetadata = { song ->
                 if (parentFragmentManager.findFragmentByTag(EDITOR_TAG) == null) {
                     MetadataEditorDialogFragment.newInstance(song.id)
                         .show(parentFragmentManager, EDITOR_TAG)
                 }
             },
-            onDeleteSong = { song -> showDeleteDialog(song) }
+            onDeleteSong = { song -> showDeleteDialog(song) },
+            onGoToAlbum = { song ->
+                song.albums.firstOrNull()?.let { showAlbum(this, it.id) }
+            },
+            onGoToArtist = { song ->
+                song.artists.firstOrNull()?.let { showPerson(this, PersonKind.ARTIST, it.id) }
+            },
+            onGoToProducer = { song ->
+                song.producers.firstOrNull()?.let { showPerson(this, PersonKind.PRODUCER, it.id) }
+            }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(viewModel.tracks.value.getOrNull(position)?.song?.title)
         }
+
+        // Carrusel de álbumes: solo sale en la ficha de un artista/productor (ver
+        // DetailViewModel.albums, que en un álbum va siempre vacío).
+        val albumsAdapter = DetailAlbumsAdapter(
+            onAlbumClick = { album -> showAlbum(this, album.id) }
+        )
+        recyclerAlbums.layoutManager =
+            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        recyclerAlbums.adapter = albumsAdapter
 
         toolbar.setNavigationOnClickListener { dismiss() }
         toolbar.inflateMenu(R.menu.menu_library_detail)
@@ -176,6 +199,14 @@ class DetailDialogFragment : DialogFragment() {
                     }
                 }
                 launch {
+                    combine(viewModel.albums, CoverArt.revision) { list, _ -> list }.collect { list ->
+                        albumsAdapter.submit(list)
+                        val visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+                        recyclerAlbums.visibility = visibility
+                        albumsDivider.visibility = visibility
+                    }
+                }
+                launch {
                     playerViewModel.accentColor.collect { accent ->
                         // Toda la ficha sigue el acento de LO QUE SUENA, el mismo que lleva el
                         // resto de la aplicación, no el de la carátula de esta ficha: así no
@@ -206,10 +237,16 @@ class DetailDialogFragment : DialogFragment() {
         // son tres o cuatro vistas, no compensa la complejidad de reutilizarlas.
         infoLines.removeAllViews()
         val inflater = LayoutInflater.from(requireContext())
-        for (line in header.lines) {
+        header.lines.forEachIndexed { index, line ->
             val row = inflater.inflate(R.layout.item_detail_info, infoLines, false)
             row.findViewById<ImageView>(R.id.infoIcon).setImageResource(line.icon)
             row.findViewById<TextView>(R.id.infoText).text = line.text
+            // Segunda forma de "ir al artista" además del menú de 3 puntos: tocar la línea de
+            // artista, que en la cabecera de un álbum siempre es la primera (ver
+            // DetailViewModel.toHeader).
+            if (index == 0 && viewModel.currentKind == DetailKind.ALBUM) {
+                row.setOnClickListener { goToAlbumArtist() }
+            }
             infoLines.addView(row)
         }
         // Si el acento ya se había calculado, hay que reteñir las líneas recién creadas.
@@ -259,6 +296,20 @@ class DetailDialogFragment : DialogFragment() {
         null -> null
     }
 
+    /** Igual que en la pestaña «Canciones»: ver `SongsFragment.showAddToPlaylist`. */
+    private fun showAddToPlaylist(song: Song) {
+        if (parentFragmentManager.findFragmentByTag(AddToPlaylistDialogFragment.TAG) != null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val filename = File(song.filePath).name
+            val repo = PlaylistRepository.get()
+            val names = repo.listPlaylistNames()
+            val contained = repo.playlistsContainingAll(listOf(filename))
+            val checked = BooleanArray(names.size) { names[it] in contained }
+            AddToPlaylistDialogFragment.newInstance(listOf(filename), names, checked)
+                .show(parentFragmentManager, AddToPlaylistDialogFragment.TAG)
+        }
+    }
+
     /** Confirmación antes de borrar de verdad el archivo del dispositivo. */
     private fun showDeleteDialog(song: Song) {
         val dialog = AlertDialog.Builder(requireContext())
@@ -279,6 +330,17 @@ class DetailDialogFragment : DialogFragment() {
     }
 
     /**
+     * "Ir al artista" desde una ficha de álbum: el álbum en sí no guarda un artista con id (solo
+     * el nombre ya resuelto para pintar, ver [DetailViewModel.toHeader]), así que se coge el primer
+     * artista de la primera canción que lo tenga. La usan tanto el menú de 3 puntos como el toque en
+     * la línea de artista de la cabecera (ver [bindHeader]).
+     */
+    private fun goToAlbumArtist() {
+        viewModel.songs.firstNotNullOfOrNull { it.artists.firstOrNull() }
+            ?.let { showPerson(this, PersonKind.ARTIST, it.id) }
+    }
+
+    /**
      * Menú de 3 puntos de la ficha de álbum. Se ancla al propio icono de la toolbar aprovechando que
      * AppCompat le da a cada acción visible ("showAsAction=always") una vista con el id de su
      * MenuItem, así el PopupMenu sale justo debajo del botón que se ha tocado.
@@ -287,6 +349,10 @@ class DetailDialogFragment : DialogFragment() {
         val anchor = toolbar.findViewById<View>(R.id.action_album_menu) ?: toolbar
         PopupMenu(requireContext(), anchor).apply {
             menuInflater.inflate(R.menu.menu_album_actions, menu)
+            // Solo tiene sentido si alguna canción del álbum trae un artista enlazado (ver el mismo
+            // filtro en SongsAdapter para el menú de una canción suelta).
+            menu.findItem(R.id.action_go_to_artist)?.isVisible =
+                viewModel.songs.any { it.artists.isNotEmpty() }
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_add_album_to_playlist -> { showAddAlbumToPlaylist(); true }
@@ -294,6 +360,7 @@ class DetailDialogFragment : DialogFragment() {
                         playerViewModel.addToQueue(viewModel.songs)
                         true
                     }
+                    R.id.action_go_to_artist -> { goToAlbumArtist(); true }
                     R.id.action_edit_album -> {
                         val albumId = viewModel.currentAlbumId ?: return@setOnMenuItemClickListener true
                         if (parentFragmentManager.findFragmentByTag(ALBUM_EDITOR_TAG) == null) {
@@ -311,10 +378,10 @@ class DetailDialogFragment : DialogFragment() {
     }
 
     /**
-     * "Añadir a playlist" para el álbum entero: mismo diálogo de casillas que para una canción
+     * "Añadir a lista" para el álbum entero: mismo diálogo de casillas que para una canción
      * suelta (ver [com.untar.ultimusic.ui.songs.SongsFragment.showAddToPlaylist]), pero con TODOS
      * los nombres de archivo del álbum, en el orden de sus números de pista. Una casilla sale
-     * marcada cuando esa playlist ya contiene el álbum COMPLETO.
+     * marcada cuando esa lista ya contiene el álbum COMPLETO.
      */
     private fun showAddAlbumToPlaylist() {
         if (parentFragmentManager.findFragmentByTag(AddToPlaylistDialogFragment.TAG) != null) return
@@ -367,10 +434,16 @@ class DetailDialogFragment : DialogFragment() {
             }.show(manager, TAG)
         }
 
-        fun showAlbum(from: Fragment, albumId: Long) = show(from.parentFragmentManager, DetailKind.ALBUM, albumId)
+        // childFragmentManager, no parentFragmentManager: cuando `from` es OTRA DetailDialogFragment
+        // (navegando de un artista a un álbum suyo, o de un álbum a uno de sus artistas), las dos
+        // fichas compartirían el mismo parentFragmentManager y por tanto el mismo TAG, y la guarda
+        // anti-duplicado de arriba impediría abrir la segunda (encontraría la primera ya puesta con
+        // ese tag). Con childFragmentManager cada ficha abre la siguiente en un manager propio, así
+        // que se pueden apilar sin límite y el botón atrás de cada una solo cierra la suya.
+        fun showAlbum(from: Fragment, albumId: Long) = show(from.childFragmentManager, DetailKind.ALBUM, albumId)
 
         fun showPerson(from: Fragment, kind: PersonKind, id: Long) = show(
-            from.parentFragmentManager,
+            from.childFragmentManager,
             when (kind) {
                 PersonKind.ARTIST -> DetailKind.ARTIST
                 PersonKind.PRODUCER -> DetailKind.PRODUCER
