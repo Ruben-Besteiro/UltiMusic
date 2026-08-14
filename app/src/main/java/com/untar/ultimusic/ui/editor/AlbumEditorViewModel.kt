@@ -119,7 +119,7 @@ class AlbumEditorViewModel(app: Application) : AndroidViewModel(app) {
                 CoverArt.touch()
                 // Ya reescritas: es la misma consulta de Room que rellena la ficha de detalle del
                 // álbum, así que ya ve el título/artistas/año/portada recién guardados.
-                val songs = repository.albumTracks(current.id).first().map { it.song }
+                val songs = repository.albumTracks(current.id).first()
                 _saved.value = AlbumSaveResult(current.id, imageName, songs)
                 _isSaving.value = false
             }

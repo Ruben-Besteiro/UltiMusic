@@ -56,7 +56,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
             },
             onDeleteSong = { song -> showDeleteDialog(song) },
             onGoToAlbum = { song ->
-                song.albums.firstOrNull()?.let { DetailDialogFragment.showAlbum(this, it.id) }
+                song.album?.let { DetailDialogFragment.showAlbum(this, it.id) }
             },
             onGoToArtist = { song ->
                 song.artists.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.ARTIST, it.id) }

@@ -137,7 +137,7 @@ class DetailDialogFragment : DialogFragment() {
             },
             onDeleteSong = { song -> showDeleteDialog(song) },
             onGoToAlbum = { song ->
-                song.albums.firstOrNull()?.let { showAlbum(this, it.id) }
+                song.album?.let { showAlbum(this, it.id) }
             },
             onGoToArtist = { song ->
                 song.artists.firstOrNull()?.let { showPerson(this, PersonKind.ARTIST, it.id) }
@@ -149,12 +149,15 @@ class DetailDialogFragment : DialogFragment() {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
         val scrollbar = recycler.attachScrollbarDrag { position ->
-            sectionLetter(viewModel.tracks.value.getOrNull(position)?.song?.title)
+            sectionLetter(viewModel.tracks.value.getOrNull(position)?.title)
         }
 
         // Carrusel de álbumes: solo sale en la ficha de un artista/productor (ver
         // DetailViewModel.albums, que en un álbum va siempre vacío).
         val albumsAdapter = DetailAlbumsAdapter(
+            // Solo en la de un productor: en la de un artista el artista de cada tarjeta siempre es
+            // el mismo (ver el comentario de DetailAlbumsAdapter).
+            showArtistLine = viewModel.currentKind == DetailKind.PRODUCER,
             onAlbumClick = { album -> showAlbum(this, album.id) }
         )
         recyclerAlbums.layoutManager =

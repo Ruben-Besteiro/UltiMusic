@@ -5,6 +5,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.annotation.StringRes
@@ -20,6 +21,8 @@ import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.bindPersonSubscribers
+import com.untar.ultimusic.util.bindSongSubtitle
 import com.untar.ultimusic.util.joinNonBlank
 
 /**
@@ -106,11 +109,16 @@ class SearchAdapter(
         }
     }
 
-    /** Fila de canción. Es la misma que la de la pestaña «Canciones», con su menú de tres puntos. */
+    /** Fila de canción, con su menú de tres puntos. Reutiliza el mismo layout y el mismo helper de
+     *  subtítulo que la pestaña «Canciones» (item_song.xml / bindSongSubtitle) para que se vea
+     *  exactamente igual aquí que allí, sin mantener una copia aparte que se pueda desincronizar. */
     class SongViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val cover: ShapeableImageView = itemView.findViewById(R.id.cover)
         private val title: TextView = itemView.findViewById(R.id.songTitle)
-        private val subtitle: TextView = itemView.findViewById(R.id.songSubtitle)
+        private val subtitleArtist: TextView = itemView.findViewById(R.id.songSubtitleArtist)
+        private val subtitleRest: TextView = itemView.findViewById(R.id.songSubtitleRest)
+        private val youtubeIcon: ImageView = itemView.findViewById(R.id.songYoutubeIcon)
+        private val youtubeViews: TextView = itemView.findViewById(R.id.songYoutubeViews)
         private val more: ImageButton = itemView.findViewById(R.id.btnSongMore)
 
         fun bind(
@@ -126,10 +134,7 @@ class SearchAdapter(
         ) {
             val context = itemView.context
             title.text = song.title
-
-            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-            val album = song.albums.joinToString(", ") { it.title }.ifBlank { MusicScanner.UNKNOWN_ALBUM }
-            subtitle.text = joinNonBlank(artist, album)
+            bindSongSubtitle(song, subtitleArtist, subtitleRest, youtubeIcon, youtubeViews)
 
             cover.load(CoverArt.cover(context, song), CoverLoader.get(context))
 
@@ -138,7 +143,7 @@ class SearchAdapter(
                 PopupMenu(anchor.context, anchor).apply {
                     menuInflater.inflate(R.menu.menu_song_item, menu)
                     // Solo tiene sentido "ir a" lo que la canción de verdad tenga.
-                    menu.findItem(R.id.action_go_to_album)?.isVisible = song.albums.isNotEmpty()
+                    menu.findItem(R.id.action_go_to_album)?.isVisible = song.album != null
                     menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
                     menu.findItem(R.id.action_go_to_producer)?.isVisible = song.producers.isNotEmpty()
                     setOnMenuItemClickListener { item ->
@@ -163,15 +168,16 @@ class SearchAdapter(
         private val cover: ShapeableImageView = itemView.findViewById(R.id.albumCover)
         private val title: TextView = itemView.findViewById(R.id.albumTitle)
         private val subtitle: TextView = itemView.findViewById(R.id.albumSubtitle)
+        private val songCount: TextView = itemView.findViewById(R.id.albumSongCount)
 
         fun bind(album: AlbumSummary, onAlbumClick: (AlbumSummary) -> Unit) {
             val context = itemView.context
             title.text = album.title
 
-            val songsText = context.resources.getQuantityString(
+            subtitle.text = joinNonBlank(album.artistName ?: MusicScanner.UNKNOWN_ARTIST, album.year?.toString())
+            songCount.text = context.resources.getQuantityString(
                 R.plurals.song_count, album.songCount, album.songCount
             )
-            subtitle.text = joinNonBlank(album.artistName ?: MusicScanner.UNKNOWN_ARTIST, songsText)
 
             cover.load(CoverArt.cover(context, album.cover), CoverLoader.get(context)) {
                 error(R.drawable.cover_placeholder)
@@ -186,6 +192,8 @@ class SearchAdapter(
         private val image: ShapeableImageView = itemView.findViewById(R.id.personImage)
         private val name: TextView = itemView.findViewById(R.id.personName)
         private val subtitle: TextView = itemView.findViewById(R.id.personSubtitle)
+        private val youtubeIcon: ImageView = itemView.findViewById(R.id.personYoutubeIcon)
+        private val youtubeSubscribers: TextView = itemView.findViewById(R.id.personYoutubeSubscribers)
 
         fun bind(
             kind: PersonKind,
@@ -202,6 +210,7 @@ class SearchAdapter(
                 R.plurals.song_count, person.songCount, person.songCount
             )
             subtitle.text = context.getString(R.string.song_subtitle_format, albumsText, songsText)
+            bindPersonSubscribers(person.popularity, youtubeIcon, youtubeSubscribers)
 
             image.load(CoverArt.cover(context, person.cover), CoverLoader.get(context)) {
                 error(R.drawable.cover_placeholder)

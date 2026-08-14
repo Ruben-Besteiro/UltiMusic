@@ -30,6 +30,53 @@
         android:layout_height="1dp"
         android:background="@color/um_divider" />
 
+    <!-- Barra de búsqueda manual: la automática (título+artista de la canción) se lanza sola al
+         abrir el diálogo, pero si no encuentra nada el usuario necesita poder corregir el texto
+         (ver LyricsSuggestionsDialogFragment y el mensaje de lyrics_suggestions_empty). Un único
+         campo en vez de título+artista separados porque busca con el parámetro "q" de lrclib.net
+         (ver LrcLibApi.search(query, ...)). -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp">
+
+        <EditText
+            android:id="@+id/lyricsSuggestionsSearchInput"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/bg_search_bar"
+            android:gravity="center_vertical"
+            android:hint="@string/lyrics_suggestions_search_hint"
+            android:imeOptions="actionSearch"
+            android:includeFontPadding="false"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingHorizontal="12dp"
+            android:textColor="@color/um_on_background"
+            android:textColorHint="@color/um_on_surface_muted" />
+
+        <ImageButton
+            android:id="@+id/lyricsSuggestionsSearchButton"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/action_search"
+            android:padding="8dp"
+            android:src="@drawable/ic_search"
+            android:tint="@color/um_on_surface_muted" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"

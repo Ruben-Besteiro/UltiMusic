@@ -104,7 +104,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private var updatingOffsetUi = false
 
     private lateinit var inputTitle: EditText
-    private lateinit var inputAlbums: MaterialAutoCompleteTextView
+    private lateinit var inputAlbum: MaterialAutoCompleteTextView
     private lateinit var inputArtists: MaterialAutoCompleteTextView
     private lateinit var inputProducers: MaterialAutoCompleteTextView
     private lateinit var inputYear: EditText
@@ -307,22 +307,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
                     viewModel.song.collect { song -> if (song != null) fillForm(song) }
                 }
                 launch {
-                    viewModel.trackAndDisc.collect { pair ->
-                        if (pair != null && inputTrackNumber.text.isEmpty()) {
-                            // No es un cambio del usuario: es el número de pista/disco que ya traía
-                            // el archivo, así que no debe ensuciar el formulario.
-                            isFillingForm = true
-                            inputTrackNumber.setText(pair.first?.toString().orEmpty())
-                            inputDiscNumber.setText(pair.second?.toString().orEmpty())
-                            isFillingForm = false
-                        }
-                    }
-                }
-                launch {
                     viewModel.artistNames.collect { names -> setSuggestions(inputArtists, names) }
                 }
                 launch {
-                    viewModel.albumTitles.collect { titles -> setSuggestions(inputAlbums, titles) }
+                    viewModel.albumTitles.collect { titles -> setSuggestions(inputAlbum, titles) }
                 }
                 launch {
                     viewModel.producerNames.collect { names -> setSuggestions(inputProducers, names) }
@@ -423,7 +411,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         btnPickCover = view.findViewById(R.id.btnPickCover)
         fabAutofill = view.findViewById(R.id.fabAutofill)
         inputTitle = view.findViewById(R.id.inputTitle)
-        inputAlbums = view.findViewById(R.id.inputAlbums)
+        inputAlbum = view.findViewById(R.id.inputAlbum)
         inputArtists = view.findViewById(R.id.inputArtists)
         inputProducers = view.findViewById(R.id.inputProducers)
         inputYear = view.findViewById(R.id.inputYear)
@@ -600,11 +588,13 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
         inputTitle.setText(song.title)
         // El segundo parámetro (`filter = false`) evita que rellenar el campo abra el desplegable.
-        inputAlbums.setText(song.albums.joinToString(SEPARATOR) { it.title }, false)
+        inputAlbum.setText(song.album?.title.orEmpty(), false)
         inputArtists.setText(song.artists.joinToString(SEPARATOR) { it.name }, false)
         inputProducers.setText(song.producers.joinToString(SEPARATOR) { it.name }, false)
         inputYear.setText(song.year?.toString().orEmpty())
         inputGenres.setText(song.genres.joinToString(SEPARATOR))
+        inputTrackNumber.setText(song.trackNumber?.toString().orEmpty())
+        inputDiscNumber.setText(song.discNumber?.toString().orEmpty())
         inputLyrics.setText(song.lyrics.orEmpty())
         inputLanguage.setText(song.language.orEmpty())
         inputComment.setText(song.comment.orEmpty())
@@ -719,7 +709,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         if (title.isNotEmpty()) inputTitle.setText(title)
 
         val album = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ALBUM).orEmpty()
-        if (album.isNotEmpty()) inputAlbums.setText(album, false)
+        if (album.isNotEmpty()) inputAlbum.setText(album, false)
 
         val artists = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
         replaceValues(inputArtists, artists)
@@ -797,7 +787,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         viewModel.save(
             EditorForm(
                 title = title,
-                albums = inputAlbums.splitValues(),
+                album = inputAlbum.textOrNull(),
                 artists = inputArtists.splitValues(),
                 producers = inputProducers.splitValues(),
                 year = inputYear.intOrNull(),

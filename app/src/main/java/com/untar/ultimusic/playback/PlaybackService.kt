@@ -639,13 +639,27 @@ class PlaybackService : MediaSessionService() {
         playCurrent()
     }
 
+    /**
+     * Si la canción que suena ahora mismo pertenece a [collection] (p. ej. el usuario ya la estaba
+     * escuchando y entra a mezclar ese mismo género o lista), solo se reordena la cola —igual que
+     * [reorderQueue]— para no cortar la reproducción en curso. Si no, es una mezcla normal: se
+     * arranca desde el principio de la colección ya barajada.
+     */
     fun shuffleCollection(
         collection: List<Song>,
         playlistName: String? = null,
         collectionKind: CollectionKind? = null
     ) {
         if (collection.isEmpty()) return
-        playCollection(collection.shuffled(), 0, playlistName, collectionKind)
+        val currentId = _currentSong.value?.id
+        if (currentId != null && collection.any { it.id == currentId }) {
+            _isLooseQueue.value = false
+            _currentPlaylistName.value = playlistName
+            _currentCollectionKind.value = collectionKind
+            reorderQueue(collection.shuffled())
+        } else {
+            playCollection(collection.shuffled(), 0, playlistName, collectionKind)
+        }
     }
 
     fun next() {
@@ -804,7 +818,7 @@ class PlaybackService : MediaSessionService() {
      */
     private fun buildMediaItem(song: Song, path: String): MediaItem {
         val artistName = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-        val albumName = song.albums.firstOrNull()?.title
+        val albumName = song.album?.title
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)
             .setArtist(artistName)

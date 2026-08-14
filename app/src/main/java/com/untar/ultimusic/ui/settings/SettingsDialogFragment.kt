@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
@@ -40,22 +41,29 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.remote.GeniusTokenStore
+import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
+import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.ui.BOOST_LIMIT_PERCENT
 import com.untar.ultimusic.ui.BOOST_MAX_PERCENT
 import com.untar.ultimusic.ui.BOOST_MIN_PERCENT
 import com.untar.ultimusic.ui.EqPreset
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.ValueRuler
+import com.untar.ultimusic.ui.editor.GeniusTokenDialogFragment
+import com.untar.ultimusic.ui.sort.YouTubeApiKeyDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
 import kotlinx.coroutines.launch
 
 /**
- * Pantalla de ajustes, la del engranaje de la barra superior. Está dividida en dos grupos, uno
- * detrás de otro: **ajustes auditivos** (el **amplificador de volumen** y el **ecualizador**) y
- * **ajustes visuales** (la **lista gris** de subcarpetas).
+ * Pantalla de ajustes, la del engranaje de la barra superior. Está dividida en tres grupos, uno
+ * detrás de otro: **ajustes auditivos** (el **amplificador de volumen** y el **ecualizador**),
+ * **ajustes visuales** (las **carpetas de la fonoteca** y la **lista gris** de subcarpetas) y
+ * **servicios externos** (el token de **Genius** y la clave de la **YouTube Data API**, ver el
+ * bloque de más abajo).
  *
  * Es un [DialogFragment] a pantalla completa, como el buscador o el editor de metadatos: se abre
  * encima de la principal sin cambiar de Activity, así que la música no se corta y el botón "atrás"
@@ -97,6 +105,18 @@ import kotlinx.coroutines.launch
  *   tocan poco, y cada uno lleva su propio botón "(?)" —el mismo icono que la ayuda de la
  *   actividad principal— que abre un diálogo explicando qué hace y por qué no basta con los
  *   sliders verticales.
+ *
+ * ### Servicios externos
+ *
+ * Genius y la YouTube Data API piden un token/clave que pone cada usuario (ver [GeniusTokenStore]
+ * y [YouTubeApiKeyStore]) mediante un diálogo de "Acción requerida" —[GeniusTokenDialogFragment],
+ * [YouTubeApiKeyDialogFragment]— que solo sale solo la primera vez que hace falta: al tocar la
+ * varita del editor de canción, o al elegir "Popularidad" en el diálogo de ordenar. Si ahí se le da
+ * a "Salir", esa entrada no vuelve a ofrecerse sola (`setupDeclined` queda fijo en disco a
+ * propósito, para no insistir). Esta sección es la única puerta para volver a abrir esos diálogos
+ * después de eso —haya token/clave ya puestos (para cambiarlos) o no (para configurarlos por fin)—,
+ * así que aquí se llaman directamente, sin pasar por `shouldOfferSetup`: eso es solo para las
+ * ofertas automáticas de los otros dos sitios, no para una acción que el usuario pide a propósito.
  */
 class SettingsDialogFragment : DialogFragment() {
 
@@ -110,6 +130,8 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var ruler: ValueRuler
     private lateinit var valueInput: EditText
     private lateinit var noLimitCheck: MaterialCheckBox
+    private lateinit var libraryRootsTitle: TextView
+    private lateinit var libraryRootAdapter: LibraryRootAdapter
     private lateinit var greylistTitle: TextView
     private lateinit var greylistAdapter: GreylistAdapter
 
@@ -136,6 +158,14 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var reverbUnsupported: View
     private lateinit var dynamicsSlider: Slider
     private lateinit var dynamicsUnsupported: View
+
+    private lateinit var servicesSectionTitle: TextView
+    private lateinit var geniusTitle: TextView
+    private lateinit var geniusStatus: TextView
+    private lateinit var btnConfigureGenius: TextView
+    private lateinit var youtubeTitle: TextView
+    private lateinit var youtubeStatus: TextView
+    private lateinit var btnConfigureYoutube: TextView
 
     /** Un slider por banda del ecualizador, en el mismo orden que [PlayerViewModel.eqBands]. */
     private var eqBandSliders: List<Slider> = emptyList()
@@ -191,6 +221,9 @@ class SettingsDialogFragment : DialogFragment() {
         ruler = view.findViewById(R.id.boostRuler)
         valueInput = view.findViewById(R.id.boostValue)
         noLimitCheck = view.findViewById(R.id.boostNoLimit)
+        libraryRootsTitle = view.findViewById(R.id.libraryRootsTitle)
+        val libraryRootsRecycler = view.findViewById<RecyclerView>(R.id.libraryRootsRecycler)
+        val addLibraryRootButton = view.findViewById<View>(R.id.btnAddLibraryRoot)
         greylistTitle = view.findViewById(R.id.greylistTitle)
         val greylistRecycler = view.findViewById<RecyclerView>(R.id.greylistRecycler)
         val addGreylistFolderButton = view.findViewById<View>(R.id.btnAddGreylistFolder)
@@ -215,6 +248,13 @@ class SettingsDialogFragment : DialogFragment() {
         reverbUnsupported = view.findViewById(R.id.reverbUnsupported)
         dynamicsSlider = view.findViewById(R.id.dynamicsSlider)
         dynamicsUnsupported = view.findViewById(R.id.dynamicsUnsupported)
+        servicesSectionTitle = view.findViewById(R.id.servicesSectionTitle)
+        geniusTitle = view.findViewById(R.id.geniusTitle)
+        geniusStatus = view.findViewById(R.id.geniusStatus)
+        btnConfigureGenius = view.findViewById(R.id.btnConfigureGenius)
+        youtubeTitle = view.findViewById(R.id.youtubeTitle)
+        youtubeStatus = view.findViewById(R.id.youtubeStatus)
+        btnConfigureYoutube = view.findViewById(R.id.btnConfigureYoutube)
 
         // La barra de estado es transparente en este tema, así que la toolbar se aparta ella sola
         // de la hora y la batería con un padding del tamaño de ese hueco.
@@ -234,9 +274,60 @@ class SettingsDialogFragment : DialogFragment() {
         ruler.maxValue = BOOST_MAX_PERCENT
 
         setupBoostControls()
+        setupLibraryRoots(libraryRootsRecycler, addLibraryRootButton)
         setupGreylist(greylistRecycler, addGreylistFolderButton)
         setupEqualizer(eqBandsContainer)
+        setupServices()
         observeState()
+    }
+
+    /**
+     * Monta la lista de carpetas raíz adicionales, el botón que abre el explorador (arrancando en el
+     * almacenamiento externo entero, no en `UltiMusic`: ver [FolderPickerDialogFragment.newInstance])
+     * y la papelera de cada fila. Usa una `requestKey` propia ([LIBRARY_ROOT_PICKER_REQUEST_KEY]) para
+     * no colisionar con la del mismo explorador reutilizado por [setupGreylist].
+     */
+    private fun setupLibraryRoots(recycler: RecyclerView, addFolderButton: View) {
+        libraryRootAdapter = LibraryRootAdapter(onDelete = { root -> showRemoveLibraryRootDialog(root) })
+        recycler.layoutManager = LinearLayoutManager(requireContext())
+        recycler.adapter = libraryRootAdapter
+
+        addFolderButton.setOnClickListener {
+            FolderPickerDialogFragment.newInstance(
+                initialDir = Environment.getExternalStorageDirectory(),
+                rootTitle = getString(R.string.folder_picker_storage_root_title),
+                requestKey = LIBRARY_ROOT_PICKER_REQUEST_KEY
+            ).show(childFragmentManager, FolderPickerDialogFragment.TAG)
+        }
+
+        childFragmentManager.setFragmentResultListener(
+            LIBRARY_ROOT_PICKER_REQUEST_KEY,
+            viewLifecycleOwner
+        ) { _, bundle ->
+            val path = bundle.getString(FolderPickerDialogFragment.RESULT_PATH) ?: return@setFragmentResultListener
+            when (settingsViewModel.tryAddLibraryRoot(path)) {
+                SettingsViewModel.AddLibraryRootResult.SUCCESS -> Unit
+                SettingsViewModel.AddLibraryRootResult.ALREADY_COVERED ->
+                    toast(R.string.settings_library_root_error_nested)
+            }
+        }
+    }
+
+    /**
+     * Confirmación antes de quitar una carpeta raíz: a diferencia de la lista gris, aquí sí hay
+     * riesgo real de perder datos (la próxima reconciliación borra de verdad las canciones exclusivas
+     * de esa carpeta si no reaparecen con el mismo nombre en otra vigilada, ver
+     * [com.untar.ultimusic.data.LibraryRepository.removeLibraryRoot]).
+     */
+    private fun showRemoveLibraryRootDialog(root: LibraryRoot) {
+        val name = root.path.substringAfterLast('/')
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.settings_library_root_delete_desc)
+            .setMessage(TextUtils.expandTemplate(resources.getText(R.string.settings_library_roots_remove_confirm), name))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeLibraryRoot(root.path) }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
     /**
@@ -274,6 +365,60 @@ class SettingsDialogFragment : DialogFragment() {
             .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeGreylistFolder(folder.path) }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
+    /**
+     * Cablea los botones de Genius y YouTube: cada uno abre su diálogo de "Acción requerida" de
+     * siempre —[GeniusTokenDialogFragment], [YouTubeApiKeyDialogFragment]— directamente, sin mirar
+     * `shouldOfferSetup` (eso es solo para la oferta automática de los otros sitios). Es la única
+     * forma de volver a entrar ahí si el usuario rechazó la configuración en su momento, ver la
+     * cabecera de la clase.
+     */
+    private fun setupServices() {
+        refreshServiceStatus()
+
+        btnConfigureGenius.setOnClickListener {
+            if (childFragmentManager.findFragmentByTag(GeniusTokenDialogFragment.TAG) == null) {
+                GeniusTokenDialogFragment.newInstance()
+                    .show(childFragmentManager, GeniusTokenDialogFragment.TAG)
+            }
+        }
+        btnConfigureYoutube.setOnClickListener {
+            if (childFragmentManager.findFragmentByTag(YouTubeApiKeyDialogFragment.TAG) == null) {
+                YouTubeApiKeyDialogFragment.newInstance()
+                    .show(childFragmentManager, YouTubeApiKeyDialogFragment.TAG)
+            }
+        }
+        // Ambos diálogos avisan de cómo han acabado tanto si se configura como si se rechaza (ver
+        // sus RESULT_KEY); aquí interesan los dos casos por igual, porque los dos pueden cambiar lo
+        // que hay que pintar (un token nuevo, o un rechazo que vuelve a dejarlo en "No configurado").
+        childFragmentManager.setFragmentResultListener(
+            GeniusTokenDialogFragment.RESULT_KEY, viewLifecycleOwner
+        ) { _, _ -> refreshServiceStatus() }
+        childFragmentManager.setFragmentResultListener(
+            YouTubeApiKeyDialogFragment.RESULT_KEY, viewLifecycleOwner
+        ) { _, _ -> refreshServiceStatus() }
+    }
+
+    /** Repinta el estado ("Configurado"/"No configurado") y el texto del botón de cada servicio.
+     *  Se llama al abrir la pantalla y después de cada vuelta de sus diálogos. */
+    private fun refreshServiceStatus() {
+        geniusStatus.setText(
+            if (GeniusTokenStore.hasUserToken) R.string.settings_service_status_configured
+            else R.string.settings_service_status_not_configured
+        )
+        btnConfigureGenius.setText(
+            if (GeniusTokenStore.hasUserToken) R.string.settings_genius_reconfigure
+            else R.string.settings_genius_configure
+        )
+        youtubeStatus.setText(
+            if (YouTubeApiKeyStore.hasUserKey) R.string.settings_service_status_configured
+            else R.string.settings_service_status_not_configured
+        )
+        btnConfigureYoutube.setText(
+            if (YouTubeApiKeyStore.hasUserKey) R.string.settings_youtube_reconfigure
+            else R.string.settings_youtube_configure
+        )
     }
 
     /**
@@ -630,6 +775,9 @@ class SettingsDialogFragment : DialogFragment() {
                     playerViewModel.volumeBoost.collect { percent -> showValue(percent) }
                 }
                 launch {
+                    settingsViewModel.libraryRoots.collect { roots -> libraryRootAdapter.submit(roots) }
+                }
+                launch {
                     settingsViewModel.greylistFolders.collect { folders -> greylistAdapter.submit(folders) }
                 }
                 launch {
@@ -712,10 +860,10 @@ class SettingsDialogFragment : DialogFragment() {
                     }
                 }
                 // Los mandos se tiñen con el color de la canción que suena, como las pestañas y el
-                // mini-reproductor (ver `MainActivity.setupDynamicColor`). Los tres títulos de
-                // sección y los interruptores (ecualizador, cada carpeta de la lista gris) llevaban
-                // el amarillo fijo del XML/tema aunque sonara una canción de otro color; ahora
-                // siguen el mismo acento que el resto.
+                // mini-reproductor (ver `MainActivity.setupDynamicColor`). Los títulos de sección y
+                // subsección y los interruptores (ecualizador, cada carpeta de la lista gris)
+                // llevaban el amarillo fijo del XML/tema aunque sonara una canción de otro color;
+                // ahora siguen el mismo acento que el resto.
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         val tint = ColorStateList.valueOf(accent)
@@ -727,6 +875,7 @@ class SettingsDialogFragment : DialogFragment() {
                         ruler.accentColor = accent
                         noLimitCheck.buttonTintList = tint
                         additionalOptionsCheck.buttonTintList = tint
+                        libraryRootsTitle.setTextColor(accent)
                         greylistTitle.setTextColor(accent)
                         greylistAdapter.setAccent(accent)
                         eqTitle.setTextColor(accent)
@@ -746,6 +895,9 @@ class SettingsDialogFragment : DialogFragment() {
                         virtualizerSlider.thumbTintList = tint
                         dynamicsSlider.trackActiveTintList = tint
                         dynamicsSlider.thumbTintList = tint
+                        servicesSectionTitle.setTextColor(accent)
+                        geniusTitle.setTextColor(accent)
+                        youtubeTitle.setTextColor(accent)
                     }
                 }
                 // Si se conectan auriculares con el límite quitado, el ViewModel lo repone solo; aquí
@@ -796,5 +948,9 @@ class SettingsDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "settings"
+
+        // Clave propia para no colisionar con FolderPickerDialogFragment.RESULT_KEY, que sigue
+        // usando setupGreylist para el mismo explorador reutilizado con otro punto de partida.
+        private const val LIBRARY_ROOT_PICKER_REQUEST_KEY = "library_root_picker_result"
     }
 }

@@ -14,6 +14,9 @@
     <string name="action_help">Ayuda</string>
     <string name="action_search">Buscar</string>
     <string name="action_more">Más opciones</string>
+    <!-- Botón de ordenar de la barra superior (antes "Más opciones", que no hacía nada): abre
+         SortDialogFragment para la pestaña actual del ViewPager. -->
+    <string name="action_sort">Ordenar</string>
 
     <!-- Buscador -->
     <string name="search_hint">Buscar</string>
@@ -159,6 +162,48 @@
          largo. Ver GeniusApiErrorDialogFragment. -->
     <string name="genius_error_title">Error con la API de Genius</string>
     <string name="genius_error_message">Se ha producido un error con tu API Client de Genius. Para continuar sacándole el máximo partido al rellenado automático de metadatos, debes crear otro. Disculpa las molestias.</string>
+
+    <!-- Diálogo de "Acción requerida" de la clave de la YouTube Data API, gemelo del de Genius de
+         arriba: sale al elegir "Popularidad" en el diálogo de ordenar sin tener clave guardada. Ver
+         YouTubeApiKeyDialogFragment. -->
+    <string name="youtube_setup_title">Acción requerida</string>
+    <string name="youtube_setup_intro">Ordenar por popularidad utiliza la YouTube Data API. Por causas ajenas a UltiMusic, para utilizar esta función debes seguir un proceso corto:</string>
+    <string name="youtube_setup_step1">1 - Abre este enlace y crea un proyecto (o elige uno que ya tengas):</string>
+    <string name="youtube_setup_step2">2 - En Biblioteca de APIs, busca YouTube Data API v3 y habilítala para ese proyecto (si no lo estaba ya). El paso 3 solo te dejará elegirla si la habilitas primero.</string>
+    <string name="youtube_setup_step3">3 - Vuelve al proyecto, dale a Crear credenciales y selecciona YouTube Data API v3 donde te lo pida.</string>
+    <string name="youtube_setup_step4">4 - Copia la clave que te dio el paso 3. Se comprobará automáticamente cuando le des a <b>Continuar</b>.</string>
+    <string name="youtube_setup_login_url">https://console.cloud.google.com/apis/credentials</string>
+    <string name="youtube_setup_exit">Salir</string>
+    <string name="youtube_setup_continue">Continuar</string>
+    <string name="youtube_setup_checking">Comprobando la clave…</string>
+    <string name="youtube_setup_ok">Clave guardada</string>
+    <string name="youtube_setup_invalid">Esa clave no vale. Comprueba que has copiado la Clave de API y que YouTube Data API v3 está habilitada en su proyecto</string>
+    <string name="youtube_setup_no_key">No hay ninguna clave copiada. Cópiala y vuelve a darle a Continuar</string>
+    <!-- Cierre del diálogo: deja claro que se puede decir que no, y que se pierde solo el orden por
+         popularidad, nada más de la aplicación. -->
+    <string name="youtube_setup_optional">Este proceso es opcional, pero si lo rechazas, no podrás ordenar canciones ni artistas por popularidad.</string>
+    <!-- Aviso al tocar "Popularidad" habiendo rechazado ya la configuración antes (SortDialogFragment):
+         no se vuelve a insistir con el diálogo, así que hay que decir dónde retomarlo si cambia de
+         idea. -->
+    <string name="youtube_setup_declined_hint">No podrás ordenar por popularidad sin la clave de la YouTube Data API. Puedes configurarla desde Ajustes &gt; Servicios externos</string>
+
+    <!-- Diálogo de ordenar (ver SortDialogFragment), abierto desde el botón del ojo de la barra
+         superior. %1$s es el nombre de la pestaña actual (tab_songs, tab_albums…). -->
+    <string name="sort_title">Ordenar %1$s</string>
+    <string name="sort_field_name">Nombre</string>
+    <string name="sort_field_song_count">Número de canciones</string>
+    <string name="sort_field_duration">Duración</string>
+    <string name="sort_field_year">Año</string>
+    <string name="sort_field_popularity">Popularidad</string>
+    <!-- Última línea de la ficha de un artista (DetailViewModel.toHeader), junto al icono de
+         YouTube: los suscriptores de su canal ya compactados (ver formatCompactCount). A
+         diferencia del subtítulo de la fila (item_person.xml), aquí SÍ lleva la palabra
+         "suscriptores" porque hay sitio de sobra para ella. %1$s es el número compactado. -->
+    <string name="youtube_subscribers_format">%1$s suscriptores</string>
+    <!-- Casilla que invierte el orden natural de cada criterio (ver SortField.naturalDirection):
+         desmarcada es Nombre A-Z, Número de canciones/Duración/Popularidad de más a menos y Año de
+         menos a más. -->
+    <string name="sort_invert_order">Invertir orden</string>
     <string name="suggestion_cover_desc">Portada de la sugerencia</string>
     <!-- Separador de las partes del subtítulo de una sugerencia ("Artista | Álbum | Año"), el
          mismo que ya usa song_subtitle_format en las listas de canciones/álbumes. -->
@@ -172,8 +217,9 @@
     <!-- Buscador de letras sincronizadas de lrclib.net (ver LyricsSuggestionsDialogFragment), abierto
          desde el icono de lupa del campo "Letra" del editor. -->
     <string name="lyrics_suggestions_title">Sugerencias de letra</string>
-    <string name="lyrics_suggestions_empty">No se han encontrado letras</string>
+    <string name="lyrics_suggestions_empty">No se han encontrado letras. Vuelve a introducir el título y el artista (esto último es opcional)</string>
     <string name="lyrics_suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
+    <string name="lyrics_suggestions_search_hint">Título y artista</string>
     <string name="lyrics_suggestions_badge_synced">Sincronizada</string>
     <!-- Marca de que el candidato dura lo mismo que el archivo del usuario: si no coincide, el
          audio viene de otra fuente y la letra sincronizada probablemente vaya desfasada. -->
@@ -186,7 +232,7 @@
     <string name="field_album_title">Título del álbum</string>
 
     <string name="field_title">Título</string>
-    <string name="field_albums">Álbum(es)</string>
+    <string name="field_albums">Álbum</string>
     <string name="field_artists">Artista(s)</string>
     <string name="field_producers">Productor(es)</string>
     <string name="field_year">Año</string>
@@ -299,18 +345,26 @@
     <string name="settings_boost_device_unknown">No se puede saber si el dispositivo conectado es un altavoz o unos auriculares, así que el límite se mantiene</string>
     <string name="settings_boost_bluetooth_denied">Sin ese permiso, UltiMusic no puede distinguir un altavoz Bluetooth de unos auriculares, así que mantiene el límite</string>
 
+    <!-- Carpetas de la fonoteca -->
+    <string name="settings_library_roots_title">Carpetas de la fonoteca</string>
+    <string name="settings_library_roots_subtitle">Por defecto, las carpetas son UltiMusic, Download y Music. Aquí puedes añadir más</string>
+    <string name="settings_library_roots_add">Añadir carpeta</string>
+    <string name="settings_library_root_delete_desc">Quitar carpeta de la fonoteca</string>
+    <string name="settings_library_roots_remove_confirm">¿Quitar <b>^1</b> de la fonoteca? Las canciones que solo estén ahí se borrarán de la biblioteca (ediciones y listas incluidas), salvo que también estén en otra carpeta incluida con el mismo nombre de archivo</string>
+    <string name="settings_library_root_error_nested">Esa carpeta ya forma parte de la fonoteca</string>
+
     <!-- Lista gris -->
     <string name="settings_greylist_title">Lista gris</string>
-    <string name="settings_greylist_subtitle">Las canciones van en la carpeta UltiMusic. Con esta opción podrás ocultar y desocultar subcarpetas</string>
+    <string name="settings_greylist_subtitle">Con esta opción podrás ocultar y desocultar carpetas</string>
     <string name="settings_greylist_add">Añadir subcarpeta</string>
     <string name="settings_greylist_switch_desc">Activar o desactivar esta subcarpeta</string>
     <string name="settings_greylist_delete_desc">Quitar de la lista gris</string>
-    <string name="settings_greylist_remove_confirm">¿Quitar <b>^1</b> de la lista gris? La carpeta no se borrará del dispositivo</string>
+    <string name="settings_greylist_remove_confirm">¿Quitar <b>^1</b> de la lista gris?</string>
     <string name="settings_greylist_empty">Todavía no has añadido ninguna subcarpeta</string>
 
     <!-- Ecualizador -->
     <string name="settings_eq_title">Ecualizador</string>
-    <string name="settings_eq_subtitle">Ajusta la respuesta en frecuencia y añade profundidad al sonido. Se aplica a todo lo que suene en UltiMusic</string>
+    <string name="settings_eq_subtitle">Permite potenciar o debilitar rangos de frecuencias (por ejemplo si tienes auriculares de mala calidad)</string>
     <string name="settings_eq_switch_desc">Activar o desactivar el ecualizador</string>
     <string name="settings_eq_reset">Restablecer</string>
     <string name="settings_eq_bass_boost">Refuerzo de graves</string>
@@ -349,8 +403,26 @@
     <string name="settings_eq_dynamics_help_body">A diferencia del amplificador de volumen, que sube el sonido una cantidad fija, este efecto reacciona en cada instante: sube lo que suena flojo y baja lo que suena fuerte, para que la diferencia entre ambos sea menor. Sirve para oír música a poco volumen sin perder las voces, o para nivelar canciones grabadas con masterizaciones muy distintas. Cuanto más alto el valor, más agresiva la compresión.</string>
     <string name="settings_eq_dynamics_unsupported">No soportado en este dispositivo</string>
 
+    <!-- ===== Grupo: servicios externos (Genius y YouTube Data API) ===== -->
+    <!-- Entrada de Ajustes desde la que reconfigurar el token de Genius o la clave de la YouTube Data
+         API tras haberlas rechazado: sin esto, decir que no en GeniusTokenDialogFragment o
+         YouTubeApiKeyDialogFragment era una puerta sin vuelta atrás (setupDeclined no se borra solo).
+         Los dos botones abren el mismo diálogo de siempre, esta vez sin pasar por shouldOfferSetup. -->
+    <string name="settings_services_section_title">Servicios externos</string>
+    <string name="settings_service_status_configured">Configurado</string>
+    <string name="settings_service_status_not_configured">No configurado</string>
+    <string name="settings_genius_title">Genius</string>
+    <string name="settings_genius_subtitle">Se usa al autorrellenar canciones: productores, canción original (si es un remix) y videoclip</string>
+    <string name="settings_genius_configure">Configurar token</string>
+    <string name="settings_genius_reconfigure">Cambiar token</string>
+    <string name="settings_youtube_title">YouTube Data API</string>
+    <string name="settings_youtube_subtitle">Se usa para ordenar canciones y artistas por popularidad</string>
+    <string name="settings_youtube_configure">Configurar clave</string>
+    <string name="settings_youtube_reconfigure">Cambiar clave</string>
+
     <!-- Selector de subcarpetas -->
     <string name="folder_picker_root_title">UltiMusic</string>
+    <string name="folder_picker_storage_root_title">Almacenamiento</string>
     <string name="folder_picker_back">Subir una carpeta</string>
     <string name="folder_picker_choose">Elegir esta carpeta</string>
     <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>

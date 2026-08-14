@@ -25,6 +25,23 @@ val geniusToken: String = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }.getProperty("genius.token").orEmpty()
 
+/**
+ * Clave de la YouTube Data API v3 (ver `data/remote/YouTubeStatsApi.kt`, las visitas del vídeo de
+ * una canción), sacada de `local.properties` por el mismo motivo que [geniusToken]: que no acabe en
+ * git.
+ *
+ * De momento es SOLO de desarrollo, igual que el respaldo de [geniusToken] en `GeniusTokenStore`
+ * (ver ese comentario): todavía no existe el diálogo para que cada usuario ponga la suya propia, así
+ * que esto es lo único que hay mientras tanto, y por eso en el bloque `debug` de abajo en vez de en
+ * `defaultConfig`. Para ponerla: crear una clave de API en https://console.cloud.google.com con la
+ * "YouTube Data API v3" habilitada, y añadir a `local.properties` la línea
+ * `youtube.api_key=LA_CLAVE`.
+ */
+val youtubeApiKey: String = Properties().apply {
+    val file = rootProject.file("local.properties")
+    if (file.exists()) file.inputStream().use { load(it) }
+}.getProperty("youtube.api_key").orEmpty()
+
 android {
     namespace = "com.untar.ultimusic"
     compileSdk {
@@ -44,6 +61,8 @@ android {
         // desarrollador no puede acabar dentro de un APK publicado: ver el comentario del bloque
         // `release` sobre por qué eso importa tanto.
         buildConfigField("String", "GENIUS_TOKEN", "\"\"")
+        // Mismo motivo que GENIUS_TOKEN de aquí arriba: vacío salvo en debug.
+        buildConfigField("String", "YOUTUBE_API_KEY", "\"\"")
     }
 
     // Desde AGP 8 la clase BuildConfig no se genera si no se pide expresamente; hace falta para
@@ -58,6 +77,7 @@ android {
             // desarrolla: así no hay que pasar por el diálogo de configuración en cada instalación
             // limpia mientras se prueba la aplicación.
             buildConfigField("String", "GENIUS_TOKEN", "\"$geniusToken\"")
+            buildConfigField("String", "YOUTUBE_API_KEY", "\"$youtubeApiKey\"")
         }
         release {
             // Y NUNCA aquí. Si el token viajara en el APK publicado, todo lo que hace

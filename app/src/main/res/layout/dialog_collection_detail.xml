@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Ficha de una lista o un género (ver CollectionDetailDialogFragment). Misma idea que
+  dialog_library_detail.xml (cabecera teñida con el acento de lo que suena + mini-reproductor
+  propio abajo), pero sin carátula grande: ni una lista ni un género tienen imagen propia, así que
+  la cabecera es solo la barra superior más una línea con el resumen (nº de canciones + duración).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/collectionRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/collectionHeader"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_surface"
+        android:orientation="vertical">
+
+        <com.google.android.material.appbar.MaterialToolbar
+            android:id="@+id/collectionToolbar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="@android:color/transparent"
+            android:minHeight="?attr/actionBarSize"
+            app:navigationIcon="@drawable/ic_arrow_back"
+            app:titleTextColor="@color/um_on_background"
+            tools:title="Rock" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="16dp"
+            android:paddingTop="4dp">
+
+            <ImageView
+                android:id="@+id/collectionSummaryIcon"
+                android:layout_width="20dp"
+                android:layout_height="20dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_timer" />
+
+            <TextView
+                android:id="@+id/collectionSummaryText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:textSize="15sp"
+                tools:text="119 canciones | 7:38:27" />
+
+        </LinearLayout>
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/recyclerCollectionSongs"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:scrollbars="none"
+            tools:listitem="@layout/item_collection_song" />
+
+        <TextView
+            android:id="@+id/emptyView"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:gravity="center"
+            android:text="@string/no_songs_here"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+    <!--
+      Igual que dialog_library_detail.xml: mini-reproductor propio para poder pausar, reanudar o
+      abrir el iPod sin salir de esta ficha (ver MiniPlayerController).
+    -->
+    <SeekBar
+        android:id="@+id/songProgress"
+        android:layout_width="match_parent"
+        android:layout_height="10dp"
+        android:paddingStart="0dp"
+        android:paddingEnd="0dp"
+        android:max="1000"
+        android:progress="0"
+        android:progressDrawable="@drawable/seekbar_line_square"
+        android:progressBackgroundTint="@color/um_divider"
+        android:progressTint="@color/um_yellow"
+        android:thumb="@null"
+        android:splitTrack="false"
+        android:background="@null"
+        android:foreground="@android:color/transparent" />
+
+    <include
+        android:id="@+id/miniPlayer"
+        layout="@layout/view_mini_player" />
+
+</LinearLayout>

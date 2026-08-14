@@ -1,11 +1,15 @@
 package com.untar.ultimusic.model
 
+import com.untar.ultimusic.util.SortableLibraryItem
+
 data class Song(
     val id: Long = 0,
     val filePath: String,
     val title: String,
     val artists: List<Artist>,
-    val albums: List<Album>,
+    /** Álbum al que pertenece, o null si no está catalogada en ninguno. A diferencia de artistas y
+     * productores, una canción pertenece como mucho a UN álbum (ver [com.untar.ultimusic.data.db.entities.SongEntity.albumId]). */
+    val album: Album?,
     val producers: List<Producer>,
     val duration: Long,
     val year: Int?,
@@ -34,8 +38,24 @@ data class Song(
      * desplazar. */
     val lyricsOffsetMs: Long,
 
+    /** Posición dentro de [album] (número de pista y de disco). Null si no pertenece a ningún
+     * álbum o si el álbum no la trae. */
+    val trackNumber: Int?,
+    val discNumber: Int?,
+
     val ogTitle: String?,
     val ogArtist: String?,
     val ogAlbum: String?,
-    val ogYear: Int?
-)
+    val ogYear: Int?,
+
+    /** Visitas del vídeo de [videoUrl] en YouTube, o null si no tiene vídeo o todavía no se han
+     * pedido. Ver [com.untar.ultimusic.data.db.entities.SongEntity.youtubeViewCount] sobre de dónde
+     * sale y cada cuánto se refresca. */
+    val youtubeViewCount: Long?
+) : SortableLibraryItem {
+    override val sortName: String get() = title
+    override val sortDuration: Long get() = duration
+    override val sortYear: Int? get() = year
+    override val sortPopularity: Long? get() = youtubeViewCount
+    override val sortSongCount: Int get() = 0
+}

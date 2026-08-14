@@ -1,7 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 
+<!--
+  Fila de canción de la pestaña «Canciones» y de la ficha de una lista o un género (ver
+  item_collection_song.xml, que es esta misma fila con un manejador de arrastre delante). Subtítulo
+  de dos líneas: el artista solo (puede ser una lista larga si hay varios) y, debajo, el resto
+  -álbum y, si la canción tiene vídeo asignado, sus visitas de YouTube al final (ver SongsAdapter).
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/songRow"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -36,19 +43,56 @@
             android:textColor="@color/um_on_background"
             android:textSize="16sp"
             android:textStyle="italic"
-            tools:text="AAAAAAAAAAAAAAAA"
-            xmlns:tools="http://schemas.android.com/tools" />
+            tools:text="AAAAAAAAAAAAAAAA" />
 
         <TextView
-            android:id="@+id/songSubtitle"
+            android:id="@+id/songSubtitleArtist"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:textColor="@color/um_on_surface_muted"
-            android:textSize="14sp"
-            tools:text="Artista A | Álbum A"
-            xmlns:tools="http://schemas.android.com/tools" />
+            android:textSize="12sp"
+            tools:text="Artista A" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/songSubtitleRest"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="12sp"
+                tools:text="Álbum A" />
+
+            <ImageView
+                android:id="@+id/songYoutubeIcon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="6dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_youtube"
+                android:tint="@color/um_on_surface_muted"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/songYoutubeViews"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="123K"
+                tools:visibility="visible" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

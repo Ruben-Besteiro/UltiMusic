@@ -2,7 +2,9 @@
 <!--
   Elemento del carrusel horizontal de álbumes en la ficha de un artista/productor
   (dialog_library_detail.xml): versión pequeña de item_album_card.xml (rejilla de la pestaña de
-  Álbumes), con el año en el subtítulo en vez del artista, que aquí siempre es el mismo.
+  Álbumes), con el año en el subtítulo en vez del artista. En la ficha de un ARTISTA la línea de
+  artista se oculta (aquí siempre es el mismo, no aporta nada repetirlo); en la de un PRODUCTOR sí
+  se ve, porque cada álbum puede ser de uno distinto (ver DetailAlbumsAdapter.showArtistLine).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -41,11 +43,19 @@
         tools:text="AiAiA - Single" />
 
     <TextView
-        android:id="@+id/albumSubtitle"
+        android:id="@+id/albumSubtitleArtist"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="11sp"
+        android:visibility="gone"
+        tools:text="Artista A"
+        tools:visibility="visible" />
+
+    <TextView
+        android:id="@+id/albumSubtitleYear"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:textColor="@color/um_on_surface_muted"
         android:textSize="11sp"
         tools:text="2026" />

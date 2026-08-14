@@ -293,9 +293,9 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
         )
 
         // Las etiquetas son las mismas que ya rotulan cada campo en los editores (ver el bloque
-        // field_* de strings.xml): álbum es "Álbum(es)" porque es EL MISMO campo multivalor que
-        // inputAlbums, no un campo nuevo con nombre propio. El título es distinto según el tipo de
-        // ficha, porque así lo es también en cada editor (canción vs. álbum).
+        // field_* de strings.xml): álbum es "Álbum" porque es EL MISMO campo que inputAlbum, no un
+        // campo nuevo con nombre propio. El título es distinto según el tipo de ficha, porque así lo
+        // es también en cada editor (canción vs. álbum).
         //
         // Pista, disco, productores, vídeo y og* no existen en el editor de ÁLBUM (ver el javadoc de
         // AlbumEditorDialogFragment.applySuggestion), así que no se ofrecen ahí; en la práctica ya

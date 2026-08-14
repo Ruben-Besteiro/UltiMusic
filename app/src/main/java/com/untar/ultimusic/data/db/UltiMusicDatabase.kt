@@ -6,12 +6,13 @@ import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.untar.ultimusic.data.db.entities.AlbumArtistCrossRef
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
+import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
-import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
@@ -29,12 +30,24 @@ import java.io.File
         AlbumEntity::class,
         ProducerEntity::class,
         SongArtistCrossRef::class,
-        SongAlbumCrossRef::class,
         AlbumArtistCrossRef::class,
         SongProducerCrossRef::class,
-        GreylistFolderEntity::class
+        GreylistFolderEntity::class,
+        LibraryRootEntity::class
     ],
-    version = 12,
+    // v15: añade SongEntity.youtubeChannelId (canal del vídeo de cada canción) y
+    // ArtistEntity.youtubeChannelId/youtubeChannelSubscriberCount (popularidad del artista, ver
+    // ArtistEntity). A diferencia de casi todos los saltos de versión anteriores, esta SÍ tiene
+    // migración escrita a mano (MIGRATION_14_15, ver Migrations.kt): son solo columnas nuevas, y
+    // destruir la biblioteca entera por dos ALTER TABLE sería un coste innecesario para el usuario.
+    // v16: añade la tabla `library_roots` (carpetas raíz adicionales de la fonoteca, ver
+    // LibraryRootEntity), con migración escrita a mano (MIGRATION_15_16) por el mismo motivo. Se
+    // siembra con Download/Music de fábrica (ver seedDefaultLibraryRoots en Migrations.kt).
+    // v17: renombra ArtistEntity.youtubeChannelViewCount a youtubeChannelSubscriberCount (en
+    // realidad guarda suscriptores, no visitas; ver MIGRATION_16_17 en Migrations.kt), con migración
+    // escrita a mano por el mismo motivo que las dos anteriores: es una fonoteca ya poblada la que
+    // se perdería si se dejara recrear a lo bruto.
+    version = 17,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -57,8 +70,24 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         UltiMusicDatabase::class.java,
                         DB_NAME
                     )
-                        // Durante el desarrollo aún no hay migraciones; si el esquema cambia, se recrea.
+                        // MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16 y MIGRATION_16_17
+                        // conservan la biblioteca (ver Migrations.kt sobre por qué cada una se
+                        // escribió a mano). El resto de saltos de versión anteriores nunca tuvieron
+                        // migración, así que para esos (y para cualquier salto futuro sin migración)
+                        // sigue habiendo fallbackToDestructiveMigration: el esquema se recrea vacío
+                        // en vez de fallar al abrir la base de datos.
+                        .addMigrations(MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
                         .fallbackToDestructiveMigration(dropAllTables = true)
+                        // Instalación nueva: la tabla `library_roots` se crea ya en v16 (con el
+                        // esquema completo de golpe) y `onCreate` es el único momento en el que se
+                        // sabe que es de verdad nueva, sin pasar nunca por MIGRATION_15_16 -que es
+                        // quien siembra Download/Music en quien SÍ actualiza desde v15-.
+                        .addCallback(object : RoomDatabase.Callback() {
+                            override fun onCreate(db: SupportSQLiteDatabase) {
+                                super.onCreate(db)
+                                seedDefaultLibraryRoots(db)
+                            }
+                        })
                         .build()
                 }.also { instance = it }
             }

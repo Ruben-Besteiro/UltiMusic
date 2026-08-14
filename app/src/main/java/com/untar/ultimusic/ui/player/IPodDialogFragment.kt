@@ -55,7 +55,6 @@ import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
-import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
@@ -65,9 +64,7 @@ import com.untar.ultimusic.util.LyricLine
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.YouTubeUrl
 import com.untar.ultimusic.util.joinNonBlank
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -83,35 +80,18 @@ import java.io.File
  * continuo aunque se suelte a medio arrastrar. Comparte el [PlayerViewModel] de la actividad, así
  * que refleja siempre la misma reproducción que el mini-reproductor.
  *
- * Tiene DOS modos:
- *  - **Normal** (sin argumentos): expandido desde el mini-reproductor, muestra lo que suena y su
- *    cola. Todo se lee de [PlayerViewModel].
- *  - **Navegación** ([newInstance] con una lista, o [newInstanceForGenre] con un género): abre
- *    mostrando el contenido de esa colección para ELEGIR qué sonará después, con scroll+tap, con
- *    las flechas + play, o al azar con el botón de las 3 rayas (que aquí es un icono de aleatorio).
- *    El recuadro de info, la carátula, el play/pausa, el progreso y el acento de color siguen
- *    reflejando SIEMPRE lo que suena de verdad en la app (venga de esta colección, de otra o de una
- *    canción suelta): solo la lista central cambia a la de esta colección para poder elegir. Al
- *    elegir una fila o pulsar play, interrumpe lo que sonara y empieza esa colección (vía
- *    [PlayerViewModel.playCollection] / [PlayerViewModel.shuffleCollection]), y la ventana pasa a
- *    comportarse como el modo normal. Si al abrir la ventana esa misma colección ya era la que
- *    sonaba, se entra directamente en modo normal (ver [PlayerViewModel.currentPlaylistName]).
- *    Solo una lista se puede además reordenar arrastrando cada fila, con el nuevo orden guardado
- *    en su archivo; un género no tiene orden propio que guardar (ver [enterBrowseMode]).
+ * Siempre muestra lo que suena de verdad y su cola, todo leído de [PlayerViewModel]: no tiene un
+ * modo de navegación propio para elegir qué sonará. Ese papel lo hace, antes de llegar aquí, la
+ * ficha de una lista o un género (ver
+ * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]), que ya deja sonando la
+ * colección elegida; esta ventana se limita a reflejarlo.
  *
- * Aparte de esos dos modos, la pantalla tiene un **modo vídeo** que se activa con el botón de la
- * derecha de la cabecera (ver [videoMode]).
+ * Aparte de eso, la pantalla tiene un **modo vídeo** que se activa con el botón de la derecha de la
+ * cabecera (ver [videoMode]).
  */
 class IPodDialogFragment : DialogFragment() {
 
     private val playerViewModel: PlayerViewModel by activityViewModels()
-    private val playlistsViewModel: PlaylistsViewModel by activityViewModels()
-
-    /** Nombre de la lista si estamos en modo navegación de lista; null en cualquier otro caso. */
-    private val playlistName: String? get() = arguments?.getString(ARG_PLAYLIST)
-
-    /** Nombre del género si estamos en modo navegación de género; null en cualquier otro caso. */
-    private val genreName: String? get() = arguments?.getString(ARG_GENRE)
 
     /**
      * True si esta instancia se abrió arrastrando el mini-reproductor (ver [forDrag]). En ese caso
@@ -124,49 +104,9 @@ class IPodDialogFragment : DialogFragment() {
     /** Evita disparar [animateClose] dos veces (p.ej. arrastre + botón atrás casi a la vez). */
     private var closing = false
 
-    /**
-     * True mientras se está eligiendo canción de una lista (modo navegación) sin haber pulsado
-     * aún play/fila/aleatorio. Solo afecta al colector de la cola real: se salta mientras [browsing]
-     * es true porque la lista central la ocupa la lista, no la cola real. El resto de colectores
-     * (título, carátula, play/pausa, progreso, acento) NO se gobiernan por esta variable: siempre
-     * reflejan lo que suena de verdad. Pasa a false en cuanto el usuario elige una canción.
-     */
-    private var browsing = false
-
-    /**
-     * Tipo de colección que se está navegando mientras [browsing] es true (lista o género). Lo
-     * usa [queueEndText] para saber de qué colección hablar en el aviso de la caja de info: mientras
-     * se navega, ese aviso debe ser sobre la lista/género que se está viendo, no sobre la cola
-     * real que suena de fondo (que puede ser suelta, de otra colección, o no existir aún si la app
-     * acaba de arrancar en frío).
-     */
-    private var browsingKind: CollectionKind? = null
-
-    /**
-     * Cuántas canciones tiene la colección que se está navegando, o -1 mientras [loadSongs] (ver
-     * [enterBrowseMode]) todavía no ha devuelto nada. Lo usa [queueEndText] para distinguir "la
-     * lista está vacía" de "se ha acabado la lista": -1 se trata como "no vacía todavía" para
-     * no mostrar el aviso de vacía en el instante en que se abre, antes de saber cuántas tiene de
-     * verdad.
-     */
-    private var browsingSongCount = -1
-
-    /** Cursor de la fila seleccionada con las flechas (la que reproduciría el botón de play). */
-    private var selectedIndex = 0
-
-    /** Ayudante de arrastre para reordenar la fila que toque: la cola real en modo normal
-     * ([queueAdapter]) o la lista de la lista en modo navegación ([enterBrowseMode]). Solo hace
-     * falta uno porque nunca están enganchados los dos a la vez (comparten el mismo [RecyclerView],
-     * y solo uno de los dos adaptadores es el activo en cada momento); ver
-     * [attachReorderTouchHelper]. */
+    /** Ayudante de arrastre para reordenar la fila que se suelte de la cola real (ver
+     * [attachReorderTouchHelper]). */
     private var itemTouchHelper: ItemTouchHelper? = null
-
-    /**
-     * Corrutina que, en modo navegación, mantiene la fila "altavoz" y el botón de menú al día con
-     * la reproducción real. Se cancela al salir de la navegación (ver [startPlaybackFromBrowse]),
-     * porque a partir de ahí ese trabajo ya lo hacen los controles del modo normal.
-     */
-    private var browseJob: Job? = null
 
     // ===================================================================================
     // Modo vídeo.
@@ -379,8 +319,8 @@ class IPodDialogFragment : DialogFragment() {
 
         val loader = CoverLoader.get(requireContext())
 
-        // Adaptador de la cola en reproducción (modo normal). Se puede reordenar arrastrando, igual
-        // que una lista en modo navegación (ver [attachReorderTouchHelper]).
+        // Adaptador de la cola en reproducción. Se puede reordenar arrastrando (ver
+        // [attachReorderTouchHelper]).
         val queueAdapter = IPodQueueAdapter(
             onItemClick = { position -> playerViewModel.jumpTo(position) },
             onStartDrag = { holder -> itemTouchHelper?.startDrag(holder) },
@@ -908,7 +848,6 @@ class IPodDialogFragment : DialogFragment() {
                         playerViewModel.coverRevision
                     ) { q, i, _ -> q to i }
                         .collect { (queue, index) ->
-                            if (browsing) return@collect
                             queueAdapter.submit(queue, index)
                             // El resumen de la caja de info ("Quedan N canciones" + duración) cuenta
                             // lo que hay en la cola, así que hay que rehacerlo también cuando cambia
@@ -927,248 +866,15 @@ class IPodDialogFragment : DialogFragment() {
             }
         }
 
-        // Si nos han abierto para una lista o un género que NO es ya lo que está sonando,
-        // arrancamos en modo navegación. Si esa misma colección ya es la cola actual (el usuario
-        // reabre el iPod sobre ella), nos quedamos en modo normal para reflejar lo que suena de
-        // verdad.
-        val playlist = playlistName
-        val genre = genreName
-        if (playlist != null && playerViewModel.currentPlaylistName.value != playlist) {
-            enterBrowseMode(
-                collectionKey = playlist,
-                reorderable = true,
-                loadSongs = {
-                    val index = playlistsViewModel.songIndex()
-                    PlaylistRepository.get().resolveSongs(playlist, index)
-                },
-                onReordered = { newList ->
-                    playlistsViewModel.reorder(playlist, newList.map { File(it.filePath).name })
-                },
-                cover = cover, queueList = queueList, layoutManager = queueLayoutManager,
-                btnMenu = btnMenu, btnPrev = btnPrev, btnNext = btnNext, btnPlayPause = btnPlayPause,
-                queueAdapter = queueAdapter, setupNormalControls = setupNormalControls,
-                tvTitle = tvTitle, tvMeta = tvMeta
-            )
-        } else if (genre != null && playerViewModel.currentPlaylistName.value != genreCollectionKey(genre)) {
-            enterBrowseMode(
-                collectionKey = genreCollectionKey(genre),
-                reorderable = false,
-                loadSongs = { LibraryRepository.get(requireContext()).songsOfGenre(genre).first() },
-                onReordered = null,
-                cover = cover, queueList = queueList, layoutManager = queueLayoutManager,
-                btnMenu = btnMenu, btnPrev = btnPrev, btnNext = btnNext, btnPlayPause = btnPlayPause,
-                queueAdapter = queueAdapter, setupNormalControls = setupNormalControls,
-                tvTitle = tvTitle, tvMeta = tvMeta
-            )
-        }
-    }
-
-    /**
-     * Configura la ventana como navegador de una colección: lista en pantalla, arrastrable solo si
-     * [reorderable] (solo una lista tiene un orden propio que guardar; un género no). [collectionKey]
-     * es el identificador que se guarda en [PlayerViewModel.currentPlaylistName] al empezar a sonar
-     * (para que reabrir esta MISMA colección entre directamente en modo normal); [loadSongs] resuelve
-     * sus canciones (de la lista en disco, o de la biblioteca filtrada por género) y [onReordered],
-     * solo presente cuando [reorderable], persiste el nuevo orden tras arrastrar una fila.
-     *
-     * El botón de las 3 rayas, las flechas y el play se comportan de una forma u otra según si la
-     * canción que suena de verdad está en esta colección (ver [PlaylistQueueAdapter.containsNowPlaying]
-     * y la función local `refreshBrowseControls`): si no está, es selección pura (aleatorio +
-     * flechas moviendo un cursor sin reproducir); si está, ya no tiene sentido "elegir": 3 rayas
-     * alterna carátula/lista como en modo normal, y las flechas van a la canción anterior/siguiente
-     * **de esta colección** (no a la de la cola real genérica, que puede ser una colección distinta).
-     */
-    private fun enterBrowseMode(
-        collectionKey: String,
-        reorderable: Boolean,
-        loadSongs: suspend () -> List<Song>,
-        onReordered: ((List<Song>) -> Unit)?,
-        cover: ShapeableImageView,
-        queueList: RecyclerView,
-        layoutManager: LinearLayoutManager,
-        btnMenu: ImageButton,
-        btnPrev: ImageButton,
-        btnNext: ImageButton,
-        btnPlayPause: ImageButton,
-        queueAdapter: IPodQueueAdapter,
-        setupNormalControls: () -> Unit,
-        tvTitle: TextView,
-        tvMeta: TextView
-    ) {
-        browsing = true
-        selectedIndex = 0
-        browsingSongCount = -1
-
-        // Lista y género son las dos únicas colecciones que pasan por aquí (ver [CollectionKind]);
-        // álbum/artista/productor se reproducen directamente desde su ficha, sin pasar por modo
-        // navegación (ver [DetailDialogFragment]).
-        val kind = if (reorderable) CollectionKind.LISTA else CollectionKind.GENRE
-        browsingKind = kind
-
-        // Muestra la lista (para hacer scroll y pinchar) por encima de la carátula, que se sigue
-        // viendo de fondo, atenuada (ver el velo semitransparente de queueList en el XML). El resto
-        // de la info (título, carátula, play/pausa, progreso, acento) NO se toca aquí: los colectores
-        // de más arriba siguen activos y pintan lo que suena de verdad, aunque estemos navegando.
-        queueList.isVisible = true
-        updateInfoBox(queueList, tvTitle, tvMeta)
-
-        lateinit var playlistAdapter: PlaylistQueueAdapter
-        playlistAdapter = PlaylistQueueAdapter(
-            onItemClick = { pos ->
-                // Si esa fila es justo la que suena de verdad, no tiene sentido "reproducirla de
-                // nuevo" (la reiniciaría desde 0:00): solo alternamos pausa/reproducción real.
-                if (playlistAdapter.isRowNowPlaying(pos)) {
-                    playerViewModel.togglePlayPause()
-                } else {
-                    startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
-                        playerViewModel.playCollection(it.currentSongs(), pos, collectionKey, kind)
-                    }
-                }
-            },
-            onStartDrag = { holder -> itemTouchHelper?.startDrag(holder) },
-            // Al soltar tras arrastrar, persistimos el nuevo orden (solo llega a dispararse cuando
-            // reorderable, que es cuando se engancha el ItemTouchHelper de abajo).
-            onReordered = { newList -> onReordered?.invoke(newList) },
-            reorderable = reorderable
-        )
-        playlistAdapter.setAccent(playerViewModel.accentColor.value)
-        queueList.adapter = playlistAdapter
-
-        // Arrastre solo vertical, iniciado desde el manejador (no por pulsación larga). Un género no
-        // tiene orden propio que guardar, así que ni siquiera se engancha el ItemTouchHelper (y su
-        // manejador ya viene oculto, ver [PlaylistQueueAdapter]); en ese caso solo desenganchamos el
-        // de la cola real que hubiera quedado de antes (ver [attachReorderTouchHelper]).
-        if (reorderable) {
-            attachReorderTouchHelper(
-                queueList,
-                onMove = { from, to -> playlistAdapter.moveItem(from, to) },
-                onDropped = { playlistAdapter.commitReorder() }
-            )
-        } else {
-            itemTouchHelper?.attachToRecyclerView(null)
-            itemTouchHelper = null
-        }
-
-        // Función local que resalta la fila del cursor y la centra. El recuadro de info y la
-        // carátula no se tocan aquí: siguen reflejando lo que suena de verdad (ver colectores).
-        fun renderSelected() {
-            playlistAdapter.setSelected(selectedIndex)
-            queueList.post {
-                layoutManager.scrollToPositionWithOffset(selectedIndex, queueList.height / 2)
-            }
-        }
-
-        // El botón de las 3 rayas y las flechas dependen de si la canción que suena de verdad está
-        // en esta lista: si NO está, seguimos en selección pura (aleatorio + cursor sin
-        // reproducir). Si SÍ está, no tiene sentido "elegir" nada —ya se está mostrando lo que
-        // realmente suena—, así que 3 rayas alterna carátula/lista como en modo normal, y las
-        // flechas van a la canción anterior/siguiente **de esta lista** (no de la cola real, que
-        // puede ser otra cosa distinta: por ejemplo, si sonaba una canción suelta desde Canciones, su
-        // "siguiente" real es cualquier canción al azar de la biblioteca, no la de esta lista). El
-        // cursor pasa a seguir siempre a la fila que suena, para que el play (más abajo) la alterne
-        // en vez de reiniciarla.
-        fun refreshBrowseControls() {
-            if (playlistAdapter.containsNowPlaying()) {
-                selectedIndex = playlistAdapter.nowPlayingIndex()
-                renderSelected()
-                // Igual que en modo normal (ver setupNormalControls): se comporta igual en modo
-                // vídeo, mostrando/ocultando la misma cola por encima del videoclip.
-                btnMenu.setImageResource(R.drawable.ic_menu)
-                btnMenu.setOnClickListener {
-                    queueList.isVisible = !queueList.isVisible
-                    updateInfoBox(queueList, tvTitle, tvMeta)
-                }
-                // Ir a la anterior/siguiente canción de ESTA lista equivale a pinchar la fila de
-                // al lado: interrumpe lo que sonaba e inicia la lista desde ahí (sale de
-                // navegación), igual que startPlaybackFromBrowse hace con cualquier otra fila.
-                btnPrev.setOnClickListener {
-                    val idx = playlistAdapter.nowPlayingIndex()
-                    if (idx > 0) {
-                        startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
-                            playerViewModel.playCollection(it.currentSongs(), idx - 1, collectionKey, kind)
-                        }
-                    }
-                }
-                btnNext.setOnClickListener {
-                    val idx = playlistAdapter.nowPlayingIndex()
-                    if (idx < playlistAdapter.itemCount - 1) {
-                        startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
-                            playerViewModel.playCollection(it.currentSongs(), idx + 1, collectionKey, kind)
-                        }
-                    }
-                }
-            } else {
-                btnMenu.setImageResource(R.drawable.ic_shuffle)
-                btnMenu.setOnClickListener {
-                    startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
-                        playerViewModel.shuffleCollection(it.currentSongs(), collectionKey, kind)
-                    }
-                }
-                btnPrev.setOnClickListener {
-                    if (selectedIndex > 0) { selectedIndex--; renderSelected() }
-                }
-                btnNext.setOnClickListener {
-                    if (selectedIndex < playlistAdapter.itemCount - 1) { selectedIndex++; renderSelected() }
-                }
-            }
-        }
-        refreshBrowseControls()
-
-        // El play reproduce la canción seleccionada, salvo que el cursor esté ya sobre la que suena
-        // de verdad: entonces no tiene sentido reiniciarla, solo alternamos pausa/reproducción real.
-        btnPlayPause.setOnClickListener {
-            if (playlistAdapter.isSelectedNowPlaying()) {
-                playerViewModel.togglePlayPause()
-            } else {
-                startPlaybackFromBrowse(queueList, queueAdapter, cover, btnMenu, setupNormalControls) {
-                    playerViewModel.playCollection(it.currentSongs(), selectedIndex, collectionKey, kind)
-                }
-            }
-        }
-
-        // Mientras se navega, mantiene el adaptador y los controles (menú + flechas) al día con la
-        // reproducción real (por si cambia mientras la ventana sigue abierta en modo navegación). Se
-        // cancela al salir de este modo (ver [startPlaybackFromBrowse]).
-        browseJob = viewLifecycleOwner.lifecycleScope.launch {
-            viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
-                playerViewModel.currentSong.collect { song ->
-                    playlistAdapter.setNowPlaying(song?.filePath)
-                    refreshBrowseControls()
-                }
-            }
-        }
-
-        // Cargamos las canciones de la colección ([loadSongs]: resuelve la lista en disco, o
-        // filtra la biblioteca por género).
-        viewLifecycleOwner.lifecycleScope.launch {
-            val songs = loadSongs()
-            val nowPlayingPath = playerViewModel.currentSong.value?.filePath
-            // Si lo que suena de verdad está en esta colección, el cursor arranca en su fila (en vez
-            // de en la primera) para que las flechas y el play partan de donde uno lo esperaría.
-            val initialIndex = songs.indexOfFirst { it.filePath == nowPlayingPath }.let { if (it >= 0) it else 0 }
-            playlistAdapter.submit(songs, initialIndex)
-            playlistAdapter.setNowPlaying(nowPlayingPath)
-            selectedIndex = initialIndex
-            renderSelected()
-            refreshBrowseControls()
-            // Ahora que ya sabemos cuántas canciones tiene de verdad, refrescamos el aviso de la caja
-            // de info por si estaba mostrando el de "puedes añadir más" sin saber todavía que la
-            // colección está vacía (ver [browsingSongCount] y [queueEndText]).
-            browsingSongCount = songs.size
-            updateInfoBox(queueList, tvTitle, tvMeta)
-        }
     }
 
     /**
      * Engancha a [queueList] un arrastre solo vertical, iniciado desde el manejador de cada fila (no
      * por pulsación larga): [onMove] mueve en memoria mientras se arrastra, y [onDropped] persiste el
-     * orden final al soltar. Lo usan tanto la cola real en modo normal ([queueAdapter], justo debajo)
-     * como la lista de una lista en modo navegación ([enterBrowseMode]) — mismo gesto, mismo
-     * manejador ([R.id.dragHandle] en sus respectivos layouts), y hasta ahora era la misma pareja
-     * onMove/clearView copiada en los dos sitios.
+     * orden final al soltar.
      *
-     * Desengancha primero cualquier [itemTouchHelper] anterior: los dos modos comparten el mismo
-     * [queueList], y dejar el viejo enganchado a la vez que el nuevo duplicaría la gestión del gesto.
+     * Desengancha primero cualquier [itemTouchHelper] anterior, por si esta ventana ya llevaba uno
+     * enganchado de una llamada previa.
      */
     private fun attachReorderTouchHelper(
         queueList: RecyclerView,
@@ -1195,41 +901,6 @@ class IPodDialogFragment : DialogFragment() {
             }
         }
         itemTouchHelper = ItemTouchHelper(callback).also { it.attachToRecyclerView(queueList) }
-    }
-
-    /**
-     * Sale del modo navegación y arranca la reproducción indicada por [play]. Restaura los controles
-     * normales; a partir de aquí los colectores de [PlayerViewModel] retoman el pintado.
-     *
-     * No fuerza la vista de carátula: la pantalla se queda como esté (si se estaba viendo la cola
-     * de la lista, ahora pasará a verse la cola real), igual da si se ha elegido tocando una
-     * fila, con las flechas, al azar o con el botón de play — las cuatro formas de elegir canción
-     * se comportan igual.
-     */
-    private fun startPlaybackFromBrowse(
-        queueList: RecyclerView,
-        queueAdapter: IPodQueueAdapter,
-        cover: ShapeableImageView,
-        btnMenu: ImageButton,
-        setupNormalControls: () -> Unit,
-        play: (PlaylistQueueAdapter) -> Unit
-    ) {
-        val playlistAdapter = queueList.adapter as? PlaylistQueueAdapter ?: return
-        browsing = false
-        browsingKind = null
-        browseJob?.cancel()
-        browseJob = null
-        queueAdapter.setAccent(playerViewModel.accentColor.value)
-        queueList.adapter = queueAdapter
-        // El de la lista (si lo había, ver [enterBrowseMode]) se sustituye por el de la cola real:
-        // ver [attachReorderTouchHelper].
-        attachReorderTouchHelper(
-            queueList,
-            onMove = { from, to -> queueAdapter.moveItem(from, to) },
-            onDropped = { queueAdapter.commitReorder() }
-        )
-        setupNormalControls()
-        play(playlistAdapter)
     }
 
     /**
@@ -1274,46 +945,17 @@ class IPodDialogFragment : DialogFragment() {
         // aunque sonara una canción azul, porque aquí solo se repintaban los contornos.
         AccentTint.fill(view, R.id.ipodBody, DynamicColor.dim(accent))
 
-        // El icono de altavoz de la fila "sonando ahora" también sigue el acento, tanto en la cola
-        // real (IPodQueueAdapter) como en la lista de una lista en modo navegación
-        // (PlaylistQueueAdapter): solo uno de los dos es el adaptador activo en cada momento.
-        when (val adapter = view.findViewById<RecyclerView>(R.id.queueList).adapter) {
-            is IPodQueueAdapter -> adapter.setAccent(accent)
-            is PlaylistQueueAdapter -> adapter.setAccent(accent)
-        }
+        // El icono de altavoz de la fila "sonando ahora" también sigue el acento.
+        (view.findViewById<RecyclerView>(R.id.queueList).adapter as? IPodQueueAdapter)?.setAccent(accent)
     }
 
     /**
-     * Qué decir en [R.id.tvMeta] mientras se ve la cola/lista en vez de la carátula (ver
-     * [updateInfoBox]): una cola suelta o una lista admiten seguir añadiendo canciones a mano, así
-     * que invitan a hacerlo; el resto (género, álbum, artista, productor, o una colección sin tipo
-     * conocido) son fijas y solo avisan de que se han acabado.
-     *
-     * Mientras se navega ([browsing]), el aviso habla de la colección que se está viendo
-     * ([browsingKind]), no de la cola real que suena de fondo: esta puede ser suelta, de otra
-     * colección distinta, o no existir todavía (app recién abierta en frío), y en los tres casos el
-     * texto debe seguir siendo el de la lista que se tiene delante.
-     *
-     * En ambos casos (cola real o colección navegada) distingue además "vacía de por sí" de "se ha
-     * acabado": si la lista que se navega no tiene ninguna canción ([browsingSongCount] en 0, ya
-     * cargada), o la cola real no tiene ninguna ([PlayerViewModel.queue] vacía), no tiene sentido
-     * decir "has llegado al final" ni invitar a añadir más, porque no hay nada que "recorrer".
+     * Qué decir en [R.id.tvMeta] mientras se ve la cola en vez de la carátula (ver [updateInfoBox]):
+     * una cola suelta o una lista admiten seguir añadiendo canciones a mano, así que invitan a
+     * hacerlo; el resto (género, álbum, artista, productor, o una colección sin tipo conocido) son
+     * fijas y solo avisan de que se han acabado.
      */
     private fun queueEndText(): String {
-        if (browsing) {
-            if (browsingSongCount == 0) {
-                return if (browsingKind == CollectionKind.LISTA) {
-                    getString(R.string.playlist_empty)
-                } else {
-                    getString(R.string.queue_end)
-                }
-            }
-            return if (browsingKind == CollectionKind.LISTA) {
-                getString(R.string.queue_hint_playlist)
-            } else {
-                getString(R.string.queue_end)
-            }
-        }
         if (playerViewModel.queue.value.isEmpty()) return getString(R.string.queue_empty)
         if (playerViewModel.isLooseQueue.value) return getString(R.string.queue_hint_loose)
         return if (playerViewModel.currentCollectionKind.value == CollectionKind.LISTA) {
@@ -1326,7 +968,7 @@ class IPodDialogFragment : DialogFragment() {
     /** Construye la línea "Artista | Álbum | Año" omitiendo el año si no existe. */
     private fun metaLine(song: Song): String {
         val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-        val album = song.albums.joinToString(", ") { it.title }.ifBlank { MusicScanner.UNKNOWN_ALBUM }
+        val album = song.album?.title ?: MusicScanner.UNKNOWN_ALBUM
         return joinNonBlank(artist, album, song.year?.toString())
     }
 
@@ -1351,9 +993,6 @@ class IPodDialogFragment : DialogFragment() {
     ) {
         val song = playerViewModel.currentSong.value
         if (queueList.isVisible) {
-            // La cuenta sale siempre de la cola REAL, no de las filas que se estén viendo: en modo
-            // navegación la lista de arriba puede ser una lista que ni siquiera está sonando (ver
-            // enterBrowseMode), pero lo que "queda" es lo que queda por reproducirse de verdad.
             // drop() ya devuelve vacío si la actual es la última (o si no hay cola).
             val remaining = playerViewModel.queue.value
                 .drop(playerViewModel.currentIndex.value + 1)
@@ -1400,7 +1039,7 @@ class IPodDialogFragment : DialogFragment() {
         PopupMenu(anchor.context, anchor).apply {
             menuInflater.inflate(R.menu.menu_song_item, menu)
             // Solo tiene sentido "ir a" lo que la canción de verdad tenga.
-            menu.findItem(R.id.action_go_to_album)?.isVisible = song.albums.isNotEmpty()
+            menu.findItem(R.id.action_go_to_album)?.isVisible = song.album != null
             menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
             menu.findItem(R.id.action_go_to_producer)?.isVisible = song.producers.isNotEmpty()
             setOnMenuItemClickListener { item ->
@@ -1408,7 +1047,7 @@ class IPodDialogFragment : DialogFragment() {
                     R.id.action_add_to_queue -> { playerViewModel.addToQueue(song); true }
                     R.id.action_add_to_playlist -> { showAddToPlaylist(song); true }
                     R.id.action_go_to_album -> {
-                        song.albums.firstOrNull()?.let { DetailDialogFragment.showAlbum(requireActivity(), it.id) }
+                        song.album?.let { DetailDialogFragment.showAlbum(requireActivity(), it.id) }
                         true
                     }
                     R.id.action_go_to_artist -> {
@@ -1482,20 +1121,10 @@ class IPodDialogFragment : DialogFragment() {
     }
 
     companion object {
-        private const val ARG_PLAYLIST = "playlist"
-        private const val ARG_GENRE = "genre"
         private const val ARG_SUPPRESS_ENTER_ANIM = "suppress_enter_anim"
         private const val TAG_VIDEO_PICKER = "video_picker"
         private const val TAG_METADATA_EDITOR = "metadataEditor"
         private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
-
-        /**
-         * Prefijo de la clave que identifica una colección de género en
-         * [PlayerViewModel.currentPlaylistName], para que nunca se confunda con una lista real
-         * aunque compartan el mismo texto (p. ej. una lista y un género que se llamen los dos
-         * "Rock").
-         */
-        private const val GENRE_KEY_PREFIX = "genre:"
 
         /** Alto/ancho de un vídeo 16:9, para que la pantalla del iPod se ajuste a él en modo vídeo. */
         private const val VIDEO_ASPECT_RATIO = 9f / 16f
@@ -1507,24 +1136,6 @@ class IPodDialogFragment : DialogFragment() {
         private const val CLOSE_ANIM_MS = 200L
 
         /**
-         * Abre el iPod mostrando la lista [playlistName] para elegir qué sonará. Si esa lista
-         * ya es la que suena, se abre en modo normal en su lugar (ver [browsing]).
-         */
-        fun newInstance(playlistName: String) = IPodDialogFragment().apply {
-            arguments = bundleOf(ARG_PLAYLIST to playlistName)
-        }
-
-        /**
-         * Abre el iPod mostrando las canciones del género [genreName] para elegir qué sonará,
-         * EXACTAMENTE igual que [newInstance] con una lista, salvo que esta colección no se puede
-         * reordenar (ver [enterBrowseMode]): un género no tiene un orden propio guardado en ningún
-         * sitio, es sencillamente lo que traen las canciones.
-         */
-        fun newInstanceForGenre(genreName: String) = IPodDialogFragment().apply {
-            arguments = bundleOf(ARG_GENRE to genreName)
-        }
-
-        /**
          * Instancia para abrir arrastrando el mini-reproductor hacia arriba (ver
          * [MainActivity.setupMiniPlayerDrag]): sin animación de ventana propia y con [followOpenDrag]
          * disponible para trasladarla en vivo desde el primer momento.
@@ -1532,8 +1143,5 @@ class IPodDialogFragment : DialogFragment() {
         fun forDrag() = IPodDialogFragment().apply {
             arguments = bundleOf(ARG_SUPPRESS_ENTER_ANIM to true)
         }
-
-        /** Clave de [PlayerViewModel.currentPlaylistName] para la colección del género [genre]. */
-        private fun genreCollectionKey(genre: String) = "$GENRE_KEY_PREFIX$genre"
     }
 }

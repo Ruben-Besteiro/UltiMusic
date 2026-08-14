@@ -3,6 +3,7 @@ package com.untar.ultimusic.ui.library
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
@@ -11,6 +12,7 @@ import com.untar.ultimusic.R
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.bindPersonSubscribers
 
 /**
  * Lista de personas: una imagen circular con el nombre y, debajo, cuántos álbumes y canciones
@@ -43,6 +45,8 @@ class PeopleAdapter(
         private val image: ShapeableImageView = itemView.findViewById(R.id.personImage)
         private val name: TextView = itemView.findViewById(R.id.personName)
         private val subtitle: TextView = itemView.findViewById(R.id.personSubtitle)
+        private val youtubeIcon: ImageView = itemView.findViewById(R.id.personYoutubeIcon)
+        private val youtubeSubscribers: TextView = itemView.findViewById(R.id.personYoutubeSubscribers)
 
         fun bind(person: PersonSummary, onPersonClick: (PersonSummary) -> Unit) {
             val context = itemView.context
@@ -58,6 +62,7 @@ class PeopleAdapter(
                 R.plurals.song_count, person.songCount, person.songCount
             )
             subtitle.text = context.getString(R.string.song_subtitle_format, albumsText, songsText)
+            bindPersonSubscribers(person.popularity, youtubeIcon, youtubeSubscribers)
 
             image.load(CoverArt.cover(context, person.cover), CoverLoader.get(context)) {
                 error(R.drawable.cover_placeholder)

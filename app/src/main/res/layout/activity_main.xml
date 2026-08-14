@@ -11,10 +11,10 @@
 
     <!--
       Toolbar hecha a mano (en vez de MaterialToolbar + menú) porque el buscador necesita animar
-      cada icono por separado: al pinchar la barra, el engranaje, la ayuda y "más opciones" se echan
-      a un lado (visibility GONE) y, como searchBar es el único hijo con layout_weight, se estira
-      sola para ocupar todo el ancho que dejan libres. Con un Toolbar de menú nativo no hay forma de
-      coger cada icono por separado para animarlo así.
+      cada icono por separado: al pinchar la barra, el engranaje, la ayuda y el ojo de ordenar se
+      echan a un lado (visibility GONE) y, como searchBar es el único hijo con layout_weight, se
+      estira sola para ocupar todo el ancho que dejan libres. Con un Toolbar de menú nativo no hay
+      forma de coger cada icono por separado para animarlo así.
     -->
     <LinearLayout
         android:id="@+id/toolbar"
@@ -103,14 +103,16 @@
             android:src="@drawable/ic_help"
             android:tint="@color/um_on_background" />
 
+        <!-- Antes "más opciones" (tres puntos) sin hacer nada; ahora abre el diálogo de ordenar de
+             la pestaña actual (ver MainActivity.setupToolbar y ui/sort/SortDialogFragment). -->
         <ImageButton
-            android:id="@+id/btnMore"
+            android:id="@+id/btnSort"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/action_more"
+            android:contentDescription="@string/action_sort"
             android:padding="12dp"
-            android:src="@drawable/ic_more_vert"
+            android:src="@drawable/ic_eye"
             android:tint="@color/um_on_background" />
     </LinearLayout>
 
@@ -170,7 +172,13 @@
 
             <!-- Barra de navegación: solo iconos salvo en la pestaña actual, que además muestra su
                  nombre debajo (ver MainActivity.setupPager). Sin indicador de Material (la propia
-                 pestaña ya se distingue por el color dinámico e icono desplazado). -->
+                 pestaña ya se distingue por el color dinámico e icono desplazado).
+
+                 tabPaddingStart/End/tabMinWidth a 0: el padding horizontal de cada pestaña lo
+                 pone MainActivity.redistributeTabPadding directamente en el customView, no
+                 Material, así el reparto (quitarle padding a las no seleccionadas para hacerle
+                 sitio al nombre de la actual) es exacto y no hay un padding "de fábrica" adicional
+                 sumándose por debajo. -->
             <com.google.android.material.tabs.TabLayout
                 android:id="@+id/tabLayout"
                 android:layout_width="match_parent"
@@ -178,7 +186,10 @@
                 android:background="@color/um_surface"
                 app:tabGravity="center"
                 app:tabIndicatorHeight="0dp"
-                app:tabMode="scrollable" />
+                app:tabMinWidth="0dp"
+                app:tabMode="scrollable"
+                app:tabPaddingStart="0dp"
+                app:tabPaddingEnd="0dp" />
         </LinearLayout>
 
         <FrameLayout

@@ -54,8 +54,6 @@
             android:id="@+id/trackDuration"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:textColor="@color/um_on_surface_muted"
             android:textSize="14sp"
             tools:text="Álbum A | 3:07" />

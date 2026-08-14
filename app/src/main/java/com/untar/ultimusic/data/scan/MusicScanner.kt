@@ -25,19 +25,24 @@ object MusicScanner {            // OBJECT = SINGLETON
     const val UNKNOWN_ALBUM = ""
 
     /**
-     * El listado de carpetas en las que se buscan canciones.
-     * Solo se reconoce la carpeta UltiMusic, para que el usuario tenga un único
-     * sitio claro donde guardar su música (y evitar duplicados con otras apps).
+     * El listado de carpetas en las que se buscan canciones: `UltiMusic` (la raíz por defecto,
+     * siempre presente) más las carpetas raíz adicionales que el usuario haya añadido desde ajustes
+     * (ver [com.untar.ultimusic.data.db.entities.LibraryRootEntity]). [MusicScanner] no conoce la
+     * base de datos —sigue siendo "solo lectura de filesystem"—, así que [extraRoots] se lo pasa
+     * quien sí la tiene ([com.untar.ultimusic.data.LibraryRepository]).
      */
-    private fun scanRoots(): List<File> {
+    private fun scanRoots(extraRoots: List<File>): List<File> {
         val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
-        return listOf(ultiMusic)
+        return listOf(ultiMusic) + extraRoots
     }
 
-    /** Escanea las carpetas configuradas y devuelve las etiquetas crudas de cada archivo. */
-    suspend fun scan(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }): List<ScannedSong> = withContext(Dispatchers.IO) {
+    /** Escanea las carpetas configuradas ([scanRoots]) y devuelve las etiquetas crudas de cada archivo. */
+    suspend fun scan(
+        extraRoots: List<File> = emptyList(),
+        onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
+    ): List<ScannedSong> = withContext(Dispatchers.IO) {
         val files = LinkedHashSet<File>()
-        for (root in scanRoots()) {
+        for (root in scanRoots(extraRoots)) {
             if (root.exists() && root.isDirectory) {
                 collectAudioFiles(root, files)
             }
@@ -50,15 +55,18 @@ object MusicScanner {            // OBJECT = SINGLETON
     }
 
     /**
-     * ¿Se puede leer ahora mismo la carpeta de la fonoteca?
+     * ¿Se pueden leer ahora mismo TODAS las carpetas de la fonoteca?
      *
-     * Sirve para no sacar conclusiones precipitadas: si la carpeta no es accesible (permiso
-     * revocado, almacenamiento no montado…), TODAS las canciones parecerían haber desaparecido.
-     * Antes de dar una por perdida —y borrarla de las listas, que son archivos del usuario y no
-     * se pueden recuperar— hay que comprobar que el problema es de la canción y no de la carpeta.
+     * Sirve para no sacar conclusiones precipitadas: si una carpeta no es accesible (permiso
+     * revocado, almacenamiento no montado…), sus canciones parecerían haber desaparecido. Antes de
+     * dar una por perdida —y borrarla de las listas, que son archivos del usuario y no se pueden
+     * recuperar— hay que comprobar que el problema es de la canción y no de la carpeta.
+     *
+     * Con varias carpetas raíz basta con que UNA no sea legible para que no sea seguro fiarse de lo
+     * que falte de ahí, así que se exige que TODAS lo sean (`.all`, no `.any`).
      */
-    suspend fun libraryFolderReadable(): Boolean = withContext(Dispatchers.IO) {
-        scanRoots().any { it.isDirectory && it.canRead() }
+    suspend fun libraryFolderReadable(extraRoots: List<File> = emptyList()): Boolean = withContext(Dispatchers.IO) {
+        scanRoots(extraRoots).all { it.isDirectory && it.canRead() }
     }
 
     /**
@@ -68,9 +76,9 @@ object MusicScanner {            // OBJECT = SINGLETON
      * así que es muy rápido. Sirve para relocalizar al vuelo una canción cuyo archivo el usuario ha
      * movido de carpeta y cuya ruta guardada, por tanto, ya no vale.
      */
-    suspend fun findByFilename(filename: String): File? = withContext(Dispatchers.IO) {
+    suspend fun findByFilename(filename: String, extraRoots: List<File> = emptyList()): File? = withContext(Dispatchers.IO) {
         val files = LinkedHashSet<File>()
-        for (root in scanRoots()) {
+        for (root in scanRoots(extraRoots)) {
             if (root.exists() && root.isDirectory) {
                 collectAudioFiles(root, files)
             }

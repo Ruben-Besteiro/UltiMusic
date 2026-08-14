@@ -6,6 +6,10 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.view.inputmethod.EditorInfo
+import android.view.inputmethod.InputMethodManager
+import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.core.os.bundleOf
@@ -36,6 +40,11 @@ import kotlinx.coroutines.launch
  * [MetadataEditorDialogFragment] para que rellene el campo "Letra". Nunca guarda nada por su
  * cuenta: solo entrega datos.
  *
+ * Esa búsqueda inicial es automática, con lo que ya haya en los campos de título/artista del
+ * editor, pero puede no encontrar nada (mayúsculas, "feat.", erratas...). Por eso arriba del todo
+ * hay una barra de búsqueda manual, prellenada con ese mismo texto, con la que el usuario puede
+ * corregirlo y relanzar la búsqueda (botón de lupa o Enter, ver [runManualSearch]).
+ *
  * Mismo patrón que [MetadataSuggestionsDialogFragment] (que a su vez sigue el de
  * [com.untar.ultimusic.ui.player.VideoPickerDialogFragment]): un [DialogFragment] a pantalla
  * completa que devuelve su resultado con la API de resultados entre fragmentos
@@ -58,6 +67,8 @@ class LyricsSuggestionsDialogFragment : DialogFragment() {
     private lateinit var messageGroup: View
     private lateinit var message: TextView
     private lateinit var retryButton: MaterialButton
+    private lateinit var searchInput: EditText
+    private lateinit var searchButton: ImageButton
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,17 +104,31 @@ class LyricsSuggestionsDialogFragment : DialogFragment() {
         messageGroup = view.findViewById(R.id.lyricsSuggestionsMessageGroup)
         message = view.findViewById(R.id.lyricsSuggestionsMessage)
         retryButton = view.findViewById(R.id.lyricsSuggestionsRetry)
+        searchInput = view.findViewById(R.id.lyricsSuggestionsSearchInput)
+        searchButton = view.findViewById(R.id.lyricsSuggestionsSearchButton)
 
         val adapter = LyricsSuggestionsAdapter { onSuggestionPicked(it) }
         list.layoutManager = LinearLayoutManager(requireContext())
         list.adapter = adapter
         retryButton.setOnClickListener { viewModel.retry() }
 
-        viewModel.search(
-            requireArguments().getString(ARG_TITLE).orEmpty(),
-            requireArguments().getString(ARG_ARTIST).orEmpty(),
-            requireArguments().getLong(ARG_DURATION_MS)
-        )
+        val title = requireArguments().getString(ARG_TITLE).orEmpty()
+        val artist = requireArguments().getString(ARG_ARTIST).orEmpty()
+
+        // Prellenada con lo que ya se buscó automáticamente, para que corregirlo sea editar en vez
+        // de volver a escribirlo entero.
+        searchInput.setText(listOf(title, artist).filter { it.isNotBlank() }.joinToString(" "))
+        searchButton.setOnClickListener { runManualSearch() }
+        searchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (actionId == EditorInfo.IME_ACTION_SEARCH) {
+                runManualSearch()
+                true
+            } else {
+                false
+            }
+        }
+
+        viewModel.search(title, artist, requireArguments().getLong(ARG_DURATION_MS))
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -140,6 +165,15 @@ class LyricsSuggestionsDialogFragment : DialogFragment() {
                 message.text = getString(R.string.suggestions_rate_limited, state.retryInSeconds)
             LyricsSuggestionsUiState.Loading -> Unit
         }
+    }
+
+    /** Lanza una búsqueda con el texto de la barra manual (botón de lupa o Enter en el teclado). */
+    private fun runManualSearch() {
+        val query = searchInput.text?.toString().orEmpty()
+        if (query.isBlank()) return
+        val imm = requireContext().getSystemService(InputMethodManager::class.java)
+        imm?.hideSoftInputFromWindow(searchInput.windowToken, 0)
+        viewModel.searchManual(query)
     }
 
     /** La letra sincronizada gana siempre que exista; si no, se devuelve la plana (ver

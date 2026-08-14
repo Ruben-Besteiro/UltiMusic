@@ -15,24 +15,39 @@ import java.io.File
  * por cada subcarpeta de la fonoteca, y se añaden/quitan vigilantes según se crean o borran
  * subcarpetas nuevas. Sin esto, una canción descargada dentro de una subcarpeta nunca dispara la
  * reconciliación y solo aparecería tras el siguiente arranque en frío de la app.
+ *
+ * [roots] no es solo `UltiMusic`: incluye también las carpetas raíz adicionales que el usuario haya
+ * añadido desde ajustes (ver [com.untar.ultimusic.data.db.entities.LibraryRootEntity]). Todos los
+ * `DirWatcher` de todas las raíces comparten el mismo mapa `watchers` y el mismo debounce: un
+ * aluvión de eventos repartido entre varias raíces dispara una sola reconciliación, no una por raíz.
  */
 class MusicLibraryObserver(
-    private val root: File,
+    private val roots: List<File>,
     private val scope: CoroutineScope,
     private val onChangesDetected: suspend () -> Unit
 ) {
-    /** Un `DirWatcher` por cada carpeta vigilada, indexado por su ruta absoluta. */
+    /** Un `DirWatcher` por cada carpeta vigilada (de cualquier raíz), indexado por su ruta absoluta. */
     private val watchers = mutableMapOf<String, DirWatcher>()
     private var debounceJob: Job? = null
 
     fun startWatching() {
-        watchRecursively(root)
+        roots.forEach { watchRecursively(it) }
     }
 
     fun stopWatching() {
         debounceJob?.cancel()
         watchers.values.forEach { it.stopWatching() }
         watchers.clear()
+    }
+
+    /** Añade una carpeta raíz nueva en caliente (el usuario acaba de añadirla desde ajustes). */
+    fun watchNewRoot(root: File) {
+        watchRecursively(root)
+    }
+
+    /** Deja de vigilar una carpeta raíz (el usuario acaba de quitarla desde ajustes). */
+    fun unwatchRoot(root: File) {
+        unwatch(root)
     }
 
     /** Añade un vigilante para [dir] y, recursivamente, para todas sus subcarpetas ya existentes. */

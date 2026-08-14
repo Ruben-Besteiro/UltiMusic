@@ -20,16 +20,17 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.PlaylistSummary
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
-import com.untar.ultimusic.ui.player.IPodDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import kotlinx.coroutines.launch
 
 /**
  * Pestaña de listas de reproducción. Muestra las listas (archivos de `~/UltiMusic/Playlists`), deja
  * crearlas con el botón "+", renombrarlas/borrarlas desde el menú de 3 puntos de cada fila, y al
- * pinchar una abre el iPod en modo navegación mostrando su contenido sin reproducir nada.
+ * pinchar una abre su ficha intermedia mostrando su contenido para elegir qué sonará (ver
+ * [CollectionDetailDialogFragment.showPlaylist]).
  */
 class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
 
@@ -42,12 +43,7 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
         val createButton = view.findViewById<FloatingActionButton>(R.id.btnCreatePlaylist)
 
         val adapter = PlaylistsAdapter(
-            onPlaylistClick = { playlist ->
-                if (parentFragmentManager.findFragmentByTag("ipod") == null) {
-                    IPodDialogFragment.newInstance(playlist.name)
-                        .show(parentFragmentManager, "ipod")
-                }
-            },
+            onPlaylistClick = { playlist -> CollectionDetailDialogFragment.showPlaylist(this, playlist.name) },
             onRename = { playlist -> showRenameDialog(playlist) },
             onDelete = { playlist -> showDeleteDialog(playlist) }
         )

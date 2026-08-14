@@ -4,15 +4,21 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.SortPreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.PlaylistSummary
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.LibraryTab
+import com.untar.ultimusic.util.SortOption
+import com.untar.ultimusic.util.sortedByOption
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -37,14 +43,40 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     /** Se incrementa tras cada cambio en disco para forzar la relectura de los flujos derivados. */
     private val tick = MutableStateFlow(0)
 
+    /** Criterio de orden de la pestaña, persistido (ver [SortPreferences]), igual que en
+     *  [com.untar.ultimusic.ui.SongsViewModel] y [com.untar.ultimusic.ui.library.LibraryViewModel]. */
+    private val _sort = MutableStateFlow(SortPreferences.get(LibraryTab.PLAYLISTS))
+    val sort: StateFlow<SortOption> = _sort.asStateFlow()
+
     /**
-     * Resúmenes de todas las listas (nombre, nº de canciones, duración total). Depende del [tick]
-     * y de la biblioteca: si cambian los archivos o se reescanea la música, se repinta.
+     * Resúmenes de todas las listas (nombre, nº de canciones, duración total), ya ordenados. Depende
+     * del [tick], de la biblioteca y de [_sort]: si cambian los archivos, se reescanea la música o se
+     * cambia el orden, se repinta.
      */
     val playlists: StateFlow<List<PlaylistSummary>> =
-        combine(tick, library.songs) { _, songs -> songs }
-            .mapLatest { songs -> buildSummaries(songs) }
+        combine(tick, library.songs, _sort) { _, songs, sort -> songs to sort }
+            .mapLatest { (songs, sort) -> buildSummaries(songs).sortedByOption(sort) }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun setSort(option: SortOption) {
+        _sort.value = option
+        SortPreferences.save(LibraryTab.PLAYLISTS, option)
+    }
+
+    /**
+     * Canciones de UNA lista, reactivas al [tick] compartido y a la biblioteca — igual que
+     * [playlists], pero resueltas para una sola lista en vez de resumidas para todas. La usa
+     * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment] para que su ficha se
+     * entere al instante de cualquier cambio de pertenencia hecho desde cualquier otra pantalla
+     * (p. ej. quitar la canción actual de esta misma lista desde su propio menú de 3 puntos, que
+     * pasa por [addSongs]/[removeSongs] y por tanto por este mismo [tick]).
+     */
+    fun songsOf(name: String): Flow<List<Song>> =
+        combine(tick, library.songs) { _, songs -> songs }
+            .mapLatest { songs ->
+                val byFilename = songs.associateBy { File(it.filePath).name }
+                repository.resolveSongs(name, byFilename)
+            }
 
     private suspend fun buildSummaries(songs: List<Song>): List<PlaylistSummary> {
         val byFilename = songs.associateBy { File(it.filePath).name }

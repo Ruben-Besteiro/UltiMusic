@@ -4,12 +4,17 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.SortPreferences
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.LibraryTab
+import com.untar.ultimusic.util.SortOption
+import com.untar.ultimusic.util.sortedByOption
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -22,9 +27,21 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = LibraryRepository.get(app)
 
-    /** Solo lectura; es lo que exponemos a la UI. */
-    val songs: StateFlow<List<Song>> = repository.songs
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    /** Criterio de orden de la pestaña, persistido (ver [SortPreferences]) y aplicado en Kotlin sobre
+     *  lo que ya llega ordenado por SQL, porque Room no admite un `ORDER BY` dinámico. Lo cambia
+     *  [setSort], que abre [com.untar.ultimusic.ui.sort.SortDialogFragment]. */
+    private val _sort = MutableStateFlow(SortPreferences.get(LibraryTab.SONGS))
+    val sort: StateFlow<SortOption> = _sort.asStateFlow()
+
+    /** Solo lectura; es lo que exponemos a la UI, ya reordenada. */
+    val songs: StateFlow<List<Song>> = combine(repository.songs, _sort) { list, option ->
+        list.sortedByOption(option)
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun setSort(option: SortOption) {
+        _sort.value = option
+        SortPreferences.save(LibraryTab.SONGS, option)
+    }
 
     private val _loading = MutableStateFlow(false)
     val loading = _loading.asStateFlow()
@@ -64,6 +81,10 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
                     _progress.value = if (total > 0) (current * 100) / total else 0
                 }
             }
+            // Al terminar cada reconciliación, no solo la primera: es la señal más parecida a
+            // "abrir la aplicación" que hay, y refreshYouTubeStatsIfDue ya se encarga de no repetir
+            // el refresco más de una vez al día por su cuenta.
+            repository.refreshYouTubeStatsIfDue()
             reconciled = true
             _loading.value = false
             reconcileJob = null

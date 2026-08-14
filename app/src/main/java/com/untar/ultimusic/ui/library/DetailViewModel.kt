@@ -9,11 +9,11 @@ import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
-import com.untar.ultimusic.model.AlbumTrack
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.TimeFormat
+import com.untar.ultimusic.util.formatCompactCount
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
@@ -76,23 +76,24 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
-     * Canciones que se listan debajo. Para un álbum llevan su número de pista y van ordenadas por
-     * él; para un artista o un productor no hay número que enseñar (sus canciones vienen de álbumes
-     * distintos), así que se envuelven con `trackNumber = null` para poder reutilizar el adaptador.
+     * Canciones que se listan debajo. Para un álbum van ordenadas por su número de pista (que ya
+     * trae cada [Song], ver [Song.trackNumber]); para un artista o un productor ese número no se
+     * enseña ([DetailSongsAdapter] solo lo pinta en la ficha de álbum), aunque la canción lo lleve
+     * consigo igualmente (es del álbum al que pertenece, no de esta ficha).
      */
-    val tracks: StateFlow<List<AlbumTrack>> = target
+    val tracks: StateFlow<List<Song>> = target
         .flatMapLatest { t ->
             when (t?.first) {
                 null -> flowOf(emptyList())
                 DetailKind.ALBUM -> repository.albumTracks(t.second)
-                DetailKind.ARTIST -> repository.artistSongs(t.second).map { it.asTracks() }
-                DetailKind.PRODUCER -> repository.producerSongs(t.second).map { it.asTracks() }
+                DetailKind.ARTIST -> repository.artistSongs(t.second)
+                DetailKind.PRODUCER -> repository.producerSongs(t.second)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Las canciones sueltas, para pasárselas al reproductor al pulsar una. */
-    val songs: List<Song> get() = tracks.value.map { it.song }
+    val songs: List<Song> get() = tracks.value
 
     /**
      * Álbumes del carrusel horizontal, solo para artista/productor (en un álbum va vacío: no tiene
@@ -172,10 +173,15 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     private fun PersonSummary.toHeader() = DetailHeader(
         title = name,
         cover = cover,
-        lines = listOf(
+        lines = listOfNotNull(
             InfoLine(R.drawable.ic_album, albumsText(albumCount)),
             InfoLine(R.drawable.ic_music_note, songsText(songCount)),
-            InfoLine(R.drawable.ic_timer, TimeFormat.hhmmss(totalDuration))
+            InfoLine(R.drawable.ic_timer, TimeFormat.hhmmss(totalDuration)),
+            // Última línea, solo si se conoce: los suscriptores del canal de YouTube más repetido
+            // entre las canciones donde esta persona es la artista principal (ver
+            // PersonSummary.popularity). Siempre ausente en un productor, cuya popularidad es
+            // siempre null por diseño (ver el comentario de esa propiedad).
+            popularity?.let { InfoLine(R.drawable.ic_youtube, subscribersText(it)) }
         )
     )
 
@@ -184,6 +190,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun albumsText(count: Int): String = getApplication<Application>().resources
         .getQuantityString(R.plurals.album_count, count, count)
-}
 
-private fun List<Song>.asTracks(): List<AlbumTrack> = map { AlbumTrack(it, null) }
+    private fun subscribersText(count: Long): String = getApplication<Application>()
+        .getString(R.string.youtube_subscribers_format, formatCompactCount(count))
+}

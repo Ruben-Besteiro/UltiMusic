@@ -66,7 +66,7 @@ class SearchBarController(
     private val topBar: ViewGroup,
     private val btnSettings: View,
     private val btnHelp: View,
-    private val btnMore: View,
+    private val btnSort: View,
     private val searchLeadingIcon: ImageView,
     private val searchInput: EditText,
     private val btnSearchClear: View,
@@ -101,7 +101,7 @@ class SearchBarController(
             },
             onDeleteSong = ::showDeleteDialog,
             onGoToAlbum = { song ->
-                song.albums.firstOrNull()?.let {
+                song.album?.let {
                     hideKeyboard()
                     DetailDialogFragment.showAlbum(activity, it.id)
                 }
@@ -182,7 +182,7 @@ class SearchBarController(
         TransitionManager.beginDelayedTransition(topBar, AutoTransition().setDuration(ANIM_DURATION_MS))
         btnSettings.visibility = View.GONE
         btnHelp.visibility = View.GONE
-        btnMore.visibility = View.GONE
+        btnSort.visibility = View.GONE
         searchLeadingIcon.setImageResource(R.drawable.ic_arrow_back)
         searchLeadingIcon.contentDescription = activity.getString(R.string.search_back)
 
@@ -206,7 +206,7 @@ class SearchBarController(
         TransitionManager.beginDelayedTransition(topBar, AutoTransition().setDuration(ANIM_DURATION_MS))
         btnSettings.visibility = View.VISIBLE
         btnHelp.visibility = View.VISIBLE
-        btnMore.visibility = View.VISIBLE
+        btnSort.visibility = View.VISIBLE
         searchLeadingIcon.setImageResource(R.drawable.ic_search)
         searchLeadingIcon.contentDescription = activity.getString(R.string.action_search)
 

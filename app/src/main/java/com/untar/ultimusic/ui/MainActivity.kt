@@ -47,7 +47,9 @@ import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.ui.search.SearchBarController
 import com.untar.ultimusic.ui.search.SearchViewModel
 import com.untar.ultimusic.ui.settings.SettingsDialogFragment
+import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.LibraryTab
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -100,6 +102,14 @@ class MainActivity : AppCompatActivity() {
 
     /** Gris de las pestañas no seleccionadas de la barra de navegación (ver applyTabAppearance). */
     private val mutedTabColor: Int by lazy { ContextCompat.getColor(this, R.color.um_on_surface_muted) }
+
+    /** Ancho del icono de cada pestaña (ver item_nav_tab.xml); ver redistributeTabPadding. */
+    private val tabIconWidthDp = 24f
+
+    /** Padding horizontal "de descanso" de cada pestaña y el mínimo al que se le puede bajar para
+     *  hacerle sitio al nombre de la seleccionada; ver redistributeTabPadding. */
+    private val tabPaddingRestDp = 16f
+    private val tabPaddingMinDp = 4f
 
     /**
      * Último acento recibido de [PlayerViewModel.accentColor], usado para pintar la pestaña actual
@@ -241,9 +251,23 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupToolbar() {
-        // El engranaje de la izquierda abre los ajustes; la ayuda y "más opciones" de la derecha,
-        // de momento, no hacen nada. La barra de búsqueda del centro la engancha setupSearch().
+        // El engranaje de la izquierda abre los ajustes; la ayuda de la derecha, de momento, no hace
+        // nada. La barra de búsqueda del centro la engancha setupSearch().
         findViewById<View>(R.id.btnSettings).setOnClickListener { showSettings() }
+        findViewById<View>(R.id.btnSort).setOnClickListener { showSort() }
+    }
+
+    /**
+     * Abre el diálogo de ordenar (ver [SortDialogFragment]) de la pestaña que se esté viendo AHORA
+     * en el ViewPager, no una fija: es lo que espera el usuario al tocar el ojo mientras mira, por
+     * ejemplo, la pestaña de Artistas. Las posiciones del ViewPager y de [LibraryTab] van en el mismo
+     * orden a propósito (ver [MainPagerAdapter]), así que basta con el índice de `values()`.
+     */
+    private fun showSort() {
+        if (supportFragmentManager.findFragmentByTag(SortDialogFragment.TAG) != null) return
+        val position = findViewById<ViewPager2>(R.id.viewPager).currentItem
+        val tab = LibraryTab.values().getOrNull(position) ?: return
+        SortDialogFragment.newInstance(tab).show(supportFragmentManager, SortDialogFragment.TAG)
     }
 
     /**
@@ -266,7 +290,7 @@ class MainActivity : AppCompatActivity() {
             topBar = findViewById<ViewGroup>(R.id.toolbar),
             btnSettings = findViewById(R.id.btnSettings),
             btnHelp = findViewById(R.id.btnHelp),
-            btnMore = findViewById(R.id.btnMore),
+            btnSort = findViewById(R.id.btnSort),
             searchLeadingIcon = findViewById<ImageView>(R.id.searchLeadingIcon),
             searchInput = findViewById<EditText>(R.id.searchInput),
             btnSearchClear = findViewById(R.id.btnSearchClear),
@@ -301,8 +325,16 @@ class MainActivity : AppCompatActivity() {
             applyTabAppearance(tab, selected = position == 0, currentAccentColor)
         }.attach()
 
+        // redistributeTabPadding necesita todas las pestañas ya montadas para poder recorrerlas
+        // (TabLayoutMediator llama al lambda de arriba una por una, antes de que exista la
+        // siguiente), así que el primer reparto se hace aquí, justo tras el attach().
+        redistributeTabPadding(tabLayout, selectedPosition = 0)
+
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) = applyTabAppearance(tab, true, currentAccentColor)
+            override fun onTabSelected(tab: TabLayout.Tab) {
+                applyTabAppearance(tab, true, currentAccentColor)
+                redistributeTabPadding(tabLayout, tab.position)
+            }
             override fun onTabUnselected(tab: TabLayout.Tab) = applyTabAppearance(tab, false, currentAccentColor)
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
@@ -317,6 +349,39 @@ class MainActivity : AppCompatActivity() {
         ImageViewCompat.setImageTintList(icon, ColorStateList.valueOf(color))
         label.visibility = if (selected) View.VISIBLE else View.GONE
         label.setTextColor(color)
+    }
+
+    /**
+     * Al aparecer el nombre de la pestaña seleccionada, su ancho crece (el layout de
+     * item_nav_tab.xml es vertical y el texto suele ser más ancho que el icono de 24dp). Sin esto
+     * esa pestaña empujaría a las demás -y, en modo scrollable, Material acabaría desplazando toda
+     * la tira para dejarla visible, sacando la primera pestaña casi de la pantalla-. En su lugar,
+     * le quitamos el mismo padding horizontal a cada pestaña NO seleccionada para hacerle sitio
+     * exacto al texto: el ancho total de la barra no cambia, así que nada se desplaza ni hay que
+     * recortar el nombre (el padding tiene un suelo en [tabPaddingMinDp] por si algún nombre fuera
+     * tan largo que ni así cupiese).
+     */
+    private fun redistributeTabPadding(tabLayout: TabLayout, selectedPosition: Int) {
+        val density = resources.displayMetrics.density
+        val restPaddingPx = tabPaddingRestDp * density
+        val minPaddingPx = tabPaddingMinDp * density
+        val iconWidthPx = tabIconWidthDp * density
+
+        val selectedLabel = tabLayout.getTabAt(selectedPosition)?.customView
+            ?.findViewById<TextView>(R.id.navLabel) ?: return
+        val growthPx = (selectedLabel.paint.measureText(selectedLabel.text.toString()) - iconWidthPx)
+            .coerceAtLeast(0f)
+
+        val othersCount = tabLayout.tabCount - 1
+        val reductionPerSidePx = if (othersCount > 0) growthPx / othersCount / 2f else 0f
+        val unselectedPaddingPx = (restPaddingPx - reductionPerSidePx).coerceAtLeast(minPaddingPx).toInt()
+        val restPaddingIntPx = restPaddingPx.toInt()
+
+        for (i in 0 until tabLayout.tabCount) {
+            val view = tabLayout.getTabAt(i)?.customView ?: continue
+            val paddingPx = if (i == selectedPosition) restPaddingIntPx else unselectedPaddingPx
+            view.setPadding(paddingPx, view.paddingTop, paddingPx, view.paddingBottom)
+        }
     }
 
     /**
@@ -509,9 +574,7 @@ class MainActivity : AppCompatActivity() {
         filePath = filePath,
         title = title,
         artists = artist?.let { listOf(Artist(name = it, imageName = null)) } ?: emptyList(),
-        albums = album?.let {
-            listOf(Album(title = it, artists = emptyList(), year = year, genres = genres, imageName = null))
-        } ?: emptyList(),
+        album = album?.let { Album(title = it, artists = emptyList(), year = year, genres = genres, imageName = null) },
         producers = producer?.let { listOf(Producer(name = it, imageName = null)) } ?: emptyList(),
         duration = duration,
         year = year,
@@ -524,9 +587,12 @@ class MainActivity : AppCompatActivity() {
         videoThumbnailName = null,
         videoOffsetMs = 0L,
         lyricsOffsetMs = 0L,
+        trackNumber = trackNumber,
+        discNumber = discNumber,
         ogTitle = null,
         ogArtist = null,
         ogAlbum = null,
-        ogYear = null
+        ogYear = null,
+        youtubeViewCount = null
     )
 }

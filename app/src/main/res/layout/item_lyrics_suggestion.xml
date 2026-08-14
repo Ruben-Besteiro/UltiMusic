@@ -50,7 +50,7 @@
             android:ellipsize="end"
             android:maxLines="1"
             android:textColor="@color/um_on_surface_muted"
-            android:textSize="14sp"
+            android:textSize="12sp"
             tools:text="Queen | A Night at the Opera | 5:51" />
 
         <TextView
@@ -59,7 +59,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:textColor="@color/um_on_surface_muted"
-            android:textSize="12sp"
+            android:textSize="11sp"
             android:textStyle="italic"
             tools:text="Sincronizada | Duración coincide" />
 

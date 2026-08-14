@@ -14,7 +14,7 @@ No hagas verificaciones automáticas después de hacer cambios. Solo dime qué d
 
 
 
-Todo lo referente a los artistas y a los productores se hará de la misma manera, puesto que son cosas similares. Cuando se toque uno de los dos, se debe intentar evitar inconsistencias.
+Todo lo referente a los artistas y a los productores se hará de la misma manera, puesto que son cosas similares. Cuando se toque uno de los dos, se debe intentar evitar inconsistencias, salvo que diga lo contrario.
 
 
 
@@ -22,5 +22,9 @@ Todos los elementos que sean de color amarillo o amarillo oscuro deben usar el c
 
 
 
-Al editar una imagen, la imagen nueva debe aparecer instantáneamente a lo largo de toda la aplicación, no se puede ver la imagen antigua (salvo en la notificación)
+Al hacer ediciones dentro de la aplicación, lo nuevo debe aparecer instantáneamente a lo largo de toda la aplicación, no se puede ver lo antiguo.
+
+
+
+Al tocar la base de datos, se debe crear una migración de BD y destruir la anterior.
 

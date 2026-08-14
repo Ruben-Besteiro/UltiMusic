@@ -535,6 +535,44 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
+            <!-- ===== Ajuste: carpetas de la fonoteca ===== -->
+
+            <TextView
+                android:id="@+id/libraryRootsTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_library_roots_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_library_roots_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <!-- nestedScrollingEnabled=false: mismo motivo que greylistRecycler, ver más abajo. -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/libraryRootsRecycler"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:nestedScrollingEnabled="false" />
+
+            <TextView
+                android:id="@+id/btnAddLibraryRoot"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_library_roots_add"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold" />
+
             <!-- ===== Ajuste: lista gris ===== -->
 
             <TextView
@@ -575,6 +613,108 @@
                 android:text="@string/settings_greylist_add"
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold" />
+
+            <!-- ===== Grupo: servicios externos ===== -->
+            <!--
+              Genius y la YouTube Data API piden un token/clave por usuario (ver GeniusTokenStore y
+              YouTubeApiKeyStore) mediante un diálogo de "Acción requerida" que solo sale la primera
+              vez que hace falta. Si el usuario le da a "Salir" ahí, esa entrada no se le vuelve a
+              ofrecer sola nunca más (setupDeclined queda fijo) - este es el único sitio desde el que
+              puede volver a abrirla si cambia de idea o se equivocó al salir.
+            -->
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="28dp"
+                android:background="@color/um_divider" />
+
+            <TextView
+                android:id="@+id/servicesSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/settings_services_section_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <!-- ===== Ajuste: Genius ===== -->
+
+            <TextView
+                android:id="@+id/geniusTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_genius_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_genius_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/geniusStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp"
+                tools:text="No configurado" />
+
+            <TextView
+                android:id="@+id/btnConfigureGenius"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold"
+                tools:text="@string/settings_genius_configure" />
+
+            <!-- ===== Ajuste: YouTube Data API ===== -->
+
+            <TextView
+                android:id="@+id/youtubeTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_youtube_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_youtube_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/youtubeStatus"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp"
+                tools:text="No configurado" />
+
+            <TextView
+                android:id="@+id/btnConfigureYoutube"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold"
+                tools:text="@string/settings_youtube_configure" />
 
         </LinearLayout>
 

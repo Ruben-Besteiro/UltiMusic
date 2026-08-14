@@ -3,6 +3,7 @@ package com.untar.ultimusic.data.db
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
+import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
@@ -13,6 +14,7 @@ import com.untar.ultimusic.model.Album
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.Artist
 import com.untar.ultimusic.model.GreylistFolder
+import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
@@ -42,6 +44,8 @@ fun GreylistFolderEntity.toDomain(): GreylistFolder = GreylistFolder(
     excluded = excluded
 )
 
+fun LibraryRootEntity.toDomain(): LibraryRoot = LibraryRoot(path = path)
+
 /**
  * Los artistas del álbum se dejan vacíos en la vista de canciones (no se necesitan ahí; la lista
  * de canciones solo muestra el título del álbum). La pestaña de álbumes usa [AlbumSummary], que ya
@@ -61,7 +65,7 @@ fun SongWithRelations.toDomain(): Song = Song(
     filePath = song.filePath,
     title = song.title,
     artists = artists.sortedByArtistLink(artistLinks).map { it.toDomain() },
-    albums = albums.map { it.toDomain() },
+    album = album?.toDomain(),
     producers = producers.sortedByProducerLink(producerLinks).map { it.toDomain() },
     duration = song.duration,
     year = song.year,
@@ -74,10 +78,13 @@ fun SongWithRelations.toDomain(): Song = Song(
     videoThumbnailName = song.videoThumbnailName,
     videoOffsetMs = song.videoOffsetMs,
     lyricsOffsetMs = song.lyricsOffsetMs,
+    trackNumber = song.trackNumber,
+    discNumber = song.discNumber,
     ogTitle = song.ogTitle,
     ogArtist = song.ogArtist,
     ogAlbum = song.ogAlbum,
-    ogYear = song.ogYear
+    ogYear = song.ogYear,
+    youtubeViewCount = song.youtubeViewCount
 )
 
 // --- Resúmenes de las pestañas de Álbumes / Artistas / Productores ---
@@ -107,7 +114,8 @@ fun PersonSummaryRow.toDomain(kind: GroupKind): PersonSummary = PersonSummary(
     cover = CoverRef(
         ownImage = imageName,
         group = GroupCoverSource(kind, id)
-    )
+    ),
+    popularity = popularity
 )
 
 // --- Orden de artistas/productores dentro de una canción ---

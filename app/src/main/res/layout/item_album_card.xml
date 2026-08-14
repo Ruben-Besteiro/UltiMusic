@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Celda de la rejilla de álbumes: carátula cuadrada + título + artista. -->
+<!--
+  Celda de la rejilla de álbumes: carátula cuadrada + título + subtítulo de dos líneas: artista y
+  año en la primera, número de canciones en la segunda (ver AlbumsAdapter.AlbumViewHolder).
+-->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -35,7 +38,7 @@
         android:ellipsize="end"
         android:maxLines="1"
         android:textColor="@color/um_on_background"
-        android:textSize="15sp"
+        android:textSize="16sp"
         android:textStyle="italic"
         tools:text="Meteora" />
 
@@ -43,10 +46,16 @@
         android:id="@+id/albumSubtitle"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:ellipsize="end"
-        android:maxLines="1"
         android:textColor="@color/um_on_surface_muted"
-        android:textSize="13sp"
-        tools:text="Linkin Park" />
+        android:textSize="14sp"
+        tools:text="Linkin Park | 2003" />
+
+    <TextView
+        android:id="@+id/albumSongCount"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="14sp"
+        tools:text="12 canciones" />
 
 </LinearLayout>

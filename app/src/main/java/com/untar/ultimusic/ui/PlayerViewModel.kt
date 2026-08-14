@@ -32,9 +32,9 @@ data class PlaybackProgress(val positionMs: Long = 0L, val durationMs: Long = 0L
  * [com.untar.ultimusic.playback.PlaybackService.isLooseQueue]). La usa el iPod para elegir la
  * palabra correcta al anunciar cuántas canciones quedan ("en la lista", "en el álbum", "de este
  * artista"...) y qué decir al llegar a la última (ver
- * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [LISTA] y [GENRE] los pone el modo
- * navegación del iPod al empezar a reproducir esa colección (ver
- * [com.untar.ultimusic.ui.player.IPodDialogFragment.enterBrowseMode]); [ALBUM], [ARTIST] y
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [LISTA] y [GENRE] los pone la ficha
+ * intermedia de una lista o un género al empezar a reproducir esa colección (ver
+ * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]); [ALBUM], [ARTIST] y
  * [PRODUCER] los pone la ficha de detalle (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
  */
 enum class CollectionKind { LISTA, GENRE, ALBUM, ARTIST, PRODUCER }

@@ -4,19 +4,17 @@ import android.app.Dialog
 import android.content.Context
 import android.content.res.ColorStateList
 import android.os.Bundle
-import android.view.View
-import android.view.ViewGroup
-import android.widget.CheckedTextView
+import android.view.LayoutInflater
 import android.widget.EditText
-import android.widget.ListView
+import android.widget.LinearLayout
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
-import androidx.core.graphics.drawable.DrawableCompat
 import androidx.core.os.bundleOf
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.util.AccentTint
@@ -45,13 +43,27 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         val args = requireArguments()
         val filenames = args.getStringArray(ARG_FILENAMES)!!.toList()
         val names = args.getStringArray(ARG_NAMES)?.toList() ?: emptyList()
-        // Estado marcado/desmarcado; el propio AlertDialog lo va actualizando al tocar cada fila.
+        // Estado marcado/desmarcado; cada casilla lo va actualizando al tocarla.
         val checked = args.getBooleanArray(ARG_CHECKED) ?: BooleanArray(names.size)
 
-        val dialog = AlertDialog.Builder(requireContext())
-            .setTitle(R.string.add_to_playlist_title)
-            .setMultiChoiceItems(names.toTypedArray(), checked) { _, which, isChecked ->
-                val name = names[which]
+        // Casillas reales (MaterialCheckBox), no el `setMultiChoiceItems` de serie: ese monta un
+        // ListView de CheckedTextView cuyo `checkMarkTintList` no llega a recolorear el
+        // `AnimatedStateListDrawable` del check múltiple de fábrica, así que se quedaba siempre en
+        // el amarillo fijo de colorControlActivated. Con MaterialCheckBox, `buttonTintList` sí
+        // funciona, igual que en el resto de la app (ver MetadataSuggestionsDialogFragment y
+        // SettingsDialogFragment).
+        val content = LayoutInflater.from(requireContext())
+            .inflate(R.layout.dialog_add_to_playlist, null, false)
+        val fieldsContainer = content.findViewById<LinearLayout>(R.id.addToPlaylistFields)
+        names.forEachIndexed { index, name ->
+            val checkbox = LayoutInflater.from(requireContext())
+                .inflate(R.layout.item_playlist_checkbox, fieldsContainer, false) as MaterialCheckBox
+            checkbox.text = name
+            checkbox.isChecked = checked[index]
+            // El listener se engancha DESPUÉS de fijar el estado inicial: si no, marcar el estado
+            // de partida dispararía un addSongs/removeSongs de mentira sobre canciones que ya
+            // estaban (o no) en la lista.
+            checkbox.setOnCheckedChangeListener { _, isChecked ->
                 if (isChecked) {
                     viewModel.addSongs(name, filenames)
                     showAddedToast(name, filenames.size)
@@ -59,6 +71,12 @@ class AddToPlaylistDialogFragment : DialogFragment() {
                     viewModel.removeSongs(name, filenames)
                 }
             }
+            fieldsContainer.addView(checkbox)
+        }
+
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.add_to_playlist_title)
+            .setView(content)
             .setNeutralButton(R.string.playlist_new_option) { _, _ -> showCreateAndAdd(filenames) }
             .setPositiveButton(R.string.dialog_ok, null)
             .create()
@@ -69,35 +87,13 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         // no hace falta recolorear a media que se marca una casilla.
         dialog.setOnShowListener {
             val accent = playerViewModel.accentColor.value
-            dialog.listView?.let { tintChecklist(it, accent) }
             val tint = ColorStateList.valueOf(accent)
-            dialog.getButton(AlertDialog.BUTTON_NEUTRAL)?.setTextColor(tint)
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)?.setTextColor(tint)
+            for (i in 0 until fieldsContainer.childCount) {
+                (fieldsContainer.getChildAt(i) as? MaterialCheckBox)?.buttonTintList = tint
+            }
+            AccentTint.buttons(dialog, accent)
         }
         return dialog
-    }
-
-    /**
-     * Tiñe con [accent] las casillas de este diálogo de selección múltiple.
-     *
-     * Es un [ListView] (lo crea el propio `AlertDialog`, no se puede cambiar por un `RecyclerView`),
-     * y un ListView **recicla** sus filas al hacer scroll: si solo tiñéramos las visibles al abrir el
-     * diálogo, una lista que quedase fuera de pantalla aparecería sin teñir al bajar. Por eso se
-     * engancha un `OnHierarchyChangeListener`, que repite el tintado cada vez que una fila (nueva o
-     * reciclada) entra en la jerarquía de vistas visible.
-     */
-    private fun tintChecklist(listView: ListView, accent: Int) {
-        fun tint(view: View) {
-            val checkedTextView = view as? CheckedTextView ?: return
-            val drawable = checkedTextView.checkMarkDrawable?.mutate() ?: return
-            DrawableCompat.setTint(drawable, accent)
-            checkedTextView.checkMarkDrawable = drawable
-        }
-        for (i in 0 until listView.childCount) tint(listView.getChildAt(i))
-        listView.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
-            override fun onChildViewAdded(parent: View, child: View) = tint(child)
-            override fun onChildViewRemoved(parent: View, child: View) = Unit
-        })
     }
 
     /** Aviso de "N canciones añadidas a X" al marcar una casilla o crear la lista desde aquí. */

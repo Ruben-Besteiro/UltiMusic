@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de una carpeta raíz adicional de la fonoteca: su ruta absoluta completa (puede vivir en
+     cualquier parte del dispositivo, no solo bajo UltiMusic) y una papelera que la quita de la lista
+     (sin tocar la carpeta real). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal" >
+
+    <TextView
+        android:id="@+id/libraryRootPath"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="start"
+        android:maxLines="1"
+        android:textColor="@color/um_on_background"
+        android:textSize="15sp"
+        tools:text="/storage/emulated/0/Download/Música" />
+
+    <ImageButton
+        android:id="@+id/btnLibraryRootDelete"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/settings_library_root_delete_desc"
+        android:src="@drawable/ic_delete" />
+
+</LinearLayout>

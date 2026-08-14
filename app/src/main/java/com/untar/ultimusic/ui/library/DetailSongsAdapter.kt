@@ -10,7 +10,6 @@ import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.scan.MusicScanner
-import com.untar.ultimusic.model.AlbumTrack
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
@@ -40,9 +39,9 @@ class DetailSongsAdapter(
     private val onGoToProducer: (Song) -> Unit
 ) : RecyclerView.Adapter<DetailSongsAdapter.TrackViewHolder>() {
 
-    private var tracks: List<AlbumTrack> = emptyList()
+    private var tracks: List<Song> = emptyList()
 
-    fun submit(list: List<AlbumTrack>) {
+    fun submit(list: List<Song>) {
         tracks = list
         notifyDataSetChanged()
     }
@@ -70,7 +69,7 @@ class DetailSongsAdapter(
         private val more: View = itemView.findViewById(R.id.btnTrackMore)
 
         fun bind(
-            track: AlbumTrack,
+            song: Song,
             position: Int,
             currentKind: DetailKind,
             onSongClick: (Int) -> Unit,
@@ -82,14 +81,13 @@ class DetailSongsAdapter(
             onGoToArtist: (Song) -> Unit,
             onGoToProducer: (Song) -> Unit
         ) {
-            val song = track.song
             title.text = song.title
             // En la ficha de álbum el álbum ya lo dice la cabecera: repetirlo en cada canción sobra.
             // En artista/productor sí hace falta, porque cada canción puede venir de uno distinto.
             duration.text = if (currentKind == DetailKind.ALBUM) {
                 TimeFormat.mmss(song.duration)
             } else {
-                val album = song.albums.joinToString(", ") { it.title }.ifBlank { MusicScanner.UNKNOWN_ALBUM }
+                val album = song.album?.title ?: MusicScanner.UNKNOWN_ALBUM
                 joinNonBlank(album, TimeFormat.mmss(song.duration))
             }
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
@@ -98,7 +96,7 @@ class DetailSongsAdapter(
                 number.visibility = View.VISIBLE
                 // Un álbum sin número de pista tampoco tiene dato que mostrar: un guión en vez de
                 // dejar la columna vacía, que descuadraría los títulos.
-                number.text = track.trackNumber?.toString() ?: "-"
+                number.text = song.trackNumber?.toString() ?: "-"
             } else {
                 // En artista/productor el número de pista es un dato del álbum, no de la persona:
                 // fuera del todo en vez de un guión que no significaría nada aquí.
@@ -115,7 +113,7 @@ class DetailSongsAdapter(
                     // La opción de "ir a" la ficha en la que ya estamos no pinta nada aquí; las demás
                     // solo si la canción de verdad tiene ese dato.
                     menu.findItem(R.id.action_go_to_album)?.isVisible =
-                        currentKind != DetailKind.ALBUM && song.albums.isNotEmpty()
+                        currentKind != DetailKind.ALBUM && song.album != null
                     menu.findItem(R.id.action_go_to_artist)?.isVisible =
                         currentKind != DetailKind.ARTIST && song.artists.isNotEmpty()
                     menu.findItem(R.id.action_go_to_producer)?.isVisible =

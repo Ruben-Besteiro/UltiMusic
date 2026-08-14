@@ -6,13 +6,16 @@ import androidx.room.Relation
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
-import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 
 /**
- * Canción con sus artistas, álbumes y productores resueltos a través de las tablas de cruce.
+ * Canción con sus artistas, su álbum y sus productores resueltos a través de las tablas de cruce.
+ *
+ * [album] sale de [SongEntity.albumId], una clave foránea normal (una canción pertenece como mucho a
+ * UN álbum: a diferencia de los artistas/productores, aquí no hay tabla de cruce). Room resuelve un
+ * `@Relation` a un campo no-lista como relación N:1, trayendo como mucho una fila.
  *
  * [artistLinks] y [producerLinks] traen las filas de cruce en crudo (con su [SongArtistCrossRef.position]
  * / [SongProducerCrossRef.position]) además de las entidades ya resueltas en [artists]/[producers]:
@@ -35,16 +38,8 @@ data class SongWithRelations(
     val artists: List<ArtistEntity>,
     @Relation(parentColumn = "id", entityColumn = "songId")
     val artistLinks: List<SongArtistCrossRef>,
-    @Relation(
-        parentColumn = "id",
-        entityColumn = "id",
-        associateBy = Junction(
-            value = SongAlbumCrossRef::class,
-            parentColumn = "songId",
-            entityColumn = "albumId"
-        )
-    )
-    val albums: List<AlbumEntity>,
+    @Relation(parentColumn = "albumId", entityColumn = "id")
+    val album: AlbumEntity?,
     @Relation(
         parentColumn = "id",
         entityColumn = "id",

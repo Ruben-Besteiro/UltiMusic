@@ -29,10 +29,9 @@ import java.util.Collections
  * (historial); las próximas (encoladas a mano) con número positivo. Al pinchar una fila se salta a
  * ella (ver [PlayerViewModel.jumpTo]).
  *
- * Se puede reordenar arrastrando, igual que una lista en modo navegación (ver
- * [PlaylistQueueAdapter], mismo manejador y mismo patrón: [moveItem] mueve en memoria mientras se
- * arrastra y [commitReorder] persiste el orden final al soltar, con [onStartDrag] enganchado al
- * [androidx.recyclerview.widget.ItemTouchHelper] de [IPodDialogFragment]).
+ * Se puede reordenar arrastrando: [moveItem] mueve en memoria mientras se arrastra y
+ * [commitReorder] persiste el orden final al soltar, con [onStartDrag] enganchado al
+ * [androidx.recyclerview.widget.ItemTouchHelper] de [IPodDialogFragment].
  */
 class IPodQueueAdapter(
     private val onItemClick: (Int) -> Unit,
@@ -43,8 +42,7 @@ class IPodQueueAdapter(
     private val songs: MutableList<Song> = mutableListOf()
 
     /** Ruta de archivo de la canción actual; de ahí se recalcula [currentIndex] tras cada arrastre
-     * (mismo motivo que [PlaylistQueueAdapter.nowPlayingIndex]: la posición absoluta que llega en
-     * [submit] deja de valer en cuanto se reordena en memoria). */
+     * (la posición absoluta que llega en [submit] deja de valer en cuanto se reordena en memoria). */
     private var currentFilePath: String? = null
     private var currentIndex: Int = 0
 

@@ -1,12 +1,20 @@
 package com.untar.ultimusic.data.db.entities
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
  * Fila de la tabla de canciones. El [filePath] es la clave estable que ancla la canción entre
  * escaneos (aunque el [id] autogenerado cambie de instalación a instalación).
+ *
+ * [albumId] enlaza con el álbum al que pertenece esta canción, con [trackNumber]/[discNumber] como
+ * la posición que ocupa en él. A diferencia de los artistas y productores (donde una colaboración es
+ * habitual), una canción pertenece como mucho a UN álbum: no hay tabla de cruce, es una relación
+ * N:1 normal como cualquier clave foránea. `SET_NULL` en vez de `CASCADE` porque borrar el álbum no
+ * debe borrar sus canciones, solo deshacer el enlace (en la práctica esto no llega a pasar: un álbum
+ * solo se borra cuando ya no le queda ninguna canción enlazada, ver `LibraryDao.pruneOrphanAlbums`).
  *
  * Los campos `og*` guardan la info de la canción ORIGINAL cuando esta es un remix (título, artista,
  * álbum y año del tema original). No provienen de la etiqueta del archivo: los rellena el usuario
@@ -35,12 +43,36 @@ import androidx.room.PrimaryKey
  * la fila nunca se borra por esto, así que reactivar la carpeta la devuelve intacta, con sus
  * ediciones, carátula y vídeo.
  *
+ * [youtubeViewCount] son las visitas del vídeo de [videoUrl] en YouTube. A diferencia de todo lo
+ * demás de aquí arriba, ESTE campo sí sale de la API de YouTube (ver
+ * `data/remote/YouTubeStatsApi.kt`), nunca lo escribe el usuario: null mientras la canción no tenga
+ * vídeo o todavía no se haya refrescado. Se actualiza solo, como mucho una vez al día (ver
+ * `LibraryRepository.refreshYouTubeStatsIfDue`), lo que de paso cumple la política de YouTube de
+ * refrescar o borrar cada 30 días los datos sacados de su API — algo que no aplicaba a ningún otro
+ * campo de esta tabla porque ninguno viene de ahí.
+ *
+ * [youtubeChannelId] es el canal que subió ese vídeo, refrescado junto con [youtubeViewCount] y por
+ * el mismo motivo. Es un dato puramente interno: no se enseña en ninguna pantalla, solo sirve de
+ * materia prima para que [com.untar.ultimusic.data.LibraryRepository.refreshYouTubeStatsIfDue]
+ * calcule la "popularidad" de cada artista —el canal que más se repite entre las canciones donde ese
+ * artista es el principal— y la guarde en
+ * [com.untar.ultimusic.data.db.entities.ArtistEntity.youtubeChannelId]/
+ * [com.untar.ultimusic.data.db.entities.ArtistEntity.youtubeChannelSubscriberCount].
+ *
  * El productor NO está aquí: vive en su propia tabla ([ProducerEntity]) enlazada por
  * [SongProducerCrossRef], igual que los artistas, porque tiene pestaña y ficha propias.
  */
 @Entity(
     tableName = "songs",
-    indices = [Index(value = ["filePath"], unique = true)]
+    indices = [Index(value = ["filePath"], unique = true), Index("albumId")],
+    foreignKeys = [
+        ForeignKey(
+            entity = AlbumEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["albumId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ]
 )
 data class SongEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -58,6 +90,12 @@ data class SongEntity(
     val videoOffsetMs: Long = 0,
     val lyricsOffsetMs: Long = 0,
     val hiddenByGreylist: Boolean = false,
+    val youtubeViewCount: Long? = null,
+    val youtubeChannelId: String? = null,
+
+    val albumId: Long?,
+    val trackNumber: Int?,
+    val discNumber: Int?,
 
     val ogTitle: String?,
     val ogArtist: String?,

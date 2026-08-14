@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Álbum en forma de FILA (carátula cuadrada + título + artista y número de canciones).
+  Álbum en forma de FILA (carátula cuadrada + título + subtítulo de dos líneas: artista y año en la
+  primera, número de canciones en la segunda -ver SearchAdapter.AlbumViewHolder-).
   La pestaña de Álbumes los pinta como tarjetas grandes en una rejilla (`item_album_card`), pero en
   los resultados de búsqueda conviven con canciones y artistas, que son filas: una tarjeta ahí
   rompería la lista en dos.
@@ -45,11 +46,17 @@
             android:id="@+id/albumSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:textColor="@color/um_on_surface_muted"
-            android:textSize="14sp"
-            tools:text="Queen | 12 canciones" />
+            android:textSize="12sp"
+            tools:text="Queen | 1975" />
+
+        <TextView
+            android:id="@+id/albumSongCount"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="12sp"
+            tools:text="12 canciones" />
 
     </LinearLayout>
 

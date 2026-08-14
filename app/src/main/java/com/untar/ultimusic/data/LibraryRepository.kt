@@ -10,15 +10,19 @@ import com.untar.ultimusic.data.db.LibraryDao
 import com.untar.ultimusic.data.db.UltiMusicDatabase
 import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
+import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongEntity
+import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
 import com.untar.ultimusic.data.db.toDomain
+import com.untar.ultimusic.data.remote.YouTubeStatsApi
+import com.untar.ultimusic.data.remote.YouTubeStatsRefresh
 import com.untar.ultimusic.data.scan.MusicLibraryObserver
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
-import com.untar.ultimusic.model.AlbumTrack
 import com.untar.ultimusic.model.GenreSummary
 import com.untar.ultimusic.model.GreylistFolder
+import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
@@ -47,6 +51,14 @@ class LibraryRepository private constructor(
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var libraryObserver: MusicLibraryObserver? = null
 
+    /**
+     * Evita observers duplicados: [startWatchingLibraryChanges] necesita leer las carpetas raíz
+     * guardadas (una consulta suspend), así que ya no es síncrona. Sin este flag, dos llamadas
+     * seguidas (dos `onResume`, por ejemplo) podrían colarse ambas antes de que la primera termine y
+     * crear dos observers, dejando uno huérfano sin `stopWatching()`.
+     */
+    private var watchingStarted = false
+
     /** Canciones persistidas, reactivas: cualquier edición reemite la lista. */
     val songs: Flow<List<Song>> =
         dao.observeSongs().map { list -> list.map { it.toDomain() } }
@@ -59,6 +71,10 @@ class LibraryRepository private constructor(
     /** Subcarpetas de la lista gris (ajustes > Lista gris), reactivo: un cambio en cualquiera repinta la lista. */
     val greylistFolders: Flow<List<GreylistFolder>> =
         dao.observeGreylistFolders().map { list -> list.map { it.toDomain() } }
+
+    /** Carpetas raíz adicionales de la fonoteca (ajustes > Carpetas de la fonoteca), reactivo. */
+    val libraryRoots: Flow<List<LibraryRoot>> =
+        dao.observeLibraryRoots().map { list -> list.map { it.toDomain() } }
 
     // --- Pestañas de Álbumes / Artistas / Productores ---
     //
@@ -80,14 +96,22 @@ class LibraryRepository private constructor(
      * lista de texto dentro de cada canción, así que se deriva aquí, en Kotlin, a partir de
      * [songs]. Se agrupa por el texto EXACTO —igual que el resto de nombres de la aplicación, donde
      * dos grafías distintas cuentan como cosas distintas— y se ordena igual que las demás pestañas.
+     *
+     * [GenreSummary.totalDuration] suma la duración de cada canción que lleve ese género: una
+     * canción con varios géneros cuenta entera en cada uno de ellos, igual que [songCount].
      */
     val genres: Flow<List<GenreSummary>> = songs.map { list ->
-        list.asSequence()
-            .flatMap { it.genres.asSequence() }
-            .filter { it.isNotBlank() }
-            .groupingBy { it }
-            .eachCount()
-            .map { (name, count) -> GenreSummary(name, count) }
+        // name -> (canciones, duración total). LinkedHashMap solo por determinismo al recorrerlo;
+        // el orden real lo pone el sortedBy de abajo.
+        val byGenre = LinkedHashMap<String, Pair<Int, Long>>()
+        for (song in list) {
+            for (genre in song.genres) {
+                if (genre.isBlank()) continue
+                val (count, duration) = byGenre[genre] ?: (0 to 0L)
+                byGenre[genre] = (count + 1) to (duration + song.duration)
+            }
+        }
+        byGenre.map { (name, countAndDuration) -> GenreSummary(name, countAndDuration.first, countAndDuration.second) }
             .sortedBy { it.name.lowercase() }
     }
 
@@ -126,21 +150,10 @@ class LibraryRepository private constructor(
     fun producer(id: Long): Flow<PersonSummary?> =
         dao.observeProducerSummaries(id).map { rows -> rows.firstOrNull()?.toDomain(GroupKind.PRODUCER) }
 
-    /**
-     * Canciones de un álbum, ya ordenadas por número de pista y con ese número al lado.
-     *
-     * El número vive en la tabla de cruce y la relación de la canción no lo arrastra, así que se
-     * pide en una segunda consulta y se unen aquí con [combine]: cada vez que cualquiera de los dos
-     * flujos emite, se recalcula la lista combinada. El orden lo marca la consulta de canciones.
-     */
-    fun albumTracks(albumId: Long): Flow<List<AlbumTrack>> =
-        combine(
-            dao.observeSongsOfAlbum(albumId),
-            dao.observeTrackPositions(albumId)
-        ) { songs, positions ->
-            val numberBySongId = positions.associate { it.songId to it.trackNumber }
-            songs.map { AlbumTrack(it.toDomain(), numberBySongId[it.song.id]) }
-        }
+    /** Canciones de un álbum, ya ordenadas por número de pista (y de disco): ver
+     * [com.untar.ultimusic.data.db.entities.SongEntity.trackNumber]. */
+    fun albumTracks(albumId: Long): Flow<List<Song>> =
+        dao.observeSongsOfAlbum(albumId).map { list -> list.map { it.toDomain() } }
 
     fun artistSongs(id: Long): Flow<List<Song>> =
         dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
@@ -171,34 +184,175 @@ class LibraryRepository private constructor(
         dao.findSongByPath(path)?.toDomain()
     }
 
+    /** Rutas guardadas de carpetas raíz adicionales, como [File], para pasárselas a [MusicScanner]. */
+    private suspend fun libraryRootFiles(): List<File> = dao.libraryRootPaths().map { File(it) }
+
     /**
      * Reconcilia lo que hay en disco con lo guardado: escanea (lento, fuera de transacción) y
      * delega en el DAO la inserción de novedades y el borrado de lo que ya no existe. Las
      * ediciones del usuario nunca se pisan.
      */
     suspend fun reconcile(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) = withContext(Dispatchers.IO) {
-        val scanned = MusicScanner.scan(onProgress)
+        val scanned = MusicScanner.scan(libraryRootFiles(), onProgress)
         dao.reconcile(scanned)
     }
 
-    fun startWatchingLibraryChanges() {
-        if (libraryObserver != null) return
-
-        val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
-        if (!ultiMusic.exists() || !ultiMusic.isDirectory) return
-
-        libraryObserver = MusicLibraryObserver(ultiMusic, observerScope) {
-            observerScope.launch {
-                reconcile()
+    /**
+     * Refresca las visitas (y el canal) de YouTube de todas las canciones con vídeo, como mucho una
+     * vez al día (ver [YouTubeStatsRefresh]). La llama [com.untar.ultimusic.ui.SongsViewModel] al
+     * terminar cada reconciliación con el filesystem, que es lo más parecido que hay a "abrir la
+     * aplicación" sin depender de que la biblioteca ya esté cargada del todo, y también
+     * [com.untar.ultimusic.ui.sort.YouTubeApiKeyDialogFragment] justo al guardar una clave nueva (para
+     * no hacer esperar al usuario hasta el refresco del día siguiente).
+     *
+     * De paso resuelve el canal "de cada artista" y su número de suscriptores, guardándolos
+     * directamente en su fila ([com.untar.ultimusic.data.db.entities.ArtistEntity.youtubeChannelId]/
+     * [com.untar.ultimusic.data.db.entities.ArtistEntity.youtubeChannelSubscriberCount]): es lo que usa
+     * `LibraryDao.observeArtistSummaries` para la popularidad de un artista (ver
+     * [com.untar.ultimusic.model.PersonSummary.popularity]). La moda (el canal que más se repite entre
+     * las canciones donde el artista es el principal) se calcula aquí, en Kotlin, a partir de
+     * [LibraryDao.artistChannelCandidates]; SQL solo hace el `GROUP BY` de conteo, no decide cuál gana.
+     *
+     * Es best-effort y en segundo plano ([observerScope], no el de quien llama): un fallo de red o
+     * de cuota no debe alargar ni romper la reconciliación, y las visitas/suscriptores son un dato
+     * decorativo del subtítulo (y de un criterio de orden opcional), no algo de lo que dependa la
+     * reproducción.
+     *
+     * Excepciones al tope diario: cuando el usuario cambia el vídeo de UNA canción desde el editor
+     * (ver [refreshYouTubeStatsForSong]), y cuando pone o cambia la clave con [force] (ver más abajo).
+     *
+     * @param force Salta la comprobación de [YouTubeStatsRefresh.isDue] (pero no la de
+     * [YouTubeStatsApi.isConfigured]). La usa [com.untar.ultimusic.ui.sort.YouTubeApiKeyDialogFragment]
+     * al guardar una clave nueva O al cambiar una ya puesta: sin esto, si el usuario había introducido
+     * vídeos sin clave (o con una que dejó de funcionar), el barrido de hoy ya se habría dado por
+     * intentado -aunque no consiguiera nada por no haber clave todavía- y esos vídeos se quedarían sin
+     * visitas hasta el refresco de mañana en vez de pedirse en cuanto la clave por fin sirve.
+     */
+    fun refreshYouTubeStatsIfDue(force: Boolean = false) {
+        if (!YouTubeStatsApi.isConfigured || (!force && !YouTubeStatsRefresh.isDue)) return
+        observerScope.launch {
+            // Agrupadas por id de vídeo (no por canción): dos canciones podrían compartir el mismo
+            // vídeo, y así se piden sus visitas una sola vez y se reparten entre todas las que lo
+            // llevan.
+            val songIdsByVideoId = dao.songsWithVideoUrl()
+                .mapNotNull { row -> YouTubeUrl.videoId(row.videoUrl)?.let { it to row.id } }
+                .groupBy({ it.first }, { it.second })
+            if (songIdsByVideoId.isEmpty()) {
+                YouTubeStatsRefresh.markRefreshed()
+                return@launch
             }
-        }.apply {
-            startWatching()
+
+            // Paso 1: visitas + canal de cada vídeo, guardados en la propia canción.
+            val stats = mutableMapOf<Long, Pair<Long, String?>>()
+            for (chunk in songIdsByVideoId.keys.chunked(YouTubeStatsApi.MAX_IDS_PER_CALL)) {
+                val videoStats = YouTubeStatsApi.videoStats(chunk)
+                for ((videoId, videoStat) in videoStats) {
+                    songIdsByVideoId[videoId]?.forEach { songId -> stats[songId] = videoStat.viewCount to videoStat.channelId }
+                }
+            }
+            dao.setYoutubeViewCounts(stats)
+
+            // Paso 2: el canal de cada artista, de TODA la fonoteca.
+            resolveArtistChannels(dao.artistChannelCandidates())
+
+            // Se marca al final, no al principio: si el proceso se interrumpe a medias, la próxima
+            // apertura de la aplicación vuelve a intentarlo entero en vez de darlo por hecho.
+            YouTubeStatsRefresh.markRefreshed()
+        }
+    }
+
+    /**
+     * Refresco INMEDIATO de las visitas (y el canal) de UNA canción con vídeo, sin esperar al tope
+     * de una vez al día de [refreshYouTubeStatsIfDue]. La llama
+     * [com.untar.ultimusic.ui.editor.MetadataEditorViewModel.save] justo después de guardar, pero
+     * SOLO cuando el vídeo ha cambiado de verdad (uno nuevo, o distinto del que tenía antes): es la
+     * única edición que deja desactualizado el dato guardado — el resto de campos no tocan las
+     * visitas, así que no hay nada que valga la pena volver a pedir.
+     *
+     * También recalcula, si la tiene, la popularidad del artista PRINCIPAL de esta canción: el canal
+     * que se le acaba de guardar podría cambiar cuál es "el canal del artista" (la moda de sus
+     * canciones), y esperar al refresco diario dejaría su ficha con un dato viejo hasta entonces.
+     * Solo ESE artista, no toda la fonoteca: el barrido completo ya lo hace [refreshYouTubeStatsIfDue]
+     * a diario.
+     *
+     * A propósito NO llama a [YouTubeStatsRefresh.markRefreshed]: el tope diario sigue intacto para
+     * el resto de la fonoteca, esto es solo una excepción puntual para la canción que se acaba de
+     * editar, no un refresco general adelantado.
+     */
+    fun refreshYouTubeStatsForSong(songId: Long, videoUrl: String) {
+        if (!YouTubeStatsApi.isConfigured) return
+        observerScope.launch {
+            val videoId = YouTubeUrl.videoId(videoUrl) ?: return@launch
+            val stat = YouTubeStatsApi.videoStats(listOf(videoId))[videoId] ?: return@launch
+            dao.setYoutubeViewCount(songId, stat.viewCount, stat.channelId)
+
+            val artistIds = dao.principalArtistIds(songId)
+            if (artistIds.isEmpty()) return@launch
+            resolveArtistChannels(dao.artistChannelCandidates().filter { it.artistId in artistIds })
+        }
+    }
+
+    /**
+     * Resuelve, para cada artista presente en [candidates], cuál de sus canales candidatos es "el
+     * suyo" (el más repetido que responda con suscriptores válidos) y lo guarda. Compartido por
+     * [refreshYouTubeStatsIfDue] (con TODOS los candidatos de la fonoteca) y
+     * [refreshYouTubeStatsForSong] (con los de un solo artista): la lógica de elegir moda y pedir
+     * suscriptores es la misma, solo cambia el alcance de la lista de entrada.
+     */
+    private suspend fun resolveArtistChannels(candidates: List<ArtistChannelCandidateRow>) {
+        // artistChannelCandidates ya viene agrupado por (artista, canal) con su recuento; aquí solo
+        // hace falta quedarse, por artista, con los candidatos ordenados de más a menos repetido.
+        val candidatesByArtist = candidates
+            .groupBy({ it.artistId }, { it.channelId to it.cnt })
+            .mapValues { (_, cands) -> cands.sortedByDescending { it.second }.map { it.first } }
+        if (candidatesByArtist.isEmpty()) return
+
+        // Una sola tanda de peticiones para TODOS los canales candidatos de TODOS los artistas de
+        // este lote, sin repetir el mismo canal si lo comparten varios.
+        val allChannelIds = candidatesByArtist.values.flatten().distinct()
+        val channelSubscribers = mutableMapOf<String, Long>()
+        for (chunk in allChannelIds.chunked(YouTubeStatsApi.MAX_IDS_PER_CALL)) {
+            channelSubscribers.putAll(YouTubeStatsApi.channelStats(chunk))
+        }
+
+        // Por artista: el candidato más repetido que SÍ haya respondido con suscriptores ("válido",
+        // ver el comentario de artistChannelCandidates); null si ninguno lo hizo.
+        val resolved = candidatesByArtist.mapValues { (_, channelIds) ->
+            channelIds.firstOrNull { it in channelSubscribers }
+                ?.let { channelId -> channelId to channelSubscribers.getValue(channelId) }
+        }
+        dao.setArtistYoutubeChannels(resolved)
+    }
+
+    fun startWatchingLibraryChanges() {
+        if (watchingStarted) return
+        watchingStarted = true
+
+        observerScope.launch {
+            val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
+            if (!ultiMusic.exists() || !ultiMusic.isDirectory) {
+                watchingStarted = false
+                return@launch
+            }
+
+            // Solo se vigilan las carpetas raíz que existan de verdad ahora mismo: una guardada que
+            // ya no está montada (tarjeta SD retirada, carpeta borrada a mano) no debe hacer fallar
+            // la vigilancia de las demás.
+            val roots = listOf(ultiMusic) + libraryRootFiles().filter { it.exists() && it.isDirectory }
+            libraryObserver = MusicLibraryObserver(roots, observerScope) {
+                observerScope.launch {
+                    reconcile()
+                }
+            }.apply {
+                startWatching()
+            }
         }
     }
 
     fun stopWatchingLibraryChanges() {
         libraryObserver?.stopWatching()
         libraryObserver = null
+        watchingStarted = false
     }
 
     // --- Lista gris ---
@@ -216,6 +370,27 @@ class LibraryRepository private constructor(
 
     suspend fun setGreylistFolderExcluded(path: String, excluded: Boolean) = withContext(Dispatchers.IO) {
         dao.setGreylistFolderExcluded(path, excluded)
+    }
+
+    // --- Carpetas raíz de la fonoteca ---
+    //
+    // A diferencia de la lista gris (que solo oculta/muestra con un UPDATE, sin reescanear), añadir
+    // o quitar una carpeta raíz SÍ cambia qué cuenta como parte de la biblioteca, así que las dos
+    // operaciones reconcilian de inmediato: las canciones de una carpeta recién añadida aparecen sin
+    // esperar a la siguiente apertura de la app, y las de una recién quitada se dan de baja igual de
+    // rápido (salvo que reaparezcan con el mismo nombre en otra carpeta vigilada, ver
+    // LibraryDao.reconcile).
+
+    suspend fun addLibraryRoot(path: String) = withContext(Dispatchers.IO) {
+        dao.insertLibraryRoot(LibraryRootEntity(path = path))
+        libraryObserver?.watchNewRoot(File(path))
+        reconcile()
+    }
+
+    suspend fun removeLibraryRoot(path: String) = withContext(Dispatchers.IO) {
+        dao.deleteLibraryRoot(path)
+        libraryObserver?.unwatchRoot(File(path))
+        reconcile()
     }
 
     /**
@@ -236,7 +411,7 @@ class LibraryRepository private constructor(
         val stored = File(song.filePath)
         if (stored.exists()) return@withContext song.filePath
 
-        val relocated = MusicScanner.findByFilename(stored.name) ?: return@withContext null
+        val relocated = MusicScanner.findByFilename(stored.name, libraryRootFiles()) ?: return@withContext null
         // Best-effort: si la reconciliación se nos ha adelantado, la fila antigua ya no existe y el
         // UPDATE no afecta a nadie. La ruta encontrada sigue siendo válida para reproducir.
         runCatching { dao.updateSongPath(song.filePath, relocated.absolutePath) }
@@ -247,7 +422,7 @@ class LibraryRepository private constructor(
      * ¿Se puede leer la carpeta de la fonoteca? Lo consulta quien vaya a dar una canción por
      * perdida (ver [MusicScanner.libraryFolderReadable]).
      */
-    suspend fun libraryFolderReadable(): Boolean = MusicScanner.libraryFolderReadable()
+    suspend fun libraryFolderReadable(): Boolean = MusicScanner.libraryFolderReadable(libraryRootFiles())
 
     // --- Ediciones (se reflejan al instante en el Flow [songs]) ---
 
@@ -301,19 +476,13 @@ class LibraryRepository private constructor(
         dao.setVideoOffsetMs(songId = song.id, offsetMs = offsetMs)
     }
 
-    /** Pista y disco de una canción (viven en la tabla de cruce, no en la fila de la canción). */
-    suspend fun trackAndDisc(songId: Long): Pair<Int?, Int?> =
-        dao.trackNumberOf(songId) to dao.discNumberOf(songId)
-
-    /** Guardado completo desde el editor de metadatos (fila + reenlazado de artistas y álbumes). */
+    /** Guardado completo desde el editor de metadatos (fila + reenlazado de artistas y álbum). */
     suspend fun saveSongEdits(
         song: SongEntity,
         artistNames: List<String>,
-        albumTitles: List<String>,
-        producerNames: List<String>,
-        trackNumber: Int?,
-        discNumber: Int?
-    ) = dao.saveSongEdits(song, artistNames, albumTitles, producerNames, trackNumber, discNumber)
+        albumTitle: String?,
+        producerNames: List<String>
+    ) = dao.saveSongEdits(song, artistNames, albumTitle, producerNames)
 
     /**
      * Copia la imagen elegida por el usuario a `~/UltiMusic/images` y devuelve el nombre de

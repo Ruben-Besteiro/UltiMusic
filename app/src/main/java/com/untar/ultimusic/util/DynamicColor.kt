@@ -9,6 +9,8 @@ import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -20,11 +22,20 @@ import kotlinx.coroutines.withContext
  * Usa **Palette**, una librería de AndroidX que analiza un `Bitmap` y devuelve un puñado de colores
  * representativos ("swatches") ya clasificados: vibrante, apagado, oscuro, claro... Nosotros
  * preferimos los vivos, porque un gris sacado de una portada oscura no se distinguiría del fondo.
+ * Eso sí: un swatch "vivo" que solo cubre un puñado de píxeles (un detalle minúsculo de la
+ * carátula) queda descartado a favor de uno con más peso real; ver [pickSwatch].
  *
  * El color elegido se normaliza después con [readable]: se le fuerza un mínimo de saturación y una
  * franja de luminosidad, de forma que siempre destaque sobre el fondo negro de la app y el texto
  * blanco encima siga leyéndose. Sin eso, una portada casi blanca daría un acento invisible y una
  * casi negra, uno indistinguible del fondo.
+ *
+ * Cada resultado se cachea (ver [cache]) con una clave que identifica la carátula concreta (ruta +
+ * fecha de modificación, igual que [CoverFileKeyer]/[AudioCoverKeyer]), así que la MISMA carátula
+ * da SIEMPRE el mismo acento mientras no se edite: sin la caché, `updateAccent` en
+ * [com.untar.ultimusic.playback.PlaybackService] recalculaba desde cero en cada cambio de canción,
+ * y una carátula con varias zonas de saturación parecida podía acabar en un swatch distinto de una
+ * pasada a otra por mínimas diferencias de decodificación.
  */
 object DynamicColor {
 
@@ -39,7 +50,7 @@ object DynamicColor {
     const val DEFAULT = 0xFFFFD000.toInt()
 
     /**
-     * Carga la imagen indicada (cualquier dato que entienda Coil: un [java.io.File], un
+     * Carga la imagen indicada (cualquier dato que entienda Coil: un [File], un
      * `AudioCover`...) y devuelve su color de acento, o [DEFAULT] si no hay imagen o no se puede
      * analizar.
      *
@@ -47,22 +58,73 @@ object DynamicColor {
      * puede ir en el hilo principal; se llama desde el `viewModelScope`.
      */
     suspend fun fromCover(context: Context, data: Any): Int = withContext(Dispatchers.IO) {
+        val key = cacheKey(data)
+        key?.let { cache[it] }?.let { return@withContext it }
+
         val bitmap = loadBitmap(context, data) ?: return@withContext DEFAULT
         val palette = runCatching { Palette.from(bitmap).clearFilters().generate() }
             .getOrNull() ?: return@withContext DEFAULT
 
-        // De más a menos "vivo". El dominante es el último recurso: es el color que más superficie
-        // ocupa, que en una portada oscura suele ser casi negro (por eso [readable] lo rescata).
-        val swatch = palette.vibrantSwatch
-            ?: palette.lightVibrantSwatch
-            ?: palette.darkVibrantSwatch
-            ?: palette.mutedSwatch
-            ?: palette.lightMutedSwatch
-            ?: palette.darkMutedSwatch
-            ?: palette.dominantSwatch
-            ?: return@withContext DEFAULT
+        val color = readable(pickSwatch(palette).rgb)
+        key?.let { cache[it] = color }
+        color
+    }
 
-        readable(swatch.rgb)
+    /**
+     * Elige qué [Palette.Swatch] usar, de más a menos "vivo": vibrante, apagado, oscuro, claro...
+     * El dominante (el color que más superficie ocupa) es el último recurso, porque en una
+     * portada oscura suele ser casi negro (por eso [readable] lo rescata después).
+     *
+     * Antes de aceptar un candidato "vivo" se comprueba que represente al menos
+     * [MIN_POPULATION_FRACTION] de los píxeles analizados: un `vibrantSwatch` sacado de un detalle
+     * minúsculo de la carátula (una etiqueta, un reflejo) no es representativo y descolocaba el
+     * acento respecto a lo que se ve a simple vista. Si ningún "vivo" llega a ese umbral, se cae al
+     * dominante de verdad -el color que de hecho ocupa más carátula-, y solo si ni eso hay se
+     * rescata el primer candidato "vivo" encontrado, por pequeño que sea, antes que rendirse.
+     */
+    private fun pickSwatch(palette: Palette): Palette.Swatch {
+        val totalPopulation = palette.swatches.sumOf { it.population }.coerceAtLeast(1)
+        val vividCandidates = listOfNotNull(
+            palette.vibrantSwatch,
+            palette.lightVibrantSwatch,
+            palette.darkVibrantSwatch,
+            palette.mutedSwatch,
+            palette.lightMutedSwatch,
+            palette.darkMutedSwatch
+        )
+        return vividCandidates.firstOrNull { it.population.toFloat() / totalPopulation >= MIN_POPULATION_FRACTION }
+            ?: palette.dominantSwatch
+            ?: vividCandidates.firstOrNull()
+            ?: Palette.Swatch(DEFAULT, 0)
+    }
+
+    /**
+     * Caché en memoria de acentos ya calculados, para que la misma carátula (ver [cacheKey]) no se
+     * vuelva a analizar ni pueda dar un resultado distinto de una vez a otra. Un `Map<String, Int>`
+     * de miles de entradas no pesa nada, así que no hace falta límite de tamaño ni política de
+     * expulsión.
+     */
+    private val cache = ConcurrentHashMap<String, Int>()
+
+    /**
+     * Identifica de forma estable la carátula que hay detrás de [data], para cachear su acento.
+     * Replica a mano la clave que ya usan [CoverFileKeyer]/[AudioCoverKeyer]/[GroupCoverKeyer] para
+     * la caché de Coil (ruta + fecha de modificación, o revisión del collage): así una edición de
+     * carátula -que reescribe el archivo y le cambia la fecha- invalida el acento cacheado igual
+     * que ya invalida la miniatura cacheada, sin tener que escuchar [CoverArt.touch] aparte.
+     *
+     * `null` para cualquier tipo de dato que no reconozcamos: en ese caso simplemente no se cachea,
+     * en vez de arriesgarse a una clave incorrecta.
+     */
+    private fun cacheKey(data: Any): String? = when (data) {
+        is File -> "${data.absolutePath}:${data.lastModified()}"
+        is AudioCover -> {
+            val thumbnail = data.fallbackThumbnail
+            "${data.file.absolutePath}:${data.file.lastModified()}:" +
+                "${thumbnail?.absolutePath}:${thumbnail?.lastModified() ?: 0}"
+        }
+        is GroupCoverSource -> "${data.kind}:${data.id}:${CoverArt.revision.value}"
+        else -> null
     }
 
     /**
@@ -172,6 +234,7 @@ object DynamicColor {
     }
 
     private const val SAMPLE_SIZE = 128
+    private const val MIN_POPULATION_FRACTION = 0.08f
     private const val MIN_SATURATION = 0.35f
     private const val MIN_LIGHTNESS = 0.45f
     private const val MAX_LIGHTNESS = 0.72f

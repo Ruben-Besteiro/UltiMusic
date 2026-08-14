@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Contenido del diálogo "Añadir a lista" (AddToPlaylistDialogFragment). Una casilla por lista
+    existente, creada por código (item_playlist_checkbox.xml): cuántas y cuáles hay cambia con las
+    listas del usuario, así que no hay forma de dejarlas fijas aquí.
+
+    Antes esto era un `setMultiChoiceItems` de serie sobre un ListView de CheckedTextView: sus
+    casillas usan `checkMarkTintList`, que en la práctica no recolorea el `AnimatedStateListDrawable`
+    del check múltiple de fábrica (se queda en el amarillo fijo de colorControlActivated pese al
+    tinte). Usar MaterialCheckBox de verdad, como en dialog_suggestion_overwrite.xml, sí responde a
+    `buttonTintList`.
+-->
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:maxHeight="420dp">
+
+    <LinearLayout
+        android:id="@+id/addToPlaylistFields"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:paddingHorizontal="24dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="16dp" />
+
+</ScrollView>

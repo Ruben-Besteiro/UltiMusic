@@ -31,13 +31,17 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Explorador de subcarpetas de `UltiMusic`, para elegir una que añadir a la lista gris. Es propio de
- * la app (no el selector de documentos del sistema): UltiMusic ya lee el almacenamiento directamente
- * con `File` gracias a `MANAGE_EXTERNAL_STORAGE`, así que no hace falta pasar por Storage Access
- * Framework ni traducir después una URI a una ruta real.
+ * Explorador de carpetas propio de la app (no el selector de documentos del sistema): UltiMusic ya
+ * lee el almacenamiento directamente con `File` gracias a `MANAGE_EXTERNAL_STORAGE`, así que no hace
+ * falta pasar por Storage Access Framework ni traducir después una URI a una ruta real.
  *
- * Empieza en `UltiMusic` y deja navegar hacia dentro tocando una fila; el botón "Elegir esta
- * carpeta" confirma la que se esté viendo en ese momento (no hace falta llegar a una carpeta sin
+ * Sirve a dos pantallas de ajustes con el mismo explorador, cada una con su propio punto de partida
+ * y su propia clave de resultado (ver [newInstance]): la lista gris arranca en `UltiMusic` (para
+ * elegir una subcarpeta que ocultar), y las carpetas raíz de la fonoteca arrancan en el
+ * almacenamiento externo entero (para poder elegir una carpeta en cualquier parte del dispositivo).
+ *
+ * Empieza en [root] y deja navegar hacia dentro tocando una fila; el botón "Elegir esta carpeta"
+ * confirma la que se esté viendo en ese momento (no hace falta llegar a una carpeta sin
  * subcarpetas). El resultado se devuelve con la API de resultados entre fragmentos
  * ([setFragmentResult]/`setFragmentResultListener`), igual que [VideoPickerDialogFragment
  * ][com.untar.ultimusic.ui.player.VideoPickerDialogFragment] hace con el iPod.
@@ -48,7 +52,11 @@ class FolderPickerDialogFragment : DialogFragment() {
     // btnChooseFolder (ver onViewCreated).
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
-    private val root: File by lazy { File(Environment.getExternalStorageDirectory(), "UltiMusic") }
+    private val root: File by lazy {
+        File(requireArguments().getString(ARG_INITIAL_DIR)!!)
+    }
+    private val rootTitle: String? by lazy { requireArguments().getString(ARG_ROOT_TITLE) }
+    private val requestKey: String by lazy { requireArguments().getString(ARG_REQUEST_KEY) ?: RESULT_KEY }
     private lateinit var currentDir: File
 
     private lateinit var toolbar: MaterialToolbar
@@ -95,7 +103,7 @@ class FolderPickerDialogFragment : DialogFragment() {
 
         toolbar.setNavigationOnClickListener { navigateUpOrDismiss() }
         chooseButton.setOnClickListener {
-            setFragmentResult(RESULT_KEY, bundleOf(RESULT_PATH to currentDir.absolutePath))
+            setFragmentResult(requestKey, bundleOf(RESULT_PATH to currentDir.absolutePath))
             dismiss()
         }
 
@@ -138,7 +146,7 @@ class FolderPickerDialogFragment : DialogFragment() {
 
     private fun showFolder(folder: File) {
         toolbar.title = if (folder == root) {
-            getString(R.string.folder_picker_root_title)
+            rootTitle ?: getString(R.string.folder_picker_root_title)
         } else {
             folder.absolutePath.removePrefix(root.absolutePath + "/")
         }
@@ -153,10 +161,32 @@ class FolderPickerDialogFragment : DialogFragment() {
     companion object {
         const val TAG = "folder_picker"
 
-        /** Clave con la que la pantalla de ajustes escucha el resultado (ver `setFragmentResultListener`). */
+        /** Clave por defecto con la que la lista gris escucha el resultado (ver `setFragmentResultListener`). */
         const val RESULT_KEY = "folder_picker_result"
         const val RESULT_PATH = "path"
 
-        fun newInstance() = FolderPickerDialogFragment()
+        private const val ARG_INITIAL_DIR = "initial_dir"
+        private const val ARG_ROOT_TITLE = "root_title"
+        private const val ARG_REQUEST_KEY = "request_key"
+
+        /**
+         * @param initialDir carpeta en la que arranca el explorador (por defecto, `UltiMusic`, para
+         * no cambiar el comportamiento de la lista gris).
+         * @param rootTitle título de la toolbar mientras se ve [initialDir]; si es null se usa
+         * [R.string.folder_picker_root_title] ("UltiMusic").
+         * @param requestKey clave de [setFragmentResult] con la que escuchar el resultado; por
+         * defecto [RESULT_KEY], para no romper el punto de llamada de la lista gris.
+         */
+        fun newInstance(
+            initialDir: File = File(Environment.getExternalStorageDirectory(), "UltiMusic"),
+            rootTitle: String? = null,
+            requestKey: String = RESULT_KEY
+        ) = FolderPickerDialogFragment().apply {
+            arguments = bundleOf(
+                ARG_INITIAL_DIR to initialDir.absolutePath,
+                ARG_ROOT_TITLE to rootTitle,
+                ARG_REQUEST_KEY to requestKey
+            )
+        }
     }
 }

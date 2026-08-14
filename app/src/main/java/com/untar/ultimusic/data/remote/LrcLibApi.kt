@@ -56,10 +56,24 @@ object LrcLibApi {
         artist: String,
         songDurationMs: Long
     ): List<LyricsSuggestion> =
+        runSearch(
+            "track_name=${URLEncoder.encode(title, "UTF-8")}" +
+                "&artist_name=${URLEncoder.encode(artist, "UTF-8")}",
+            songDurationMs
+        )
+
+    /**
+     * Igual que [search], pero para la barra de búsqueda manual del diálogo (ver
+     * [com.untar.ultimusic.ui.editor.LyricsSuggestionsDialogFragment]): un único campo de texto
+     * libre en vez de título+artista separados, así que aquí se usa el parámetro genérico `q` de
+     * lrclib.net (busca por título, artista y álbum a la vez) en lugar de `track_name`/`artist_name`.
+     */
+    suspend fun search(query: String, songDurationMs: Long): List<LyricsSuggestion> =
+        runSearch("q=${URLEncoder.encode(query, "UTF-8")}", songDurationMs)
+
+    private suspend fun runSearch(queryParams: String, songDurationMs: Long): List<LyricsSuggestion> =
         withContext(Dispatchers.IO) {
-            val url = "${BASE_URL}search?track_name=${URLEncoder.encode(title, "UTF-8")}" +
-                "&artist_name=${URLEncoder.encode(artist, "UTF-8")}"
-            val results = httpGet(url)
+            val results = httpGet("${BASE_URL}search?$queryParams")
 
             val suggestions = mutableListOf<LyricsSuggestion>()
             for (i in 0 until results.length()) {

@@ -44,14 +44,17 @@ class AlbumsAdapter(
         private val cover: ShapeableImageView = itemView.findViewById(R.id.albumCover)
         private val title: TextView = itemView.findViewById(R.id.albumTitle)
         private val subtitle: TextView = itemView.findViewById(R.id.albumSubtitle)
+        private val songCount: TextView = itemView.findViewById(R.id.albumSongCount)
 
         fun bind(album: AlbumSummary, onAlbumClick: (AlbumSummary) -> Unit) {
+            val context = itemView.context
             title.text = album.title
             // El año ya viene con su propio fallback resuelto en SQL (el más tardío de las
             // canciones del álbum si no hay uno puesto a mano, ver LibraryDao.observeAlbumSummaries).
             subtitle.text = joinNonBlank(album.artistName ?: MusicScanner.UNKNOWN_ARTIST, album.year?.toString())
-
-            val context = itemView.context
+            songCount.text = context.resources.getQuantityString(
+                R.plurals.song_count, album.songCount, album.songCount
+            )
             cover.load(CoverArt.cover(context, album.cover), CoverLoader.get(context)) {
                 error(R.drawable.cover_placeholder)
             }

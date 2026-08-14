@@ -12,18 +12,18 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
-import com.untar.ultimusic.ui.player.IPodDialogFragment
 import kotlinx.coroutines.launch
 
 /**
  * Pestaña de Géneros. Lista de solo texto, igual que [PeopleFragment] pero sin imagen (ver
  * item_genre.xml): un género no tiene ficha de detalle propia, solo nombre y cuántas canciones lo
- * llevan. Al pinchar uno se abre el iPod en modo navegación mostrando sus canciones para elegir
- * qué sonará, EXACTAMENTE igual que al pinchar una lista (ver
- * [IPodDialogFragment.newInstanceForGenre]), salvo que no se puede reordenar: un género no es una
- * lista propia del usuario, así que no hay orden que guardar.
+ * llevan. Al pinchar uno se abre la ficha intermedia con sus canciones para elegir qué sonará,
+ * EXACTAMENTE igual que al pinchar una lista (ver
+ * [CollectionDetailDialogFragment.showGenre]/[showPlaylist]), salvo que no se puede reordenar: un
+ * género no es una lista propia del usuario, así que no hay orden que guardar.
  */
 class GenresFragment : Fragment(R.layout.fragment_library_list) {
 
@@ -36,12 +36,7 @@ class GenresFragment : Fragment(R.layout.fragment_library_list) {
         emptyView.setText(R.string.no_genres)
 
         val adapter = GenresAdapter(
-            onGenreClick = { genre ->
-                if (parentFragmentManager.findFragmentByTag("ipod") == null) {
-                    IPodDialogFragment.newInstanceForGenre(genre.name)
-                        .show(parentFragmentManager, "ipod")
-                }
-            }
+            onGenreClick = { genre -> CollectionDetailDialogFragment.showGenre(this, genre.name) }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter

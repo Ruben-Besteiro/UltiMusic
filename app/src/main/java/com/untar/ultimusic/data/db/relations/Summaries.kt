@@ -38,7 +38,11 @@ data class PersonSummaryRow(
     val imageName: String?,
     val songCount: Int,
     val albumCount: Int,
-    val totalDuration: Long
+    val totalDuration: Long,
+    /** Ver [com.untar.ultimusic.model.PersonSummary.popularity]. Siempre null en la fila de
+     *  productores: la consulta de productores selecciona `NULL AS popularity` sin más, para no
+     *  calcular nada que no se vaya a usar. */
+    val popularity: Long?
 )
 
 /**
@@ -53,12 +57,6 @@ data class AlbumGroupRow(
     val firstArtistId: Long?
 )
 
-/** Número de pista de una canción dentro de un álbum concreto (vive en la tabla de cruce). */
-data class TrackPosition(
-    val songId: Long,
-    val trackNumber: Int?
-)
-
 /**
  * Una canción candidata al collage de carátulas de un álbum/artista/productor, con solo las tres
  * columnas de las que sale su carátula individual (mismos campos que resuelve
@@ -70,4 +68,32 @@ data class CollageCandidateRow(
     val imageName: String?,
     val filePath: String,
     val videoThumbnailName: String?
+)
+
+/** Una canción con vídeo, solo con lo que hace falta para pedir sus visitas a YouTube: su id (para
+ *  guardar la respuesta) y el enlace (del que se saca el id de 11 caracteres del vídeo, ver
+ *  `YouTubeUrl.videoId`). La usa `LibraryRepository.refreshYouTubeStatsIfDue`. */
+data class SongVideoRow(
+    val id: Long,
+    val videoUrl: String
+)
+
+/**
+ * Ruta y duración (ms) de una canción ya guardada, para el emparejamiento por contenido de
+ * `LibraryDao.reconcile`: cuando un archivo se mueve Y se renombra a la vez, ni la ruta ni el
+ * nombre sirven de ancla, pero la duración exacta del audio no cambia por mover o renombrar el
+ * archivo (a diferencia del título, que el usuario puede haber sobrescrito desde el editor).
+ */
+data class SongPathDurationRow(
+    val filePath: String,
+    val duration: Long
+)
+
+/** Un canal candidato a "el canal de este artista", con cuántas de sus canciones principales lo
+ *  llevan. Ver `LibraryDao.artistChannelCandidates`: no es un resumen para pintar, es la materia
+ *  prima con la que `LibraryRepository.refreshYouTubeStatsIfDue` calcula la moda de cada artista. */
+data class ArtistChannelCandidateRow(
+    val artistId: Long,
+    val channelId: String,
+    val cnt: Int
 )

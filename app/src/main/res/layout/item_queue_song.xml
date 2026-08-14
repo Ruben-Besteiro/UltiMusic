@@ -58,13 +58,10 @@
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:layout_marginStart="8dp"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:textColor="@color/um_on_background"
             android:textSize="15sp" />
 
-        <!-- Igual que en item_playlist_queue_song.xml: manejador para arrastrar y reordenar la cola
-             tal cual está sonando (ver IPodQueueAdapter). -->
+        <!-- Manejador para arrastrar y reordenar la cola tal cual está sonando (ver IPodQueueAdapter). -->
         <ImageView
             android:id="@+id/dragHandle"
             android:layout_width="28dp"

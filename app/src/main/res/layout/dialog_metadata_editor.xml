@@ -98,15 +98,14 @@
                 </com.google.android.material.textfield.TextInputLayout>
 
                 <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/layoutAlbums"
+                    android:id="@+id/layoutAlbum"
                     style="@style/Widget.UltiMusic.TextField.Dropdown"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="@string/field_albums"
-                    app:helperText="@string/multi_value_hint">
+                    android:hint="@string/field_albums">
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                        android:id="@+id/inputAlbums"
+                        android:id="@+id/inputAlbum"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"

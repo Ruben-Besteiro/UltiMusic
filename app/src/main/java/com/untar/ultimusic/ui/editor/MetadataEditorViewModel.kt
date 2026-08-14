@@ -51,10 +51,6 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
     val producerNames: StateFlow<List<String>> = repository.producerNames
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Pista y disco actuales (viven en la tabla de cruce; se leen una vez al abrir). */
-    private val _trackAndDisc = MutableStateFlow<Pair<Int?, Int?>?>(null)
-    val trackAndDisc = _trackAndDisc.asStateFlow()
-
     /** Se pone en no-null cuando el guardado termina, con la canción ya releída de Room (con todos
      * sus campos al día: carátula, letra, título...), para que el diálogo avise al usuario y pueda
      * refrescarla en [PlayerViewModel] si esta canción es la que suena — si no, lo editado no se
@@ -79,7 +75,6 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
     fun setSongId(id: Long) {
         if (_songId.value != NO_SONG) return
         _songId.value = id
-        viewModelScope.launch { _trackAndDisc.value = repository.trackAndDisc(id) }
     }
 
     /**
@@ -97,6 +92,9 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
     fun save(form: EditorForm, pickedImage: Uri?) {
         val current = song.value ?: return
         val titleChanged = form.title != current.title
+        // También hace falta después de guardar (ver el aviso más abajo, junto a
+        // refreshYouTubeStatsForSong), así que se calcula una sola vez aquí arriba.
+        val videoUrlChanged = form.videoUrl != current.videoUrl
         // Se marca ANTES de lanzar la corrutina (no dentro): así, aunque el diálogo intente cerrarse
         // en el mismo instante en que se pulsa "Guardar", ya ve isSaving a true.
         _isSaving.value = true
@@ -119,7 +117,7 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
                         current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
                         thumbnailName = null
                     }
-                    form.videoUrl != current.videoUrl -> {
+                    videoUrlChanged -> {
                         current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
                         val videoId = YouTubeUrl.videoId(form.videoUrl)
                         thumbnailName = videoId?.let { repository.downloadVideoThumbnail(it, form.title) }
@@ -144,20 +142,35 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
                     videoThumbnailName = thumbnailName,
                     videoOffsetMs = form.videoOffsetMs,
                     lyricsOffsetMs = form.lyricsOffsetMs,
+                    // El álbum lo resuelve saveSongEdits a partir de albumTitle; este valor es
+                    // provisional y se sobrescribe ahí.
+                    albumId = current.album?.id,
+                    trackNumber = form.trackNumber,
+                    discNumber = form.discNumber,
                     ogTitle = form.ogTitle,
                     ogArtist = form.ogArtist,
                     ogAlbum = form.ogAlbum,
-                    ogYear = form.ogYear
+                    ogYear = form.ogYear,
+                    // El editor no toca las visitas de YouTube (las pone solo el refresco diario, ver
+                    // LibraryRepository.refreshYouTubeStatsIfDue): sin esto, cada edición de metadatos
+                    // las borraría de vuelta a null hasta el siguiente refresco.
+                    youtubeViewCount = current.youtubeViewCount
                 )
 
                 repository.saveSongEdits(
                     song = entity,
                     artistNames = form.artists,
-                    albumTitles = form.albums,
-                    producerNames = form.producers,
-                    trackNumber = form.trackNumber,
-                    discNumber = form.discNumber
+                    albumTitle = form.album,
+                    producerNames = form.producers
                 )
+                // El vídeo ha cambiado de verdad (uno nuevo, o distinto del que tenía antes): sin
+                // esto, sus visitas se quedarían en null (o en las del vídeo viejo) hasta el refresco
+                // diario, aunque el usuario acabe de asignarlo — ver el javadoc de
+                // refreshYouTubeStatsForSong sobre por qué esta es la única edición que se salta el
+                // tope de una vez al día.
+                if (videoUrlChanged && form.videoUrl != null) {
+                    repository.refreshYouTubeStatsForSong(current.id, form.videoUrl)
+                }
                 // Ver CoverArt.revision: sin esto, una carátula que reutiliza el nombre de archivo de
                 // la anterior no cambiaría nada en el Song que sale de Room, y las listas de la app
                 // no se enterarían de que hay una imagen nueva que cargar.
@@ -189,7 +202,7 @@ data class SaveResult(val song: Song)
  */
 data class EditorForm(
     val title: String,
-    val albums: List<String>,
+    val album: String?,
     val artists: List<String>,
     val producers: List<String>,
     val year: Int?,

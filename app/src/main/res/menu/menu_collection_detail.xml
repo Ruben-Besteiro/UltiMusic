@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Barra superior de la ficha de una lista o un género (ver CollectionDetailDialogFragment): igual
+  que menu_library_detail.xml (aleatorio + 3 puntos), pero el de 3 puntos aquí sale SIEMPRE — a
+  diferencia de álbum/artista/productor, tanto una lista como un género tienen algo que ofrecer en
+  ese menú (ver menu_collection_actions.xml).
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_shuffle"
+        android:icon="@drawable/ic_shuffle"
+        android:title="@string/shuffle_collection"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_collection_menu"
+        android:icon="@drawable/ic_more_vert"
+        android:title="@string/action_more"
+        app:showAsAction="always" />
+
+</menu>
