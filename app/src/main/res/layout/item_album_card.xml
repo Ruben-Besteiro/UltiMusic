@@ -47,7 +47,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textColor="@color/um_on_surface_muted"
-        android:textSize="14sp"
+        android:textSize="12sp"
         tools:text="Linkin Park | 2003" />
 
     <TextView
@@ -55,7 +55,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textColor="@color/um_on_surface_muted"
-        android:textSize="14sp"
+        android:textSize="12sp"
         tools:text="12 canciones" />
 
 </LinearLayout>

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Ficha de un álbum / artista / productor.
+  Ficha de un álbum o un artista.
 
   La cabecera (toolbar + carátula + datos) es un bloque cuyo color de fondo se pone desde el código
   a partir de la carátula; por eso aquí arranca en negro y no lleva ningún color fijo.
@@ -70,7 +70,7 @@
     </LinearLayout>
 
     <!--
-      Carrusel horizontal de álbumes: solo en la ficha de un artista/productor (ver
+      Carrusel horizontal de álbumes: solo en la ficha de un artista (ver
       DetailDialogFragment), oculto por defecto y en la de un álbum. Cada elemento es una versión
       pequeña de la tarjeta de la pestaña de Álbumes (item_detail_album_card.xml).
     -->

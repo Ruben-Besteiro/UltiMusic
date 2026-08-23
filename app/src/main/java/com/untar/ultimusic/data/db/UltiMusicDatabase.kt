@@ -16,6 +16,8 @@ import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
+import com.untar.ultimusic.data.db.entities.SongTagCrossRef
+import com.untar.ultimusic.data.db.entities.TagEntity
 import java.io.File
 
 /**
@@ -33,7 +35,9 @@ import java.io.File
         AlbumArtistCrossRef::class,
         SongProducerCrossRef::class,
         GreylistFolderEntity::class,
-        LibraryRootEntity::class
+        LibraryRootEntity::class,
+        TagEntity::class,
+        SongTagCrossRef::class
     ],
     // v15: añade SongEntity.youtubeChannelId (canal del vídeo de cada canción) y
     // ArtistEntity.youtubeChannelId/youtubeChannelSubscriberCount (popularidad del artista, ver
@@ -47,7 +51,19 @@ import java.io.File
     // realidad guarda suscriptores, no visitas; ver MIGRATION_16_17 en Migrations.kt), con migración
     // escrita a mano por el mismo motivo que las dos anteriores: es una fonoteca ya poblada la que
     // se perdería si se dejara recrear a lo bruto.
-    version = 17,
+    // v18: sistema de Etiquetas (TagEntity/SongTagCrossRef, tablas `tags`/`song_tag`) más
+    // SongEntity.dateAdded (fecha de creación del archivo, para la etiqueta predefinida "Descargadas
+    // recientemente"), con migración escrita a mano (migration17To18 en Migrations.kt) por el mismo
+    // motivo que las anteriores. Se siembra con las 4 etiquetas predefinidas (Favoritos, Descargadas
+    // recientemente, En ninguna lista, Sin etiquetas personalizadas), ver seedDefaultTags.
+    // v19: sin cambio de esquema — solo siembra la 5ª etiqueta predefinida "Debug" (migration18To19
+    // en Migrations.kt, reutiliza seedDefaultTags), pensada para probar el flujo de añadir/quitar
+    // etiquetas de una canción antes de que existan etiquetas personalizadas de verdad.
+    // v20: sin cambio de esquema — retira esa misma etiqueta "Debug" (MIGRATION_19_20 en
+    // Migrations.kt), ya innecesaria ahora que existen etiquetas personalizadas de verdad (ver
+    // TagEditorDialogFragment). SystemTagKey.DEBUG desaparece del enum; seedDefaultTags ya no la
+    // siembra para instalaciones nuevas.
+    version = 20,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -70,22 +86,39 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         UltiMusicDatabase::class.java,
                         DB_NAME
                     )
-                        // MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16 y MIGRATION_16_17
-                        // conservan la biblioteca (ver Migrations.kt sobre por qué cada una se
-                        // escribió a mano). El resto de saltos de versión anteriores nunca tuvieron
-                        // migración, así que para esos (y para cualquier salto futuro sin migración)
-                        // sigue habiendo fallbackToDestructiveMigration: el esquema se recrea vacío
-                        // en vez de fallar al abrir la base de datos.
-                        .addMigrations(MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17)
+                        // MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
+                        // migration17To18, migration18To19 y MIGRATION_19_20 conservan la biblioteca
+                        // (ver Migrations.kt sobre por qué cada una se escribió a mano). Las dos de
+                        // en medio no son `val`: necesitan el `context` para sembrar las etiquetas
+                        // predefinidas (nombres/colores salen de strings.xml/colors.xml, ver
+                        // seedDefaultTags), así que se construyen aquí, donde sí hay uno a mano;
+                        // MIGRATION_19_20 vuelve a ser `val` porque solo borra una fila por
+                        // `systemKey`, sin leer ningún recurso. El resto de saltos de versión
+                        // anteriores nunca tuvieron migración, así que para esos (y para cualquier
+                        // salto futuro sin migración) sigue habiendo fallbackToDestructiveMigration:
+                        // el esquema se recrea vacío en vez de fallar al abrir la base de datos.
+                        .addMigrations(
+                            MIGRATION_12_13,
+                            MIGRATION_14_15,
+                            MIGRATION_15_16,
+                            MIGRATION_16_17,
+                            migration17To18(context.applicationContext),
+                            migration18To19(context.applicationContext),
+                            MIGRATION_19_20
+                        )
                         .fallbackToDestructiveMigration(dropAllTables = true)
                         // Instalación nueva: la tabla `library_roots` se crea ya en v16 (con el
                         // esquema completo de golpe) y `onCreate` es el único momento en el que se
                         // sabe que es de verdad nueva, sin pasar nunca por MIGRATION_15_16 -que es
-                        // quien siembra Download/Music en quien SÍ actualiza desde v15-.
+                        // quien siembra Download/Music en quien SÍ actualiza desde v15-. Lo mismo
+                        // aplica a `tags` (creada ya en v18) y seedDefaultTags/migration17To18 —
+                        // instalación nueva siembra directamente las 4 etiquetas predefinidas
+                        // vigentes (sin "Debug"), sin pasar por migration18To19 ni MIGRATION_19_20.
                         .addCallback(object : RoomDatabase.Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
                                 seedDefaultLibraryRoots(db)
+                                seedDefaultTags(db, context.applicationContext)
                             }
                         })
                         .build()

@@ -2,7 +2,7 @@
 <!--
   Fila de canción dentro de una ficha: nº de pista + carátula + título/duración + menú.
   La carátula sale de CoverArt.cover(song) (ver DetailSongsAdapter): en un álbum será casi
-  siempre la misma imagen repetida, pero en artista/productor cada canción puede traer la suya.
+  siempre la misma imagen repetida, pero en la de un artista cada canción puede traer la suya.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -50,13 +50,48 @@
             android:textStyle="italic"
             tools:text="Numb" />
 
-        <TextView
-            android:id="@+id/trackDuration"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:textColor="@color/um_on_surface_muted"
-            android:textSize="14sp"
-            tools:text="Álbum A | 3:07" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/trackDuration"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp"
+                tools:text="Álbum A | 3:07" />
+
+            <ImageView
+                android:id="@+id/trackYoutubeIcon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginStart="6dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_youtube"
+                android:tint="@color/um_on_surface_muted"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/trackYoutubeViews"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="3dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="123K"
+                tools:visibility="visible" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

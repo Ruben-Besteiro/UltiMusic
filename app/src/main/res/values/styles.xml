@@ -7,7 +7,7 @@
     </style>
 
     <!--
-      Imagen totalmente circular (artistas y productores). Un "cornerSize" del 50% siempre equivale
+      Imagen totalmente circular (artistas). Un "cornerSize" del 50% siempre equivale
       a la mitad del lado, así que redondea del todo sea cual sea el tamaño de la vista.
     -->
     <style name="ShapeAppearanceOverlay.UltiMusic.Circle" parent="">

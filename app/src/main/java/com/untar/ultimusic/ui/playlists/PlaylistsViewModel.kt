@@ -9,6 +9,7 @@ import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.PlaylistSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.LibraryTab
+import com.untar.ultimusic.util.PlaylistResumeStore
 import com.untar.ultimusic.util.SortOption
 import com.untar.ultimusic.util.sortedByOption
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -64,6 +65,17 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
+     * Unión de todos los nombres de archivo que están en alguna lista, reactiva al mismo [tick] que
+     * [playlists]. La usa [com.untar.ultimusic.ui.library.TagsViewModel] (vía
+     * `bindPlaylistFilenames`) para calcular la etiqueta predefinida "En ninguna lista" sin que
+     * [com.untar.ultimusic.data.LibraryRepository] tenga que depender de [PlaylistRepository]
+     * directamente (ver el comentario de `LibraryRepository.tagSummaries`).
+     */
+    val allFilenamesInPlaylists: StateFlow<Set<String>> =
+        tick.mapLatest { repository.allFilenamesInAnyPlaylist() }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptySet())
+
+    /**
      * Canciones de UNA lista, reactivas al [tick] compartido y a la biblioteca — igual que
      * [playlists], pero resueltas para una sola lista en vez de resumidas para todas. La usa
      * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment] para que su ficha se
@@ -97,8 +109,20 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
     // --- Mutaciones (refrescan al terminar) ---
 
     fun create(name: String) = mutate { repository.createPlaylist(name) }
-    fun rename(oldName: String, newName: String) = mutate { repository.renamePlaylist(oldName, newName) }
-    fun delete(name: String) = mutate { repository.deletePlaylist(name) }
+
+    /** Si el renombrado tiene éxito, el "Posición actual" guardado (ver [PlaylistResumeStore]) sigue
+     *  a la lista con su nuevo nombre en vez de quedarse huérfano bajo el antiguo. */
+    fun rename(oldName: String, newName: String) = mutate {
+        if (repository.renamePlaylist(oldName, newName)) PlaylistResumeStore.rename(oldName, newName)
+    }
+
+    /** Borra también el "Posición actual" guardado: sin esto, un nombre reciclado para una lista
+     *  nueva heredaría el de la borrada. */
+    fun delete(name: String) = mutate {
+        repository.deletePlaylist(name)
+        PlaylistResumeStore.clear(name)
+    }
+
     fun addSongs(name: String, filenames: List<String>) = mutate { repository.addSongs(name, filenames) }
     fun removeSongs(name: String, filenames: List<String>) = mutate { repository.removeSongs(name, filenames) }
     fun reorder(name: String, filenames: List<String>) = mutate { repository.setFilenames(name, filenames) }
@@ -113,6 +137,13 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
      */
     fun forgetSong(filename: String) = mutate {
         if (library.libraryFolderReadable()) repository.removeSongFromAll(filename)
+    }
+
+    /** Igual que [forgetSong] pero para varios archivos a la vez (borrado desde la selección
+     *  múltiple de Canciones), en una sola pasada -no una llamada por canción- para no disparar
+     *  [tick] N veces seguidas. */
+    fun forgetSongs(filenames: List<String>) = mutate {
+        if (library.libraryFolderReadable()) filenames.forEach { repository.removeSongFromAll(it) }
     }
 
     /** Fuerza una relectura (p. ej. al volver a la pestaña, por si se editó el archivo desde fuera). */

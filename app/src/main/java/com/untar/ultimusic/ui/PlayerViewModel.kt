@@ -32,12 +32,12 @@ data class PlaybackProgress(val positionMs: Long = 0L, val durationMs: Long = 0L
  * [com.untar.ultimusic.playback.PlaybackService.isLooseQueue]). La usa el iPod para elegir la
  * palabra correcta al anunciar cuántas canciones quedan ("en la lista", "en el álbum", "de este
  * artista"...) y qué decir al llegar a la última (ver
- * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [LISTA] y [GENRE] los pone la ficha
- * intermedia de una lista o un género al empezar a reproducir esa colección (ver
- * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]); [ALBUM], [ARTIST] y
- * [PRODUCER] los pone la ficha de detalle (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment]). [LISTA], [GENRE] y [TAG] los pone la ficha
+ * intermedia de una lista, un género o una etiqueta al empezar a reproducir esa colección (ver
+ * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]); [ALBUM] y [ARTIST] los pone
+ * la ficha de detalle (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
  */
-enum class CollectionKind { LISTA, GENRE, ALBUM, ARTIST, PRODUCER }
+enum class CollectionKind { LISTA, GENRE, TAG, ALBUM, ARTIST }
 
 /** Volumen normal: sin amplificar. Es el mínimo del amplificador y su valor por defecto. */
 const val BOOST_MIN_PERCENT = 100
@@ -325,6 +325,10 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Avisa cuando se intenta añadir a la cola sin que suene nada todavía (ver `PlaybackService`). */
     val cannotAddToEmptyQueue: Flow<Unit> = serviceEvents { it.cannotAddToEmptyQueue }
+
+    /** Avisa (ya con el mensaje formateado) cuando una canción falla al reproducirse tras
+     *  reintentarlo una vez y se salta a la siguiente (ver `PlaybackService`). */
+    val playbackError: Flow<String> = serviceEvents { it.playbackError }
 
     val volumeBoost: StateFlow<Int> = serviceState(BOOST_MIN_PERCENT) { it.volumeBoost }
     val limitDisabled: StateFlow<Boolean> = serviceState(false) { it.limitDisabled }

@@ -25,6 +25,16 @@ object MusicScanner {            // OBJECT = SINGLETON
     const val UNKNOWN_ALBUM = ""
 
     /**
+     * Resultado de [scan]: [newSongs] son las etiquetas de los archivos que NO estaban ya
+     * catalogados (los únicos que hacía falta leer, ver [knownPaths][scan]), y [currentPaths] son
+     * las rutas de TODOS los archivos de audio encontrados, estén catalogados o no. Hace falta este
+     * segundo conjunto para que [com.untar.ultimusic.data.db.LibraryDao.reconcile] sepa qué
+     * canciones ya catalogadas han desaparecido, cosa que [newSongs] por sí solo no puede decir (los
+     * archivos ya conocidos ni siquiera están en esa lista).
+     */
+    data class ScanResult(val newSongs: List<ScannedSong>, val currentPaths: Set<String>)
+
+    /**
      * El listado de carpetas en las que se buscan canciones: `UltiMusic` (la raíz por defecto,
      * siempre presente) más las carpetas raíz adicionales que el usuario haya añadido desde ajustes
      * (ver [com.untar.ultimusic.data.db.entities.LibraryRootEntity]). [MusicScanner] no conoce la
@@ -36,22 +46,37 @@ object MusicScanner {            // OBJECT = SINGLETON
         return listOf(ultiMusic) + extraRoots
     }
 
-    /** Escanea las carpetas configuradas ([scanRoots]) y devuelve las etiquetas crudas de cada archivo. */
+    /**
+     * Escanea las carpetas configuradas ([scanRoots]) y devuelve las etiquetas crudas de cada
+     * archivo NUEVO (ver [ScanResult]).
+     *
+     * @param knownPaths Rutas que la capa de datos ya tiene catalogadas (ver
+     * [com.untar.ultimusic.data.db.LibraryDao.allSongPaths]). No se releen sus etiquetas: para una
+     * ruta que no ha cambiado, [com.untar.ultimusic.data.db.LibraryDao.reconcile] no hace nada con
+     * ellas, así que abrir [MediaMetadataRetriever] para cada una en cada reconciliación era trabajo
+     * desperdiciado —la parte lenta del escaneo—. Solo se lee lo que no está en [knownPaths]:
+     * archivos nuevos o movidos/renombrados desde otra ruta (que [LibraryDao.reconcile] necesita
+     * completos para insertarlos o para su emparejamiento por nombre/duración).
+     */
     suspend fun scan(
         extraRoots: List<File> = emptyList(),
+        knownPaths: Set<String> = emptySet(),
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
-    ): List<ScannedSong> = withContext(Dispatchers.IO) {
+    ): ScanResult = withContext(Dispatchers.IO) {
         val files = LinkedHashSet<File>()
         for (root in scanRoots(extraRoots)) {
             if (root.exists() && root.isDirectory) {
                 collectAudioFiles(root, files)
             }
         }
-        val total = files.size
-        return@withContext files.mapIndexed { index, file ->
+        val currentPaths = files.mapTo(HashSet(files.size)) { it.absolutePath }
+        val newFiles = files.filter { it.absolutePath !in knownPaths }
+        val total = newFiles.size
+        val newSongs = newFiles.mapIndexed { index, file ->
             onProgress(index + 1, total)
             readSong(file)
         }.filterNotNull()
+        ScanResult(newSongs, currentPaths)
     }
 
     /**

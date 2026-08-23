@@ -21,4 +21,16 @@
          de la cola, más largo y capaz de ocupar hasta 2 líneas (ver IPodDialogFragment.updateInfoBox
          y R.string.queue_hint_playlist, el más largo de los avisos). -->
     <dimen name="ipod_info_box_min_height">64dp</dimen>
+
+    <!-- Ancho del borde de la "salchicha" de una etiqueta (ver bg_tag_chip.xml/TagsAdapter),
+         compartido entre el XML y AccentTint.stroke por el mismo motivo que los ipod_stroke_* de
+         arriba. -->
+    <dimen name="tag_chip_stroke_width">2dp</dimen>
+
+    <!-- Color picker del editor de etiquetas (ver ui/library/colorpicker/ColorPickerView.kt): tamaño
+         del cuadrado de saturación/valor, ancho de la barra vertical de matiz, y tamaño del swatch de
+         vista previa del color elegido. -->
+    <dimen name="color_picker_sv_size">180dp</dimen>
+    <dimen name="color_picker_hue_width">28dp</dimen>
+    <dimen name="color_picker_preview_size">56dp</dimen>
 </resources>

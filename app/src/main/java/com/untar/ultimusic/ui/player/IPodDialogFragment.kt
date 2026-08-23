@@ -53,7 +53,7 @@ import com.untar.ultimusic.ui.common.attachVerticalDrag
 import com.untar.ultimusic.ui.editor.LyricsSuggestionsDialogFragment
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
-import com.untar.ultimusic.ui.library.PersonKind
+import com.untar.ultimusic.ui.library.SongTagsDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
@@ -952,8 +952,8 @@ class IPodDialogFragment : DialogFragment() {
     /**
      * Qué decir en [R.id.tvMeta] mientras se ve la cola en vez de la carátula (ver [updateInfoBox]):
      * una cola suelta o una lista admiten seguir añadiendo canciones a mano, así que invitan a
-     * hacerlo; el resto (género, álbum, artista, productor, o una colección sin tipo conocido) son
-     * fijas y solo avisan de que se han acabado.
+     * hacerlo; el resto (género, álbum, artista, o una colección sin tipo conocido) son fijas y
+     * solo avisan de que se han acabado.
      */
     private fun queueEndText(): String {
         if (playerViewModel.queue.value.isEmpty()) return getString(R.string.queue_empty)
@@ -1041,7 +1041,6 @@ class IPodDialogFragment : DialogFragment() {
             // Solo tiene sentido "ir a" lo que la canción de verdad tenga.
             menu.findItem(R.id.action_go_to_album)?.isVisible = song.album != null
             menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
-            menu.findItem(R.id.action_go_to_producer)?.isVisible = song.producers.isNotEmpty()
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_add_to_queue -> { playerViewModel.addToQueue(song); true }
@@ -1052,13 +1051,7 @@ class IPodDialogFragment : DialogFragment() {
                     }
                     R.id.action_go_to_artist -> {
                         song.artists.firstOrNull()?.let {
-                            DetailDialogFragment.showPerson(requireActivity(), PersonKind.ARTIST, it.id)
-                        }
-                        true
-                    }
-                    R.id.action_go_to_producer -> {
-                        song.producers.firstOrNull()?.let {
-                            DetailDialogFragment.showPerson(requireActivity(), PersonKind.PRODUCER, it.id)
+                            DetailDialogFragment.showArtist(requireActivity(), it.id)
                         }
                         true
                     }
@@ -1066,6 +1059,13 @@ class IPodDialogFragment : DialogFragment() {
                         if (childFragmentManager.findFragmentByTag(TAG_METADATA_EDITOR) == null) {
                             MetadataEditorDialogFragment.newInstance(song.id)
                                 .show(childFragmentManager, TAG_METADATA_EDITOR)
+                        }
+                        true
+                    }
+                    R.id.action_edit_tags -> {
+                        if (childFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+                            SongTagsDialogFragment.newInstance(song.id)
+                                .show(childFragmentManager, SongTagsDialogFragment.TAG)
                         }
                         true
                     }

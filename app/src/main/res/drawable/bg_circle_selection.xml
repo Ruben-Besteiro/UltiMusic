@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Círculo del check de selección (ver item_song.xml / SongsAdapter). Color de partida
+     @color/um_yellow, repintado con el acento dinámico igual que el resto de lo amarillo de la
+     aplicación (ver AccentTint.fill y CLAUDE.md). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="oval">
+    <solid android:color="@color/um_yellow" />
+    <stroke
+        android:width="2dp"
+        android:color="@android:color/white" />
+</shape>

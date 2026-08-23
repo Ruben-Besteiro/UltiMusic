@@ -19,19 +19,19 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 
 /**
- * Alimenta las cuatro pestañas de agrupación: Álbumes, Artistas, Productores y Géneros.
+ * Alimenta las tres pestañas de agrupación: Álbumes, Artistas y Géneros.
  *
  * Es el equivalente de [com.untar.ultimusic.ui.SongsViewModel] para esas pestañas, y como
- * él vive en el ámbito de la ACTIVIDAD (`by activityViewModels()`): así los cuatro fragmentos del
+ * él vive en el ámbito de la ACTIVIDAD (`by activityViewModels()`): así los tres fragmentos del
  * ViewPager comparten una única instancia y, sobre todo, las listas no se recalculan cada vez que
  * el usuario desliza entre pestañas y el ViewPager destruye y recrea los fragmentos.
  *
  * No hace ningún escaneo: eso lo dispara `SongsViewModel.loadIfNeeded()`. Aquí solo se observa la
- * base de datos, así que en cuanto la reconciliación o una edición cambian algo, las cuatro listas
+ * base de datos, así que en cuanto la reconciliación o una edición cambian algo, las tres listas
  * se repintan solas.
  *
  * Cada lista lleva su PROPIO criterio de orden (ver [com.untar.ultimusic.ui.sort.SortDialogFragment]):
- * cuatro [MutableStateFlow] independientes, uno por pestaña, persistidos en [SortPreferences] y
+ * tres [MutableStateFlow] independientes, uno por pestaña, persistidos en [SortPreferences] y
  * combinados con el flujo de datos correspondiente antes de exponerlo.
  */
 class LibraryViewModel(app: Application) : AndroidViewModel(app) {
@@ -44,9 +44,6 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     private val _artistsSort = MutableStateFlow(SortPreferences.get(LibraryTab.ARTISTS))
     val artistsSort: StateFlow<SortOption> = _artistsSort.asStateFlow()
 
-    private val _producersSort = MutableStateFlow(SortPreferences.get(LibraryTab.PRODUCERS))
-    val producersSort: StateFlow<SortOption> = _producersSort.asStateFlow()
-
     private val _genresSort = MutableStateFlow(SortPreferences.get(LibraryTab.GENRES))
     val genresSort: StateFlow<SortOption> = _genresSort.asStateFlow()
 
@@ -58,11 +55,6 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         list.sortedByOption(option)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    /** Gemelo de [artists]: productores y artistas se tratan exactamente igual. */
-    val producers: StateFlow<List<PersonSummary>> = combine(repository.producers, _producersSort) { list, option ->
-        list.sortedByOption(option)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
-
     val genres: StateFlow<List<GenreSummary>> = combine(repository.genres, _genresSort) { list, option ->
         list.sortedByOption(option)
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -71,9 +63,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         when (tab) {
             LibraryTab.ALBUMS -> _albumsSort.value = option
             LibraryTab.ARTISTS -> _artistsSort.value = option
-            LibraryTab.PRODUCERS -> _producersSort.value = option
             LibraryTab.GENRES -> _genresSort.value = option
-            LibraryTab.SONGS, LibraryTab.PLAYLISTS ->
+            LibraryTab.SONGS, LibraryTab.TAGS, LibraryTab.PLAYLISTS ->
                 throw IllegalArgumentException("$tab no lo maneja LibraryViewModel")
         }
         SortPreferences.save(tab, option)

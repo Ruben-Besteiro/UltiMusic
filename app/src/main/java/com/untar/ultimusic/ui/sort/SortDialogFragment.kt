@@ -17,6 +17,7 @@ import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.library.LibraryViewModel
+import com.untar.ultimusic.ui.library.TagsViewModel
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.LibraryTab
@@ -43,6 +44,7 @@ class SortDialogFragment : DialogFragment() {
 
     private val songsViewModel: SongsViewModel by activityViewModels()
     private val libraryViewModel: LibraryViewModel by activityViewModels()
+    private val tagsViewModel: TagsViewModel by activityViewModels()
     private val playlistsViewModel: PlaylistsViewModel by activityViewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
@@ -145,8 +147,8 @@ class SortDialogFragment : DialogFragment() {
         LibraryTab.SONGS -> songsViewModel.sort.value
         LibraryTab.ALBUMS -> libraryViewModel.albumsSort.value
         LibraryTab.ARTISTS -> libraryViewModel.artistsSort.value
-        LibraryTab.PRODUCERS -> libraryViewModel.producersSort.value
         LibraryTab.GENRES -> libraryViewModel.genresSort.value
+        LibraryTab.TAGS -> tagsViewModel.sort.value
         LibraryTab.PLAYLISTS -> playlistsViewModel.sort.value
     }
 
@@ -160,8 +162,9 @@ class SortDialogFragment : DialogFragment() {
         val option = SortOption(field, direction)
         when (tab) {
             LibraryTab.SONGS -> songsViewModel.setSort(option)
+            LibraryTab.TAGS -> tagsViewModel.setSort(option)
             LibraryTab.PLAYLISTS -> playlistsViewModel.setSort(option)
-            LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.PRODUCERS, LibraryTab.GENRES ->
+            LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.GENRES ->
                 libraryViewModel.setSort(tab, option)
         }
     }

@@ -5,8 +5,8 @@
     <string name="tab_songs">Canciones</string>
     <string name="tab_albums">Álbumes</string>
     <string name="tab_artists">Artistas</string>
-    <string name="tab_producers">Productores</string>
     <string name="tab_genres">Géneros</string>
+    <string name="tab_tags">Etiquetas</string>
     <string name="tab_playlists">Listas</string>
 
     <!-- Barra superior -->
@@ -22,7 +22,7 @@
     <string name="search_hint">Buscar</string>
     <string name="search_back">Cerrar la búsqueda</string>
     <string name="search_clear">Borrar lo escrito</string>
-    <string name="search_prompt">Escribe para buscar canciones, álbumes, artistas y productores.</string>
+    <string name="search_prompt">Escribe para buscar canciones, álbumes y artistas.</string>
     <string name="search_no_results">No se ha encontrado nada para «%1$s».</string>
 
     <!-- Canciones -->
@@ -33,7 +33,6 @@
     <string name="add_to_playlist">Añadir a lista</string>
     <string name="go_to_album">Ir al álbum</string>
     <string name="go_to_artist">Ir al artista</string>
-    <string name="go_to_producer">Ir al productor</string>
     <string name="delete_song">Eliminar</string>
     <string name="delete_song_confirm">¿Eliminar <b>^1</b> del dispositivo?</string>
     <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
@@ -44,14 +43,30 @@
     <string name="cannot_open_file">No se ha podido abrir el archivo</string>
     <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
     <string name="cannot_add_to_empty_queue">No hay cola de reproducción</string>
+    <string name="playback_error_file_not_found">no se encuentra el archivo</string>
+    <string name="playback_error_no_permission">sin permiso para leer el archivo</string>
+    <string name="playback_error_decoding">fallo al decodificar el audio</string>
+    <string name="playback_error_io">fallo al leer el archivo</string>
+    <string name="playback_error_skip_known">No se ha podido reproducir %1$s (%2$s), se salta a la siguiente</string>
+    <string name="playback_error_skip_unknown">No se ha podido reproducir %1$s, se salta a la siguiente</string>
 
-    <!-- Álbumes, artistas y productores -->
-    <string name="person_image_desc">Imagen del artista o productor</string>
+    <!-- Selección múltiple de canciones (pulsación larga en la pestaña Canciones): ver
+         SongsAdapter/SongsFragment y el icono de 3 puntos que sustituye al ojo de la toolbar
+         mientras hay algo seleccionado (MainActivity.setupToolbar). -->
+    <string name="song_selected_desc">Canción seleccionada</string>
+    <string name="song_selection_more">Más opciones de las canciones seleccionadas</string>
+    <plurals name="delete_songs_confirm">
+        <item quantity="one">¿Eliminar %d canción del dispositivo?</item>
+        <item quantity="other">¿Eliminar %d canciones del dispositivo?</item>
+    </plurals>
+
+    <!-- Álbumes y artistas -->
+    <string name="person_image_desc">Imagen del artista</string>
     <string name="shuffle_collection">Reproducir en orden aleatorio</string>
     <string name="no_albums">Todavía no hay ningún álbum</string>
     <string name="no_artists">Todavía no hay ningún artista</string>
-    <string name="no_producers">Todavía no hay ningún productor</string>
     <string name="no_genres">Todavía no hay ningún género</string>
+    <string name="no_tags">Todavía no hay ninguna etiqueta</string>
     <string name="no_songs_here">Aquí no hay ninguna canción</string>
 
     <!--
@@ -78,7 +93,15 @@
 
     <!-- Editor de metadatos -->
     <string name="edit_metadata">Editar metadatos</string>
+    <string name="edit_tags">Editar etiquetas</string>
     <string name="metadata_editor_title">Editor de metadatos</string>
+    <!-- Título de la toolbar cuando se editan varias canciones a la vez (selección múltiple en
+         Canciones). Ver MetadataEditorDialogFragment.isMultiEdit. -->
+    <string name="metadata_editor_title_multi">Editar %1$d canciones</string>
+    <!-- Placeholder de un campo cuando las canciones seleccionadas no coinciden en ese valor: se
+         deja en blanco (ver MetadataEditorDialogFragment.fillMultiField) y solo se sobrescribe en
+         todas si el usuario lo toca de verdad. -->
+    <string name="editor_multiple_values">Varios valores</string>
     <string name="editor_close">Cerrar el editor</string>
     <string name="editor_save">Guardar</string>
     <string name="editor_pick_cover">Elegir portada</string>
@@ -282,7 +305,7 @@
     <!-- Aviso de la cola/lista, en @+id/tvMeta (ver IPodDialogFragment.updateInfoBox), cuando ya no
          queda ninguna canción por sonar (la actual es la última): la cola suelta y la lista
          admiten seguir añadiendo canciones a mano, así que invitan a hacerlo;
-         álbum/artista/productor/género son colecciones fijas, así que solo avisan de que se han
+         álbum/artista/género son colecciones fijas, así que solo avisan de que se han
          acabado. -->
     <string name="queue_hint_loose">Puedes añadir más música a la cola dándole a los tres puntos y a \"Añadir a cola\"</string>
     <string name="queue_hint_playlist">Puedes añadir más música a la lista dándole a los tres puntos y a \"Añadir a lista\"</string>
@@ -319,7 +342,6 @@
     <string name="playlist_subtitle_format">%1$s | %2$s</string>
     <string name="playlist_more">Más opciones de la lista</string>
     <string name="playlist_create">Nueva lista</string>
-    <string name="playlist_new_option">Nueva lista…</string>
     <string name="playlist_name_hint">Nombre de la lista</string>
     <string name="playlist_rename">Renombrar</string>
     <string name="playlist_delete">Eliminar</string>
@@ -329,6 +351,48 @@
     <string name="playlist_name_taken">Ya existe una lista con ese nombre</string>
     <string name="playlist_empty">Esta lista está vacía</string>
     <string name="add_to_playlist_title">Añadir a lista</string>
+    <!-- Ficha de una lista: última canción reproducida dentro de ELLA (no cuenta si esa misma
+         canción se reprodujo desde cualquier otro sitio, ver PlaylistResumeStore). -->
+    <string name="playlist_current_position">Posición actual: %1$s</string>
+    <string name="playlist_resume">REANUDAR</string>
+
+    <!-- Etiquetas: nombre de las 4 predefinidas del sistema (ver Migrations.kt.seedDefaultTags).
+         Fuente de verdad de estos textos: se leen en la migración/onCreate vía context.getString y
+         se guardan tal cual en TagEntity.name, no se recalculan en tiempo de ejecución. Hubo una 5ª,
+         "Debug", retirada en MIGRATION_19_20 en cuanto dejó de hacer falta. -->
+    <string name="tag_favorites_name">Favoritos</string>
+    <string name="tag_recently_added_name">Canciones descargadas recientemente</string>
+    <string name="tag_not_in_playlist_name">En ninguna lista</string>
+    <string name="tag_no_custom_tags_name">Sin etiquetas personalizadas</string>
+
+    <!-- Diálogo de etiquetas de una canción (SongTagsDialogFragment/TagPickerDialogFragment). El
+         "_multi" es para la edición múltiple (selección de varias canciones, ver
+         SongTagsDialogFragment.isMultiEdit): al principio solo salen las comunes a todas, y lo que
+         se añada/quite se aplica a todas al aceptar. -->
+    <string name="song_tags_title">Etiquetas de la canción</string>
+    <string name="song_tags_title_multi">Etiquetas de %1$d canciones</string>
+    <string name="song_tags_empty">Esta canción no tiene etiquetas todavía</string>     <!-- No se utiliza (?) -->
+    <string name="song_tags_empty_multi">Estas canciones no tienen etiquetas en común</string>
+    <string name="add_tag_button">+ Añadir</string>
+    <string name="remove_tag">Quitar etiqueta</string>
+    <string name="tag_picker_title">Añadir etiqueta</string>
+    <string name="tag_picker_search_hint">Buscar etiquetas</string>
+
+    <!-- Crear/editar/borrar una etiqueta personalizada (TagEditorDialogFragment, botón "+" y menú
+         de 3 puntos de TagsFragment/TagsAdapter). "Eliminar" se reutiliza de playlist_delete: es un
+         texto genérico, no hace falta duplicarlo. -->
+    <string name="tag_create">Nueva etiqueta</string>
+    <string name="tag_edit">Editar etiqueta</string>
+    <string name="tag_name_hint">Nombre de la etiqueta</string>
+    <string name="tag_delete_confirm">¿Eliminar la etiqueta <b>^1</b>? Las canciones no se tocarán</string>
+    <string name="tag_more">Más opciones de la etiqueta</string>
+
+    <!-- Color picker del editor de etiquetas (ver ui/library/colorpicker/ColorPickerView.kt): los
+         únicos campos de texto son estos 3, sin H/S/V/CMYK/hex. -->
+    <string name="color_picker_r_label">R</string>
+    <string name="color_picker_g_label">G</string>
+    <string name="color_picker_b_label">B</string>
+
     <string name="ipod_shuffle_random">Reproducir una canción al azar</string>
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>

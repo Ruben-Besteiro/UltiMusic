@@ -14,11 +14,14 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.EditText
+import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.core.widget.ImageViewCompat
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
@@ -42,7 +45,12 @@ import com.untar.ultimusic.model.Album
 import com.untar.ultimusic.model.Artist
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.ui.common.MiniPlayerController
+import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
+import com.untar.ultimusic.ui.library.SongTagsDialogFragment
+import com.untar.ultimusic.ui.library.TagsViewModel
+import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.ui.search.SearchBarController
 import com.untar.ultimusic.ui.search.SearchViewModel
@@ -76,23 +84,31 @@ class MainActivity : AppCompatActivity() {
     // ha desaparecido; al pasar por el ViewModel, su `tick` se encarga de repintar las pestañas.
     private val playlistsViewModel: PlaylistsViewModel by viewModels()
 
+    // Ámbito de actividad, MISMA instancia que obtienen los fragmentos/diálogos con
+    // activityViewModels(). Se declara aquí (y no en TagsFragment, donde vivía antes) solo para
+    // conectarle el bind de abajo antes de que exista ningún fragmento — ver el comentario de
+    // onCreate.
+    private val tagsViewModel: TagsViewModel by viewModels()
+
     private val tabTitles: List<String> by lazy {
         listOf(
             getString(R.string.tab_songs),
             getString(R.string.tab_albums),
             getString(R.string.tab_artists),
-            getString(R.string.tab_producers),
             getString(R.string.tab_genres),
+            getString(R.string.tab_tags),
             getString(R.string.tab_playlists)
         )
     }
 
-    /** Un icono por pestaña, en el mismo orden que [tabTitles] y que [MainPagerAdapter]. */
+    /** Un icono por pestaña, en el mismo orden que [tabTitles] y que [MainPagerAdapter]. Géneros
+     *  estrena ic_radio (antes usaba ic_genre); Etiquetas hereda ese icono viejo de "etiqueta de
+     *  ropa", que le pega más temáticamente. */
     private val tabIcons: List<Int> = listOf(
         R.drawable.ic_music_note,
         R.drawable.ic_album,
         R.drawable.ic_artist,
-        R.drawable.ic_producer,
+        R.drawable.ic_radio,
         R.drawable.ic_genre,
         R.drawable.ic_playlist
     )
@@ -133,6 +149,13 @@ class MainActivity : AppCompatActivity() {
             insets
         }
 
+        onBackPressedDispatcher.addCallback(this, selectionBackCallback)
+        // La etiqueta predefinida "En ninguna lista" necesita saber qué canciones están en alguna
+        // Lista (ver TagsViewModel/LibraryRepository.tagSummaries). Se conecta AQUÍ, antes de que
+        // exista ningún fragmento, porque tagsViewModel ahora se observa desde más sitios que la
+        // pestaña Etiquetas (Canciones, un álbum/artista, una lista, el buscador, el iPod...) y
+        // cualquiera de ellos puede abrirse sin haber visitado nunca esa pestaña.
+        tagsViewModel.bindPlaylistFilenames { playlistsViewModel.allFilenamesInPlaylists }
         setupToolbar()
         setupSearch()
         setupPager()
@@ -254,7 +277,38 @@ class MainActivity : AppCompatActivity() {
         // El engranaje de la izquierda abre los ajustes; la ayuda de la derecha, de momento, no hace
         // nada. La barra de búsqueda del centro la engancha setupSearch().
         findViewById<View>(R.id.btnSettings).setOnClickListener { showSettings() }
-        findViewById<View>(R.id.btnSort).setOnClickListener { showSort() }
+
+        val btnSort = findViewById<ImageButton>(R.id.btnSort)
+        btnSort.setOnClickListener {
+            if (songsViewModel.selectedIds.value.isEmpty()) showSort() else showSelectionMenu(btnSort)
+        }
+
+        // Mientras haya canciones marcadas (pulsación larga en la pestaña Canciones, ver
+        // SongsAdapter/SongsFragment) el ojo de ordenar se convierte en el menú de 3 puntos de la
+        // selección: songsViewModel es la MISMA instancia de ámbito de actividad que usa
+        // SongsFragment, así que esto se entera al instante de cada marca/desmarca.
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                songsViewModel.selectedIds.collect { ids ->
+                    val selecting = ids.isNotEmpty()
+                    btnSort.setImageResource(if (selecting) R.drawable.ic_more_vert else R.drawable.ic_eye)
+                    btnSort.contentDescription =
+                        getString(if (selecting) R.string.song_selection_more else R.string.action_sort)
+                    selectionBackCallback.isEnabled = selecting
+                }
+            }
+        }
+    }
+
+    /**
+     * Atrás, mientras hay una selección múltiple activa, la limpia en vez de salir de la
+     * aplicación (MainActivity es la raíz). Se activa/desactiva en el `collect` de
+     * [setupToolbar] según [SongsViewModel.selectedIds].
+     */
+    private val selectionBackCallback = object : OnBackPressedCallback(false) {
+        override fun handleOnBackPressed() {
+            songsViewModel.clearSelection()
+        }
     }
 
     /**
@@ -268,6 +322,91 @@ class MainActivity : AppCompatActivity() {
         val position = findViewById<ViewPager2>(R.id.viewPager).currentItem
         val tab = LibraryTab.values().getOrNull(position) ?: return
         SortDialogFragment.newInstance(tab).show(supportFragmentManager, SortDialogFragment.TAG)
+    }
+
+    /**
+     * Menú de 3 puntos de la selección múltiple de canciones (ver menu_song_selection.xml): sin
+     * "Ir al...", porque no tiene sentido para varias canciones a la vez. Cada acción limpia la
+     * selección al lanzarse -no al terminar-, igual que tocar una canción suelta cierra su propio
+     * menú de 3 puntos: lo marcado ya ha hecho su papel de decirle a la acción sobre qué canciones
+     * actuar.
+     */
+    private fun showSelectionMenu(anchor: View) {
+        val ids = songsViewModel.selectedIds.value
+        val selected = songsViewModel.songs.value.filter { it.id in ids }
+        if (selected.isEmpty()) return
+        PopupMenu(this, anchor).apply {
+            menuInflater.inflate(R.menu.menu_song_selection, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_add_to_queue -> {
+                        songsViewModel.clearSelection()
+                        playerViewModel.addToQueue(selected)
+                        true
+                    }
+                    R.id.action_add_to_playlist -> { showAddToPlaylistForSelection(selected); true }
+                    R.id.action_edit_metadata -> { showMetadataEditorForSelection(selected); true }
+                    R.id.action_edit_tags -> { showEditTagsForSelection(selected); true }
+                    R.id.action_delete_song -> { showDeleteDialogForSelection(selected); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    /** Igual que `SongsFragment.showAddToPlaylist`, pero para varias canciones a la vez: el propio
+     *  diálogo ya está pensado para una lista de archivos (ver [AddToPlaylistDialogFragment]). */
+    private fun showAddToPlaylistForSelection(selected: List<Song>) {
+        songsViewModel.clearSelection()
+        if (supportFragmentManager.findFragmentByTag(AddToPlaylistDialogFragment.TAG) != null) return
+        lifecycleScope.launch {
+            val filenames = selected.map { File(it.filePath).name }
+            val repo = PlaylistRepository.get()
+            val names = repo.listPlaylistNames()
+            val contained = repo.playlistsContainingAll(filenames)
+            val checked = BooleanArray(names.size) { names[it] in contained }
+            AddToPlaylistDialogFragment.newInstance(filenames, names, checked)
+                .show(supportFragmentManager, AddToPlaylistDialogFragment.TAG)
+        }
+    }
+
+    /** Abre el editor de metadatos en modo múltiple (ver [MetadataEditorDialogFragment]). Misma
+     *  etiqueta que usa `SongsFragment` para una canción suelta: es la misma pantalla, solo cambia
+     *  cuántos ids se le pasan. */
+    private fun showMetadataEditorForSelection(selected: List<Song>) {
+        songsViewModel.clearSelection()
+        if (supportFragmentManager.findFragmentByTag("metadataEditor") == null) {
+            MetadataEditorDialogFragment.newInstance(selected.map { it.id })
+                .show(supportFragmentManager, "metadataEditor")
+        }
+    }
+
+    /** Abre el editor de etiquetas en modo múltiple (ver [SongTagsDialogFragment]): al principio solo
+     *  salen las etiquetas comunes a TODAS las seleccionadas, y lo que se añada/quite ahí se aplica a
+     *  todas de golpe al pulsar "Aceptar", no en directo como en el caso de una sola canción. */
+    private fun showEditTagsForSelection(selected: List<Song>) {
+        songsViewModel.clearSelection()
+        if (supportFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+            SongTagsDialogFragment.newInstance(selected.map { it.id })
+                .show(supportFragmentManager, SongTagsDialogFragment.TAG)
+        }
+    }
+
+    /** Confirmación antes de borrar de verdad los archivos del dispositivo, igual que
+     *  `SongsFragment.showDeleteDialog` pero con el mensaje en plural (ver delete_songs_confirm). */
+    private fun showDeleteDialogForSelection(selected: List<Song>) {
+        songsViewModel.clearSelection()
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.delete_song)
+            .setMessage(resources.getQuantityString(R.plurals.delete_songs_confirm, selected.size, selected.size))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.delete_song) { _, _ ->
+                songsViewModel.delete(selected)
+                playlistsViewModel.forgetSongs(selected.map { File(it.filePath).name })
+            }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
     /**
@@ -334,6 +473,10 @@ class MainActivity : AppCompatActivity() {
             override fun onTabSelected(tab: TabLayout.Tab) {
                 applyTabAppearance(tab, true, currentAccentColor)
                 redistributeTabPadding(tabLayout, tab.position)
+                // La selección múltiple es solo de la pestaña Canciones (posición 0, ver
+                // SongsViewModel.selectedIds): si se sale de ella, se limpia sola en vez de
+                // quedarse "colgada" con el menú de 3 puntos puesto en otra pestaña.
+                if (tab.position != 0) songsViewModel.clearSelection()
             }
             override fun onTabUnselected(tab: TabLayout.Tab) = applyTabAppearance(tab, false, currentAccentColor)
             override fun onTabReselected(tab: TabLayout.Tab) {}
@@ -430,6 +573,15 @@ class MainActivity : AppCompatActivity() {
                         R.string.cannot_add_to_empty_queue,
                         Toast.LENGTH_SHORT
                     ).show()
+                }
+            }
+        }
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // El mensaje ya viene formateado desde PlaybackService (necesita el título de la
+                // canción y, si se sabe, el motivo del fallo).
+                playerViewModel.playbackError.collect { message ->
+                    Toast.makeText(this@MainActivity, message, Toast.LENGTH_LONG).show()
                 }
             }
         }

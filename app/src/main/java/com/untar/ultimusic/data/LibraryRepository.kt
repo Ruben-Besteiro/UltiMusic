@@ -13,6 +13,8 @@ import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongEntity
+import com.untar.ultimusic.data.db.entities.SongTagCrossRef
+import com.untar.ultimusic.data.db.entities.TagEntity
 import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
 import com.untar.ultimusic.data.db.toDomain
 import com.untar.ultimusic.data.remote.YouTubeStatsApi
@@ -25,9 +27,10 @@ import com.untar.ultimusic.model.GreylistFolder
 import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.SystemTagKey
+import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
-import com.untar.ultimusic.util.GroupKind
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -76,7 +79,7 @@ class LibraryRepository private constructor(
     val libraryRoots: Flow<List<LibraryRoot>> =
         dao.observeLibraryRoots().map { list -> list.map { it.toDomain() } }
 
-    // --- Pestañas de Álbumes / Artistas / Productores ---
+    // --- Pestañas de Álbumes / Artistas ---
     //
     // El `null` de estas llamadas significa "sin filtrar por id": devuelve la lista entera. Con un
     // id concreto, la misma consulta sirve para la ficha de detalle (ver los métodos de abajo).
@@ -85,10 +88,7 @@ class LibraryRepository private constructor(
         dao.observeAlbumSummaries(null).map { rows -> rows.map { it.toDomain() } }
 
     val artists: Flow<List<PersonSummary>> =
-        dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain(GroupKind.ARTIST) } }
-
-    val producers: Flow<List<PersonSummary>> =
-        dao.observeProducerSummaries(null).map { rows -> rows.map { it.toDomain(GroupKind.PRODUCER) } }
+        dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain() } }
 
     /**
      * Pestaña de Géneros. A diferencia de las tres de arriba, no sale de una consulta SQL: el
@@ -119,6 +119,160 @@ class LibraryRepository private constructor(
     fun songsOfGenre(genre: String): Flow<List<Song>> =
         songs.map { list -> list.filter { genre in it.genres } }
 
+    // --- Pestaña de Etiquetas ---
+    //
+    // Las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags) están sembradas en la tabla
+    // `tags` desde la instalación/migración, así que [tagEntities] siempre las trae; lo único que se
+    // calcula aquí es CUÁNTAS canciones tiene cada una y CUÁLES. Favoritos y Debug usan membresía real
+    // ([tagCrossRefs], escrita desde SongTagsDialogFragment/TagPickerDialogFragment); las otras 3 se
+    // derivan al vuelo de [songs] en [resolveSongsOfTag]. "En ninguna lista" necesita saber qué
+    // canciones están en alguna Lista, dato que vive en PlaylistRepository (archivos .txt, ajeno a
+    // este repositorio): en vez de leerlo directamente -lo que acoplaría LibraryRepository a
+    // PlaylistRepository y rompería la reactividad instantánea, ya que los .txt no reemiten solos-,
+    // se recibe como parámetro externo (mismo patrón "bind" que
+    // CollectionDetailViewModel.bindPlaylistSongs; ver TagsViewModel.bindPlaylistFilenames, que es
+    // quien lo conecta de verdad al tick de PlaylistsViewModel).
+
+    private val tagEntities: Flow<List<TagEntity>> = dao.observeTags()
+    private val tagCrossRefs: Flow<List<SongTagCrossRef>> = dao.observeSongTagCrossRefs()
+
+    /** Una etiqueta ya resuelta contra la biblioteca: su resumen para pintar, y el conjunto de ids de
+     *  canción que la tienen (real o calculada, ver [resolveSongsOfTag]) — este último es lo que
+     *  necesita [tagsOfSong] para saber si UNA canción concreta la tiene, sin repetir la resolución. */
+    private data class ResolvedTag(val summary: TagSummary, val matchedSongIds: Set<Long>)
+
+    private fun resolveAllTags(
+        tags: List<TagEntity>,
+        crossRefs: List<SongTagCrossRef>,
+        allSongs: List<Song>,
+        inPlaylist: Set<String>
+    ): List<ResolvedTag> {
+        val members = crossRefs.groupBy({ it.tagId }, { it.songId }).mapValues { it.value.toSet() }
+        val songsWithCustomTag = songsWithCustomTag(tags, crossRefs)
+        return tags.map { tag ->
+            val resolved = resolveSongsOfTag(tag, allSongs, members[tag.id].orEmpty(), inPlaylist, songsWithCustomTag)
+            val summary = TagSummary(
+                tag.id, tag.name, tag.colorArgb, resolved.size, resolved.sumOf { it.duration }, tag.systemKey
+            )
+            ResolvedTag(summary, resolved.mapTo(mutableSetOf()) { it.id })
+        }
+    }
+
+    /** Canciones con AL MENOS una etiqueta personalizada (`systemKey == null`), para resolver "Sin
+     *  etiquetas personalizadas" (ver [resolveSongsOfTag]). Se calcula una sola vez por resolución en
+     *  vez de dentro de cada `tag.map`, porque no depende de qué etiqueta se esté resolviendo. */
+    private fun songsWithCustomTag(tags: List<TagEntity>, crossRefs: List<SongTagCrossRef>): Set<Long> {
+        val customTagIds = tags.filter { it.systemKey == null }.mapTo(mutableSetOf()) { it.id }
+        return crossRefs.filter { it.tagId in customTagIds }.mapTo(mutableSetOf()) { it.songId }
+    }
+
+    /** Resúmenes de las 5 etiquetas (más las personalizadas que haya en el futuro), para la pestaña
+     *  de Etiquetas. [filenamesInAnyPlaylist] es el "bind" externo descrito arriba. */
+    fun tagSummaries(filenamesInAnyPlaylist: Flow<Set<String>>): Flow<List<TagSummary>> =
+        combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
+            resolveAllTags(tags, crossRefs, allSongs, inPlaylist).map { it.summary }
+        }
+
+    /** Canciones de UNA etiqueta, por [id] (no por nombre: ver la decisión de diseño de usar el id
+     *  como clave de una etiqueta en la ficha de detalle). */
+    fun songsOfTag(id: Long, filenamesInAnyPlaylist: Flow<Set<String>>): Flow<List<Song>> =
+        combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
+            val tag = tags.firstOrNull { it.id == id } ?: return@combine emptyList()
+            val memberIds = crossRefs.filter { it.tagId == tag.id }.map { it.songId }.toSet()
+            resolveSongsOfTag(tag, allSongs, memberIds, inPlaylist, songsWithCustomTag(tags, crossRefs))
+        }
+
+    /**
+     * Etiquetas de UNA canción (ver [SongTagsDialogFragment][com.untar.ultimusic.ui.library.SongTagsDialogFragment]):
+     * tanto las de membresía real como las calculadas que la canción cumpla ahora mismo (p. ej. si es
+     * una de las 20 más recientes, "Descargadas recientemente" sale en su lista, aunque no tenga
+     * ninguna fila en `song_tag`).
+     */
+    fun tagsOfSong(songId: Long, filenamesInAnyPlaylist: Flow<Set<String>>): Flow<List<TagSummary>> =
+        combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
+            resolveAllTags(tags, crossRefs, allSongs, inPlaylist)
+                .filter { songId in it.matchedSongIds }
+                .map { it.summary }
+        }
+
+    /** Añade/quita la membresía real de una canción en una etiqueta (ver
+     *  [SongTagsDialogFragment][com.untar.ultimusic.ui.library.SongTagsDialogFragment]/
+     *  [TagPickerDialogFragment][com.untar.ultimusic.ui.library.TagPickerDialogFragment]). Solo tiene
+     *  sentido para etiquetas SIN calcular (Favoritos o una personalizada): las 3 calculadas no
+     *  tienen fila que insertar/borrar, y la UI ya no deja llegar hasta aquí para ellas (sin X que
+     *  quitar, sin sitio en el buscador de añadir). No hace falta refrescar nada a mano:
+     *  [dao.observeSongTagCrossRefs] reemite sola al escribir. */
+    suspend fun addSongToTag(songId: Long, tagId: Long) = dao.insertSongTag(SongTagCrossRef(songId, tagId))
+    suspend fun removeSongFromTag(songId: Long, tagId: Long) = dao.deleteSongTag(songId, tagId)
+
+    /**
+     * Igual que [addSongToTag]/[removeSongFromTag] pero para VARIAS canciones a la vez (edición
+     * múltiple de etiquetas, ver
+     * [SongTagsDialogFragment][com.untar.ultimusic.ui.library.SongTagsDialogFragment] con más de un
+     * id): [addTagIds] se añaden a TODAS las [songIds], [removeTagIds] se quitan de TODAS, sin
+     * importar si cada canción concreta ya las tenía o no -insertar una que ya tenía es un no-op
+     * (`insertSongTag` usa `OnConflictStrategy.IGNORE`), quitar una que no tenía es un `DELETE` que
+     * no encuentra fila-. Mismo patrón de bucle secuencial que
+     * [MetadataEditorViewModel.saveMulti][com.untar.ultimusic.ui.editor.MetadataEditorViewModel.saveMulti]
+     * para su propia edición múltiple: cada escritura es ya atómica de por sí, no hace falta envolver
+     * el bucle entero en una transacción aparte.
+     */
+    suspend fun applyTagsToSongs(songIds: List<Long>, addTagIds: Set<Long>, removeTagIds: Set<Long>) {
+        for (songId in songIds) {
+            for (tagId in addTagIds) dao.insertSongTag(SongTagCrossRef(songId, tagId))
+            for (tagId in removeTagIds) dao.deleteSongTag(songId, tagId)
+        }
+    }
+
+    /** Crea una etiqueta personalizada nueva, al final del orden actual (ver [LibraryDao.maxTagSortOrder]).
+     *  [name] se recorta y no puede quedar vacío tras el trim: la UI (TagEditorDialogFragment) ya
+     *  deshabilita el botón de aceptar en ese caso, esto es un cinturón de seguridad, igual que hace
+     *  PlaylistRepository con el nombre de una lista. No hace falta refrescar nada a mano:
+     *  [dao.observeTags] reemite sola al escribir. */
+    suspend fun createTag(name: String, colorArgb: Int) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        val sortOrder = dao.maxTagSortOrder() + 1
+        dao.insertTag(TagEntity(name = trimmed, colorArgb = colorArgb, systemKey = null, sortOrder = sortOrder))
+    }
+
+    /** Renombra/recolorea una etiqueta personalizada existente. No tiene efecto sobre una predefinida
+     *  (ver [LibraryDao.updateTag], `WHERE systemKey IS NULL`); la UI no deja llegar hasta aquí para esas. */
+    suspend fun updateTag(id: Long, name: String, colorArgb: Int) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        dao.updateTag(id, trimmed, colorArgb)
+    }
+
+    /** Borra una etiqueta personalizada (y, en cascada, su membresía en `song_tag`, ver el
+     *  `ON DELETE CASCADE` de `SongTagCrossRef.tagId`). No tiene efecto sobre una predefinida. */
+    suspend fun deleteTag(id: Long) = dao.deleteTag(id)
+
+    /**
+     * Resuelve qué canciones tiene [tag], según su tipo (ver [SystemTagKey]):
+     * - Favoritos: membresía real, [memberIds].
+     * - Descargadas recientemente: las 20 con [Song.dateAdded] más reciente. 100% calculada, nunca
+     *   más de 20.
+     * - En ninguna lista: cuyo archivo no está en [inPlaylist] (unión de todas las Listas).
+     * - Sin etiquetas personalizadas: todas las canciones EXCEPTO las que ya tengan alguna etiqueta
+     *   personalizada ([songsWithCustomTag]).
+     * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que Favoritos.
+     */
+    private fun resolveSongsOfTag(
+        tag: TagEntity,
+        allSongs: List<Song>,
+        memberIds: Set<Long>,
+        inPlaylist: Set<String>,
+        songsWithCustomTag: Set<Long>
+    ): List<Song> =
+        when (tag.systemKey?.let { runCatching { SystemTagKey.valueOf(it) }.getOrNull() }) {
+            SystemTagKey.FAVORITES -> allSongs.filter { it.id in memberIds }
+            SystemTagKey.RECENTLY_ADDED -> allSongs.sortedByDescending { it.dateAdded }.take(20)
+            SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { File(it.filePath).name !in inPlaylist }
+            SystemTagKey.NO_CUSTOM_TAGS -> allSongs.filter { it.id !in songsWithCustomTag }
+            null -> allSongs.filter { it.id in memberIds }
+        }
+
     // --- Fichas de detalle ---
 
     fun album(id: Long): Flow<AlbumSummary?> =
@@ -145,10 +299,7 @@ class LibraryRepository private constructor(
         }
 
     fun artist(id: Long): Flow<PersonSummary?> =
-        dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain(GroupKind.ARTIST) }
-
-    fun producer(id: Long): Flow<PersonSummary?> =
-        dao.observeProducerSummaries(id).map { rows -> rows.firstOrNull()?.toDomain(GroupKind.PRODUCER) }
+        dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
 
     /** Canciones de un álbum, ya ordenadas por número de pista (y de disco): ver
      * [com.untar.ultimusic.data.db.entities.SongEntity.trackNumber]. */
@@ -158,15 +309,9 @@ class LibraryRepository private constructor(
     fun artistSongs(id: Long): Flow<List<Song>> =
         dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
 
-    fun producerSongs(id: Long): Flow<List<Song>> =
-        dao.observeSongsOfProducer(id).map { list -> list.map { it.toDomain() } }
-
-    /** Álbumes de un artista/productor, para el carrusel horizontal de su ficha. */
+    /** Álbumes de un artista, para el carrusel horizontal de su ficha. */
     fun artistAlbums(id: Long): Flow<List<AlbumSummary>> =
         dao.observeAlbumsOfArtist(id).map { rows -> rows.map { it.toDomain() } }
-
-    fun producerAlbums(id: Long): Flow<List<AlbumSummary>> =
-        dao.observeAlbumsOfProducer(id).map { rows -> rows.map { it.toDomain() } }
 
     /**
      * Canciones sueltas por id, en el mismo orden que [ids] (la consulta no lo garantiza). Las
@@ -188,13 +333,19 @@ class LibraryRepository private constructor(
     private suspend fun libraryRootFiles(): List<File> = dao.libraryRootPaths().map { File(it) }
 
     /**
-     * Reconcilia lo que hay en disco con lo guardado: escanea (lento, fuera de transacción) y
-     * delega en el DAO la inserción de novedades y el borrado de lo que ya no existe. Las
-     * ediciones del usuario nunca se pisan.
+     * Reconcilia lo que hay en disco con lo guardado: escanea (fuera de transacción) y delega en el
+     * DAO la inserción de novedades y el borrado de lo que ya no existe. Las ediciones del usuario
+     * nunca se pisan.
+     *
+     * Antes de escanear se piden las rutas ya catalogadas ([LibraryDao.allSongPaths]) para
+     * pasárselas a [MusicScanner.scan] como `knownPaths`: así el escaneo solo abre y lee las
+     * etiquetas de los archivos NUEVOS, no de toda la fonoteca en cada llamada (ver
+     * [MusicScanner.scan] y [LibraryDao.reconcile]).
      */
     suspend fun reconcile(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) = withContext(Dispatchers.IO) {
-        val scanned = MusicScanner.scan(libraryRootFiles(), onProgress)
-        dao.reconcile(scanned)
+        val knownPaths = dao.allSongPaths().toHashSet()
+        val result = MusicScanner.scan(libraryRootFiles(), knownPaths, onProgress)
+        dao.reconcile(result.newSongs, result.currentPaths)
     }
 
     /**

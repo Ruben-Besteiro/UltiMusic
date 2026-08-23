@@ -58,7 +58,7 @@ private const val IPOD_TAG = "ipod"
  *
  * Antes esto vivía solo en [com.untar.ultimusic.ui.MainActivity], que es la única pantalla que
  * siempre lo tuvo. Ahora también lo usa [com.untar.ultimusic.ui.library.DetailDialogFragment] (la
- * ficha de álbum/artista/productor), la única ventana a pantalla completa que también lleva
+ * ficha de álbum/artista), la única ventana a pantalla completa que también lleva
  * mini-reproductor; el resto (buscador, editores, ajustes, iPod) se abren sin él.
  *
  * [fragmentManager] es el que se usa para mostrar el iPod al tocar el mini-reproductor o al

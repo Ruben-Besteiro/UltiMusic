@@ -1,5 +1,6 @@
 package com.untar.ultimusic.data.db.entities
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
@@ -100,5 +101,23 @@ data class SongEntity(
     val ogTitle: String?,
     val ogArtist: String?,
     val ogAlbum: String?,
-    val ogYear: Int?
+    val ogYear: Int?,
+
+    /**
+     * Cuándo se creó el archivo en disco (`File.lastModified()`, milisegundos epoch), usado como
+     * "fecha de creación" para la etiqueta predefinida "Canciones descargadas recientemente" (ver
+     * [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]). Se rellena al escanear (ver
+     * `ScannedSong.toEntity`) y se conserva tal cual si la canción solo cambia de carpeta: mover un
+     * archivo no debería resetear cuándo se "añadió" a la fonoteca. Default `0` solo para no romper
+     * construcciones con nombre existentes; las filas ya guardadas antes de esta columna se
+     * rellenan una vez en la migración que la introduce (ver Migrations.kt).
+     *
+     * `@ColumnInfo(defaultValue = "0")` es a propósito, no solo el default de Kotlin: sin él, el
+     * esquema que Room ESPERA (deducido de la entidad) no llevaría ningún `DEFAULT` de verdad, y no
+     * coincidiría con el `DEFAULT 0` que la migración necesita poner de verdad en SQLite —SQLite
+     * exige un `DEFAULT` para añadir una columna `NOT NULL` a una tabla con filas ya existentes—, lo
+     * que rompería la validación de esquema de Room al abrir la base de datos tras migrar.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val dateAdded: Long = 0
 )

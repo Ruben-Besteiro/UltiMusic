@@ -51,7 +51,11 @@ data class Song(
     /** Visitas del vídeo de [videoUrl] en YouTube, o null si no tiene vídeo o todavía no se han
      * pedido. Ver [com.untar.ultimusic.data.db.entities.SongEntity.youtubeViewCount] sobre de dónde
      * sale y cada cuánto se refresca. */
-    val youtubeViewCount: Long?
+    val youtubeViewCount: Long?,
+
+    /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.dateAdded]. Default `0` para no romper
+     * construcciones con nombre existentes. */
+    val dateAdded: Long = 0
 ) : SortableLibraryItem {
     override val sortName: String get() = title
     override val sortDuration: Long get() = duration

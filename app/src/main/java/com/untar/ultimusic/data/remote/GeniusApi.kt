@@ -22,7 +22,7 @@ import java.net.URLEncoder
  * podría producir esas filas: da un único álbum por canción, sin ediciones que comparar. Pero sabe
  * tres cosas que iTunes no sabe, y que además son campos que UltiMusic modela y que hasta ahora no
  * rellenaba nadie:
- * - **Productores** (`producer_artists`), que aquí tienen pestaña y ficha propias.
+ * - **Productores** (`producer_artists`), que aquí tienen su propio campo en el editor de metadatos.
  * - **La canción original de un remix** (`song_relationships` → `remix_of`), que es exactamente lo
  *   que guardan los campos `og*` (ver [com.untar.ultimusic.model.Song]).
  * - **El enlace del videoclip** (`media`), que si no hay que buscar a mano en el iPod.

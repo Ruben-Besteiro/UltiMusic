@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de la lista de Etiquetas: el nombre dentro de una "salchicha" de color (bg_tag_chip,
+     inspirada en Top Drives) en vez del texto plano de item_genre.xml, y debajo el recuento de
+     canciones. Botón de 3 puntos (editar/eliminar) SOLO visible en etiquetas personalizadas
+     (systemKey == null); las 5 predefinidas lo ocultan (GONE), ver TagsAdapter. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp">
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tagChip"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/bg_tag_chip"
+            android:paddingHorizontal="14dp"
+            android:paddingVertical="6dp"
+            android:textColor="@color/um_on_background"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            tools:text="Favoritos" />
+
+        <TextView
+            android:id="@+id/tagSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="12sp"
+            tools:text="12 canciones" />
+
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btnTagMore"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/tag_more"
+        android:src="@drawable/ic_more_vert" />
+
+</LinearLayout>

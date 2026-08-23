@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Ficha de una lista o un género (ver CollectionDetailDialogFragment). Misma idea que
+  Ficha de una lista, un género o una etiqueta (ver CollectionDetailDialogFragment). Misma idea que
   dialog_library_detail.xml (cabecera teñida con el acento de lo que suena + mini-reproductor
-  propio abajo), pero sin carátula grande: ni una lista ni un género tienen imagen propia, así que
-  la cabecera es solo la barra superior más una línea con el resumen (nº de canciones + duración).
+  propio abajo), pero sin carátula grande: ninguno de los tres tiene imagen propia, así que la
+  cabecera es solo la barra superior más una línea con el resumen (nº de canciones + duración) y,
+  solo para una lista, el bloque de "Posición actual"/REANUDAR debajo (ver collectionResumeBlock).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -54,6 +55,59 @@
                 android:layout_marginStart="12dp"
                 android:textSize="15sp"
                 tools:text="119 canciones | 7:38:27" />
+
+        </LinearLayout>
+
+        <!--
+          Solo para una Lista (nunca género ni etiqueta, ver CollectionDetailDialogFragment): última
+          canción reproducida DENTRO de ella, con un botón para reanudarla desde el principio. Oculto
+          por defecto: aparece solo si hay algo guardado para esta lista (ver PlaylistResumeStore),
+          y solo entonces btnResumePlaylist se oculta aparte mientras esta lista exacta esté sonando.
+        -->
+        <LinearLayout
+            android:id="@+id/collectionResumeBlock"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingHorizontal="16dp"
+            android:paddingBottom="12dp"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <ImageView
+                android:id="@+id/collectionResumeIcon"
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:contentDescription="@null"
+                android:src="@drawable/ic_music_note" />
+
+            <TextView
+                android:id="@+id/collectionResumeText"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="12dp"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textSize="13sp"
+                tools:text="Posición actual: Bohemian Rhapsody" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnResumePlaylist"
+                style="@style/Widget.Material3.Button.TextButton"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:minWidth="0dp"
+                android:minHeight="0dp"
+                android:paddingHorizontal="8dp"
+                android:text="@string/playlist_resume"
+                android:textSize="12sp"
+                app:icon="@drawable/ic_play"
+                app:iconGravity="textStart"
+                app:iconSize="14dp"
+                app:iconPadding="4dp" />
 
         </LinearLayout>
     </LinearLayout>

@@ -23,7 +23,7 @@ import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
-import com.untar.ultimusic.ui.library.PersonKind
+import com.untar.ultimusic.ui.library.SongTagsDialogFragment
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
@@ -45,7 +45,18 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         val loadingSpinner = view.findViewById<ProgressBar>(R.id.loadingSpinner)
 
         val adapter = SongsAdapter(
-            onSongClick = { song -> playerViewModel.play(song) },
+            // Con selección activa, tocar una fila la marca/desmarca en vez de reproducir; si no,
+            // se reproduce como siempre (ver SongsViewModel.selectedIds).
+            onSongClick = { song ->
+                if (songsViewModel.selectedIds.value.isEmpty()) playerViewModel.play(song)
+                else songsViewModel.toggleSelection(song.id)
+            },
+            // Mantener pulsada una canción empieza la selección con ella ya marcada. Si ya había
+            // una selección en marcha, se limita a marcar/desmarcar esta también.
+            onSongLongClick = { song ->
+                if (songsViewModel.selectedIds.value.isEmpty()) songsViewModel.startSelection(song.id)
+                else songsViewModel.toggleSelection(song.id)
+            },
             onAddToQueue = { song -> playerViewModel.addToQueue(song) },
             onAddToPlaylist = { song -> showAddToPlaylist(song) },
             onEditMetadata = { song ->
@@ -54,15 +65,18 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                         .show(parentFragmentManager, "metadataEditor")
                 }
             },
+            onEditTags = { song ->
+                if (parentFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+                    SongTagsDialogFragment.newInstance(song.id)
+                        .show(parentFragmentManager, SongTagsDialogFragment.TAG)
+                }
+            },
             onDeleteSong = { song -> showDeleteDialog(song) },
             onGoToAlbum = { song ->
                 song.album?.let { DetailDialogFragment.showAlbum(this, it.id) }
             },
             onGoToArtist = { song ->
-                song.artists.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.ARTIST, it.id) }
-            },
-            onGoToProducer = { song ->
-                song.producers.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.PRODUCER, it.id) }
+                song.artists.firstOrNull()?.let { DetailDialogFragment.showArtist(this, it.id) }
             }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -120,7 +134,11 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                     playerViewModel.accentColor.collect { accent ->
                         scrollbar.setAccentColor(accent)
                         loadingSpinner.indeterminateTintList = ColorStateList.valueOf(accent)
+                        adapter.setAccentColor(accent)
                     }
+                }
+                launch {
+                    songsViewModel.selectedIds.collect { ids -> adapter.setSelection(ids) }
                 }
             }
         }

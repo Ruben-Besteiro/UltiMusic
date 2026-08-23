@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Contenido de TagEditorDialogFragment: nombre + vista previa en vivo de la "salchicha" +
+     color picker. Ver dialog_song_tags.xml/item_tag.xml para el mismo estilo de "salchicha". -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingHorizontal="20dp"
+    android:paddingTop="8dp"
+    android:paddingBottom="4dp">
+
+    <EditText
+        android:id="@+id/inputTagName"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/tag_name_hint"
+        android:singleLine="true"
+        android:textColor="@color/um_on_background"
+        tools:text="Favoritas de verano" />
+
+    <TextView
+        android:id="@+id/tagChipPreview"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:background="@drawable/bg_tag_chip"
+        android:paddingHorizontal="14dp"
+        android:paddingVertical="6dp"
+        android:textColor="@color/um_on_background"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        tools:text="Favoritas de verano" />
+
+    <com.untar.ultimusic.ui.library.colorpicker.ColorPickerView
+        android:id="@+id/colorPicker"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="18dp" />
+
+</LinearLayout>

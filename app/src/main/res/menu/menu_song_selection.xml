@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Menú del botón de 3 puntos que sustituye al ojo de ordenar de la toolbar mientras hay canciones
+  seleccionadas (ver MainActivity.setupToolbar y SongsViewModel.selectedIds). Afecta a TODAS las
+  seleccionadas a la vez; a diferencia de menu_song_item.xml no lleva "Ir al..." (no tiene sentido
+  para varias canciones a la vez) ni id repetidos, así un mismo listener sirve para los dos menús.
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_add_to_queue"
+        android:title="@string/add_to_queue" />
+    <item
+        android:id="@+id/action_add_to_playlist"
+        android:title="@string/add_to_playlist" />
+    <item
+        android:id="@+id/action_edit_metadata"
+        android:title="@string/edit_metadata" />
+    <item
+        android:id="@+id/action_edit_tags"
+        android:title="@string/edit_tags" />
+    <item
+        android:id="@+id/action_delete_song"
+        android:title="@string/delete_song" />
+</menu>

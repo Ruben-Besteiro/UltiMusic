@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pestaña de Etiquetas: como fragment_library_list.xml (compartido por Géneros/Artistas/
+     Productores) pero con su propio layout, para poder llevar el botón "+" flotante de crear
+     etiqueta sin afectar a esas otras pestañas — mismo motivo por el que Listas tiene su propio
+     fragment_playlists.xml en vez de compartir. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background">
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerLibrary"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:clipToPadding="false"
+        android:paddingTop="10dp"
+        android:paddingBottom="88dp"
+        android:scrollbars="none"
+        tools:listitem="@layout/item_tag" />
+
+    <TextView
+        android:id="@+id/emptyView"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:layout_margin="24dp"
+        android:gravity="center"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="16sp"
+        android:visibility="gone" />
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/btnCreateTag"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="20dp"
+        android:contentDescription="@string/tag_create"
+        android:src="@android:drawable/ic_input_add"
+        app:backgroundTint="@color/um_yellow"
+        app:tint="@color/um_background" />
+
+</FrameLayout>

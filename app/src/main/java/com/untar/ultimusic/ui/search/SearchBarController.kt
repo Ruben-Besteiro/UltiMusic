@@ -27,7 +27,7 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
-import com.untar.ultimusic.ui.library.PersonKind
+import com.untar.ultimusic.ui.library.SongTagsDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
@@ -59,7 +59,7 @@ private const val EDITOR_TAG = "metadataEditor"
  *
  * Todo el filtrado real lo sigue haciendo [SearchViewModel]; esta clase solo pinta lo que él calcula
  * y decide qué pasa al pulsar cada resultado, exactamente igual que hacía el diálogo anterior
- * (canción: suena con las demás encontradas detrás; álbum/artista/productor: abre su ficha encima).
+ * (canción: suena con las demás encontradas detrás; álbum/artista: abre su ficha encima).
  */
 class SearchBarController(
     private val activity: FragmentActivity,
@@ -99,6 +99,12 @@ class SearchBarController(
                         .show(activity.supportFragmentManager, EDITOR_TAG)
                 }
             },
+            onEditTags = { song ->
+                if (activity.supportFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+                    SongTagsDialogFragment.newInstance(song.id)
+                        .show(activity.supportFragmentManager, SongTagsDialogFragment.TAG)
+                }
+            },
             onDeleteSong = ::showDeleteDialog,
             onGoToAlbum = { song ->
                 song.album?.let {
@@ -109,22 +115,16 @@ class SearchBarController(
             onGoToArtist = { song ->
                 song.artists.firstOrNull()?.let {
                     hideKeyboard()
-                    DetailDialogFragment.showPerson(activity, PersonKind.ARTIST, it.id)
-                }
-            },
-            onGoToProducer = { song ->
-                song.producers.firstOrNull()?.let {
-                    hideKeyboard()
-                    DetailDialogFragment.showPerson(activity, PersonKind.PRODUCER, it.id)
+                    DetailDialogFragment.showArtist(activity, it.id)
                 }
             },
             onAlbumClick = { album ->
                 hideKeyboard()
                 DetailDialogFragment.showAlbum(activity, album.id)
             },
-            onPersonClick = { kind, person ->
+            onPersonClick = { person ->
                 hideKeyboard()
-                DetailDialogFragment.showPerson(activity, kind, person.id)
+                DetailDialogFragment.showArtist(activity, person.id)
             }
         )
         recycler.layoutManager = LinearLayoutManager(activity)
@@ -154,7 +154,7 @@ class SearchBarController(
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     // Ver el comentario de CoverArt.revision: los resultados salen de las mismas
-                    // listas de Canciones/Álbumes/Artistas/Productores, así que sufren la misma
+                    // listas de Canciones/Álbumes/Artistas, así que sufren la misma
                     // laguna si solo cambia una carátula reutilizando su nombre de archivo.
                     combine(viewModel.results, CoverArt.revision) { results, _ -> results }
                         .collect { results ->
@@ -267,7 +267,7 @@ class SearchBarController(
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
-    /** Recoge el teclado. Hace falta antes de abrir una ficha encima (álbum/artista/productor). */
+    /** Recoge el teclado. Hace falta antes de abrir una ficha encima (álbum/artista). */
     private fun hideKeyboard() {
         val imm = activity.getSystemService(InputMethodManager::class.java)
         imm?.hideSoftInputFromWindow(searchInput.windowToken, 0)

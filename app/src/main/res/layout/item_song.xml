@@ -19,13 +19,41 @@
     android:paddingVertical="10dp">
 
 
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/cover"
+    <!-- Carátula + overlay de selección (ver SongsAdapter.bind): mientras hay canciones
+         seleccionadas (pulsación larga), selectionScrim y selectionCheck se hacen visibles sobre
+         la carátula de las que estén marcadas. selectionCheck se tiñe con el acento dinámico, como
+         el resto de lo amarillo de la aplicación (ver bg_circle_selection.xml y CLAUDE.md). -->
+    <FrameLayout
         android:layout_width="56dp"
-        android:layout_height="56dp"
-        android:background="@drawable/cover_placeholder"
-        android:contentDescription="@string/album_cover_desc"
-        android:scaleType="centerCrop"/>
+        android:layout_height="56dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/cover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/cover_placeholder"
+            android:contentDescription="@string/album_cover_desc"
+            android:scaleType="centerCrop"/>
+
+        <View
+            android:id="@+id/selectionScrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/um_queue_scrim"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/selectionCheck"
+            android:layout_width="22dp"
+            android:layout_height="22dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_circle_selection"
+            android:contentDescription="@string/song_selected_desc"
+            android:padding="3dp"
+            android:src="@drawable/ic_check_circle"
+            android:visibility="gone" />
+
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"

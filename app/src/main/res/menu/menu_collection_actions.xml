@@ -1,14 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Contenido del PopupMenu que abre el botón de 3 puntos de la ficha de una lista o un género (ver
-  CollectionDetailDialogFragment). Las dos primeras opciones valen para los dos casos: añadir TODA
-  la colección a la cola o a otra lista, mismos títulos que en el menú de una canción suelta
-  (menu_song_item.xml) y el de un álbum (menu_album_actions.xml), solo que aplicadas a todas las
-  canciones a la vez. Eliminar solo tiene sentido en una lista —un género no es un documento del
-  usuario, solo lo que traen las canciones— así que el código la oculta para uno (ver
-  CollectionDetailDialogFragment.showCollectionMenu). Renombrar ya se puede hacer desde la propia
-  pestaña de Listas (ver PlaylistsAdapter); no se repite aquí para no arrastrar el nombre con el
-  que se abrió esta ficha si cambiara mientras sigue abierta.
+  Contenido del PopupMenu que abre el botón de 3 puntos de la ficha de un GÉNERO — el único
+  CollectionKind que sigue teniendo este menú (ver CollectionDetailDialogFragment.onViewCreated,
+  que oculta el icono para Lista/Etiqueta). Añadir la colección entera a la cola o a otra lista,
+  mismos títulos que en el menú de una canción suelta (menu_song_item.xml) y el de un álbum
+  (menu_album_actions.xml), solo que aplicadas a todas las canciones a la vez. Borrar/renombrar una
+  lista vive en el menú de 3 puntos de su propia fila (ver PlaylistsAdapter/menu_playlist_item.xml);
+  editar/borrar una etiqueta, en el de la suya (ver TagsAdapter/menu_tag_item.xml). Un género no
+  tiene fila propia editable, así que aquí nunca hubo ni hace falta esa opción.
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
@@ -17,7 +16,4 @@
     <item
         android:id="@+id/action_add_collection_to_playlist"
         android:title="@string/add_to_playlist" />
-    <item
-        android:id="@+id/action_delete_playlist"
-        android:title="@string/playlist_delete" />
 </menu>

@@ -7,6 +7,7 @@ import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
+import com.untar.ultimusic.data.db.entities.TagEntity
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.PersonSummaryRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
@@ -18,6 +19,7 @@ import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.Tag
 import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.GroupCoverSource
 import com.untar.ultimusic.util.GroupKind
@@ -45,6 +47,14 @@ fun GreylistFolderEntity.toDomain(): GreylistFolder = GreylistFolder(
 )
 
 fun LibraryRootEntity.toDomain(): LibraryRoot = LibraryRoot(path = path)
+
+fun TagEntity.toDomain(): Tag = Tag(
+    id = id,
+    name = name,
+    colorArgb = colorArgb,
+    systemKey = systemKey,
+    sortOrder = sortOrder
+)
 
 /**
  * Los artistas del álbum se dejan vacíos en la vista de canciones (no se necesitan ahí; la lista
@@ -84,7 +94,8 @@ fun SongWithRelations.toDomain(): Song = Song(
     ogArtist = song.ogArtist,
     ogAlbum = song.ogAlbum,
     ogYear = song.ogYear,
-    youtubeViewCount = song.youtubeViewCount
+    youtubeViewCount = song.youtubeViewCount,
+    dateAdded = song.dateAdded
 )
 
 // --- Resúmenes de las pestañas de Álbumes / Artistas / Productores ---
@@ -102,10 +113,7 @@ fun AlbumSummaryRow.toDomain(): AlbumSummary = AlbumSummary(
     )
 )
 
-/** [kind] distingue si esta fila viene de la pestaña de Artistas o de la de Productores: la fila en
- * sí ([PersonSummaryRow]) es idéntica para las dos (se tratan igual), pero el collage de carátulas
- * necesita saber en qué tabla de cruce buscar las canciones (ver [GroupCoverSource]). */
-fun PersonSummaryRow.toDomain(kind: GroupKind): PersonSummary = PersonSummary(
+fun PersonSummaryRow.toDomain(): PersonSummary = PersonSummary(
     id = id,
     name = name,
     songCount = songCount,
@@ -113,7 +121,7 @@ fun PersonSummaryRow.toDomain(kind: GroupKind): PersonSummary = PersonSummary(
     totalDuration = totalDuration,
     cover = CoverRef(
         ownImage = imageName,
-        group = GroupCoverSource(kind, id)
+        group = GroupCoverSource(GroupKind.ARTIST, id)
     ),
     popularity = popularity
 )

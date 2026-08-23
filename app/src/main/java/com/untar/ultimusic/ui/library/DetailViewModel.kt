@@ -27,7 +27,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /** Qué se está mirando en la ficha de detalle. */
-enum class DetailKind { ALBUM, ARTIST, PRODUCER }
+enum class DetailKind { ALBUM, ARTIST }
 
 /** Una línea de datos de la cabecera: un icono a la izquierda y un texto a la derecha. */
 data class InfoLine(@DrawableRes val icon: Int, val text: String)
@@ -40,9 +40,9 @@ data class DetailHeader(
 )
 
 /**
- * Estado de la ficha de un álbum, un artista o un productor.
+ * Estado de la ficha de un álbum o un artista.
  *
- * Los tres casos comparten ViewModel porque la pantalla es la misma: una cabecera con imagen y
+ * Los dos casos comparten ViewModel porque la pantalla es la misma: una cabecera con imagen y
  * datos, y debajo la lista de canciones. Lo único que cambia es de qué consulta salen los datos y
  * qué líneas tiene la cabecera, y de eso se encargan los `when (kind)` de aquí.
  *
@@ -70,15 +70,14 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
                     repository.albumArtistNames(t.second)
                 ) { summary, artistNames -> summary?.toHeader(artistNames) }
                 DetailKind.ARTIST -> repository.artist(t.second).map { it?.toHeader() }
-                DetailKind.PRODUCER -> repository.producer(t.second).map { it?.toHeader() }
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
      * Canciones que se listan debajo. Para un álbum van ordenadas por su número de pista (que ya
-     * trae cada [Song], ver [Song.trackNumber]); para un artista o un productor ese número no se
-     * enseña ([DetailSongsAdapter] solo lo pinta en la ficha de álbum), aunque la canción lo lleve
+     * trae cada [Song], ver [Song.trackNumber]); para un artista ese número no se enseña
+     * ([DetailSongsAdapter] solo lo pinta en la ficha de álbum), aunque la canción lo lleve
      * consigo igualmente (es del álbum al que pertenece, no de esta ficha).
      */
     val tracks: StateFlow<List<Song>> = target
@@ -87,7 +86,6 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
                 null -> flowOf(emptyList())
                 DetailKind.ALBUM -> repository.albumTracks(t.second)
                 DetailKind.ARTIST -> repository.artistSongs(t.second)
-                DetailKind.PRODUCER -> repository.producerSongs(t.second)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -96,14 +94,13 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     val songs: List<Song> get() = tracks.value
 
     /**
-     * Álbumes del carrusel horizontal, solo para artista/productor (en un álbum va vacío: no tiene
-     * sentido enseñar el propio álbum dentro de su ficha).
+     * Álbumes del carrusel horizontal, solo para artista (en un álbum va vacío: no tiene sentido
+     * enseñar el propio álbum dentro de su ficha).
      */
     val albums: StateFlow<List<AlbumSummary>> = target
         .flatMapLatest { t ->
             when (t?.first) {
                 DetailKind.ARTIST -> repository.artistAlbums(t.second)
-                DetailKind.PRODUCER -> repository.producerAlbums(t.second)
                 DetailKind.ALBUM, null -> flowOf(emptyList())
             }
         }
@@ -179,8 +176,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
             InfoLine(R.drawable.ic_timer, TimeFormat.hhmmss(totalDuration)),
             // Última línea, solo si se conoce: los suscriptores del canal de YouTube más repetido
             // entre las canciones donde esta persona es la artista principal (ver
-            // PersonSummary.popularity). Siempre ausente en un productor, cuya popularidad es
-            // siempre null por diseño (ver el comentario de esa propiedad).
+            // PersonSummary.popularity).
             popularity?.let { InfoLine(R.drawable.ic_youtube, subscribersText(it)) }
         )
     )

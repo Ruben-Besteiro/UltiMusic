@@ -1,8 +1,12 @@
 package com.untar.ultimusic.data.db
 
+import android.content.Context
 import android.os.Environment
+import androidx.core.content.ContextCompat
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.untar.ultimusic.R
+import com.untar.ultimusic.model.SystemTagKey
 import java.io.File
 
 /**
@@ -154,5 +158,142 @@ val MIGRATION_16_17 = object : Migration(16, 17) {
         db.execSQL("DROP TABLE artists")
         db.execSQL("ALTER TABLE artists_new RENAME TO artists")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_artists_tagName ON artists(tagName)")
+    }
+}
+
+/**
+ * v17 → v18: sistema de Etiquetas (ver [com.untar.ultimusic.data.db.entities.TagEntity]/
+ * [com.untar.ultimusic.data.db.entities.SongTagCrossRef]) más `songs.dateAdded`, la fecha de
+ * creación del archivo en disco que necesita la etiqueta predefinida "Descargadas recientemente".
+ *
+ * A diferencia de [MIGRATION_12_13]...[MIGRATION_16_17] (`val` de nivel de fichero, construidos sin
+ * `Context`), esta se declara como FUNCIÓN que recibe el `Context`: sembrar las 4 etiquetas
+ * predefinidas necesita leer sus nombres y colores de `strings.xml`/`colors.xml` (ver
+ * [seedDefaultTags]), y `Migration.migrate(db: SupportSQLiteDatabase)` no recibe ningún `Context`
+ * propio. `UltiMusicDatabase.get(context)` sí lo tiene, así que se cierra sobre él al construir la
+ * migración en vez de leerlo desde dentro de `migrate`.
+ *
+ * `dateAdded` se rellena para las filas YA existentes con `File(filePath).lastModified()` (ver
+ * [backfillDateAdded]): mismo dato que se le pone a partir de ahora a cualquier canción nueva desde
+ * `ScannedSong.toEntity` en `LibraryDao.kt`, así que las canciones de antes de esta versión también
+ * entran en igualdad de condiciones en "Descargadas recientemente" desde el primer arranque.
+ */
+fun migration17To18(context: Context): Migration = object : Migration(17, 18) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE songs ADD COLUMN dateAdded INTEGER NOT NULL DEFAULT 0")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS tags (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                name TEXT NOT NULL,
+                colorArgb INTEGER NOT NULL,
+                systemKey TEXT,
+                sortOrder INTEGER NOT NULL
+            )
+            """
+        )
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_tags_systemKey ON tags(systemKey)")
+
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS song_tag (
+                songId INTEGER NOT NULL,
+                tagId INTEGER NOT NULL,
+                PRIMARY KEY(songId, tagId),
+                FOREIGN KEY(songId) REFERENCES songs(id) ON DELETE CASCADE,
+                FOREIGN KEY(tagId) REFERENCES tags(id) ON DELETE CASCADE
+            )
+            """
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_song_tag_tagId ON song_tag(tagId)")
+
+        backfillDateAdded(db)
+        seedDefaultTags(db, context)
+    }
+}
+
+/**
+ * Rellena `dateAdded` para las canciones que ya existían antes de esta versión, fila a fila, con la
+ * fecha de modificación del archivo en disco (`stat()`, sin abrir el audio). Para una fonoteca
+ * personal (cientos o pocos miles de canciones) es trivial; si algún archivo ya no es legible
+ * (`runCatching`), se queda a `0` en vez de romper la migración entera por una canción suelta.
+ */
+private fun backfillDateAdded(db: SupportSQLiteDatabase) {
+    db.query("SELECT id, filePath FROM songs").use { cursor ->
+        val idIndex = cursor.getColumnIndexOrThrow("id")
+        val pathIndex = cursor.getColumnIndexOrThrow("filePath")
+        while (cursor.moveToNext()) {
+            val id = cursor.getLong(idIndex)
+            val lastModified = runCatching { File(cursor.getString(pathIndex)).lastModified() }.getOrDefault(0L)
+            db.execSQL("UPDATE songs SET dateAdded = ? WHERE id = ?", arrayOf<Any>(lastModified, id))
+        }
+    }
+}
+
+/**
+ * Siembra las 4 etiquetas predefinidas, en el mismo orden del enunciado del feature (Favoritos,
+ * Descargadas recientemente, En ninguna lista, Sin etiquetas personalizadas). Se llama tanto desde
+ * [migration17To18] (quien actualiza desde v17) como desde el `Callback` de [UltiMusicDatabase]
+ * (instalación nueva, que crea la tabla `tags` ya en v18 y nunca pasa por ninguna migración) — mismo
+ * patrón que [seedDefaultLibraryRoots]. `INSERT OR IGNORE` sobre `systemKey` la hace segura de
+ * repetir sin duplicar nada.
+ *
+ * Hubo una 5ª fila, "Debug" (ver [SystemTagKey]), sembrada por [migration18To19] y retirada por
+ * [migration19To20] en cuanto dejó de hacer falta: por eso ya no aparece aquí, aunque instalaciones
+ * viejas pasaran por sembrarla.
+ *
+ * Nombres y colores salen de `strings.xml`/`colors.xml` (`R.string.tag_*_name`/`R.color.um_tag_*`),
+ * NO de literales sueltos aquí: son datos que el desarrollador edita en el sitio de siempre. El
+ * único motivo de resolverlos con `Context` en vez de leer el recurso directamente desde `db.execSQL`
+ * es que SQL no sabe de recursos de Android.
+ */
+internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context) {
+    val rows = listOf(
+        Triple(SystemTagKey.FAVORITES, R.string.tag_favorites_name, R.color.um_tag_favorites),
+        Triple(SystemTagKey.RECENTLY_ADDED, R.string.tag_recently_added_name, R.color.um_tag_recently_added),
+        Triple(SystemTagKey.NOT_IN_PLAYLIST, R.string.tag_not_in_playlist_name, R.color.um_tag_not_in_playlist),
+        Triple(SystemTagKey.NO_CUSTOM_TAGS, R.string.tag_no_custom_tags_name, R.color.um_tag_no_custom_tags)
+    )
+    rows.forEachIndexed { sortOrder, (systemKey, nameRes, colorRes) ->
+        db.execSQL(
+            "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(
+                context.getString(nameRes),
+                ContextCompat.getColor(context, colorRes),
+                systemKey.name,
+                sortOrder
+            )
+        )
+    }
+}
+
+/**
+ * v18 → v19: sembraba la etiqueta predefinida "Debug" (`SystemTagKey.DEBUG`, ya retirado del enum),
+ * pensada para poder probar el flujo completo de añadir/quitar etiquetas de una canción antes de que
+ * existieran etiquetas personalizadas de verdad. Se deja tal cual (no se borra ni se reescribe: una
+ * migración ya aplicada no cambia) porque [migration19To20] limpia su resultado para quien pasara por
+ * aquí; sin cambio de esquema.
+ */
+fun migration18To19(context: Context): Migration = object : Migration(18, 19) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        seedDefaultTags(db, context)
+    }
+}
+
+/**
+ * v19 → v20: retira la etiqueta predefinida "Debug" (ver [SystemTagKey]), que ya cumplió su propósito
+ * de probar el flujo de añadir/quitar etiquetas antes de que existieran las personalizadas de verdad
+ * (ver [TagEditorDialogFragment][com.untar.ultimusic.ui.library.TagEditorDialogFragment]) y ya no
+ * hace falta. Sin cambio de esquema: solo borra la fila `systemKey = 'DEBUG'` de `tags` -si existe,
+ * de una instalación que pasara por [migration18To19] o naciera ya en v19- y, en cascada, su
+ * membresía en `song_tag` (`ON DELETE CASCADE`, ver [com.untar.ultimusic.data.db.entities.SongTagCrossRef]).
+ * Una instalación nueva a partir de aquí nunca llega a tener esa fila: [seedDefaultTags] ya no la
+ * siembra. No necesita `Context` (no lee ningún recurso), así que es un `val` de nivel de fichero
+ * como [MIGRATION_16_17], no una función.
+ */
+val MIGRATION_19_20 = object : Migration(19, 20) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DELETE FROM tags WHERE systemKey = 'DEBUG'")
     }
 }

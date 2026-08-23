@@ -137,6 +137,14 @@ class PlaylistRepository private constructor() {
     }
 
     /**
+     * Unión de TODOS los nombres de archivo que aparecen en CUALQUIER lista, para la etiqueta
+     * predefinida "En ninguna lista" (ver [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]).
+     */
+    suspend fun allFilenamesInAnyPlaylist(): Set<String> = withContext(Dispatchers.IO) {
+        listPlaylistNames().flatMapTo(mutableSetOf()) { readFilenames(it) }
+    }
+
+    /**
      * Resuelve los nombres de archivo de una lista a objetos [Song] reales, en orden. [byFilename]
      * es un índice basename→canción que arma quien llama (a partir de la biblioteca cargada). Las
      * entradas que ya no existen en la biblioteca (archivo borrado) se descartan.

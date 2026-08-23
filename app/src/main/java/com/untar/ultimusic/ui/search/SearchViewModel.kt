@@ -9,7 +9,6 @@ import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
-import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.util.TextSearch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,8 +40,7 @@ sealed interface SearchResult {
 
     data class AlbumRow(val album: AlbumSummary) : SearchResult
 
-    /** Artistas y productores comparten fila; [kind] solo sirve para abrir la ficha correcta. */
-    data class PersonRow(val kind: PersonKind, val person: PersonSummary) : SearchResult
+    data class PersonRow(val person: PersonSummary) : SearchResult
 }
 
 /**
@@ -54,7 +52,7 @@ sealed interface SearchResult {
  * biblioteca de un móvil cabe de sobra en memoria —ya está toda cargada para pintar las pestañas—,
  * así que recorrerla es cuestión de milisegundos.
  *
- * Como los cuatro flujos de la biblioteca son reactivos, los resultados se corrigen solos: si
+ * Como los tres flujos de la biblioteca son reactivos, los resultados se corrigen solos: si
  * mientras el buscador está abierto se edita el título de una canción o termina una reconciliación,
  * la lista se repinta sin que el usuario tenga que volver a escribir.
  *
@@ -79,10 +77,10 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     /**
-     * Resultados en el orden pedido: canciones, álbumes, artistas y productores.
+     * Resultados en el orden pedido: canciones, álbumes y artistas.
      *
-     * [combine] es el operador que "casa" varios flujos: cada vez que CUALQUIERA de los cinco emite
-     * (la consulta o una de las cuatro listas), se vuelve a ejecutar el bloque con el último valor
+     * [combine] es el operador que "casa" varios flujos: cada vez que CUALQUIERA de los cuatro emite
+     * (la consulta o una de las tres listas), se vuelve a ejecutar el bloque con el último valor
      * de todos. [flowOn] manda ese trabajo a un hilo de cómputo, para que teclear rápido no bloquee
      * el hilo de la interfaz mientras se recorre la biblioteca entera.
      */
@@ -90,10 +88,9 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
         _query.map { TextSearch.normalize(it.trim()) }.distinctUntilChanged(),
         repository.songs,
         repository.albums,
-        repository.artists,
-        repository.producers
-    ) { needle, songs, albums, artists, producers ->
-        build(needle, songs, albums, artists, producers)
+        repository.artists
+    ) { needle, songs, albums, artists ->
+        build(needle, songs, albums, artists)
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -111,16 +108,15 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
      * cabecera "Álbumes" sin nada debajo sería ruido.
      *
      * Se busca por el nombre VISIBLE de cada cosa (el título de la canción, el del álbum, el nombre
-     * del artista o del productor), que es lo que el usuario ve escrito en la app y por tanto lo que
-     * espera poder buscar. Una canción no aparece por el nombre de su artista: para eso está la
-     * sección de artistas, cuya ficha ya lista todas sus canciones.
+     * del artista), que es lo que el usuario ve escrito en la app y por tanto lo que espera poder
+     * buscar. Una canción no aparece por el nombre de su artista: para eso está la sección de
+     * artistas, cuya ficha ya lista todas sus canciones.
      */
     private fun build(
         needle: String,
         songs: List<Song>,
         albums: List<AlbumSummary>,
-        artists: List<PersonSummary>,
-        producers: List<PersonSummary>
+        artists: List<PersonSummary>
     ): List<SearchResult> {
         if (needle.isEmpty()) return emptyList()
 
@@ -133,10 +129,7 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
             .addSection(out, R.string.tab_albums) { SearchResult.AlbumRow(it) }
 
         artists.filter { TextSearch.contains(it.name, needle) }
-            .addSection(out, R.string.tab_artists) { SearchResult.PersonRow(PersonKind.ARTIST, it) }
-
-        producers.filter { TextSearch.contains(it.name, needle) }
-            .addSection(out, R.string.tab_producers) { SearchResult.PersonRow(PersonKind.PRODUCER, it) }
+            .addSection(out, R.string.tab_artists) { SearchResult.PersonRow(it) }
 
         return out
     }

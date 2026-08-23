@@ -18,42 +18,23 @@ import com.untar.ultimusic.util.CoverArt
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
-/**
- * Pestañas de Artistas y de Productores. Es **un solo fragmento para las dos** porque artistas y
- * productores se tratan exactamente igual: misma lista, mismo adaptador, misma ficha de detalle.
- *
- * Cuál de las dos es se decide con un argumento ([ARG_KIND]) que se pasa en el `Bundle` al crearlo,
- * que es la forma correcta de parametrizar un fragmento: sus argumentos sobreviven a que el sistema
- * lo destruya y lo recree (al girar la pantalla, por ejemplo), cosa que una propiedad normal no
- * haría.
- */
+/** Pestaña de Artistas. */
 class PeopleFragment : Fragment(R.layout.fragment_library_list) {
 
     private val libraryViewModel: LibraryViewModel by activityViewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
-    /** Qué pestaña somos: la de artistas o la de productores. */
-    private val kind: PersonKind
-        get() = PersonKind.valueOf(requireArguments().getString(ARG_KIND)!!)
-
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerLibrary)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
-
-        val kind = this.kind
-        emptyView.setText(
-            if (kind == PersonKind.ARTIST) R.string.no_artists else R.string.no_producers
-        )
+        emptyView.setText(R.string.no_artists)
 
         val adapter = PeopleAdapter(
-            onPersonClick = { person -> DetailDialogFragment.showPerson(this, kind, person.id) }
+            onPersonClick = { person -> DetailDialogFragment.showArtist(this, person.id) }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
-        val source = when (kind) {
-            PersonKind.ARTIST -> libraryViewModel.artists
-            PersonKind.PRODUCER -> libraryViewModel.producers
-        }
+        val source = libraryViewModel.artists
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(source.value.getOrNull(position)?.name)
         }
@@ -78,18 +59,4 @@ class PeopleFragment : Fragment(R.layout.fragment_library_list) {
             }
         }
     }
-
-    companion object {
-        private const val ARG_KIND = "kind"
-
-        fun newInstance(kind: PersonKind): PeopleFragment = PeopleFragment().apply {
-            arguments = Bundle().apply { putString(ARG_KIND, kind.name) }
-        }
-    }
 }
-
-/**
- * Las dos clases de "persona" de la biblioteca. Se guarda por su nombre (`name`) en el Bundle y no
- * por su posición, para que reordenar el enum algún día no cambie el significado de lo guardado.
- */
-enum class PersonKind { ARTIST, PRODUCER }

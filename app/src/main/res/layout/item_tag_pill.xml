@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila del buscador de TagPickerDialogFragment: la "salchicha" sola (bg_tag_chip, color mutado en
+     runtime, igual que item_tag.xml/TagsAdapter), sin subtítulo de recuento (no pinta nada aquí) ni X
+     (aquí solo se AÑADE, nunca se quita). -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/tagPillChip"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_margin="6dp"
+    android:background="@drawable/bg_tag_chip"
+    android:paddingHorizontal="14dp"
+    android:paddingVertical="6dp"
+    android:textColor="@color/um_on_background"
+    android:textSize="14sp"
+    android:textStyle="bold"
+    tools:text="Debug" />

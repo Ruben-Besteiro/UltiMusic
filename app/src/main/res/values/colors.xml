@@ -34,4 +34,14 @@
          aunque la carátula que suene sea roja o verde. Es el rojo de error de Material sobre fondo
          oscuro, lo bastante claro para leerse encima de um_background. -->
     <color name="um_error">#FFF2B8B5</color>
+
+    <!-- Colores de borde de las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags): el
+         relleno oscuro de su "salchicha" (ver item_tag.xml/TagsAdapter) sale de aplicar
+         DynamicColor.dim a este mismo color en vez de guardarse aparte. NO son amarillos, así que no
+         les aplica la regla de color dinámico del resto de la app: son fijos a propósito, uno por
+         etiqueta. -->
+    <color name="um_tag_favorites">#FFE91E63</color>       <!-- rosa -->
+    <color name="um_tag_recently_added">#FF0D47A1</color>  <!-- azul oscuro -->
+    <color name="um_tag_not_in_playlist">#FF6A1B9A</color> <!-- morado -->
+    <color name="um_tag_no_custom_tags">#FF616161</color>  <!-- gris -->
 </resources>

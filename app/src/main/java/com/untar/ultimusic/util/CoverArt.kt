@@ -38,19 +38,19 @@ import kotlin.math.sqrt
  *
  * El primer eslabón lo rellena el editor de metadatos: cuando el usuario elige una portada, el
  * archivo se copia a [CoverArt.imagesDir] con un nombre derivado del título/nombre de la
- * canción/álbum/artista/productor al que pertenece, y ese nombre queda en `imageName`. El tercer
+ * canción/álbum/artista al que pertenece, y ese nombre queda en `imageName`. El tercer
  * eslabón lo rellena el mismo editor al guardar un enlace de YouTube: se descarga y recorta la
  * miniatura del vídeo (ver `LibraryRepository.downloadVideoThumbnail`) y su nombre queda en
  * `videoThumbnailName`, en la misma carpeta. Si no hay imagen personalizada se extrae el arte
  * embebido del propio archivo de audio; si tampoco lo hay, se prueba la miniatura; si tampoco,
  * Coil cae en el drawable de error (recuadro negro) configurado en cada ImageView.
  *
- * Para un álbum, artista o productor la cadena tiene un eslabón más, porque ellos no son un archivo
+ * Para un álbum o artista la cadena tiene un eslabón más, porque ellos no son un archivo
  * de audio: imagen propia → COLLAGE con las carátulas de varias de sus canciones (si hay al menos
  * 4 distintas) → carátula de la primera de esas canciones que tenga alguna → recuadro negro. El
  * collage y ese último eslabón los resuelve [GroupCoverFetcher] bajo demanda (consulta la base de
  * datos y lee los archivos, así que no puede hacerse aquí, que es síncrono); [cover] solo entrega
- * el [GroupCoverSource] que le indica qué álbum/artista/productor resolver. Eso es lo que describe
+ * el [GroupCoverSource] que le indica qué álbum/artista resolver. Eso es lo que describe
  * un [CoverRef].
  */
 object CoverArt {
@@ -58,7 +58,7 @@ object CoverArt {
     /**
      * Sube cada vez que un editor de metadatos (canción o álbum) termina de guardar una carátula.
      *
-     * Hace falta porque las listas de la app (Canciones, Álbumes, Artistas/Productores, la ficha de
+     * Hace falta porque las listas de la app (Canciones, Álbumes, Artistas, la ficha de
      * detalle, el buscador...) salen de Room a través de un `StateFlow`, y un `StateFlow` NUNCA
      * reemite un valor estructuralmente IGUAL al anterior. Si la carátula se reemplaza reutilizando
      * el mismo nombre de archivo (el caso normal: ver [reserveFileName]), el `Song`/`Album` que sale
@@ -128,7 +128,7 @@ object CoverArt {
     }
 
     /**
-     * Ídem para un álbum/artista/productor. Devuelve el primer eslabón disponible de la cadena; el
+     * Ídem para un álbum o artista. Devuelve el primer eslabón disponible de la cadena; el
      * último (el recuadro negro) lo pone Coil como `error(...)` en cada ImageView, porque solo al
      * intentar leer el archivo de audio se sabe si tiene arte embebido o no.
      *
@@ -154,7 +154,7 @@ object CoverArt {
 
 /**
  * Los eslabones "de datos" de la cadena de carátulas, para poder resolverla igual sea de una
- * canción, un álbum, un artista o un productor.
+ * canción, un álbum o un artista.
  *
  * @param ownImage nombre de la imagen personalizada del propio elemento, si la tiene.
  * @param songImage nombre de la imagen personalizada de una de sus canciones (solo álbum/persona,
@@ -164,7 +164,7 @@ object CoverArt {
  * @param videoThumbnail nombre de la miniatura de YouTube de una de sus canciones (o de la propia
  *   canción, si es un [CoverRef] de canción), por si no hay arte embebido (solo si [group] es
  *   null).
- * @param group presente SOLO en un [CoverRef] de álbum/artista/productor (nunca en el de una
+ * @param group presente SOLO en un [CoverRef] de álbum/artista (nunca en el de una
  *   canción): qué collage resolver si no hay imagen propia. Ver [GroupCoverSource].
  */
 data class CoverRef(
@@ -175,13 +175,12 @@ data class CoverRef(
     val group: GroupCoverSource? = null
 )
 
-/** Qué álbum/artista/productor resolver en [GroupCoverFetcher]: sus canciones salen de una tabla
- * de cruce distinta según [kind] (ver `LibraryDao.collageCandidatesForAlbum`/`...ForArtist`/
- * `...ForProducer`). Artista y productor se tratan igual, como manda el proyecto; solo cambia a
- * qué tabla de cruce se pregunta. */
+/** Qué álbum/artista resolver en [GroupCoverFetcher]: sus canciones salen de una tabla
+ * de cruce distinta según [kind] (ver `LibraryDao.collageCandidatesForAlbum`/`...ForArtist`),
+ * que es a qué tabla de cruce se pregunta. */
 data class GroupCoverSource(val kind: GroupKind, val id: Long)
 
-enum class GroupKind { ALBUM, ARTIST, PRODUCER }
+enum class GroupKind { ALBUM, ARTIST }
 
 /** Envoltorio para indicarle a Coil que debe extraer el arte embebido de un archivo de audio, con
  * la miniatura de YouTube como reserva si ese archivo no tiene arte embebido. */
@@ -229,7 +228,7 @@ private fun extractEmbeddedArt(path: String): ByteArray? = runCatching {
 }.getOrNull()
 
 /**
- * Fetcher de Coil que resuelve la carátula de un álbum/artista/productor SIN imagen propia (ver
+ * Fetcher de Coil que resuelve la carátula de un álbum o artista SIN imagen propia (ver
  * [CoverArt.cover]): intenta un collage con las carátulas de varias de sus canciones y, si no da
  * para uno, cae en la de una sola. Va en un Fetcher (no en [CoverArt.cover], que es síncrona)
  * porque hace falta consultar la base de datos y leer archivos, y así ese trabajo queda fuera del
@@ -255,7 +254,6 @@ class GroupCoverFetcher(
         val candidates = when (source.kind) {
             GroupKind.ALBUM -> dao.collageCandidatesForAlbum(source.id)
             GroupKind.ARTIST -> dao.collageCandidatesForArtist(source.id)
-            GroupKind.PRODUCER -> dao.collageCandidatesForProducer(source.id)
         }
 
         val dir = CoverArt.imagesDir(context)
@@ -397,7 +395,7 @@ class AudioCoverKeyer : Keyer<AudioCover> {
  *
  * Se incluye [CoverArt.revision] en la clave para que la caché siga siendo correcta: es el mismo
  * contador que ya sube cada vez que un editor guarda una carátula (ver su comentario), así que
- * editar la carátula de una canción invalida al instante el collage de su álbum/artista/productor
+ * editar la carátula de una canción invalida al instante el collage de su álbum/artista
  * -y el de cualquier otro, ya que el contador es único para toda la app-, mientras que cualquier
  * repintado que NO venga de una edición (scroll, rotar la pantalla...) sí reaprovecha el bitmap ya
  * compuesto.

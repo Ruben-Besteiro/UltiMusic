@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- "Contenedor gris claro" del botón "+ Añadir" en SongTagsDialogFragment: a diferencia de una
+     etiqueta (bg_tag_chip.xml), este no representa ninguna etiqueta concreta, así que no lleva color
+     mutado en runtime ni borde — un gris fijo neutro de acción secundaria. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="10dp" />
+    <solid android:color="@color/um_surface_variant" />
+</shape>

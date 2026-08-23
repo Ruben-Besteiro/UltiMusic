@@ -1,5 +1,6 @@
 package com.untar.ultimusic.ui.collection
 
+import android.content.res.ColorStateList
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.LayoutInflater
@@ -27,6 +28,7 @@ import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.button.MaterialButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
@@ -37,24 +39,28 @@ import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
-import com.untar.ultimusic.ui.library.PersonKind
+import com.untar.ultimusic.ui.library.SongTagsDialogFragment
+import com.untar.ultimusic.ui.library.TagsViewModel
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.PlaylistResumeStore
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.joinNonBlank
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Ficha intermedia de una lista o un género: cabecera teñida con el acento de lo que suena (igual
- * que [DetailDialogFragment]) con el resumen de la colección (nº de canciones + duración) debajo,
- * y sus canciones en una lista visualmente igual que la pestaña Canciones (ver
- * [CollectionSongsAdapter]). Se abre al tocar una lista o un género en vez de saltar directamente
- * al iPod (ver [com.untar.ultimusic.ui.library.GenresFragment] y
+ * Ficha intermedia de una lista, un género o una etiqueta: cabecera teñida con el acento de lo que
+ * suena (igual que [DetailDialogFragment]) con el resumen de la colección (nº de canciones +
+ * duración) debajo, y sus canciones en una lista visualmente igual que la pestaña Canciones (ver
+ * [CollectionSongsAdapter]). Se abre al tocar una lista, un género o una etiqueta en vez de saltar
+ * directamente al iPod (ver [com.untar.ultimusic.ui.library.GenresFragment],
+ * [com.untar.ultimusic.ui.library.TagsFragment] y
  * [com.untar.ultimusic.ui.playlists.PlaylistsFragment]): aquí se elige qué sonará, y tocar una fila
  * empieza a reproducir la colección de una — la ventana del iPod, si se abre después, solo refleja
  * lo que ya está sonando (ver [com.untar.ultimusic.ui.player.IPodDialogFragment]).
@@ -67,6 +73,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
     private val viewModel: CollectionDetailViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
     private val playlistsViewModel: PlaylistsViewModel by activityViewModels()
+    private val tagsViewModel: TagsViewModel by activityViewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -80,6 +87,12 @@ class CollectionDetailDialogFragment : DialogFragment() {
         // uno propio de esta ficha: así comparte su mismo tick y se entera al instante de cualquier
         // cambio de pertenencia, venga de donde venga (ver playlistSongsSource en el ViewModel).
         viewModel.bindPlaylistSongs { name -> playlistsViewModel.songsOf(name) }
+        // Igual que arriba pero para una etiqueta: TagsViewModel COMPARTIDO de la actividad, no uno
+        // propio. bindTagName resuelve el nombre actual a partir del id (ver
+        // CollectionDetailViewModel.displayTitle): una fila de `tags` que ya no exista devuelve
+        // null, y el `map` lo convierte en cadena vacía para no dejar el título a medio pintar.
+        viewModel.bindTagSongs { id -> tagsViewModel.songsOfTag(id) }
+        viewModel.bindTagName { id -> tagsViewModel.tags.map { list -> list.firstOrNull { it.id == id }?.name } }
     }
 
     override fun onCreateView(
@@ -109,6 +122,10 @@ class CollectionDetailDialogFragment : DialogFragment() {
         val headerBox = view.findViewById<View>(R.id.collectionHeader)
         val summaryIcon = view.findViewById<ImageView>(R.id.collectionSummaryIcon)
         val summaryText = view.findViewById<TextView>(R.id.collectionSummaryText)
+        val resumeBlock = view.findViewById<View>(R.id.collectionResumeBlock)
+        val resumeIcon = view.findViewById<ImageView>(R.id.collectionResumeIcon)
+        val resumeText = view.findViewById<TextView>(R.id.collectionResumeText)
+        val btnResume = view.findViewById<MaterialButton>(R.id.btnResumePlaylist)
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerCollectionSongs)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
         val miniPlayer = view.findViewById<View>(R.id.miniPlayer)
@@ -122,8 +139,6 @@ class CollectionDetailDialogFragment : DialogFragment() {
             toolbar.updatePadding(top = bars.top)
             insets
         }
-
-        toolbar.title = viewModel.currentKey
 
         var itemTouchHelper: ItemTouchHelper? = null
         lateinit var adapter: CollectionSongsAdapter
@@ -151,13 +166,16 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         .show(parentFragmentManager, EDITOR_TAG)
                 }
             },
+            onEditTags = { song ->
+                if (parentFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+                    SongTagsDialogFragment.newInstance(song.id)
+                        .show(parentFragmentManager, SongTagsDialogFragment.TAG)
+                }
+            },
             onDeleteSong = { song -> showDeleteSongDialog(song) },
             onGoToAlbum = { song -> song.album?.let { DetailDialogFragment.showAlbum(this, it.id) } },
             onGoToArtist = { song ->
-                song.artists.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.ARTIST, it.id) }
-            },
-            onGoToProducer = { song ->
-                song.producers.firstOrNull()?.let { DetailDialogFragment.showPerson(this, PersonKind.PRODUCER, it.id) }
+                song.artists.firstOrNull()?.let { DetailDialogFragment.showArtist(this, it.id) }
             }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -192,6 +210,12 @@ class CollectionDetailDialogFragment : DialogFragment() {
 
         toolbar.setNavigationOnClickListener { dismiss() }
         toolbar.inflateMenu(R.menu.menu_collection_detail)
+        // El menú de 3 puntos solo sigue teniendo sentido para un Género: renombrar/borrar una Lista
+        // o una Etiqueta vive ahora en el menú de 3 puntos de su propia fila (PlaylistsAdapter /
+        // TagsAdapter), y "añadir a la cola"/"añadir a lista" de toda la colección ya no se ofrece
+        // ahí para esos dos casos (ver showCollectionMenu).
+        toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible =
+            viewModel.currentKind == CollectionKind.GENRE
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_shuffle -> {
@@ -205,6 +229,12 @@ class CollectionDetailDialogFragment : DialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Género/Lista lo pintan de golpe (su clave YA es el nombre); Etiqueta lo resuelve
+                // buscando su id en TagsViewModel.tags, así que se colecta en vez de asignarse una
+                // sola vez (ver CollectionDetailViewModel.displayTitle sobre el porqué).
+                launch {
+                    viewModel.displayTitle.collect { title -> toolbar.title = title }
+                }
                 launch {
                     combine(viewModel.songs, CoverArt.revision) { list, _ -> list }.collect { list ->
                         adapter.submit(list)
@@ -215,12 +245,48 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         )
                     }
                 }
+                // "Posición actual"/REANUDAR: SOLO para una Lista (ver PlaylistResumeStore). Se
+                // recalcula con cada cambio de canciones/contexto de reproducción, no solo una vez,
+                // para que el texto siga la pista mientras esta misma lista suena (el botón se
+                // oculta entonces, pero el texto de arriba sigue vivo) y para detectar al vuelo
+                // cuando deja de sonar.
+                launch {
+                    combine(
+                        viewModel.songs,
+                        playerViewModel.currentCollectionKind,
+                        playerViewModel.currentPlaylistName,
+                        playerViewModel.currentSong
+                    ) { list, kind, playingName, _ -> Triple(list, kind, playingName) }
+                        .collect { (list, kind, playingName) ->
+                            val playlistName = viewModel.currentKey
+                            val savedSong = if (viewModel.currentKind == CollectionKind.LISTA && playlistName != null) {
+                                val savedId = PlaylistResumeStore.getLastSongId(playlistName)
+                                list.firstOrNull { it.id == savedId }
+                            } else {
+                                null
+                            }
+                            if (savedSong == null) {
+                                resumeBlock.visibility = View.GONE
+                                return@collect
+                            }
+                            resumeBlock.visibility = View.VISIBLE
+                            resumeText.text = getString(R.string.playlist_current_position, savedSong.title)
+                            val playingThisPlaylist = kind == CollectionKind.LISTA && playingName == playlistName
+                            btnResume.visibility = if (playingThisPlaylist) View.GONE else View.VISIBLE
+                            btnResume.setOnClickListener {
+                                val index = list.indexOfFirst { it.id == savedSong.id }
+                                if (index >= 0) {
+                                    playerViewModel.playCollection(list, index, playlistName, CollectionKind.LISTA)
+                                }
+                            }
+                        }
+                }
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         // Mismo acento que el resto de la app: el de lo que suena, no hay carátula
                         // propia de la que sacar uno (ver el comentario equivalente en
                         // DetailDialogFragment).
-                        applyAccent(accent, headerBox, toolbar, summaryIcon, summaryText)
+                        applyAccent(accent, headerBox, toolbar, summaryIcon, summaryText, resumeIcon, resumeText, btnResume)
                         scrollbar.setAccentColor(accent)
                     }
                 }
@@ -233,7 +299,10 @@ class CollectionDetailDialogFragment : DialogFragment() {
         headerBox: View,
         toolbar: MaterialToolbar,
         summaryIcon: ImageView,
-        summaryText: TextView
+        summaryText: TextView,
+        resumeIcon: ImageView,
+        resumeText: TextView,
+        btnResume: MaterialButton
     ) {
         val background = DynamicColor.asBackground(accent)
         val onBackground = DynamicColor.onColor(background)
@@ -245,15 +314,21 @@ class CollectionDetailDialogFragment : DialogFragment() {
         toolbar.menu.findItem(R.id.action_collection_menu)?.icon?.setTint(onBackground)
         summaryIcon.setColorFilter(onBackground)
         summaryText.setTextColor(onBackground)
+        // Solo se pintan de golpe con el resto de la cabecera: su visibilidad/texto los maneja el
+        // otro `launch` de arriba (ver PlaylistResumeStore), este solo repinta el color.
+        resumeIcon.setColorFilter(onBackground)
+        resumeText.setTextColor(onBackground)
+        btnResume.setTextColor(onBackground)
+        btnResume.iconTint = ColorStateList.valueOf(onBackground)
     }
 
-    /** Menú de 3 puntos: añadir la colección entera a la cola o a otra lista, y —solo en una
-     * lista— eliminarla (ver menu_collection_actions.xml). */
+    /** Menú de 3 puntos: añadir la colección entera a la cola o a otra lista (ver
+     * menu_collection_actions.xml). Solo llega a mostrarse para un Género (ver `onViewCreated`,
+     * que oculta el icono que lo abre para Lista/Etiqueta). */
     private fun showCollectionMenu(toolbar: MaterialToolbar, adapter: CollectionSongsAdapter) {
         val anchor = toolbar.findViewById<View>(R.id.action_collection_menu) ?: toolbar
         PopupMenu(requireContext(), anchor).apply {
             menuInflater.inflate(R.menu.menu_collection_actions, menu)
-            menu.findItem(R.id.action_delete_playlist)?.isVisible = viewModel.currentKind == CollectionKind.LISTA
             setOnMenuItemClickListener { item ->
                 when (item.itemId) {
                     R.id.action_add_collection_to_queue -> {
@@ -261,7 +336,6 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         true
                     }
                     R.id.action_add_collection_to_playlist -> { showAddCollectionToPlaylist(adapter); true }
-                    R.id.action_delete_playlist -> { showDeletePlaylistDialog(); true }
                     else -> false
                 }
             }
@@ -310,22 +384,6 @@ class CollectionDetailDialogFragment : DialogFragment() {
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
-    /** Confirmación antes de borrar la lista (solo el archivo: los audios no se tocan, igual que
-     * `PlaylistsFragment.showDeleteDialog`). Cierra la ficha al terminar: ya no queda nada que ver. */
-    private fun showDeletePlaylistDialog() {
-        val name = viewModel.currentKey ?: return
-        val dialog = AlertDialog.Builder(requireContext())
-            .setTitle(R.string.playlist_delete)
-            .setMessage(TextUtils.expandTemplate(resources.getText(R.string.playlist_delete_confirm), name))
-            .setNegativeButton(R.string.dialog_cancel, null)
-            .setPositiveButton(R.string.playlist_delete) { _, _ ->
-                playlistsViewModel.delete(name)
-                dismiss()
-            }
-            .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
-    }
-
     companion object {
         private const val ARG_KIND = "kind"
         private const val ARG_KEY = "key"
@@ -346,5 +404,8 @@ class CollectionDetailDialogFragment : DialogFragment() {
         fun showPlaylist(from: Fragment, name: String) = show(from.parentFragmentManager, CollectionKind.LISTA, name)
 
         fun showGenre(from: Fragment, name: String) = show(from.parentFragmentManager, CollectionKind.GENRE, name)
+
+        /** [id], no nombre: ver la decisión de diseño de usar el id como clave de una etiqueta. */
+        fun showTag(from: Fragment, id: Long) = show(from.parentFragmentManager, CollectionKind.TAG, id.toString())
     }
 }

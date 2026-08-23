@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de SongTagsDialogFragment: la propia "salchicha" de la etiqueta (bg_tag_chip, igual que
+     item_tag.xml/TagsAdapter, color mutado en runtime) pero con una X DENTRO del mismo fondo, a la
+     derecha del nombre, para quitar la etiqueta de la canción — solo visible/clicable si es
+     eliminable (ver SongTagsDialogFragment.render). wrap_content: cada fila ocupa solo lo que su
+     texto necesita, no todo el ancho.
+
+     Tocar la fila (fuera de la X) abre la ficha de la etiqueta (ver SongTagsDialogFragment.render),
+     de ahí el foreground de toque; la X, al ser su propio View clicable, se queda con el toque en su
+     zona sin que llegue a la fila (comportamiento normal de Android con vistas anidadas).
+
+     paddingEnd por defecto SIMÉTRICO con paddingStart (igual que item_tag.xml): cuando la etiqueta
+     no es eliminable, la X desaparece del todo (View.GONE, sin hueco reservado) y sin este ajuste el
+     texto quedaba pegado al borde derecho de la píldora en vez de centrado — la X, cuando SÍ está,
+     reduce este paddingEnd por código (ver SongTagsDialogFragment.render) para dejarle su sitio. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/tagRemovableChip"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:background="@drawable/bg_tag_chip"
+    android:clickable="true"
+    android:focusable="true"
+    android:foreground="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingStart="14dp"
+    android:paddingEnd="14dp"
+    android:paddingVertical="4dp">
+
+    <TextView
+        android:id="@+id/tagRemovableName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textColor="@color/um_on_background"
+        android:textSize="14sp"
+        android:textStyle="bold"
+        tools:text="Favoritos" />
+
+    <ImageButton
+        android:id="@+id/btnRemoveTag"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginStart="4dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/remove_tag"
+        android:padding="2dp"
+        app:tint="@color/um_on_surface_muted"
+        android:src="@drawable/ic_close" />
+
+</LinearLayout>

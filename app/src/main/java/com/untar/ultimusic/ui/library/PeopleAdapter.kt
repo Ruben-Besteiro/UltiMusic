@@ -15,9 +15,8 @@ import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.bindPersonSubscribers
 
 /**
- * Lista de personas: una imagen circular con el nombre y, debajo, cuántos álbumes y canciones
- * tiene. El MISMO adaptador sirve para la pestaña de Artistas y para la de Productores, porque los
- * dos se tratan igual y se pintan igual; lo único que cambia es de qué flujo salen los datos.
+ * Lista de la pestaña de Artistas: una imagen circular con el nombre y, debajo, cuántos álbumes y
+ * canciones tiene.
  */
 class PeopleAdapter(
     private val onPersonClick: (PersonSummary) -> Unit

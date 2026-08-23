@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Etiqueta (como las de la ropa): icono de la pestaña "Géneros" en la barra de navegación. -->
+<!-- Etiqueta (como las de la ropa): icono de la pestaña "Etiquetas" en la barra de navegación (antes
+     era el de "Géneros", que ahora usa ic_radio.xml). El nombre del archivo se deja tal cual para no
+     tener que actualizar todas sus referencias por un simple cambio de a qué pestaña pertenece. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"

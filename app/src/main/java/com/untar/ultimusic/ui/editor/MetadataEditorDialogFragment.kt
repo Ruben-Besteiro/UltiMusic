@@ -74,7 +74,7 @@ import kotlinx.coroutines.launch
  * aunque se cierre la aplicación y el escaneo del disco no lo pisa.
  *
  * Se abre siempre igual, ocupando toda la pantalla, sea cual sea el sitio desde el que se lanza
- * (Canciones, una ficha de álbum/artista/productor, el buscador o el iPod).
+ * (Canciones, una ficha de álbum/artista, el buscador o el iPod).
  */
 class MetadataEditorDialogFragment : DialogFragment() {
 
@@ -87,13 +87,42 @@ class MetadataEditorDialogFragment : DialogFragment() {
     /** El formulario solo se rellena con la primera emisión: si no, escribir sería imposible. */
     private var formLoaded = false
 
-    /** Se activa mientras [fillForm] escribe los campos, para que ese volcado inicial no se
-     * confunda con un cambio del usuario y marque el formulario como sucio. */
+    /** Se activa mientras [fillForm]/[fillFormMulti] escriben los campos, para que ese volcado
+     * inicial no se confunda con un cambio del usuario y marque el formulario como sucio. */
     private var isFillingForm = false
 
     /** True en cuanto el usuario cambia algo (texto o portada). Controla si al intentar salir
      * (ver [attemptClose]) hace falta pedir confirmación. */
     private var isDirty = false
+
+    /**
+     * Ids de las canciones que se están editando, en el orden en que llegaron (ver [newInstance]).
+     * Casi siempre una sola; más de una es una edición múltiple (selección en la pestaña
+     * Canciones, ver [com.untar.ultimusic.ui.MainActivity.showMetadataEditorForSelection]).
+     */
+    private val songIds: LongArray by lazy { requireArguments().getLongArray(ARG_SONG_IDS) ?: LongArray(0) }
+    private val isMultiEdit: Boolean get() = songIds.size > 1
+
+    /**
+     * Campos que el usuario ha tocado de verdad en esta sesión (solo importa en edición múltiple,
+     * ver [buildEditedFields]): un campo que se quede en "Varios valores" sin que nadie lo escriba
+     * NO se aplica a ninguna canción, cada una conserva lo suyo (ver
+     * [com.untar.ultimusic.ui.editor.MetadataEditorViewModel.saveMulti]).
+     */
+    private val touchedFields = mutableSetOf<EditText>()
+
+    /**
+     * Campos que AHORA MISMO muestran "Varios valores" como CONTENIDO (no como hint: ver el
+     * javadoc de [fillMultiField] sobre por qué) en gris, a la espera de que el usuario los toque.
+     * En cuanto eso pasa (ver [restoreFieldColor]) se quitan de aquí y su texto vuelve al color
+     * normal -y, si fue por foco, se vacían del todo para que se pueda escribir un valor real sin
+     * tener que borrar "Varios valores" a mano primero.
+     */
+    private val placeholderFields = mutableSetOf<EditText>()
+
+    /** Color de texto original de cada campo (el de su XML/tema), para devolvérselo al salir de
+     *  "Varios valores" (ver [placeholderFields]/[restoreFieldColor]). */
+    private val originalTextColors = mutableMapOf<EditText, ColorStateList?>()
 
     private var accentColor: Int = 0
 
@@ -148,7 +177,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
-        viewModel.setSongId(requireArguments().getLong(ARG_SONG_ID))
+        viewModel.setSongIds(songIds.toList())
     }
 
     override fun onCreateView(
@@ -192,8 +221,45 @@ class MetadataEditorDialogFragment : DialogFragment() {
         val editTexts = mutableListOf<EditText>()
         collectEditTexts(view, editTexts)
         editTexts.forEach { field ->
-            field.addTextChangedListener { if (!isFillingForm) markDirty() }
+            field.addTextChangedListener {
+                if (!isFillingForm) {
+                    markDirty()
+                    // Solo importa en edición múltiple (ver [buildEditedFields]), pero no cuesta
+                    // nada llevar la cuenta siempre: es la única forma de distinguir "el usuario ha
+                    // escrito exactamente lo mismo que ya había" de "no ha tocado este campo".
+                    touchedFields.add(field)
+                }
+            }
         }
+
+        // "Varios valores" (edición múltiple, ver [fillMultiField]) se pone como CONTENIDO en gris,
+        // no como hint: así la etiqueta de arriba ("Título", "Álbum"...) se queda fija y en pequeño
+        // -como si el campo ya tuviera algo escrito, que es justo el caso- y el usuario sabe en todo
+        // momento qué campo es cada uno. offsetValue/lyricsOffsetValue quedan fuera: ya tienen su
+        // propio listener de foco (ver [setupOffsetControls]) y no llevan esa etiqueta de todos
+        // modos. En cuanto se enfoca un campo con "Varios valores" puesto, se vacía solo para poder
+        // escribir sin tener que borrarlo a mano.
+        val placeholderCapableFields = editTexts.filterNot { it === offsetValue || it === lyricsOffsetValue }
+        placeholderCapableFields.forEach { field -> originalTextColors[field] = field.textColors }
+        placeholderCapableFields.forEach { field ->
+            field.setOnFocusChangeListener { _, hasFocus ->
+                if (hasFocus && field in placeholderFields) {
+                    restoreFieldColor(field)
+                    // Envuelto en isFillingForm: vaciar el campo al ENFOCARLO no es "tocarlo" de
+                    // verdad -el usuario puede entrar y salir sin escribir nada-, así que no debe
+                    // marcarlo como sucio (ver el TextWatcher genérico de arriba). Solo cuenta como
+                    // tocado en cuanto escribe algo de verdad, que dispara ese mismo TextWatcher
+                    // con isFillingForm ya de vuelta a false.
+                    isFillingForm = true
+                    if (field is MaterialAutoCompleteTextView) field.setText("", false) else field.setText("")
+                    isFillingForm = false
+                }
+            }
+        }
+
+        // El autorrelleno busca en iTunes/Genius por el título y artista de UNA canción: no tiene
+        // sentido en edición múltiple (¿de cuál de las seleccionadas?), así que se esconde entero.
+        if (isMultiEdit) fabAutofill.visibility = View.GONE
 
         val openPicker = {
             pickImage.launch(
@@ -212,6 +278,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
         ) { _, bundle ->
             val videoId = bundle.getString(VideoPickerDialogFragment.RESULT_VIDEO_ID)
             if (videoId != null) {
+                // Antes del setText: si el campo llevaba "Varios valores" puesto, así el color
+                // vuelve al normal ANTES de escribir el enlace de verdad (ver [restoreFieldColor]).
+                restoreFieldColor(inputVideoUrl)
                 inputVideoUrl.setText(YouTubeUrl.watchUrl(videoId))
             }
         }
@@ -258,11 +327,18 @@ class MetadataEditorDialogFragment : DialogFragment() {
         // (se pulsan y abren un buscador), tocarlos otra vez no sirve para borrarlos. Va en un
         // ImageButton aparte -no el icono final de TextInputLayout- para poder clavarla en la
         // esquina de ARRIBA en vez de centrada en todo el alto de la caja (ver el FrameLayout que
-        // envuelve a cada campo en el XML). Solo se ve mientras el campo tiene algo que borrar.
+        // envuelve a cada campo en el XML). Solo se ve mientras el campo tiene algo que borrar -y
+        // "Varios valores" (edición múltiple, ver [showPlaceholderText]) NO cuenta como algo: no es
+        // un valor de verdad, así que mientras esté puesto la papelera se queda escondida.
         listOf(btnClearLyrics to inputLyrics, btnClearVideoUrl to inputVideoUrl).forEach { (button, field) ->
-            button.isVisible = field.text?.isNotEmpty() == true
-            button.setOnClickListener { field.setText("") }
-            field.addTextChangedListener { button.isVisible = it?.isNotEmpty() == true }
+            button.isVisible = field.text?.isNotEmpty() == true && field !in placeholderFields
+            button.setOnClickListener {
+                restoreFieldColor(field)
+                field.setText("")
+            }
+            field.addTextChangedListener {
+                button.isVisible = it?.isNotEmpty() == true && field !in placeholderFields
+            }
         }
 
         // Enlace "Abrir" bajo el campo de vídeo: solo aparece con una URL de YouTube reconocible
@@ -289,6 +365,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         ) { _, bundle ->
             val lyrics = bundle.getString(LyricsSuggestionsDialogFragment.RESULT_LYRICS)
             if (lyrics != null) {
+                restoreFieldColor(inputLyrics)
                 inputLyrics.setText(lyrics)
             }
         }
@@ -304,7 +381,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    viewModel.song.collect { song -> if (song != null) fillForm(song) }
+                    viewModel.songs.collect { songs ->
+                        if (songs.isEmpty()) return@collect
+                        if (isMultiEdit) fillFormMulti(songs) else fillForm(songs.first())
+                    }
                 }
                 launch {
                     viewModel.artistNames.collect { names -> setSuggestions(inputArtists, names) }
@@ -332,6 +412,25 @@ class MetadataEditorDialogFragment : DialogFragment() {
                             // siguiente reproducción.
                             playerViewModel.refreshSong(result.song)
                             viewModel.consumeSaved()
+                        }
+                    }
+                }
+                launch {
+                    viewModel.savedMulti.collect { saved ->
+                        if (saved != null) {
+                            Toast.makeText(
+                                requireContext(), R.string.editor_saved, Toast.LENGTH_SHORT
+                            ).show()
+                            isDirty = false
+                            pickedImage = null
+                            // Ya se han aplicado (los que se tocaran): un guardado posterior sin
+                            // tocar nada más no debe repetirlos.
+                            touchedFields.clear()
+                            // Si la canción que suena está entre las editadas, el reproductor la
+                            // sustituye entera al instante, igual que en el guardado de una sola.
+                            val current = playerViewModel.currentSong.value
+                            saved.firstOrNull { it.id == current?.id }?.let { playerViewModel.refreshSong(it) }
+                            viewModel.consumeSavedMulti()
                         }
                     }
                 }
@@ -503,6 +602,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private fun setupToolbar(view: View) {
         val toolbar = view.findViewById<MaterialToolbar>(R.id.editorToolbar)
         toolbar.setNavigationOnClickListener { attemptClose() }
+        // En edición múltiple, el título dice cuántas canciones hay detrás; en el caso normal (una
+        // sola) se deja el fijo de siempre, tal cual lo trae el XML.
+        if (isMultiEdit) toolbar.title = getString(R.string.metadata_editor_title_multi, songIds.size)
         toolbar.inflateMenu(R.menu.menu_metadata_editor)
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -608,6 +710,135 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
         isFillingForm = false
     }
+
+    /**
+     * Igual que [fillForm] pero para varias canciones a la vez (ver [isMultiEdit]). Cada campo se
+     * rellena con su valor común SOLO si las `songs` seleccionadas coinciden en él; si no, se deja
+     * en blanco con el hint "Varios valores" (ver [fillMultiField]) y no se toca en el guardado
+     * mientras el usuario no escriba nada de verdad ahí (ver [buildEditedFields]).
+     */
+    private fun fillFormMulti(songs: List<Song>) {
+        if (formLoaded) return
+        formLoaded = true
+        isFillingForm = true
+
+        // La carátula solo se muestra si TODAS coinciden en la misma (ver CoverArt.cover): si no,
+        // se deja el ImageView sin imagen y se ve el fondo cover_placeholder, igual que cuando
+        // fillForm no encuentra ninguna carátula para una sola canción.
+        if (pickedImage == null) {
+            val covers = songs.map { CoverArt.cover(requireContext(), it) }
+            if (covers.all { it == covers.first() }) {
+                cover.load(covers.first(), CoverLoader.get(requireContext()))
+            }
+        }
+
+        fillMultiField(inputTitle, songs.map { it.title })
+        fillMultiField(inputAlbum, songs.map { it.album?.title.orEmpty() })
+        fillMultiField(inputArtists, songs.map { it.artists.joinToString(SEPARATOR) { a -> a.name } })
+        fillMultiField(inputProducers, songs.map { it.producers.joinToString(SEPARATOR) { p -> p.name } })
+        fillMultiField(inputYear, songs.map { it.year?.toString().orEmpty() })
+        fillMultiField(inputGenres, songs.map { it.genres.joinToString(SEPARATOR) })
+        fillMultiField(inputTrackNumber, songs.map { it.trackNumber?.toString().orEmpty() })
+        fillMultiField(inputDiscNumber, songs.map { it.discNumber?.toString().orEmpty() })
+        fillMultiField(inputLyrics, songs.map { it.lyrics.orEmpty() })
+        fillMultiField(inputLanguage, songs.map { it.language.orEmpty() })
+        fillMultiField(inputComment, songs.map { it.comment.orEmpty() })
+        fillMultiField(inputVideoUrl, songs.map { it.videoUrl.orEmpty() })
+        fillMultiOffset(offsetRuler, offsetValue, songs.map { it.videoOffsetMs })
+        fillMultiOffset(lyricsOffsetRuler, lyricsOffsetValue, songs.map { it.lyricsOffsetMs })
+        fillMultiField(inputOgTitle, songs.map { it.ogTitle.orEmpty() })
+        fillMultiField(inputOgArtist, songs.map { it.ogArtist.orEmpty() })
+        fillMultiField(inputOgAlbum, songs.map { it.ogAlbum.orEmpty() })
+        fillMultiField(inputOgYear, songs.map { it.ogYear?.toString().orEmpty() })
+
+        isFillingForm = false
+    }
+
+    /**
+     * Rellena un campo de texto con su valor común entre todas las canciones seleccionadas, o
+     * pone "Varios valores" como CONTENIDO (no como hint) si no coinciden -ver [showPlaceholderText]
+     * sobre por qué-. `values` va en el mismo orden que las canciones, uno por una.
+     */
+    private fun fillMultiField(field: EditText, values: List<String>) {
+        val allEqual = values.distinct().size <= 1
+        if (allEqual) {
+            val text = values.firstOrNull().orEmpty()
+            if (field is MaterialAutoCompleteTextView) field.setText(text, false) else field.setText(text)
+        } else {
+            showPlaceholderText(field)
+        }
+    }
+
+    /**
+     * Igual que [fillMultiField] pero para una regla de desplazamiento (vídeo/letra): si todas las
+     * canciones comparten el mismo desplazamiento se refleja tal cual; si no, se deja la regla y la
+     * caja a 0 -sin texto de "Varios valores": estos dos campos van sueltos, sin la etiqueta de un
+     * TextInputLayout al lado que pudiera confundirse con un valor real (ver [placeholderFields])-.
+     * Arrastrar la regla o escribir un valor cuenta como tocar el campo igual que con cualquier
+     * otro (ver el TextWatcher genérico que llena [touchedFields]).
+     */
+    private fun fillMultiOffset(ruler: ValueRuler, value: EditText, offsetsMs: List<Long>) {
+        if (offsetsMs.distinct().size <= 1) {
+            showOffset(ruler, value, offsetsMs.firstOrNull()?.toInt() ?: 0)
+        } else {
+            showOffset(ruler, value, 0)
+            value.setText("")
+        }
+    }
+
+    /**
+     * Pone "Varios valores" como texto DE VERDAD (no como hint de [TextInputLayout]) en [field],
+     * en gris, y lo marca en [placeholderFields] hasta que el usuario lo toque (ver el listener de
+     * foco de [onViewCreated] y [restoreFieldColor]).
+     *
+     * Se hace así -y no con el hint- porque el hint de un TextInputLayout con Material vive en DOS
+     * sitios a la vez (su propia etiqueta flotante y el del EditText que envuelve, ver
+     * [com.google.android.material.textfield.TextInputLayout.editText]): cambiarlo en caliente deja
+     * uno de los dos con el texto viejo y el otro con el nuevo, y los dos se acaban dibujando a la
+     * vez, superpuestos. Poniendo el texto de verdad, la etiqueta de arriba ("Título", "Álbum"...)
+     * se queda fija -como si el campo llevara algo escrito, que es justo el caso- y no hay
+     * ambigüedad sobre qué campo es cada uno.
+     */
+    private fun showPlaceholderText(field: EditText) {
+        val text = getString(R.string.editor_multiple_values)
+        if (field is MaterialAutoCompleteTextView) field.setText(text, false) else field.setText(text)
+        field.setTextColor(ContextCompat.getColor(requireContext(), R.color.um_on_surface_muted))
+        placeholderFields.add(field)
+    }
+
+    /** Saca [field] de [placeholderFields] y le devuelve su color de texto normal (ver
+     *  [originalTextColors]). Se llama al enfocarlo (ver [onViewCreated]) y también al rellenarlo
+     *  con un valor de verdad desde fuera del teclado -letra o vídeo elegidos en su buscador, ver
+     *  los `setFragmentResultListener` correspondientes-, que no pasan por el foco. */
+    private fun restoreFieldColor(field: EditText) {
+        if (!placeholderFields.remove(field)) return
+        field.setTextColor(originalTextColors[field] ?: field.textColors)
+    }
+
+    /**
+     * Qué campos ha tocado de verdad el usuario en esta sesión (ver [touchedFields]), en el mismo
+     * orden que [EditedFields]. Solo se usa en edición múltiple (ver [saveMulti]).
+     */
+    private fun buildEditedFields(): EditedFields = EditedFields(
+        title = inputTitle in touchedFields,
+        album = inputAlbum in touchedFields,
+        artists = inputArtists in touchedFields,
+        producers = inputProducers in touchedFields,
+        year = inputYear in touchedFields,
+        genres = inputGenres in touchedFields,
+        lyrics = inputLyrics in touchedFields,
+        language = inputLanguage in touchedFields,
+        comment = inputComment in touchedFields,
+        videoUrl = inputVideoUrl in touchedFields,
+        videoOffsetMs = offsetValue in touchedFields,
+        lyricsOffsetMs = lyricsOffsetValue in touchedFields,
+        trackNumber = inputTrackNumber in touchedFields,
+        discNumber = inputDiscNumber in touchedFields,
+        ogTitle = inputOgTitle in touchedFields,
+        ogArtist = inputOgArtist in touchedFields,
+        ogAlbum = inputOgAlbum in touchedFields,
+        ogYear = inputOgYear in touchedFields
+    )
 
     /**
      * Deduce el idioma a partir de [lyrics] con [LanguageDetector] y lo vuelca en [inputLanguage].
@@ -778,36 +1009,52 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
     private fun save() {
         val title = inputTitle.text.toString().trim()
+        if (isMultiEdit) {
+            // En edición múltiple, un título vacío solo es un problema si el usuario lo ha tocado
+            // de verdad (y por tanto va a sobrescribir el de TODAS las seleccionadas): si lo dejó
+            // en "Varios valores" sin tocarlo, no se toca y cada canción conserva el suyo.
+            val edited = buildEditedFields()
+            if (edited.title && title.isEmpty()) {
+                Toast.makeText(requireContext(), R.string.editor_title_required, Toast.LENGTH_SHORT)
+                    .show()
+                return
+            }
+            viewModel.saveMulti(collectForm(title), edited, pickedImage)
+            return
+        }
+
         if (title.isEmpty()) {
             Toast.makeText(requireContext(), R.string.editor_title_required, Toast.LENGTH_SHORT)
                 .show()
             return
         }
-
-        viewModel.save(
-            EditorForm(
-                title = title,
-                album = inputAlbum.textOrNull(),
-                artists = inputArtists.splitValues(),
-                producers = inputProducers.splitValues(),
-                year = inputYear.intOrNull(),
-                genres = inputGenres.splitValues(),
-                lyrics = inputLyrics.textOrNull(),
-                language = inputLanguage.textOrNull(),
-                comment = inputComment.textOrNull(),
-                videoUrl = inputVideoUrl.textOrNull(),
-                videoOffsetMs = clampedOffsetOrZero(offsetValue).toLong(),
-                lyricsOffsetMs = clampedOffsetOrZero(lyricsOffsetValue).toLong(),
-                trackNumber = inputTrackNumber.intOrNull(),
-                discNumber = inputDiscNumber.intOrNull(),
-                ogTitle = inputOgTitle.textOrNull(),
-                ogArtist = inputOgArtist.textOrNull(),
-                ogAlbum = inputOgAlbum.textOrNull(),
-                ogYear = inputOgYear.intOrNull()
-            ),
-            pickedImage
-        )
+        viewModel.save(collectForm(title), pickedImage)
     }
+
+    /** Lo que hay AHORA MISMO en el formulario, ya limpio (recortado, vacíos a null, multivalor
+     *  partido por comas). En edición múltiple, [buildEditedFields] dice cuáles de estos campos se
+     *  aplican de verdad (ver [MetadataEditorViewModel.saveMulti]); en el caso normal se aplican
+     *  todos, como siempre. */
+    private fun collectForm(title: String): EditorForm = EditorForm(
+        title = title,
+        album = inputAlbum.textOrNull(),
+        artists = inputArtists.splitValues(),
+        producers = inputProducers.splitValues(),
+        year = inputYear.intOrNull(),
+        genres = inputGenres.splitValues(),
+        lyrics = inputLyrics.textOrNull(),
+        language = inputLanguage.textOrNull(),
+        comment = inputComment.textOrNull(),
+        videoUrl = inputVideoUrl.textOrNull(),
+        videoOffsetMs = clampedOffsetOrZero(offsetValue).toLong(),
+        lyricsOffsetMs = clampedOffsetOrZero(lyricsOffsetValue).toLong(),
+        trackNumber = inputTrackNumber.intOrNull(),
+        discNumber = inputDiscNumber.intOrNull(),
+        ogTitle = inputOgTitle.textOrNull(),
+        ogArtist = inputOgArtist.textOrNull(),
+        ogAlbum = inputOgAlbum.textOrNull(),
+        ogYear = inputOgYear.intOrNull()
+    )
 
     /**
      * Carga las sugerencias del desplegable y hace que elegir una sustituya SOLO el valor que se
@@ -829,7 +1076,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     }
 
     companion object {
-        private const val ARG_SONG_ID = "songId"
+        private const val ARG_SONG_IDS = "songIds"
         private const val TAG_VIDEO_PICKER = "video_picker"
         private const val TAG_SUGGESTIONS = "metadata_suggestions"
         private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
@@ -852,9 +1099,13 @@ class MetadataEditorDialogFragment : DialogFragment() {
          * también lo necesita para su propia regla de desplazamiento del modo vídeo. */
         internal const val OFFSET_STEP_MS = 100
 
-        fun newInstance(songId: Long): MetadataEditorDialogFragment =
+        fun newInstance(songId: Long): MetadataEditorDialogFragment = newInstance(listOf(songId))
+
+        /** Edición múltiple: una lista con más de un id abre el mismo editor con "Varios valores"
+         *  en los campos que no coincidan (ver [isMultiEdit]/[fillFormMulti]). */
+        fun newInstance(songIds: List<Long>): MetadataEditorDialogFragment =
             MetadataEditorDialogFragment().apply {
-                arguments = Bundle().apply { putLong(ARG_SONG_ID, songId) }
+                arguments = Bundle().apply { putLongArray(ARG_SONG_IDS, songIds.toLongArray()) }
             }
     }
 }

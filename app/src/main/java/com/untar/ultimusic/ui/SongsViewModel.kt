@@ -49,6 +49,34 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
     private val _progress = MutableStateFlow(0)
     val progress = _progress.asStateFlow()
 
+    /**
+     * Ids de las canciones marcadas en la pestaña Canciones (pulsación larga; ver [SongsAdapter] y
+     * [SongsFragment]). No vacío = selección múltiple activa, que es lo que [MainActivity] mira
+     * para sustituir el ojo de ordenar de la toolbar por un menú de 3 puntos (ver su
+     * `setupToolbar`). Vive aquí -no en un estado propio del fragmento- porque `MainActivity` y
+     * `SongsFragment` comparten esta MISMA instancia (`by activityViewModels()` / `by viewModels()`
+     * de ámbito de actividad), que es justo lo que hace falta para que la toolbar (de la actividad)
+     * se entere de lo que pasa en la lista (del fragmento).
+     */
+    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
+    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+
+    /** Empieza una selección con una sola canción marcada (pulsación larga sobre ella). */
+    fun startSelection(songId: Long) {
+        _selectedIds.value = setOf(songId)
+    }
+
+    /** Marca o desmarca una canción; si se queda sin ninguna, la selección múltiple termina sola. */
+    fun toggleSelection(songId: Long) {
+        _selectedIds.value = _selectedIds.value.toMutableSet().apply {
+            if (!add(songId)) remove(songId)
+        }
+    }
+
+    fun clearSelection() {
+        _selectedIds.value = emptySet()
+    }
+
     private var reconciled = false
 
     /**
@@ -68,6 +96,11 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
     /** Borra una canción de verdad (archivo y fila de la base de datos). */
     fun delete(song: Song) {
         viewModelScope.launch { repository.deleteSong(song) }
+    }
+
+    /** Igual que [delete] pero para varias a la vez (borrado desde la selección múltiple). */
+    fun delete(songs: List<Song>) {
+        viewModelScope.launch { songs.forEach { repository.deleteSong(it) } }
     }
 
     /** Reconcilia siempre (detecta archivos nuevos/borrados). Cancela cualquier reconciliación en curso. */

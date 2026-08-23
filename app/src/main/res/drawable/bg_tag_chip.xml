@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo "salchicha" de una etiqueta (ver TagsAdapter/item_tag.xml), inspirado en Top Drives: borde
+     de color vivo + relleno del mismo color pero oscuro. El color y el relleno de aquí son solo
+     PLACEHOLDERS: TagsAdapter los muta en runtime con AccentTint.fill/stroke, uno distinto por
+     etiqueta (ver DynamicColor.dim para el relleno oscuro a partir del color de borde). El radio de
+     esquina, mayor que la mitad de cualquier altura razonable de fila, es lo que garantiza la forma
+     de píldora sea cual sea el texto. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="100dp" />
+    <solid android:color="@color/um_surface_variant" />
+    <stroke
+        android:width="@dimen/tag_chip_stroke_width"
+        android:color="@color/um_divider" />
+</shape>

@@ -2,7 +2,7 @@
 <!--
   Barra superior de la ficha de una lista o un género (ver CollectionDetailDialogFragment): igual
   que menu_library_detail.xml (aleatorio + 3 puntos), pero el de 3 puntos aquí sale SIEMPRE — a
-  diferencia de álbum/artista/productor, tanto una lista como un género tienen algo que ofrecer en
+  diferencia de álbum/artista, tanto una lista como un género tienen algo que ofrecer en
   ese menú (ver menu_collection_actions.xml).
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"

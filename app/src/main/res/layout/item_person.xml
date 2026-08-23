@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Fila de la lista de Artistas / Productores: imagen circular + nombre + recuento. -->
+<!-- Fila de la lista de Artistas: imagen circular + nombre + recuento. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
@@ -52,11 +52,11 @@
                 android:textSize="14sp"
                 tools:text="3 álbumes | 27 canciones" />
 
-            <!-- Suscriptores del canal de YouTube más repetido entre las canciones donde esta
-                 persona es la artista principal (ver PeopleAdapter/SearchAdapter y
-                 PersonSummary.popularity); oculto sin dato, siempre oculto para un productor. Mismo
-                 icono y formato compacto que las visitas de una canción (item_song.xml), sin texto
-                 de reserva: la palabra "suscriptores" solo sale en la ficha de detalle. -->
+            <!-- Suscriptores del canal de YouTube más repetido entre las canciones donde este
+                 artista es el principal (ver PeopleAdapter/SearchAdapter y
+                 PersonSummary.popularity); oculto sin dato. Mismo icono y formato compacto que las
+                 visitas de una canción (item_song.xml), sin texto de reserva: la palabra
+                 "suscriptores" solo sale en la ficha de detalle. -->
             <ImageView
                 android:id="@+id/personYoutubeIcon"
                 android:layout_width="14dp"

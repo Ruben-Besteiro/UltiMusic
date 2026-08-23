@@ -15,6 +15,8 @@ import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
+import com.untar.ultimusic.data.db.entities.SongTagCrossRef
+import com.untar.ultimusic.data.db.entities.TagEntity
 import com.untar.ultimusic.data.db.relations.AlbumGroupRow
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
@@ -25,6 +27,7 @@ import com.untar.ultimusic.data.db.relations.SongVideoRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
 import com.untar.ultimusic.data.scan.ScannedSong
 import kotlinx.coroutines.flow.Flow
+import java.io.File
 
 /**
  * Único DAO de la biblioteca. Además de las operaciones sueltas, expone [reconcile], que en una
@@ -41,7 +44,7 @@ abstract class LibraryDao {
     @Query("SELECT * FROM songs WHERE hiddenByGreylist = 0 ORDER BY LOWER(title)")
     abstract fun observeSongs(): Flow<List<SongWithRelations>>
 
-    // --- Resúmenes de las pestañas Álbumes / Artistas / Productores ---
+    // --- Resúmenes de las pestañas Álbumes / Artistas ---
     //
     // Las cuentas y sumas se calculan EN SQLite con subconsultas, no en Kotlin: traerse todas las
     // canciones de cada álbum solo para contarlas sería mucho más lento y gastaría memoria de más.
@@ -56,11 +59,13 @@ abstract class LibraryDao {
             a.id AS id,
             a.title AS title,
             a.imageName AS imageName,
-            -- Si el usuario no ha puesto año, cae al más tardío de sus canciones (ver el comentario
+            -- Si el usuario no ha puesto año, cae al de su primera canción (ver el comentario
             -- de más abajo, en observeAlbumsOfArtist): un fallback SOLO para pintar, nunca se
             -- escribe en la fila del álbum.
-            COALESCE(a.year, (SELECT MAX(s.year) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0)) AS year,
+            COALESCE(a.year, (SELECT s.year FROM songs s
+                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                LIMIT 1)) AS year,
             -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
             -- en el orden en que se enlazaron, no solo el primero (GROUP_CONCAT sobre la subconsulta
             -- ya ordenada por posición; ver también [LibraryRepository.albumArtistNames], que trae
@@ -154,39 +159,6 @@ abstract class LibraryDao {
     )
     abstract fun observeArtistSummaries(id: Long?): Flow<List<PersonSummaryRow>>
 
-    /**
-     * Gemela de [observeArtistSummaries]: los productores se tratan exactamente igual, CON UNA
-     * EXCEPCIÓN explícita: la popularidad (visitas de canal) solo tiene sentido para artistas —así lo
-     * pide el diseño del diálogo de ordenar, ver [com.untar.ultimusic.util.LibraryTab.PRODUCERS]—,
-     * así que aquí se deja siempre a NULL en vez de repetir el cálculo de la moda de canal.
-     */
-    @Query(
-        """
-        SELECT
-            p.id AS id,
-            p.name AS name,
-            p.imageName AS imageName,
-            (SELECT COUNT(*) FROM song_producer x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS songCount,
-            (SELECT COUNT(DISTINCT s.albumId) FROM song_producer x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS albumCount,
-            (SELECT COALESCE(SUM(s.duration), 0) FROM song_producer x
-                JOIN songs s ON s.id = x.songId
-                WHERE x.producerId = p.id AND s.hiddenByGreylist = 0) AS totalDuration,
-            NULL AS popularity
-        FROM producers p
-        WHERE (:id IS NULL OR p.id = :id)
-          AND EXISTS (
-              SELECT 1 FROM song_producer x JOIN songs s ON s.id = x.songId
-              WHERE x.producerId = p.id AND s.hiddenByGreylist = 0
-          )
-        ORDER BY LOWER(p.name)
-        """
-    )
-    abstract fun observeProducerSummaries(id: Long?): Flow<List<PersonSummaryRow>>
-
     // --- Canciones de una ficha de detalle ---
     //
     // El número de disco manda sobre el de pista (un CD2 pista 1 va después de todo el CD1, aunque
@@ -207,7 +179,7 @@ abstract class LibraryDao {
     abstract fun observeSongsOfAlbum(albumId: Long): Flow<List<SongWithRelations>>
 
     /**
-     * Canciones de un artista/productor: primero por el año del álbum al que pertenecen, del más
+     * Canciones de un artista: primero por el año del álbum al que pertenecen, del más
      * reciente al más antiguo (sin año al final), luego por el título de ese álbum, luego por el
      * número de disco (sin disco asignado cuenta como disco 1), luego por su número de pista (sin
      * pista al final de ese álbum) y por último por el título de la canción.
@@ -220,34 +192,28 @@ abstract class LibraryDao {
         LEFT JOIN albums al ON al.id = s.albumId
         WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
         ORDER BY
-            al.year IS NULL, al.year DESC, LOWER(al.title),
+            -- Mismo fallback que observeAlbumsOfArtist: si el álbum no tiene año puesto, se usa el
+            -- de su primera canción, para que este orden cuadre con el del carrusel de arriba.
+            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
+                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
+                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
+                LIMIT 1))) IS NULL,
+            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
+                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
+                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
+                LIMIT 1))) DESC,
+            LOWER(al.title),
             COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber,
             LOWER(s.title)
         """
     )
     abstract fun observeSongsOfArtist(artistId: Long): Flow<List<SongWithRelations>>
 
-    @Transaction
-    @Query(
-        """
-        SELECT s.* FROM songs s
-        JOIN song_producer x ON x.songId = s.id
-        LEFT JOIN albums al ON al.id = s.albumId
-        WHERE x.producerId = :producerId AND s.hiddenByGreylist = 0
-        ORDER BY
-            al.year IS NULL, al.year DESC, LOWER(al.title),
-            COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber,
-            LOWER(s.title)
-        """
-    )
-    abstract fun observeSongsOfProducer(producerId: Long): Flow<List<SongWithRelations>>
-
-    // --- Álbumes de un artista/productor (carrusel horizontal de su ficha) ---
+    // --- Álbumes de un artista (carrusel horizontal de su ficha) ---
     //
-    // Un álbum "es" de este artista/productor si alguna de sus canciones lo tiene entre sus
-    // artistas/productores (mismo criterio que `albumCount` en observeArtistSummaries/
-    // observeProducerSummaries de arriba, para que ambas cifras cuadren). Más reciente primero (sin
-    // año al final), como en la captura de referencia.
+    // Un álbum "es" de este artista si alguna de sus canciones lo tiene entre sus artistas (mismo
+    // criterio que `albumCount` en observeArtistSummaries de arriba, para que ambas cifras
+    // cuadren). Más reciente primero (sin año al final), como en la captura de referencia.
 
     @Query(
         """
@@ -255,10 +221,12 @@ abstract class LibraryDao {
             a.id AS id,
             a.title AS title,
             a.imageName AS imageName,
-            -- Fallback si el usuario no ha puesto año: el más tardío de sus canciones (nunca se
+            -- Fallback si el usuario no ha puesto año: el de su primera canción (nunca se
             -- escribe en la fila del álbum, solo se calcula para pintar y para ordenar el carrusel).
-            COALESCE(a.year, (SELECT MAX(s.year) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0)) AS year,
+            COALESCE(a.year, (SELECT s.year FROM songs s
+                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                LIMIT 1)) AS year,
             -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
             -- en el orden en que se enlazaron, no solo el primero (GROUP_CONCAT sobre la subconsulta
             -- ya ordenada por posición; ver también [LibraryRepository.albumArtistNames], que trae
@@ -295,72 +263,29 @@ abstract class LibraryDao {
             JOIN song_artist x ON x.songId = s.id
             WHERE s.albumId = a.id AND x.artistId = :artistId AND s.hiddenByGreylist = 0
         )
-        ORDER BY year IS NULL, year DESC, LOWER(a.title)
+        ORDER BY
+            (COALESCE(a.year, (SELECT s.year FROM songs s
+                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                LIMIT 1))) IS NULL,
+            (COALESCE(a.year, (SELECT s.year FROM songs s
+                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                LIMIT 1))) DESC,
+            LOWER(a.title)
         """
     )
     abstract fun observeAlbumsOfArtist(artistId: Long): Flow<List<AlbumSummaryRow>>
 
-    /** Gemela de [observeAlbumsOfArtist]: los productores se tratan exactamente igual. */
-    @Query(
-        """
-        SELECT
-            a.id AS id,
-            a.title AS title,
-            a.imageName AS imageName,
-            -- Fallback si el usuario no ha puesto año: el más tardío de sus canciones (nunca se
-            -- escribe en la fila del álbum, solo se calcula para pintar y para ordenar el carrusel).
-            COALESCE(a.year, (SELECT MAX(s.year) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0)) AS year,
-            -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
-            -- en el orden en que se enlazaron, no solo el primero (GROUP_CONCAT sobre la subconsulta
-            -- ya ordenada por posición; ver también [LibraryRepository.albumArtistNames], que trae
-            -- la misma lista para la ficha de detalle). Si el álbum no tiene ninguno enlazado, el
-            -- fallback es el artista de la etiqueta original ([AlbumEntity.tagAlbumArtist], que no se
-            -- toca al reenlazar artistas y por eso sobrevive aunque el usuario vacíe el álbum); si
-            -- tampoco hay eso, el artista que más se repite entre las canciones del álbum, no el
-            -- primero que salga: GROUP BY + ORDER BY COUNT(*) DESC halla la moda. Empate a nombre más
-            -- corto (si una canción es una colaboración "A, B" y otra es solo "A", gana "A", que es
-            -- el artista real del álbum); si hasta la longitud empata, a menor id de artista, para
-            -- que el resultado sea determinista.
-            COALESCE(
-                (SELECT GROUP_CONCAT(name, ', ') FROM (
-                    SELECT ar.name AS name FROM album_artist aa
-                        JOIN artists ar ON ar.id = aa.artistId
-                        WHERE aa.albumId = a.id ORDER BY aa.position
-                )),
-                NULLIF(a.tagAlbumArtist, ''),
-                (SELECT ar.name FROM song_artist x
-                    JOIN songs s ON s.id = x.songId
-                    JOIN artists ar ON ar.id = x.artistId
-                    WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
-                    GROUP BY x.artistId
-                    ORDER BY COUNT(*) DESC, LENGTH(ar.name), x.artistId
-                    LIMIT 1)
-            ) AS artistName,
-            (SELECT COUNT(*) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
-            (SELECT COALESCE(SUM(s.duration), 0) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
-        FROM albums a
-        WHERE EXISTS (
-            SELECT 1 FROM songs s
-            JOIN song_producer x ON x.songId = s.id
-            WHERE s.albumId = a.id AND x.producerId = :producerId AND s.hiddenByGreylist = 0
-        )
-        ORDER BY year IS NULL, year DESC, LOWER(a.title)
-        """
-    )
-    abstract fun observeAlbumsOfProducer(producerId: Long): Flow<List<AlbumSummaryRow>>
-
-    // --- Candidatas al collage de carátulas (álbum/artista/productor sin imagen propia) ---
+    // --- Candidatas al collage de carátulas (álbum/artista sin imagen propia) ---
     //
     // Lectura puntual (suspend, no Flow): las pide bajo demanda `GroupCoverFetcher` (ver
     // CoverArt.kt) al resolver la carátula, no la observa ninguna pantalla. Solo trae las tres
     // columnas de las que sale la carátula de cada canción (ver CoverArt.cover(context, song)),
     // en el mismo orden que vería el usuario al entrar en la ficha (mismo ORDER BY que
-    // observeSongsOfAlbum/observeSongsOfArtist/observeSongsOfProducer), para que el collage se
-    // forme con las primeras canciones que se listan. Sin LIMIT a propósito: el collage no tiene
-    // tope de tamaño, así que hace falta poder mirar todas las candidatas si hiciera falta.
+    // observeSongsOfAlbum/observeSongsOfArtist), para que el collage se forme con las primeras
+    // canciones que se listan. Sin LIMIT a propósito: el collage no tiene tope de tamaño, así que
+    // hace falta poder mirar todas las candidatas si hiciera falta.
 
     @Query(
         """
@@ -382,28 +307,22 @@ abstract class LibraryDao {
         LEFT JOIN albums al ON al.id = s.albumId
         WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
         ORDER BY
-            al.year IS NULL, al.year DESC, LOWER(al.title),
+            -- Mismo fallback que observeSongsOfArtist (ver su comentario): así el collage se forma
+            -- con las mismas primeras canciones que ve el usuario en la ficha.
+            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
+                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
+                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
+                LIMIT 1))) IS NULL,
+            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
+                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
+                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
+                LIMIT 1))) DESC,
+            LOWER(al.title),
             COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber,
             LOWER(s.title)
         """
     )
     abstract suspend fun collageCandidatesForArtist(artistId: Long): List<CollageCandidateRow>
-
-    @Query(
-        """
-        SELECT s.imageName AS imageName, s.filePath AS filePath,
-            s.videoThumbnailName AS videoThumbnailName
-        FROM songs s
-        JOIN song_producer x ON x.songId = s.id
-        LEFT JOIN albums al ON al.id = s.albumId
-        WHERE x.producerId = :producerId AND s.hiddenByGreylist = 0
-        ORDER BY
-            al.year IS NULL, al.year DESC, LOWER(al.title),
-            COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber,
-            LOWER(s.title)
-        """
-    )
-    abstract suspend fun collageCandidatesForProducer(producerId: Long): List<CollageCandidateRow>
 
     /**
      * Canciones sueltas por id, sin orden garantizado (quien llame debe reordenarlas). La usa
@@ -543,6 +462,47 @@ abstract class LibraryDao {
     /** Rutas guardadas, para pasárselas a [com.untar.ultimusic.data.scan.MusicScanner] en cada escaneo/búsqueda. */
     @Query("SELECT path FROM library_roots")
     abstract suspend fun libraryRootPaths(): List<String>
+
+    // --- Etiquetas ---
+    //
+    // Crear/renombrar/recolorear/borrar la ETIQUETA en sí (la fila de `tags`) es esto de aquí abajo;
+    // añadir/quitar una canción de una etiqueta YA existente es insertSongTag/deleteSongTag, más
+    // abajo. Ver LibraryRepository.resolveSongsOfTag sobre cómo se combinan estas dos con la
+    // biblioteca.
+
+    @Query("SELECT * FROM tags ORDER BY sortOrder")
+    abstract fun observeTags(): Flow<List<TagEntity>>
+
+    @Insert
+    abstract suspend fun insertTag(tag: TagEntity): Long
+
+    /** `WHERE systemKey IS NULL` como cinturón de seguridad: la UI ya no deja llegar hasta aquí para
+     *  una etiqueta predefinida (Favoritos, Debug...), pero así un bug de la UI tampoco podría
+     *  renombrarlas/recolorearlas por accidente. */
+    @Query("UPDATE tags SET name = :name, colorArgb = :colorArgb WHERE id = :id AND systemKey IS NULL")
+    abstract suspend fun updateTag(id: Long, name: String, colorArgb: Int)
+
+    /** Mismo cinturón de seguridad que [updateTag]. `song_tag` se limpia sola vía el
+     *  `ON DELETE CASCADE` de `SongTagCrossRef.tagId`, no hace falta borrar sus filas a mano. */
+    @Query("DELETE FROM tags WHERE id = :id AND systemKey IS NULL")
+    abstract suspend fun deleteTag(id: Long)
+
+    /** Para insertar la próxima etiqueta personalizada al final de la lista (ver
+     *  LibraryRepository.createTag). `COALESCE` porque el `MAX` de una tabla vacía da `NULL`. */
+    @Query("SELECT COALESCE(MAX(sortOrder), -1) FROM tags")
+    abstract suspend fun maxTagSortOrder(): Int
+
+    @Query("SELECT * FROM song_tag")
+    abstract fun observeSongTagCrossRefs(): Flow<List<SongTagCrossRef>>
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insertSongTag(ref: SongTagCrossRef)
+
+    /** Borra la pareja EXACTA, no "todas las etiquetas de esta canción" (a diferencia de
+     *  `clearSongArtists`/`clearSongProducers`): aquí cada etiqueta se quita una a una, con su propia
+     *  X, no se rehace la lista entera de golpe como en el editor de metadatos. */
+    @Query("DELETE FROM song_tag WHERE songId = :songId AND tagId = :tagId")
+    abstract suspend fun deleteSongTag(songId: Long, tagId: Long)
 
     // --- Inserciones ---
 
@@ -741,7 +701,7 @@ abstract class LibraryDao {
      * el que [reconcile] enlaza el primer artista al crear el álbum. */
     @Query(
         """
-        SELECT a.id AS id, a.tagTitle AS tagTitle,
+        SELECT a.id AS id, a.title AS tagTitle,
             (SELECT aa.artistId FROM album_artist aa
                 WHERE aa.albumId = a.id ORDER BY aa.position LIMIT 1) AS firstArtistId
         FROM albums a
@@ -806,22 +766,31 @@ abstract class LibraryDao {
      * carpetas distintas, que es la misma suposición que ya hacen las listas (ver
      * `PlaylistRepository`). El de duración (fase 3) no depende de esa suposición, pero exige
      * unicidad para no reapuntar dos canciones distintas entre sí por casualidad.
+     *
+     * @param newSongs Etiquetas de los archivos que [com.untar.ultimusic.data.scan.MusicScanner.scan]
+     * encontró SIN catalogar todavía (nuevos o movidos/renombrados). No incluye los ya conocidos:
+     * para esos no hace falta releer nada, ver esa misma función.
+     * @param currentPaths Rutas de TODOS los archivos de audio que hay ahora mismo en disco, estén
+     * catalogados o no. Sin esto no se podría saber qué canciones ya catalogadas han desaparecido,
+     * porque [newSongs] no incluye las que no han cambiado.
      */
     @Transaction
-    open suspend fun reconcile(scanned: List<ScannedSong>) {
+    open suspend fun reconcile(newSongs: List<ScannedSong>, currentPaths: Set<String>) {
         val existingInfo = allSongPathsAndDurations()
         val existing = existingInfo.mapTo(HashSet(existingInfo.size)) { it.filePath }
-        val scannedPaths = HashSet<String>(scanned.size)
-        for (s in scanned) scannedPaths.add(s.filePath)
 
         // Carpetas actualmente fuera de la lista gris: lo que caiga bajo alguna de ellas entra o se
         // reapunta ya oculto, para no colarse visible hasta que se desactive el switch.
         val excludedPrefixes = excludedGreylistFolderPaths().map { "$it/" }
         fun isHidden(path: String) = excludedPrefixes.any { path.startsWith(it) }
 
-        // Fase 1: bajas y altas candidatas.
-        val gone = existingInfo.filter { it.filePath !in scannedPaths }
-        val appeared = scanned.filter { it.filePath !in existing }
+        // Fase 1: bajas y altas candidatas. El filtro `!in existing` sobre newSongs es la misma
+        // comprobación que ya hizo el escaneo contra sus rutas conocidas: se repite aquí, barata
+        // (sin releer ningún archivo), por si la BD cambió entre que el escaneo cogió su foto de
+        // rutas conocidas y esta reconciliación —así esta función sigue siendo correcta por sí sola
+        // pase lo que pase entre medias.
+        val gone = existingInfo.filter { it.filePath !in currentPaths }
+        val appeared = newSongs.filter { it.filePath !in existing }
 
         // Fase 2: las que casan por nombre de archivo son movimientos, no altas/bajas.
         // El valor del índice es una lista porque, aunque no debería, puede haber nombres repetidos:
@@ -1007,6 +976,7 @@ abstract class LibraryDao {
         pruneOrphanArtists()
         pruneOrphanAlbums()
         pruneOrphanProducers()
+        mergeDuplicateAlbums()
     }
 
     /**
@@ -1030,6 +1000,7 @@ abstract class LibraryDao {
         // editar una canción); quitarlo de un álbum no borra sus canciones, así que en la práctica
         // esto rara vez borra nada, pero es la misma red de seguridad que usa saveSongEdits.
         pruneOrphanArtists()
+        mergeDuplicateAlbums()
     }
 
     /** Busca el artista por su nombre visible, luego por el de etiqueta; si no existe, lo crea. */
@@ -1141,5 +1112,6 @@ private fun ScannedSong.toEntity(hidden: Boolean, albumId: Long?): SongEntity = 
     ogTitle = null,
     ogArtist = null,
     ogAlbum = null,
-    ogYear = null
+    ogYear = null,
+    dateAdded = File(filePath).lastModified()
 )

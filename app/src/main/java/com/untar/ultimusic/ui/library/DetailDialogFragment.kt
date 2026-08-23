@@ -51,9 +51,8 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Ficha de un álbum, un artista o un productor: cabecera teñida con el acento de lo que suena (el
- * mismo que lleva el resto de la aplicación, en su versión oscura de fondo) y, debajo, sus
- * canciones.
+ * Ficha de un álbum o un artista: cabecera teñida con el acento de lo que suena (el mismo que
+ * lleva el resto de la aplicación, en su versión oscura de fondo) y, debajo, sus canciones.
  *
  * Es un [DialogFragment] a pantalla completa por lo mismo que el editor de metadatos y la ventana
  * del iPod: se abre encima de la pantalla principal sin cambiar de Activity. A diferencia de esas
@@ -62,7 +61,7 @@ import java.io.File
  * canciones sin querer necesariamente controlar la reproducción, así que tiene sentido poder
  * pausarla, reanudarla o abrir el iPod sin volver antes a la pantalla principal.
  *
- * Los tres tipos comparten pantalla; cuál es se pasa como argumento y lo resuelve [DetailViewModel].
+ * Los dos tipos comparten pantalla; cuál es se pasa como argumento y lo resuelve [DetailViewModel].
  */
 class DetailDialogFragment : DialogFragment() {
 
@@ -135,15 +134,18 @@ class DetailDialogFragment : DialogFragment() {
                         .show(parentFragmentManager, EDITOR_TAG)
                 }
             },
+            onEditTags = { song ->
+                if (parentFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+                    SongTagsDialogFragment.newInstance(song.id)
+                        .show(parentFragmentManager, SongTagsDialogFragment.TAG)
+                }
+            },
             onDeleteSong = { song -> showDeleteDialog(song) },
             onGoToAlbum = { song ->
                 song.album?.let { showAlbum(this, it.id) }
             },
             onGoToArtist = { song ->
-                song.artists.firstOrNull()?.let { showPerson(this, PersonKind.ARTIST, it.id) }
-            },
-            onGoToProducer = { song ->
-                song.producers.firstOrNull()?.let { showPerson(this, PersonKind.PRODUCER, it.id) }
+                song.artists.firstOrNull()?.let { showArtist(this, it.id) }
             }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -152,12 +154,9 @@ class DetailDialogFragment : DialogFragment() {
             sectionLetter(viewModel.tracks.value.getOrNull(position)?.title)
         }
 
-        // Carrusel de álbumes: solo sale en la ficha de un artista/productor (ver
-        // DetailViewModel.albums, que en un álbum va siempre vacío).
+        // Carrusel de álbumes: solo sale en la ficha de un artista (ver DetailViewModel.albums, que
+        // en un álbum va siempre vacío).
         val albumsAdapter = DetailAlbumsAdapter(
-            // Solo en la de un productor: en la de un artista el artista de cada tarjeta siempre es
-            // el mismo (ver el comentario de DetailAlbumsAdapter).
-            showArtistLine = viewModel.currentKind == DetailKind.PRODUCER,
             onAlbumClick = { album -> showAlbum(this, album.id) }
         )
         recyclerAlbums.layoutManager =
@@ -168,7 +167,7 @@ class DetailDialogFragment : DialogFragment() {
         toolbar.inflateMenu(R.menu.menu_library_detail)
         // El menú de 3 puntos solo tiene sentido en un álbum: sus acciones son "de álbum" (todas
         // las canciones a la vez, en orden de pista; editar SUS metadatos, que son distintos de los
-        // de una canción). En artista/productor, ni pista ni un editor de álbum pintarían nada.
+        // de una canción). En la de un artista, ni pista ni un editor de álbum pintarían nada.
         toolbar.menu.findItem(R.id.action_album_menu)?.isVisible = viewModel.currentKind == DetailKind.ALBUM
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
@@ -188,9 +187,9 @@ class DetailDialogFragment : DialogFragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
                     // Ver el comentario de CoverArt.revision: editar solo la carátula del álbum (o de
-                    // una de sus canciones, de la que puede salir la de un artista/productor) no
-                    // cambia nada en el DetailHeader que sale de Room si el nombre de archivo se
-                    // reutiliza, así que sin esto la cabecera no se enteraría.
+                    // una de sus canciones, de la que puede salir la de un artista) no cambia nada
+                    // en el DetailHeader que sale de Room si el nombre de archivo se reutiliza, así
+                    // que sin esto la cabecera no se enteraría.
                     combine(viewModel.header, CoverArt.revision) { header, _ -> header }.collect { header ->
                         if (header != null) bindHeader(header, toolbar, cover, infoLines)
                     }
@@ -288,14 +287,13 @@ class DetailDialogFragment : DialogFragment() {
     }
 
     /**
-     * Traduce el [DetailKind] de esta ficha (álbum/artista/productor) al [CollectionKind] que
+     * Traduce el [DetailKind] de esta ficha (álbum/artista) al [CollectionKind] que
      * [PlayerViewModel] guarda al reproducirla, para que el iPod sepa qué palabra usar al anunciar
      * cuántas canciones quedan en la cola (ver [CollectionKind]).
      */
     private fun collectionKind(): CollectionKind? = when (viewModel.currentKind) {
         DetailKind.ALBUM -> CollectionKind.ALBUM
         DetailKind.ARTIST -> CollectionKind.ARTIST
-        DetailKind.PRODUCER -> CollectionKind.PRODUCER
         null -> null
     }
 
@@ -340,7 +338,7 @@ class DetailDialogFragment : DialogFragment() {
      */
     private fun goToAlbumArtist() {
         viewModel.songs.firstNotNullOfOrNull { it.artists.firstOrNull() }
-            ?.let { showPerson(this, PersonKind.ARTIST, it.id) }
+            ?.let { showArtist(this, it.id) }
     }
 
     /**
@@ -445,14 +443,8 @@ class DetailDialogFragment : DialogFragment() {
         // que se pueden apilar sin límite y el botón atrás de cada una solo cierra la suya.
         fun showAlbum(from: Fragment, albumId: Long) = show(from.childFragmentManager, DetailKind.ALBUM, albumId)
 
-        fun showPerson(from: Fragment, kind: PersonKind, id: Long) = show(
-            from.childFragmentManager,
-            when (kind) {
-                PersonKind.ARTIST -> DetailKind.ARTIST
-                PersonKind.PRODUCER -> DetailKind.PRODUCER
-            },
-            id
-        )
+        fun showArtist(from: Fragment, artistId: Long) =
+            show(from.childFragmentManager, DetailKind.ARTIST, artistId)
 
         // Mismo par de arriba, pero para abrirla desde una Activity en vez de un Fragment: la
         // barra de búsqueda de MainActivity ya no vive dentro de un diálogo (ver
@@ -461,13 +453,7 @@ class DetailDialogFragment : DialogFragment() {
         fun showAlbum(from: FragmentActivity, albumId: Long) =
             show(from.supportFragmentManager, DetailKind.ALBUM, albumId)
 
-        fun showPerson(from: FragmentActivity, kind: PersonKind, id: Long) = show(
-            from.supportFragmentManager,
-            when (kind) {
-                PersonKind.ARTIST -> DetailKind.ARTIST
-                PersonKind.PRODUCER -> DetailKind.PRODUCER
-            },
-            id
-        )
+        fun showArtist(from: FragmentActivity, artistId: Long) =
+            show(from.supportFragmentManager, DetailKind.ARTIST, artistId)
     }
 }

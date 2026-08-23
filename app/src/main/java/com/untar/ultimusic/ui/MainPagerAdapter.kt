@@ -7,16 +7,13 @@ import com.untar.ultimusic.ui.common.PlaceholderFragment
 import com.untar.ultimusic.ui.library.AlbumsFragment
 import com.untar.ultimusic.ui.library.GenresFragment
 import com.untar.ultimusic.ui.library.PeopleFragment
-import com.untar.ultimusic.ui.library.PersonKind
+import com.untar.ultimusic.ui.library.TagsFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsFragment
 import com.untar.ultimusic.ui.songs.SongsFragment
 
 /**
  * Adaptador de las páginas del ViewPager2. Las seis son fragmentos reales: Canciones, Álbumes,
- * Artistas, Productores, Géneros y Listas de reproducción.
- *
- * Artistas y Productores son el MISMO fragmento con un argumento distinto: se tratan igual, así
- * que comparten código y solo cambia de qué flujo leen.
+ * Artistas, Géneros, Etiquetas y Listas de reproducción.
  */
 class MainPagerAdapter(
     activity: FragmentActivity,
@@ -28,9 +25,9 @@ class MainPagerAdapter(
     override fun createFragment(position: Int): Fragment = when (position) {
         0 -> SongsFragment()
         1 -> AlbumsFragment()
-        2 -> PeopleFragment.newInstance(PersonKind.ARTIST)
-        3 -> PeopleFragment.newInstance(PersonKind.PRODUCER)
-        4 -> GenresFragment()
+        2 -> PeopleFragment()
+        3 -> GenresFragment()
+        4 -> TagsFragment()
         5 -> PlaylistsFragment()
         else -> PlaceholderFragment.newInstance(titles[position])
     }

@@ -39,7 +39,7 @@
 
     <!--
       Tema de las ventanas a pantalla completa que se abren encima de la principal: el editor de
-      metadatos, la ficha de álbum/artista/productor y el buscador. Mismo diálogo deslizante que el
+      metadatos, la ficha de álbum/artista y el buscador. Mismo diálogo deslizante que el
       iPod, pero con fondo opaco porque aquí sí se dibuja una pantalla entera de contenido. La barra
       de estado es transparente para que el color de la cabecera llegue hasta arriba del todo, por
       detrás de la hora y la batería; cada fragmento rellena ese hueco con padding en su toolbar.

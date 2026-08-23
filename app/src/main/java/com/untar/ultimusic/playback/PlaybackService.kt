@@ -22,10 +22,12 @@ import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MediaMetadata
+import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
+import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
@@ -41,6 +43,7 @@ import com.untar.ultimusic.ui.BOOST_MIN_PERCENT
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
+import com.untar.ultimusic.util.PlaylistResumeStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -187,6 +190,18 @@ class PlaybackService : MediaSessionService() {
     private val _cannotAddToEmptyQueue = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val cannotAddToEmptyQueue = _cannotAddToEmptyQueue.asSharedFlow()
 
+    /** Avisa cuando una canción ha fallado al reproducirse (tras reintentarlo una vez, ver
+     *  [Player.Listener.onPlayerError] en [player]) y se ha saltado a la siguiente. Ya viene
+     *  formateado en español, con el motivo si se ha podido identificar (ver [playbackErrorMessage]). */
+    private val _playbackError = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val playbackError = _playbackError.asSharedFlow()
+
+    /** Id de la canción a la que ya se le ha dado su único reintento tras un [PlaybackException]
+     *  (ver [onPlayerError][Player.Listener.onPlayerError] en [player]). Se limpia al cargar
+     *  cualquier canción por el camino normal ([loadCurrent]), así que un reintento solo cuenta
+     *  para el intento que lo disparó, no para una repetición posterior de la misma canción. */
+    private var errorRetrySongId: Long? = null
+
     private var accentJob: Job? = null
     private var loadJob: Job? = null
 
@@ -244,6 +259,27 @@ class PlaybackService : MediaSessionService() {
                         // Al terminar una canción, avanzamos solos a la siguiente. (Cualificado: sin
                         // el this@, next() se resolvería al next() deprecado del propio ExoPlayer.)
                         if (state == Player.STATE_ENDED) this@PlaybackService.next()
+                    }
+
+                    /**
+                     * Sin esto el reproductor se queda mudo para siempre en cuanto una canción falla
+                     * al cargar (archivo puntualmente ilegible, fallo del decodificador...): a
+                     * diferencia de STATE_ENDED, un error dejar al ExoPlayer parado en STATE_IDLE y
+                     * NO avanza solo a la siguiente. Aquí se le da a la canción problemática un único
+                     * reintento (`player.prepare()` desde STATE_IDLE con error limpia el error y
+                     * vuelve a intentar cargar el mismo MediaItem); si vuelve a fallar, se salta y se
+                     * avisa por qué con un Toast (ver [playbackError] / `MainActivity`).
+                     */
+                    override fun onPlayerError(error: PlaybackException) {
+                        val song = _currentSong.value ?: return
+                        if (errorRetrySongId != song.id) {
+                            errorRetrySongId = song.id
+                            player.prepare()
+                            return
+                        }
+                        errorRetrySongId = null
+                        serviceScope.launch { _playbackError.emit(playbackErrorMessage(song, error)) }
+                        this@PlaybackService.next()
                     }
                 })
             }
@@ -620,8 +656,8 @@ class PlaybackService : MediaSessionService() {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // COLECCIONES: fichas de álbum/artista/productor, modo navegación del iPod para listas y
-    // géneros — ver cabecera original.
+    // COLECCIONES: fichas de álbum/artista, modo navegación del iPod para listas y géneros — ver
+    // cabecera original.
     // ---------------------------------------------------------------------------------------------
 
     fun playCollection(
@@ -781,6 +817,18 @@ class PlaybackService : MediaSessionService() {
         val song = _queue.value.getOrNull(index) ?: return
         _currentSong.value = song
         updateAccent(song)
+        // "Posición actual"/REANUDAR de una Lista (ver PlaylistResumeStore/CollectionDetailDialogFragment):
+        // se graba SOLO mientras la cola suena en el contexto de una lista, nunca para géneros,
+        // etiquetas ni una cola suelta. loadCurrent() es el único punto por el que pasa CUALQUIER
+        // cambio de canción actual (playCollection, next/prev, jumpTo, continuación aleatoria,
+        // restorePlaybackState), así que basta este único hook.
+        if (_currentCollectionKind.value == CollectionKind.LISTA) {
+            _currentPlaylistName.value?.let { PlaylistResumeStore.setLastSong(it, song.id) }
+        }
+        // Cualquier carga por el camino normal es un intento nuevo y limpio, aunque sea la misma
+        // canción que acaba de fallar (p. ej. repetir la cola): el reintento de onPlayerError no
+        // pasa por aquí (llama a player.prepare() directamente), así que esto no le pisa nada.
+        errorRetrySongId = null
 
         loadJob?.cancel()
 
@@ -808,6 +856,35 @@ class PlaybackService : MediaSessionService() {
         if (seekToMs > 0L) player.seekTo(seekToMs)
         player.prepare()
         if (shouldPlay) player.play() else player.pause()
+    }
+
+    /**
+     * Traduce un [PlaybackException] al mensaje en español del Toast que ve el usuario cuando una
+     * canción se salta por error (ver [onPlayerError][Player.Listener.onPlayerError] en [player]).
+     * Solo se reconocen los códigos que de verdad pueden dar este reproductor con archivos locales;
+     * para cualquier otro se avisa igualmente de que se ha saltado la canción, pero sin inventarse
+     * una causa que no se sabe.
+     */
+    private fun playbackErrorMessage(song: Song, error: PlaybackException): String {
+        val reason = when (error.errorCode) {
+            PlaybackException.ERROR_CODE_IO_FILE_NOT_FOUND ->
+                getString(R.string.playback_error_file_not_found)
+            PlaybackException.ERROR_CODE_IO_NO_PERMISSION ->
+                getString(R.string.playback_error_no_permission)
+            PlaybackException.ERROR_CODE_DECODER_INIT_FAILED,
+            PlaybackException.ERROR_CODE_DECODING_FAILED,
+            PlaybackException.ERROR_CODE_DECODER_QUERY_FAILED ->
+                getString(R.string.playback_error_decoding)
+            PlaybackException.ERROR_CODE_IO_UNSPECIFIED,
+            PlaybackException.ERROR_CODE_IO_READ_POSITION_OUT_OF_RANGE ->
+                getString(R.string.playback_error_io)
+            else -> null
+        }
+        return if (reason != null) {
+            getString(R.string.playback_error_skip_known, song.title, reason)
+        } else {
+            getString(R.string.playback_error_skip_unknown, song.title)
+        }
     }
 
     /**

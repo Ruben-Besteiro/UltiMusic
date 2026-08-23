@@ -17,7 +17,6 @@ import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
-import com.untar.ultimusic.ui.library.PersonKind
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
@@ -42,12 +41,12 @@ class SearchAdapter(
     private val onAddToQueue: (Song) -> Unit,
     private val onAddToPlaylist: (Song) -> Unit,
     private val onEditMetadata: (Song) -> Unit,
+    private val onEditTags: (Song) -> Unit,
     private val onDeleteSong: (Song) -> Unit,
     private val onGoToAlbum: (Song) -> Unit,
     private val onGoToArtist: (Song) -> Unit,
-    private val onGoToProducer: (Song) -> Unit,
     private val onAlbumClick: (AlbumSummary) -> Unit,
-    private val onPersonClick: (PersonKind, PersonSummary) -> Unit
+    private val onPersonClick: (PersonSummary) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
     private var items: List<SearchResult> = emptyList()
@@ -90,13 +89,11 @@ class SearchAdapter(
         when (val item = items[position]) {
             is SearchResult.Header -> (holder as HeaderViewHolder).bind(item.titleRes, accent)
             is SearchResult.SongRow -> (holder as SongViewHolder).bind(
-                item.song, onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onDeleteSong,
-                onGoToAlbum, onGoToArtist, onGoToProducer
+                item.song, onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags,
+                onDeleteSong, onGoToAlbum, onGoToArtist
             )
             is SearchResult.AlbumRow -> (holder as AlbumViewHolder).bind(item.album, onAlbumClick)
-            is SearchResult.PersonRow -> (holder as PersonViewHolder).bind(
-                item.kind, item.person, onPersonClick
-            )
+            is SearchResult.PersonRow -> (holder as PersonViewHolder).bind(item.person, onPersonClick)
         }
     }
 
@@ -127,10 +124,10 @@ class SearchAdapter(
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
             onEditMetadata: (Song) -> Unit,
+            onEditTags: (Song) -> Unit,
             onDeleteSong: (Song) -> Unit,
             onGoToAlbum: (Song) -> Unit,
-            onGoToArtist: (Song) -> Unit,
-            onGoToProducer: (Song) -> Unit
+            onGoToArtist: (Song) -> Unit
         ) {
             val context = itemView.context
             title.text = song.title
@@ -145,15 +142,14 @@ class SearchAdapter(
                     // Solo tiene sentido "ir a" lo que la canción de verdad tenga.
                     menu.findItem(R.id.action_go_to_album)?.isVisible = song.album != null
                     menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
-                    menu.findItem(R.id.action_go_to_producer)?.isVisible = song.producers.isNotEmpty()
                     setOnMenuItemClickListener { item ->
                         when (item.itemId) {
                             R.id.action_add_to_queue -> { onAddToQueue(song); true }
                             R.id.action_add_to_playlist -> { onAddToPlaylist(song); true }
                             R.id.action_go_to_album -> { onGoToAlbum(song); true }
                             R.id.action_go_to_artist -> { onGoToArtist(song); true }
-                            R.id.action_go_to_producer -> { onGoToProducer(song); true }
                             R.id.action_edit_metadata -> { onEditMetadata(song); true }
+                            R.id.action_edit_tags -> { onEditTags(song); true }
                             R.id.action_delete_song -> { onDeleteSong(song); true }
                             else -> false
                         }
@@ -187,7 +183,6 @@ class SearchAdapter(
         }
     }
 
-    /** Sirve igual para un artista y para un productor: son la misma fila (ver `item_person`). */
     class PersonViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val image: ShapeableImageView = itemView.findViewById(R.id.personImage)
         private val name: TextView = itemView.findViewById(R.id.personName)
@@ -195,11 +190,7 @@ class SearchAdapter(
         private val youtubeIcon: ImageView = itemView.findViewById(R.id.personYoutubeIcon)
         private val youtubeSubscribers: TextView = itemView.findViewById(R.id.personYoutubeSubscribers)
 
-        fun bind(
-            kind: PersonKind,
-            person: PersonSummary,
-            onPersonClick: (PersonKind, PersonSummary) -> Unit
-        ) {
+        fun bind(person: PersonSummary, onPersonClick: (PersonSummary) -> Unit) {
             val context = itemView.context
             name.text = person.name
 
@@ -216,7 +207,7 @@ class SearchAdapter(
                 error(R.drawable.cover_placeholder)
             }
 
-            itemView.setOnClickListener { onPersonClick(kind, person) }
+            itemView.setOnClickListener { onPersonClick(person) }
         }
     }
 

@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Contenido interno de ColorPickerView, inflado con <merge> porque la propia clase ya ES el
+     LinearLayout raíz (orientación vertical fijada en su constructor). Fila de arriba: cuadrado de
+     saturación/valor + barra de matiz + vista previa del color elegido. Fila de abajo: los 3 únicos
+     campos de texto del picker (R, G y B; sin H/S/V/CMYK/hex). -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <com.untar.ultimusic.ui.library.colorpicker.SaturationValueView
+            android:id="@+id/svPicker"
+            android:layout_width="0dp"
+            android:layout_height="@dimen/color_picker_sv_size"
+            android:layout_weight="1" />
+
+        <com.untar.ultimusic.ui.library.colorpicker.HueSliderView
+            android:id="@+id/hueSlider"
+            android:layout_width="@dimen/color_picker_hue_width"
+            android:layout_height="@dimen/color_picker_sv_size"
+            android:layout_marginStart="12dp" />
+
+        <View
+            android:id="@+id/colorPreview"
+            android:layout_width="@dimen/color_picker_preview_size"
+            android:layout_height="@dimen/color_picker_preview_size"
+            android:layout_marginStart="16dp"
+            android:background="@drawable/bg_color_picker_preview" />
+
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:text="@string/color_picker_r_label"
+                android:textColor="@color/um_on_surface_muted" />
+
+            <EditText
+                android:id="@+id/inputR"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:inputType="number"
+                android:maxLength="3"
+                android:textColor="@color/um_on_background"
+                tools:text="255" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:text="@string/color_picker_g_label"
+                android:textColor="@color/um_on_surface_muted" />
+
+            <EditText
+                android:id="@+id/inputG"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:inputType="number"
+                android:maxLength="3"
+                android:textColor="@color/um_on_background"
+                tools:text="208" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:gravity="center_horizontal"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical"
+                android:text="@string/color_picker_b_label"
+                android:textColor="@color/um_on_surface_muted" />
+
+            <EditText
+                android:id="@+id/inputB"
+                android:layout_width="56dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:inputType="number"
+                android:maxLength="3"
+                android:textColor="@color/um_on_background"
+                tools:text="0" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+</merge>

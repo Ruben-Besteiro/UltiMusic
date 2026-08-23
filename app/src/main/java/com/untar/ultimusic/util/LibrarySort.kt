@@ -65,8 +65,8 @@ enum class LibraryTab(val titleRes: Int, val availableFields: List<SortField>) {
     SONGS(R.string.tab_songs, listOf(SortField.NAME, SortField.DURATION, SortField.YEAR, SortField.POPULARITY)),
     ALBUMS(R.string.tab_albums, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION, SortField.YEAR)),
     ARTISTS(R.string.tab_artists, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION, SortField.POPULARITY)),
-    PRODUCERS(R.string.tab_producers, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION)),
     GENRES(R.string.tab_genres, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION)),
+    TAGS(R.string.tab_tags, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION)),
     PLAYLISTS(R.string.tab_playlists, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION));
 
     /** Si [field] no es válido para esta pestaña, cae a [SortField.NAME]: pasa si [SortPreferences]

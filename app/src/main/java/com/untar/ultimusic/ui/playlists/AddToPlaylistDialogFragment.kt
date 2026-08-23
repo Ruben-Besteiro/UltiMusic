@@ -77,7 +77,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.add_to_playlist_title)
             .setView(content)
-            .setNeutralButton(R.string.playlist_new_option) { _, _ -> showCreateAndAdd(filenames) }
+            .setNeutralButton(R.string.playlist_create) { _, _ -> showCreateAndAdd(filenames) }
             .setPositiveButton(R.string.dialog_ok, null)
             .create()
 

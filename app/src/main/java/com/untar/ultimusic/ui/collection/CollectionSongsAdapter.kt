@@ -36,10 +36,10 @@ class CollectionSongsAdapter(
     private val onAddToQueue: (Song) -> Unit,
     private val onAddToPlaylist: (Song) -> Unit,
     private val onEditMetadata: (Song) -> Unit,
+    private val onEditTags: (Song) -> Unit,
     private val onDeleteSong: (Song) -> Unit,
     private val onGoToAlbum: (Song) -> Unit,
-    private val onGoToArtist: (Song) -> Unit,
-    private val onGoToProducer: (Song) -> Unit
+    private val onGoToArtist: (Song) -> Unit
 ) : RecyclerView.Adapter<CollectionSongsAdapter.SongViewHolder>() {
 
     private val songs: MutableList<Song> = mutableListOf()
@@ -72,8 +72,8 @@ class CollectionSongsAdapter(
     override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
         holder.bind(
             songs[position], reorderable,
-            onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onDeleteSong,
-            onGoToAlbum, onGoToArtist, onGoToProducer
+            onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags, onDeleteSong,
+            onGoToAlbum, onGoToArtist
         )
     }
 
@@ -98,10 +98,10 @@ class CollectionSongsAdapter(
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
             onEditMetadata: (Song) -> Unit,
+            onEditTags: (Song) -> Unit,
             onDeleteSong: (Song) -> Unit,
             onGoToAlbum: (Song) -> Unit,
-            onGoToArtist: (Song) -> Unit,
-            onGoToProducer: (Song) -> Unit
+            onGoToArtist: (Song) -> Unit
         ) {
             title.text = song.title
             bindSongSubtitle(song, subtitleArtist, subtitleRest, youtubeIcon, youtubeViews)
@@ -121,15 +121,14 @@ class CollectionSongsAdapter(
                     menuInflater.inflate(R.menu.menu_song_item, menu)
                     menu.findItem(R.id.action_go_to_album)?.isVisible = song.album != null
                     menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
-                    menu.findItem(R.id.action_go_to_producer)?.isVisible = song.producers.isNotEmpty()
                     setOnMenuItemClickListener { item ->
                         when (item.itemId) {
                             R.id.action_add_to_queue -> { onAddToQueue(song); true }
                             R.id.action_add_to_playlist -> { onAddToPlaylist(song); true }
                             R.id.action_go_to_album -> { onGoToAlbum(song); true }
                             R.id.action_go_to_artist -> { onGoToArtist(song); true }
-                            R.id.action_go_to_producer -> { onGoToProducer(song); true }
                             R.id.action_edit_metadata -> { onEditMetadata(song); true }
+                            R.id.action_edit_tags -> { onEditTags(song); true }
                             R.id.action_delete_song -> { onDeleteSong(song); true }
                             else -> false
                         }

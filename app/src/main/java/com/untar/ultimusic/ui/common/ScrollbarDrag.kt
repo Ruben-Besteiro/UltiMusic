@@ -66,8 +66,8 @@ class ScrollbarController internal constructor(private val thumb: View, private 
  *
  * [sectionFor] es **opcional**: si se omite (o se pasa `null`) la burbuja ni siquiera se crea y
  * queda solo el pulgar arrastrable. Eso es lo que quiere el buscador, donde los resultados no están
- * ordenados alfabéticamente sino agrupados por secciones (canciones, álbumes, artistas,
- * productores), así que una letra ahí no significaría nada.
+ * ordenados alfabéticamente sino agrupados por secciones (canciones, álbumes, artistas), así que
+ * una letra ahí no significaría nada.
  *
  * [hitboxWidthDp] es la franja de la derecha donde se detecta el toque; a propósito bastante más
  * ancha que el pulgar visible ([THUMB_WIDTH_DP]), para que sea fácil agarrarla sin apuntar con
