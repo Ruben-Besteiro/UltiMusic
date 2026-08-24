@@ -1,18 +1,21 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:orientation="vertical"
     android:background="@color/um_background">
 
+    <!-- El resumen de la fonoteca (nº de canciones + duración total) ya NO va aquí como vista fija:
+         se pinta como primera fila del propio RecyclerView (ver item_songs_header.xml y
+         SongsAdapter) para que haga scroll junto con la lista en vez de quedarse clavado arriba. -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerSongs"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:paddingTop="10dp"
         android:clipToPadding="false"
         android:scrollbars="none"
-        tools:listitem="@layout/item_song"
-        xmlns:tools="http://schemas.android.com/tools" />
+        tools:listitem="@layout/item_song" />
 
     <TextView
         android:id="@+id/emptyView"
@@ -34,4 +37,4 @@
         android:indeterminateTint="@color/um_yellow"
         android:visibility="gone" />
 
-</FrameLayout>
+</LinearLayout>

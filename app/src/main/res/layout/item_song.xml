@@ -5,6 +5,11 @@
   item_collection_song.xml, que es esta misma fila con un manejador de arrastre delante). Subtítulo
   de dos líneas: el artista solo (puede ser una lista larga si hay varios) y, debajo, el resto
   -álbum y, si la canción tiene vídeo asignado, sus visitas de YouTube al final (ver SongsAdapter).
+
+  songTagsContainer es una tercera línea OPCIONAL, oculta salvo que el ajuste "Ver etiquetas en
+  pestaña Canciones" esté activo (ver VisualPreferences/SettingsDialogFragment): las etiquetas de la
+  canción en miniatura (item_tag_chip_mini.xml), dentro de un FlowLayout que las desborda a una
+  segunda línea (y una tercera, y las que hagan falta) en vez de recortarlas si no caben todas.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -121,6 +126,14 @@
                 tools:visibility="visible" />
 
         </LinearLayout>
+
+        <com.untar.ultimusic.ui.common.FlowLayout
+            android:id="@+id/songTagsContainer"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:visibility="gone"
+            tools:visibility="visible" />
 
     </LinearLayout>
 

@@ -44,4 +44,5 @@
     <color name="um_tag_recently_added">#FF0D47A1</color>  <!-- azul oscuro -->
     <color name="um_tag_not_in_playlist">#FF6A1B9A</color> <!-- morado -->
     <color name="um_tag_no_custom_tags">#FF616161</color>  <!-- gris -->
+    <color name="um_tag_synced_video">#FFD32F2F</color>     <!-- rojo -->
 </resources>

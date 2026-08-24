@@ -15,6 +15,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
@@ -29,6 +30,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
@@ -38,9 +40,11 @@ import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
+import com.untar.ultimusic.ui.library.AddSongsToTagDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.library.SongTagsDialogFragment
 import com.untar.ultimusic.ui.library.TagsViewModel
+import com.untar.ultimusic.ui.playlists.AddSongsToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
@@ -128,6 +132,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
         val btnResume = view.findViewById<MaterialButton>(R.id.btnResumePlaylist)
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerCollectionSongs)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
+        val btnAddSongs = view.findViewById<FloatingActionButton>(R.id.btnAddSongs)
         val miniPlayer = view.findViewById<View>(R.id.miniPlayer)
         val miniProgress = view.findViewById<SeekBar>(R.id.songProgress)
         MiniPlayerController(miniPlayer, miniProgress, playerViewModel, parentFragmentManager, viewLifecycleOwner)
@@ -176,6 +181,18 @@ class CollectionDetailDialogFragment : DialogFragment() {
             onGoToAlbum = { song -> song.album?.let { DetailDialogFragment.showAlbum(this, it.id) } },
             onGoToArtist = { song ->
                 song.artists.firstOrNull()?.let { DetailDialogFragment.showArtist(this, it.id) }
+            },
+            // Solo llega a pulsarse con la X visible, es decir con currentKind ya resuelto a LISTA o
+            // a una etiqueta editable (ver el `when` de más abajo); el `!!`/currentTagId() son
+            // seguros por lo mismo.
+            onRemove = { song ->
+                when (viewModel.currentKind) {
+                    CollectionKind.LISTA -> playlistsViewModel.removeSongs(
+                        viewModel.currentKey!!, listOf(File(song.filePath).name)
+                    )
+                    CollectionKind.TAG -> tagsViewModel.removeSongFromTag(song.id, currentTagId())
+                    else -> Unit
+                }
             }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
@@ -209,6 +226,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
         }
 
         toolbar.setNavigationOnClickListener { dismiss() }
+        btnAddSongs.setOnClickListener { showAddSongs() }
         toolbar.inflateMenu(R.menu.menu_collection_detail)
         // El menú de 3 puntos solo sigue teniendo sentido para un Género: renombrar/borrar una Lista
         // o una Etiqueta vive ahora en el menú de 3 puntos de su propia fila (PlaylistsAdapter /
@@ -234,6 +252,29 @@ class CollectionDetailDialogFragment : DialogFragment() {
                 // sola vez (ver CollectionDetailViewModel.displayTitle sobre el porqué).
                 launch {
                     viewModel.displayTitle.collect { title -> toolbar.title = title }
+                }
+                // Botón "+" y X de cada fila: en una LISTA los dos se enseñan siempre (a cualquiera
+                // se le puede añadir/quitar una canción). En una ETIQUETA solo con membresía real
+                // (ver TagsViewModel.isEditable) -Favoritos, Vídeo sincronizado o una personalizada-,
+                // nunca en las 3 calculadas. En un GÉNERO ninguno de los dos llega a mostrarse
+                // (deriva solo de los metadatos, no se puede tocar a mano).
+                when (viewModel.currentKind) {
+                    CollectionKind.LISTA -> {
+                        btnAddSongs.isVisible = true
+                        adapter.setRemovable(true, R.string.remove_song_from_playlist_desc)
+                    }
+                    CollectionKind.TAG -> launch {
+                        // Se colecta tagsViewModel.tags entero (no solo la actual) porque es lo que
+                        // ya observa el resto de la app para esa lista, y aquí hace falta systemKey,
+                        // que displayTitle no trae.
+                        tagsViewModel.tags.collect { tags ->
+                            val tag = tags.firstOrNull { it.id == viewModel.currentKey?.toLongOrNull() }
+                            val editable = tag != null && tagsViewModel.isEditable(tag)
+                            btnAddSongs.isVisible = editable
+                            adapter.setRemovable(editable, R.string.remove_song_from_tag_desc)
+                        }
+                    }
+                    else -> Unit
                 }
                 launch {
                     combine(viewModel.songs, CoverArt.revision) { list, _ -> list }.collect { list ->
@@ -288,6 +329,10 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         // DetailDialogFragment).
                         applyAccent(accent, headerBox, toolbar, summaryIcon, summaryText, resumeIcon, resumeText, btnResume)
                         scrollbar.setAccentColor(accent)
+                        // El botón "+" es chrome de la app (como btnCreateTag de TagsFragment), no
+                        // el color propio de la etiqueta: sí le aplica la regla de amarillo dinámico.
+                        btnAddSongs.backgroundTintList = ColorStateList.valueOf(accent)
+                        AccentTint.contentOnAccent(btnAddSongs, accent)
                     }
                 }
             }
@@ -342,6 +387,37 @@ class CollectionDetailDialogFragment : DialogFragment() {
             show()
         }
     }
+
+    /** Abre el diálogo de "añadir canciones de golpe" que toque según [CollectionKind.currentKind]:
+     *  [AddSongsToPlaylistDialogFragment] para una lista, [AddSongsToTagDialogFragment] para una
+     *  etiqueta (con el botón "+" ya oculto para género y para una etiqueta calculada, ver el
+     *  `launch` de `tagsViewModel.tags` de más arriba, esto no debería llegar a llamarse para
+     *  ninguno de los dos). */
+    private fun showAddSongs() {
+        when (viewModel.currentKind) {
+            CollectionKind.LISTA -> {
+                val name = viewModel.currentKey ?: return
+                if (parentFragmentManager.findFragmentByTag(AddSongsToPlaylistDialogFragment.TAG) == null) {
+                    AddSongsToPlaylistDialogFragment.newInstance(name)
+                        .show(parentFragmentManager, AddSongsToPlaylistDialogFragment.TAG)
+                }
+            }
+            CollectionKind.TAG -> {
+                if (parentFragmentManager.findFragmentByTag(AddSongsToTagDialogFragment.TAG) == null) {
+                    AddSongsToTagDialogFragment.newInstance(currentTagId(), viewModel.displayTitle.value)
+                        .show(parentFragmentManager, AddSongsToTagDialogFragment.TAG)
+                }
+            }
+            else -> Unit
+        }
+    }
+
+    /** [viewModel.currentKey] como `Long`, válido mientras se esté mirando una etiqueta (ver
+     *  [CollectionDetailViewModel] sobre por qué la clave es el id como texto solo para
+     *  [CollectionKind.TAG]). Solo lo llaman sitios que ya comprobaron `currentKind == TAG` antes -el
+     *  botón "+" y la X de cada fila, ambos ocultos para lista/género/etiqueta calculada-, así que el
+     *  `!!` no debería saltar nunca en la práctica. */
+    private fun currentTagId(): Long = viewModel.currentKey!!.toLong()
 
     /** Igual que `SongsFragment.showAddToPlaylist`. */
     private fun showAddToPlaylist(song: Song) {

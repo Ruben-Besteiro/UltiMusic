@@ -1,11 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Fila de canción en la ficha de una lista o un género (ver CollectionDetailDialogFragment): igual
-  que item_song.xml (misma carátula, título/subtítulo de dos líneas con visitas de YouTube y menú
-  de 3 puntos), con un manejador de arrastre añadido delante que solo se ve en una lista (ver
-  CollectionSongsAdapter.reorderable): un género no tiene orden propio que guardar.
+  Fila de canción en la ficha de una lista, un género o una etiqueta (ver
+  CollectionDetailDialogFragment): igual que item_song.xml (misma carátula, título/subtítulo de dos
+  líneas con visitas de YouTube y menú de 3 puntos), con un manejador de arrastre añadido delante que
+  solo se ve en una lista (ver CollectionSongsAdapter.reorderable): un género no tiene orden propio
+  que guardar.
+
+  btnRemoveSong es la X que quita ESTA canción del destino, a la izquierda del menú de 3 puntos: en
+  una lista siempre, en una etiqueta solo si tiene membresía real (ver TagsViewModel.isEditable) —
+  oculta en un género o una etiqueta calculada. Su texto ("Quitar de la etiqueta"/"Quitar de la
+  lista") lo pone CollectionSongsAdapter.setRemovable en tiempo de ejecución según toque; el string
+  de aquí es solo el valor de fábrica/vista previa.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/songRow"
     android:layout_width="match_parent"
@@ -105,10 +113,22 @@
     </LinearLayout>
 
     <ImageButton
+        android:id="@+id/btnRemoveSong"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="6dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/remove_song_from_tag_desc"
+        android:src="@drawable/ic_close"
+        android:visibility="gone"
+        app:tint="@color/um_on_surface_muted"
+        tools:visibility="visible" />
+
+    <ImageButton
         android:id="@+id/btnSongMore"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:layout_marginStart="10dp"
+        android:layout_marginStart="4dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/song_more"
         android:src="@drawable/ic_more_vert" />

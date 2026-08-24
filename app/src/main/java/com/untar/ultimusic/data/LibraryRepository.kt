@@ -195,6 +195,25 @@ class LibraryRepository private constructor(
                 .map { it.summary }
         }
 
+    /**
+     * Igual que [tagsOfSong] pero para TODAS las canciones a la vez, indexadas por id (reales +
+     * calculadas). La usa la pestaña Canciones cuando el ajuste "Ver etiquetas en pestaña Canciones"
+     * está activo (ver [com.untar.ultimusic.data.VisualPreferences] y
+     * [com.untar.ultimusic.ui.songs.SongsAdapter]): resuelve [resolveAllTags] UNA sola vez para toda
+     * la biblioteca en vez de una vez por fila visible, que sería tan caro como abrir la pestaña
+     * Etiquetas una vez por canción.
+     */
+    fun songTagsById(filenamesInAnyPlaylist: Flow<Set<String>>): Flow<Map<Long, List<TagSummary>>> =
+        combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
+            val bySong = HashMap<Long, MutableList<TagSummary>>()
+            for (resolved in resolveAllTags(tags, crossRefs, allSongs, inPlaylist)) {
+                for (songId in resolved.matchedSongIds) {
+                    bySong.getOrPut(songId) { mutableListOf() }.add(resolved.summary)
+                }
+            }
+            bySong
+        }
+
     /** Añade/quita la membresía real de una canción en una etiqueta (ver
      *  [SongTagsDialogFragment][com.untar.ultimusic.ui.library.SongTagsDialogFragment]/
      *  [TagPickerDialogFragment][com.untar.ultimusic.ui.library.TagPickerDialogFragment]). Solo tiene
@@ -256,6 +275,8 @@ class LibraryRepository private constructor(
      * - En ninguna lista: cuyo archivo no está en [inPlaylist] (unión de todas las Listas).
      * - Sin etiquetas personalizadas: todas las canciones EXCEPTO las que ya tengan alguna etiqueta
      *   personalizada ([songsWithCustomTag]).
+     * - Vídeo sincronizado: membresía real, igual que Favoritos -aquí solo se LEE [memberIds]; quien
+     *   la mantiene sincronizada con [Song.videoOffsetMs] es [syncSyncedVideoTag]-.
      * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que Favoritos.
      */
     private fun resolveSongsOfTag(
@@ -270,6 +291,7 @@ class LibraryRepository private constructor(
             SystemTagKey.RECENTLY_ADDED -> allSongs.sortedByDescending { it.dateAdded }.take(20)
             SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { File(it.filePath).name !in inPlaylist }
             SystemTagKey.NO_CUSTOM_TAGS -> allSongs.filter { it.id !in songsWithCustomTag }
+            SystemTagKey.SYNCED_VIDEO -> allSongs.filter { it.id in memberIds }
             null -> allSongs.filter { it.id in memberIds }
         }
 
@@ -625,6 +647,7 @@ class LibraryRepository private constructor(
     suspend fun setVideoOffsetMs(song: Song, offsetMs: Long) = withContext(Dispatchers.IO) {
         if (offsetMs == song.videoOffsetMs) return@withContext
         dao.setVideoOffsetMs(songId = song.id, offsetMs = offsetMs)
+        syncSyncedVideoTag(song.id, offsetMs)
     }
 
     /** Guardado completo desde el editor de metadatos (fila + reenlazado de artistas y álbum). */
@@ -633,7 +656,34 @@ class LibraryRepository private constructor(
         artistNames: List<String>,
         albumTitle: String?,
         producerNames: List<String>
-    ) = dao.saveSongEdits(song, artistNames, albumTitle, producerNames)
+    ) {
+        dao.saveSongEdits(song, artistNames, albumTitle, producerNames)
+        syncSyncedVideoTag(song.id, song.videoOffsetMs)
+    }
+
+    /**
+     * Mantiene la etiqueta predefinida "Vídeo sincronizado" (ver [SystemTagKey.SYNCED_VIDEO]) en
+     * línea con [offsetMs]: la añade en cuanto deja de ser 0, la quita en cuanto vuelve a serlo.
+     *
+     * Se llama desde los DOS sitios que pueden cambiar `videoOffsetMs` -la regla del iPod
+     * ([setVideoOffsetMs]) y el editor de metadatos ([saveSongEdits])-, así que da igual por dónde se
+     * toque: la membresía real de la etiqueta (fila en `song_tag`, igual que Favoritos) nunca se
+     * desincroniza del valor de verdad. El usuario también puede añadirla/quitarla a mano desde la
+     * ficha de la etiqueta (ver [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]);
+     * esta función solo reacciona a cambios del desplazamiento, no al revés.
+     *
+     * `findTagBySystemKey` puede devolver null en teoría (una instalación que nunca haya pasado por
+     * `migration20To21` ni por el `Callback` de instalación nueva), aunque en la práctica siempre hay
+     * fila: se ignora sin más en vez de reventar, por si acaso.
+     */
+    private suspend fun syncSyncedVideoTag(songId: Long, offsetMs: Long) {
+        val tag = dao.findTagBySystemKey(SystemTagKey.SYNCED_VIDEO.name) ?: return
+        if (offsetMs != 0L) {
+            dao.insertSongTag(SongTagCrossRef(songId, tag.id))
+        } else {
+            dao.deleteSongTag(songId, tag.id)
+        }
+    }
 
     /**
      * Copia la imagen elegida por el usuario a `~/UltiMusic/images` y devuelve el nombre de

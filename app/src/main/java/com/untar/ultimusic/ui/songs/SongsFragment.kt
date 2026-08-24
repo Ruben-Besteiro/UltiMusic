@@ -15,29 +15,40 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.VisualPreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.library.SongTagsDialogFragment
+import com.untar.ultimusic.ui.library.TagsViewModel
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.CoverArt
+import com.untar.ultimusic.util.joinNonBlank
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 
 /** Primer fragmento: lista de canciones. */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SongsFragment : Fragment(R.layout.fragment_songs) {
 
     private val songsViewModel: SongsViewModel by activityViewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
     private val playlistsViewModel: PlaylistsViewModel by activityViewModels()
+    private val tagsViewModel: TagsViewModel by activityViewModels()
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerSongs)
@@ -82,8 +93,10 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
+        // -1 porque la posición 0 del RecyclerView es la cabecera de resumen (ver SongsAdapter),
+        // no una canción.
         val scrollbar = recycler.attachScrollbarDrag { position ->
-            sectionLetter(songsViewModel.songs.value.getOrNull(position)?.title)
+            sectionLetter(songsViewModel.songs.value.getOrNull(position - 1)?.title)
         }
 
         /** Pintamos las canciones en la pantalla **/
@@ -96,6 +109,12 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                     // porque el Song que sale de Room sería idéntico al de antes.
                     combine(songsViewModel.songs, CoverArt.revision) { list, _ -> list }.collect { list ->
                         adapter.submit(list)
+                        adapter.setSummary(
+                            joinNonBlank(
+                                resources.getQuantityString(R.plurals.song_count, list.size, list.size),
+                                TimeFormat.hhmmss(list.sumOf { it.duration })
+                            )
+                        )
                         if (list.isEmpty() && !songsViewModel.loading.value) {
                             emptyView.text = requireContext().getString(R.string.nothing_playing)
                             emptyView.visibility = View.VISIBLE
@@ -139,6 +158,15 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                 }
                 launch {
                     songsViewModel.selectedIds.collect { ids -> adapter.setSelection(ids) }
+                }
+                launch {
+                    // flatMapLatest, no combine directo: con el ajuste desactivado no tiene sentido
+                    // suscribirse a tagsViewModel.songTagsById (recalcula TODA la biblioteca en cada
+                    // cambio de canciones/etiquetas, el mismo coste que la pestaña Etiquetas).
+                    VisualPreferences.showSongTags.flatMapLatest { show ->
+                        if (show) tagsViewModel.songTagsById.map { byId -> show to byId }
+                        else flowOf(show to emptyMap<Long, List<TagSummary>>())
+                    }.collect { (show, byId) -> adapter.setTags(show, byId) }
                 }
             }
         }

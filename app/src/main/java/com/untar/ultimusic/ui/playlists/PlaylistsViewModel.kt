@@ -11,6 +11,7 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.PlaylistResumeStore
 import com.untar.ultimusic.util.SortOption
+import com.untar.ultimusic.util.TextSearch
 import com.untar.ultimusic.util.sortedByOption
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -88,6 +89,23 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
             .mapLatest { songs ->
                 val byFilename = songs.associateBy { File(it.filePath).name }
                 repository.resolveSongs(name, byFilename)
+            }
+
+    /**
+     * Canciones que TODAVÍA no están en la lista [name], filtradas por [query] (buscador de
+     * [com.untar.ultimusic.ui.playlists.AddSongsToPlaylistDialogFragment]): con la caja de búsqueda
+     * vacía salen todas las que le falten. Mismo criterio "sin tildes/mayúsculas" que el resto de
+     * buscadores de la app (ver [TextSearch]) y mismo patrón que
+     * [com.untar.ultimusic.ui.library.TagsViewModel.songsNotInTag], pero resuelto contra un archivo
+     * de [PlaylistRepository] (nombres de archivo) en vez de contra `song_tag` (ids).
+     */
+    fun songsNotIn(name: String, query: Flow<String>): Flow<List<Song>> =
+        combine(tick, library.songs, query) { _, songs, rawQuery -> songs to rawQuery }
+            .mapLatest { (songs, rawQuery) ->
+                val byFilename = songs.associateBy { File(it.filePath).name }
+                val inPlaylist = repository.resolveSongs(name, byFilename).mapTo(mutableSetOf()) { it.id }
+                val normalized = TextSearch.normalize(rawQuery)
+                songs.filter { it.id !in inPlaylist && TextSearch.contains(it.title, normalized) }
             }
 
     private suspend fun buildSummaries(songs: List<Song>): List<PlaylistSummary> {

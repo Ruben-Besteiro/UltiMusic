@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
+import java.util.concurrent.TimeUnit
 
 /**
  * Descarga una imagen suelta de la red (la portada elegida en el autorrelleno de metadatos, ver
@@ -37,6 +38,16 @@ object NetworkImage {
 
     private const val TIMEOUT_MS = 8_000
 
+    /** Prefijo de [File.createTempFile] para estos archivos: lo usa también [pruneOldTempFiles]
+     * para reconocer cuáles son suyos y no tocar nada más de la caché. */
+    private const val TEMP_PREFIX = "remote_cover_"
+
+    /** Cuánto se deja vivir un temporal sin reclamar antes de considerarlo basura. Generoso a
+     * propósito: una edición a medias puede sobrevivir un buen rato (la app en segundo plano, el
+     * sistema matando el proceso y recreándolo al volver...) y no queremos borrar el archivo por
+     * debajo de una sesión que sigue abierta. Ver [pruneOldTempFiles]. */
+    private val STALE_AFTER_MS = TimeUnit.HOURS.toMillis(24)
+
     /**
      * Best-effort: si algo falla (sin red, la portada no está archivada y da 404...) devuelve
      * null y quien llame se queda sin portada nueva, sin romper nada — mismo patrón que
@@ -52,7 +63,7 @@ object NetworkImage {
                 check(connection.responseCode == HttpURLConnection.HTTP_OK) {
                     "Descarga de portada respondió ${connection.responseCode}"
                 }
-                val file = File.createTempFile("remote_cover_", ".jpg", context.cacheDir)
+                val file = File.createTempFile(TEMP_PREFIX, ".jpg", context.cacheDir)
                 connection.inputStream.use { input ->
                     file.outputStream().use { output -> input.copyTo(output) }
                 }
@@ -61,5 +72,22 @@ object NetworkImage {
                 connection.disconnect()
             }
         }.getOrNull()
+    }
+
+    /**
+     * Poda por tiempo de los temporales de [download] que nadie reclamó: si el usuario previsualiza
+     * una portada y cierra el editor sin guardar (o guarda, que también deja huérfano el temporal
+     * una vez importado a su ubicación final en [CoverArt.imagesDir]), el archivo se queda en
+     * [Context.cacheDir] para siempre, porque nada más lo borra. Mismo patrón que
+     * [com.untar.ultimusic.data.remote.ApiCache.pruneExpired]: la llama
+     * [com.untar.ultimusic.UltiMusicApp] una vez por arranque, en segundo plano.
+     */
+    fun pruneOldTempFiles(context: Context) {
+        runCatching {
+            val cutoff = System.currentTimeMillis() - STALE_AFTER_MS
+            context.cacheDir.listFiles { file -> file.name.startsWith(TEMP_PREFIX) }
+                ?.filter { it.lastModified() < cutoff }
+                ?.forEach { it.delete() }
+        }
     }
 }

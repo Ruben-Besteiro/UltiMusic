@@ -10,6 +10,7 @@ import com.untar.ultimusic.model.SystemTagKey
 import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SortOption
+import com.untar.ultimusic.util.TextSearch
 import com.untar.ultimusic.util.sortedByOption
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -88,6 +89,35 @@ class TagsViewModel(app: Application) : AndroidViewModel(app) {
     /** Etiquetas de UNA canción (ver `SongTagsDialogFragment`), incluidas las calculadas que cumpla
      *  ahora mismo. */
     fun tagsOfSong(songId: Long): Flow<List<TagSummary>> = repository.tagsOfSong(songId, filenamesInAnyPlaylist)
+
+    /**
+     * True si [tag] admite añadir/quitar canciones a mano: una etiqueta personalizada (`systemKey ==
+     * null`) o una predefinida de membresía real (Favoritos, Vídeo sincronizado). False para las 3
+     * calculadas ([computedKeys]), que no tienen fila en `song_tag` que insertar/borrar.
+     *
+     * La usa [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment] para decidir si
+     * enseña el botón "+" de su ficha (ver [AddSongsToTagDialogFragment]) y la X de quitar de cada
+     * fila. `tag.systemKey !in computedKeys` cubre los dos casos de golpe: `null` nunca está en un
+     * `Set<String>`, así que una personalizada ya sale `true` sin hacer falta un `||` aparte.
+     */
+    fun isEditable(tag: TagSummary): Boolean = tag.systemKey !in computedKeys
+
+    /**
+     * Canciones que TODAVÍA no tienen la etiqueta [id], filtradas por [query] (buscador de
+     * [AddSongsToTagDialogFragment]): con la caja de búsqueda vacía salen todas las que le falten.
+     * Mismo filtrado sin tildes/mayúsculas que el resto de buscadores de la app (ver [TextSearch]).
+     */
+    fun songsNotInTag(id: Long, query: Flow<String>): Flow<List<Song>> =
+        combine(repository.songs, songsOfTag(id), query) { all, tagged, rawQuery ->
+            val taggedIds = tagged.mapTo(mutableSetOf()) { it.id }
+            val normalized = TextSearch.normalize(rawQuery)
+            all.filter { it.id !in taggedIds && TextSearch.contains(it.title, normalized) }
+        }
+
+    /** Etiquetas de TODAS las canciones a la vez, indexadas por id (ver
+     *  `LibraryRepository.songTagsById`): la usa la pestaña Canciones cuando el ajuste "Ver etiquetas
+     *  en pestaña Canciones" está activo (ver `VisualPreferences`/`SongsAdapter`). */
+    val songTagsById: Flow<Map<Long, List<TagSummary>>> = repository.songTagsById(filenamesInAnyPlaylist)
 
     /** Ver `LibraryRepository.addSongToTag`/`removeSongFromTag`: solo tiene efecto para etiquetas sin
      *  calcular, la UI ya no deja llegar aquí para las 3 calculadas. */

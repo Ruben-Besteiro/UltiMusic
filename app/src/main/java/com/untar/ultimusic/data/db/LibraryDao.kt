@@ -473,6 +473,12 @@ abstract class LibraryDao {
     @Query("SELECT * FROM tags ORDER BY sortOrder")
     abstract fun observeTags(): Flow<List<TagEntity>>
 
+    /** Lectura puntual (no un [Flow]) de una etiqueta predefinida por su [SystemTagKey], para
+     *  [com.untar.ultimusic.data.LibraryRepository.syncSyncedVideoTag]: solo hace falta su id en el
+     *  momento de guardar un desplazamiento de vídeo, no seguirla en vivo. */
+    @Query("SELECT * FROM tags WHERE systemKey = :key LIMIT 1")
+    abstract suspend fun findTagBySystemKey(key: String): TagEntity?
+
     @Insert
     abstract suspend fun insertTag(tag: TagEntity): Long
 

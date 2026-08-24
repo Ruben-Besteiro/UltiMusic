@@ -232,16 +232,19 @@ private fun backfillDateAdded(db: SupportSQLiteDatabase) {
 }
 
 /**
- * Siembra las 4 etiquetas predefinidas, en el mismo orden del enunciado del feature (Favoritos,
- * Descargadas recientemente, En ninguna lista, Sin etiquetas personalizadas). Se llama tanto desde
- * [migration17To18] (quien actualiza desde v17) como desde el `Callback` de [UltiMusicDatabase]
- * (instalación nueva, que crea la tabla `tags` ya en v18 y nunca pasa por ninguna migración) — mismo
- * patrón que [seedDefaultLibraryRoots]. `INSERT OR IGNORE` sobre `systemKey` la hace segura de
- * repetir sin duplicar nada.
+ * Siembra las etiquetas predefinidas, en el mismo orden del enunciado del feature (Favoritos,
+ * Descargadas recientemente, En ninguna lista, Sin etiquetas personalizadas, Vídeo sincronizado). Se
+ * llama tanto desde [migration17To18] (quien actualiza desde v17) como desde el `Callback` de
+ * [UltiMusicDatabase] (instalación nueva, que crea la tabla `tags` ya en v18 y nunca pasa por ninguna
+ * migración) — mismo patrón que [seedDefaultLibraryRoots]. `INSERT OR IGNORE` sobre `systemKey` la
+ * hace segura de repetir sin duplicar nada.
  *
- * Hubo una 5ª fila, "Debug" (ver [SystemTagKey]), sembrada por [migration18To19] y retirada por
+ * Hubo una fila más, "Debug" (ver [SystemTagKey]), sembrada por [migration18To19] y retirada por
  * [migration19To20] en cuanto dejó de hacer falta: por eso ya no aparece aquí, aunque instalaciones
- * viejas pasaran por sembrarla.
+ * viejas pasaran por sembrarla. "Vídeo sincronizado" es la más nueva (ver [migration20To21]): a
+ * diferencia de las 3 calculadas, SÍ hace falta sembrarla aquí para una instalación nueva -usa
+ * membresía real, como Favoritos- pero no hace falta backfill ninguno, porque una instalación nueva
+ * todavía no tiene ninguna canción con desplazamiento de vídeo guardado.
  *
  * Nombres y colores salen de `strings.xml`/`colors.xml` (`R.string.tag_*_name`/`R.color.um_tag_*`),
  * NO de literales sueltos aquí: son datos que el desarrollador edita en el sitio de siempre. El
@@ -253,7 +256,8 @@ internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context) {
         Triple(SystemTagKey.FAVORITES, R.string.tag_favorites_name, R.color.um_tag_favorites),
         Triple(SystemTagKey.RECENTLY_ADDED, R.string.tag_recently_added_name, R.color.um_tag_recently_added),
         Triple(SystemTagKey.NOT_IN_PLAYLIST, R.string.tag_not_in_playlist_name, R.color.um_tag_not_in_playlist),
-        Triple(SystemTagKey.NO_CUSTOM_TAGS, R.string.tag_no_custom_tags_name, R.color.um_tag_no_custom_tags)
+        Triple(SystemTagKey.NO_CUSTOM_TAGS, R.string.tag_no_custom_tags_name, R.color.um_tag_no_custom_tags),
+        Triple(SystemTagKey.SYNCED_VIDEO, R.string.tag_synced_video_name, R.color.um_tag_synced_video)
     )
     rows.forEachIndexed { sortOrder, (systemKey, nameRes, colorRes) ->
         db.execSQL(
@@ -295,5 +299,41 @@ fun migration18To19(context: Context): Migration = object : Migration(18, 19) {
 val MIGRATION_19_20 = object : Migration(19, 20) {
     override fun migrate(db: SupportSQLiteDatabase) {
         db.execSQL("DELETE FROM tags WHERE systemKey = 'DEBUG'")
+    }
+}
+
+/**
+ * v20 → v21: sin cambio de esquema — siembra la 5ª etiqueta predefinida "Vídeo sincronizado" (ver
+ * [SystemTagKey.SYNCED_VIDEO]), que a partir de ahora [com.untar.ultimusic.data.LibraryRepository]
+ * mantiene sola en `song_tag` según [com.untar.ultimusic.model.Song.videoOffsetMs] (ver
+ * `LibraryRepository.syncSyncedVideoTag`).
+ *
+ * A diferencia de Favoritos -que nace siempre vacía, nadie tiene canciones favoritas antes de que
+ * exista el botón para marcarlas-, aquí YA puede haber canciones con un desplazamiento de vídeo
+ * distinto de 0 guardado desde antes de esta versión (el editor de metadatos y el iPod llevan tiempo
+ * dejando ajustarlo). Sin este backfill, esas canciones se quedarían sin la etiqueta hasta que
+ * alguien les tocara el desplazamiento a mano una vez más — así que, tras sembrar la fila, se rellena
+ * `song_tag` para todas las que ya cumplan la condición.
+ */
+fun migration20To21(context: Context): Migration = object : Migration(20, 21) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(
+                context.getString(R.string.tag_synced_video_name),
+                ContextCompat.getColor(context, R.color.um_tag_synced_video),
+                SystemTagKey.SYNCED_VIDEO.name,
+                4
+            )
+        )
+        db.query("SELECT id FROM tags WHERE systemKey = ?", arrayOf(SystemTagKey.SYNCED_VIDEO.name)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val tagId = cursor.getLong(0)
+                db.execSQL(
+                    "INSERT OR IGNORE INTO song_tag (songId, tagId) SELECT id, ? FROM songs WHERE videoOffsetMs != 0",
+                    arrayOf<Any>(tagId)
+                )
+            }
+        }
     }
 }

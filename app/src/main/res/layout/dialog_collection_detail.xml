@@ -38,8 +38,7 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingHorizontal="16dp"
-            android:paddingBottom="16dp"
-            android:paddingTop="4dp">
+            android:paddingVertical="8dp">
 
             <ImageView
                 android:id="@+id/collectionSummaryIcon"
@@ -71,7 +70,6 @@
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingHorizontal="16dp"
-            android:paddingBottom="12dp"
             android:visibility="gone"
             tools:visibility="visible">
 
@@ -136,6 +134,26 @@
             android:textColor="@color/um_on_surface_muted"
             android:textSize="16sp"
             android:visibility="gone" />
+
+        <!--
+          Botón "+" flotante, igual que btnCreateTag de fragment_tags.xml (mismo icono, mismo tinte
+          dinámico): siempre visible en una lista, solo en una etiqueta con membresía real (ver
+          TagsViewModel.isEditable), oculto en un género o una etiqueta calculada. Abre
+          AddSongsToPlaylistDialogFragment o AddSongsToTagDialogFragment según toque (ver
+          CollectionDetailDialogFragment.showAddSongs).
+        -->
+        <com.google.android.material.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btnAddSongs"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="bottom|end"
+            android:layout_margin="20dp"
+            android:contentDescription="@string/add_songs_desc"
+            android:src="@android:drawable/ic_input_add"
+            android:visibility="gone"
+            app:backgroundTint="@color/um_yellow"
+            app:tint="@color/um_background"
+            tools:visibility="visible" />
 
     </FrameLayout>
 

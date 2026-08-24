@@ -63,7 +63,16 @@ import java.io.File
     // Migrations.kt), ya innecesaria ahora que existen etiquetas personalizadas de verdad (ver
     // TagEditorDialogFragment). SystemTagKey.DEBUG desaparece del enum; seedDefaultTags ya no la
     // siembra para instalaciones nuevas.
-    version = 20,
+    // v21: sin cambio de esquema — siembra la 5ª etiqueta predefinida "Vídeo sincronizado"
+    // (migration20To21 en Migrations.kt, reutiliza seedDefaultTags para instalación nueva). A
+    // diferencia de "Debug", esta usa membresía real de verdad (como Favoritos): LibraryRepository
+    // la añade/quita sola de `song_tag` según Song.videoOffsetMs (ver
+    // LibraryRepository.syncSyncedVideoTag), y el usuario también puede tocarla a mano desde la
+    // ficha de la etiqueta (botón "+"/X de cada fila, ver CollectionDetailDialogFragment). La
+    // migración hace además un backfill: las canciones que ya tuvieran un desplazamiento guardado
+    // desde antes de esta versión entran en la etiqueta de una vez, sin esperar a que se les vuelva
+    // a tocar el desplazamiento.
+    version = 21,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -87,12 +96,12 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         DB_NAME
                     )
                         // MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
-                        // migration17To18, migration18To19 y MIGRATION_19_20 conservan la biblioteca
-                        // (ver Migrations.kt sobre por qué cada una se escribió a mano). Las dos de
-                        // en medio no son `val`: necesitan el `context` para sembrar las etiquetas
-                        // predefinidas (nombres/colores salen de strings.xml/colors.xml, ver
-                        // seedDefaultTags), así que se construyen aquí, donde sí hay uno a mano;
-                        // MIGRATION_19_20 vuelve a ser `val` porque solo borra una fila por
+                        // migration17To18, migration18To19, MIGRATION_19_20 y migration20To21
+                        // conservan la biblioteca (ver Migrations.kt sobre por qué cada una se
+                        // escribió a mano). Las que no son `val` necesitan el `context` para sembrar
+                        // las etiquetas predefinidas (nombres/colores salen de strings.xml/
+                        // colors.xml, ver seedDefaultTags), así que se construyen aquí, donde sí hay
+                        // uno a mano; MIGRATION_19_20 es `val` porque solo borra una fila por
                         // `systemKey`, sin leer ningún recurso. El resto de saltos de versión
                         // anteriores nunca tuvieron migración, así que para esos (y para cualquier
                         // salto futuro sin migración) sigue habiendo fallbackToDestructiveMigration:
@@ -104,7 +113,8 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             MIGRATION_16_17,
                             migration17To18(context.applicationContext),
                             migration18To19(context.applicationContext),
-                            MIGRATION_19_20
+                            MIGRATION_19_20,
+                            migration20To21(context.applicationContext)
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true)
                         // Instalación nueva: la tabla `library_roots` se crea ya en v16 (con el
@@ -112,8 +122,9 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         // sabe que es de verdad nueva, sin pasar nunca por MIGRATION_15_16 -que es
                         // quien siembra Download/Music en quien SÍ actualiza desde v15-. Lo mismo
                         // aplica a `tags` (creada ya en v18) y seedDefaultTags/migration17To18 —
-                        // instalación nueva siembra directamente las 4 etiquetas predefinidas
-                        // vigentes (sin "Debug"), sin pasar por migration18To19 ni MIGRATION_19_20.
+                        // instalación nueva siembra directamente las 5 etiquetas predefinidas
+                        // vigentes (sin "Debug"), sin pasar por migration18To19, MIGRATION_19_20 ni
+                        // migration20To21.
                         .addCallback(object : RoomDatabase.Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)

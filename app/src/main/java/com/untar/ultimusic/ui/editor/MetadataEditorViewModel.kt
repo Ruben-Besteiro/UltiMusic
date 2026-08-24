@@ -246,7 +246,8 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
             // El editor no toca las visitas de YouTube (las pone solo el refresco diario, ver
             // LibraryRepository.refreshYouTubeStatsIfDue): sin esto, cada edición de metadatos
             // las borraría de vuelta a null hasta el siguiente refresco.
-            youtubeViewCount = current.youtubeViewCount
+            youtubeViewCount = current.youtubeViewCount,
+            dateAdded = current.dateAdded
         )
 
         repository.saveSongEdits(

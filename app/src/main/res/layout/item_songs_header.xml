@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primera fila del RecyclerView de SongsFragment (ver SongsAdapter): resumen de toda la
+     fonoteca, nº de canciones + duración total, igual que collectionSummaryText en
+     dialog_collection_detail.xml. Va dentro de la lista -no como vista fija aparte- para que
+     desaparezca con el scroll en vez de quedarse flotando arriba. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical">
+
+    <TextView
+        android:id="@+id/songsSummary"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="16dp"
+        android:paddingVertical="8dp"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="15sp"
+        tools:text="119 canciones | 7:38:27" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginBottom="10dp"
+        android:background="@color/um_divider" />
+
+</LinearLayout>

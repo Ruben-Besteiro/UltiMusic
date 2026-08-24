@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Salchicha en miniatura de una etiqueta (mismo bg_tag_chip que item_tag.xml/item_tag_removable.xml,
+     color mutado en runtime, ver SongsAdapter), para la tercera línea de una fila de canción cuando el
+     ajuste "Ver etiquetas en pestaña Canciones" está activo. Sin X de quitar -aquí es solo lectura,
+     para eso está "Editar etiquetas" en el menú de 3 puntos de la fila- y a un tamaño mucho menor que
+     item_tag.xml, porque conviven varias bajo el subtítulo (ver FlowLayout, su contenedor: si no caben
+     todas en una línea, se desbordan a la siguiente en vez de recortarse).
+     layout_marginBottom es el hueco vertical que deja FlowLayout entre una fila desbordada y la
+     siguiente; en una canción con una sola línea de etiquetas es un margen inofensivo de sobra. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/tagChipMini"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="6dp"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/bg_tag_chip"
+    android:paddingHorizontal="8dp"
+    android:paddingVertical="1dp"
+    android:textColor="@color/um_on_background"
+    android:textSize="10sp"
+    tools:text="Favoritos" />

@@ -1,0 +1,147 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Pantalla completa para añadir varias canciones de golpe a UNA lista o UNA etiqueta con
+     membresía real, compartida por AddSongsToTagDialogFragment y AddSongsToPlaylistDialogFragment
+     -mismo layout, no una copia por cada una, igual que item_song.xml lo comparten SongsAdapter y
+     SearchAdapter- porque las dos pantallas son idénticas salvo el texto del título: X a la
+     izquierda cierra SIN aplicar nada, el tick a la derecha aplica lo marcado y cierra (ver cada
+     clase). Como SettingsDialogFragment/MetadataEditorDialogFragment (STYLE_NO_FRAME +
+     Theme_UltiMusic_FullScreenDialog), no un AlertDialog: la lista de canciones puede ser larga
+     (toda la biblioteca menos la que ya esté en el destino), a diferencia de dialog_tag_picker.xml
+     (unas pocas etiquetas, le basta un RecyclerView de 320dp dentro de un AlertDialog).
+
+     Debajo del título, la MISMA píldora que la barra de búsqueda de la actividad principal
+     (activity_main.xml/searchBar: lupa a la izquierda, bg_search_bar -un color más claro que el
+     fondo, sin acento- de fondo), y debajo de ESA el divisor -no encima, como en el resto de
+     pantallas a pantalla completa-, separando la cabecera de la lista de canciones que TODAVÍA no
+     están en el destino: marcar una casilla no escribe nada todavía, solo el tick de arriba aplica
+     de golpe lo marcado. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/addSongsRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:id="@+id/addSongsBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_surface"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingVertical="4dp">
+
+        <ImageButton
+            android:id="@+id/btnCloseAddSongs"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/add_songs_close_desc"
+            android:src="@drawable/ic_close"
+            app:tint="@color/um_on_background" />
+
+        <TextView
+            android:id="@+id/addSongsTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginHorizontal="8dp"
+            android:layout_weight="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Añadir etiqueta «Favoritos» a canciones" />
+
+        <ImageButton
+            android:id="@+id/btnConfirmAddSongs"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/add_songs_confirm_desc"
+            android:src="@drawable/ic_check"
+            app:tint="@color/um_on_background" />
+
+    </LinearLayout>
+
+    <!-- Misma píldora que searchBar de activity_main.xml: lupa a la izquierda dentro del propio
+         fondo (no un icono suelto al lado) + campo de texto, sin botón de borrar -aquí no hace
+         falta, la lista entera es "todas menos las del destino" y no hay nada que colapsar al
+         vaciar la caja-. -->
+    <LinearLayout
+        android:id="@+id/addSongsSearchBar"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginHorizontal="16dp"
+        android:background="@drawable/bg_search_bar"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="8dp"
+        android:paddingEnd="14dp">
+
+        <ImageView
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@null"
+            android:padding="6dp"
+            android:src="@drawable/ic_search"
+            app:tint="@color/um_on_surface_muted" />
+
+        <EditText
+            android:id="@+id/addSongsSearchInput"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_weight="1"
+            android:background="@null"
+            android:gravity="center_vertical"
+            android:hint="@string/add_songs_search_hint"
+            android:imeOptions="actionSearch"
+            android:importantForAutofill="no"
+            android:includeFontPadding="false"
+            android:inputType="text"
+            android:maxLines="1"
+            android:paddingTop="0dp"
+            android:paddingBottom="0dp"
+            android:textColor="@color/um_on_background"
+            android:textColorHint="@color/um_on_surface_muted"
+            android:textSize="15sp" />
+
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/addSongsList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:scrollbars="none"
+            tools:listitem="@layout/item_song_checkbox" />
+
+        <TextView
+            android:id="@+id/addSongsEmpty"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:layout_margin="24dp"
+            android:gravity="center"
+            android:text="@string/add_songs_empty"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="16sp"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+</LinearLayout>

@@ -8,14 +8,18 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
+import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.TagSummary
+import com.untar.ultimusic.ui.common.FlowLayout
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.bindSongSubtitle
 
 /**
@@ -31,6 +35,15 @@ import com.untar.ultimusic.util.bindSongSubtitle
  * alterna su marca en vez de reproducir; ver [SongsFragment]). Se pinta con un velo y un check
  * sobre la carátula (ver item_song.xml), tiñendo el círculo del check con el acento dinámico como
  * manda el proyecto para todo lo amarillo (ver [AccentTint]).
+ *
+ * [setTags] añade una tercera línea opcional con las etiquetas de cada canción en miniatura, solo
+ * si el ajuste "Ver etiquetas en pestaña Canciones" está activo (ver
+ * [com.untar.ultimusic.data.VisualPreferences]).
+ *
+ * La fila 0 es siempre la cabecera de resumen (ver [setSummary] e item_songs_header.xml): va
+ * dentro de la lista -no como vista fija en fragment_songs.xml- para que haga scroll con el resto
+ * en vez de quedarse flotando arriba. El resto de posiciones son canciones, desplazadas 1 respecto
+ * a [songs].
  */
 class SongsAdapter(
     private val onSongClick: (Song) -> Unit,
@@ -42,7 +55,12 @@ class SongsAdapter(
     private val onDeleteSong: (Song) -> Unit,
     private val onGoToAlbum: (Song) -> Unit,
     private val onGoToArtist: (Song) -> Unit
-) : RecyclerView.Adapter<SongsAdapter.SongViewHolder>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    companion object {
+        private const val VIEW_TYPE_HEADER = 0
+        private const val VIEW_TYPE_SONG = 1
+    }
 
     private var songs: List<Song> = emptyList()
 
@@ -51,9 +69,33 @@ class SongsAdapter(
 
     private var accentColor: Int = 0xFFFFD000.toInt()
 
+    /** Ver [setTags]: si mostrar la tercera línea de etiquetas y de dónde sacar las de cada canción. */
+    private var showTags: Boolean = false
+    private var tagsById: Map<Long, List<TagSummary>> = emptyMap()
+
+    private var summaryText: String = ""
+
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>) {
         songs = list
+        notifyDataSetChanged()
+    }
+
+    /** Texto de la fila 0 (nº de canciones + duración total), ver SongsFragment. */
+    fun setSummary(text: String) {
+        if (summaryText == text) return
+        summaryText = text
+        notifyItemChanged(0)
+    }
+
+    /** Ajuste "Ver etiquetas en pestaña Canciones" (ver [com.untar.ultimusic.data.VisualPreferences]):
+     *  [show] decide si se pinta la tercera línea, [byId] trae las etiquetas de TODA la biblioteca de
+     *  golpe (ver `LibraryRepository.songTagsById`), indexadas por id de canción. */
+    @SuppressLint("NotifyDataSetChanged")
+    fun setTags(show: Boolean, byId: Map<Long, List<TagSummary>>) {
+        if (showTags == show && tagsById == byId) return
+        showTags = show
+        tagsById = byId
         notifyDataSetChanged()
     }
 
@@ -71,22 +113,42 @@ class SongsAdapter(
         if (selectedIds.isNotEmpty()) notifyDataSetChanged()
     }
 
-    override fun getItemCount(): Int = songs.size
+    // +1 por la cabecera de resumen, que va siempre en la posición 0 (ver comentario de la clase).
+    override fun getItemCount(): Int = songs.size + 1
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {
+    override fun getItemViewType(position: Int): Int =
+        if (position == 0) VIEW_TYPE_HEADER else VIEW_TYPE_SONG
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
-        return SongViewHolder(inflater.inflate(R.layout.item_song, parent, false))
+        return if (viewType == VIEW_TYPE_HEADER) {
+            HeaderViewHolder(inflater.inflate(R.layout.item_songs_header, parent, false))
+        } else {
+            SongViewHolder(inflater.inflate(R.layout.item_song, parent, false))
+        }
     }
 
-    override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
-        val song = songs[position]
-        holder.bind(
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        if (holder is HeaderViewHolder) {
+            holder.bind(summaryText)
+            return
+        }
+        val song = songs[position - 1]
+        (holder as SongViewHolder).bind(
             song,
             selected = song.id in selectedIds,
             accentColor = accentColor,
+            tags = if (showTags) tagsById[song.id].orEmpty() else emptyList(),
             onSongClick, onSongLongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags,
             onDeleteSong, onGoToAlbum, onGoToArtist
         )
+    }
+
+    class HeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val summary: TextView = itemView.findViewById(R.id.songsSummary)
+        fun bind(text: String) {
+            summary.text = text
+        }
     }
 
     class SongViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
@@ -98,12 +160,14 @@ class SongsAdapter(
         private val subtitleRest: TextView = itemView.findViewById(R.id.songSubtitleRest)
         private val youtubeIcon: ImageView = itemView.findViewById(R.id.songYoutubeIcon)
         private val youtubeViews: TextView = itemView.findViewById(R.id.songYoutubeViews)
+        private val tagsContainer: FlowLayout = itemView.findViewById(R.id.songTagsContainer)
         private val more: ImageButton = itemView.findViewById(R.id.btnSongMore)
 
         fun bind(
             song: Song,
             selected: Boolean,
             accentColor: Int,
+            tags: List<TagSummary>,
             onSongClick: (Song) -> Unit,
             onSongLongClick: (Song) -> Unit,
             onAddToQueue: (Song) -> Unit,
@@ -116,6 +180,7 @@ class SongsAdapter(
         ) {
             title.text = song.title
             bindSongSubtitle(song, subtitleArtist, subtitleRest, youtubeIcon, youtubeViews)
+            bindTags(tags)
 
             val loader = CoverLoader.get(itemView.context)
             cover.load(CoverArt.cover(itemView.context, song), loader)
@@ -148,6 +213,27 @@ class SongsAdapter(
                     }
                     show()
                 }
+            }
+        }
+
+        /** Tercera línea opcional de la fila (ver item_song.xml/setTags): una "salchicha" en
+         *  miniatura por etiqueta (item_tag_chip_mini.xml) dentro de un [FlowLayout] que las
+         *  desborda a una línea nueva en vez de recortarlas si no caben todas, reinflada en cada bind
+         *  porque el número de etiquetas cambia de una canción a otra. Oculta entera si [tags] llega
+         *  vacía -ajuste desactivado, o canción sin ninguna-. */
+        private fun bindTags(tags: List<TagSummary>) {
+            tagsContainer.isVisible = tags.isNotEmpty()
+            tagsContainer.removeAllViews()
+            if (tags.isEmpty()) return
+            val inflater = LayoutInflater.from(itemView.context)
+            for (tag in tags) {
+                val chip = inflater.inflate(R.layout.item_tag_chip_mini, tagsContainer, false) as TextView
+                chip.text = tag.name
+                // Colores FIJOS por etiqueta, no el acento dinámico: igual que en TagsAdapter, cada
+                // etiqueta tiene su propio color de verdad, no le aplica la regla de amarillo dinámico.
+                AccentTint.fill(chip, R.id.tagChipMini, DynamicColor.dim(tag.colorArgb))
+                AccentTint.stroke(chip, R.id.tagChipMini, tag.colorArgb, R.dimen.tag_chip_stroke_width)
+                tagsContainer.addView(chip)
             }
         }
     }

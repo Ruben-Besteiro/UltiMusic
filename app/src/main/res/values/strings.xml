@@ -356,14 +356,17 @@
     <string name="playlist_current_position">Posición actual: %1$s</string>
     <string name="playlist_resume">REANUDAR</string>
 
-    <!-- Etiquetas: nombre de las 4 predefinidas del sistema (ver Migrations.kt.seedDefaultTags).
+    <!-- Etiquetas: nombre de las predefinidas del sistema (ver Migrations.kt.seedDefaultTags).
          Fuente de verdad de estos textos: se leen en la migración/onCreate vía context.getString y
-         se guardan tal cual en TagEntity.name, no se recalculan en tiempo de ejecución. Hubo una 5ª,
+         se guardan tal cual en TagEntity.name, no se recalculan en tiempo de ejecución. Hubo una,
          "Debug", retirada en MIGRATION_19_20 en cuanto dejó de hacer falta. -->
     <string name="tag_favorites_name">Favoritos</string>
-    <string name="tag_recently_added_name">Canciones descargadas recientemente</string>
+    <string name="tag_recently_added_name">Descargada recientemente</string>
     <string name="tag_not_in_playlist_name">En ninguna lista</string>
     <string name="tag_no_custom_tags_name">Sin etiquetas personalizadas</string>
+    <!-- Membresía real como Favoritos, pero LibraryRepository.syncSyncedVideoTag la mantiene sola en
+         cuanto Song.videoOffsetMs deja de ser 0 (ver SystemTagKey.SYNCED_VIDEO). -->
+    <string name="tag_synced_video_name">Vídeo sincronizado</string>
 
     <!-- Diálogo de etiquetas de una canción (SongTagsDialogFragment/TagPickerDialogFragment). El
          "_multi" es para la edición múltiple (selección de varias canciones, ver
@@ -377,6 +380,28 @@
     <string name="remove_tag">Quitar etiqueta</string>
     <string name="tag_picker_title">Añadir etiqueta</string>
     <string name="tag_picker_search_hint">Buscar etiquetas</string>
+
+    <!-- Ficha de una lista o una etiqueta (CollectionDetailDialogFragment/CollectionSongsAdapter):
+         botón "+" flotante -en una lista, siempre; en una etiqueta, solo si tiene membresía real, ver
+         TagsViewModel.isEditable- que abre AddSongsToPlaylistDialogFragment/AddSongsToTagDialogFragment,
+         y la X de cada fila -en las dos, nunca en un género- para quitar esa canción del destino. El
+         texto de la X cambia según de cuál se trate (ver CollectionDetailDialogFragment.showAddSongs
+         y el `when` que llama a CollectionSongsAdapter.setRemovable). -->
+    <string name="add_songs_desc">Añadir canciones</string>
+    <string name="remove_song_from_tag_desc">Quitar de la etiqueta</string>
+    <string name="remove_song_from_playlist_desc">Quitar de la lista</string>
+
+    <!-- dialog_add_songs.xml, compartido por AddSongsToTagDialogFragment y
+         AddSongsToPlaylistDialogFragment (ver el comentario del layout): buscador de canciones que
+         TODAVÍA no están en el destino, para añadirlas de golpe. La X de arriba cierra sin aplicar
+         nada; el check aplica lo marcado y cierra (ver cada clase). El título SÍ es distinto según el
+         destino (etiqueta o lista), cada fragmento usa el suyo. -->
+    <string name="add_songs_to_tag_title">Añadir etiqueta «%1$s» a canciones</string>
+    <string name="add_songs_to_playlist_title">Añadir canciones a «%1$s»</string>
+    <string name="add_songs_close_desc">Cerrar sin añadir canciones</string>
+    <string name="add_songs_confirm_desc">Añadir las canciones marcadas</string>
+    <string name="add_songs_search_hint">Buscar canciones</string>
+    <string name="add_songs_empty">No hay canciones que añadir</string>
 
     <!-- Crear/editar/borrar una etiqueta personalizada (TagEditorDialogFragment, botón "+" y menú
          de 3 puntos de TagsFragment/TagsAdapter). "Eliminar" se reutiliza de playlist_delete: es un
@@ -402,6 +427,7 @@
     <string name="settings_back">Cerrar los ajustes</string>
     <string name="settings_audio_section_title">Ajustes auditivos</string>
     <string name="settings_visual_section_title">Ajustes visuales</string>
+    <string name="settings_show_song_tags">Ver etiquetas en pestaña Canciones</string>
     <string name="settings_boost_title">Amplificador de volumen</string>
     <string name="settings_boost_subtitle">Untar Technologies no se hace legalmente responsable de cualquier pérdida auditiva causada por su uso</string>
     <string name="settings_boost_no_limit">Desactivar límite</string>

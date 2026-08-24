@@ -41,6 +41,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.VisualPreferences
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
@@ -61,9 +62,9 @@ import kotlinx.coroutines.launch
 /**
  * Pantalla de ajustes, la del engranaje de la barra superior. Está dividida en tres grupos, uno
  * detrás de otro: **ajustes auditivos** (el **amplificador de volumen** y el **ecualizador**),
- * **ajustes visuales** (las **carpetas de la fonoteca** y la **lista gris** de subcarpetas) y
- * **servicios externos** (el token de **Genius** y la clave de la **YouTube Data API**, ver el
- * bloque de más abajo).
+ * **ajustes visuales** (la casilla de **etiquetas en la pestaña Canciones**, las **carpetas de la
+ * fonoteca** y la **lista gris** de subcarpetas) y **servicios externos** (el token de **Genius** y
+ * la clave de la **YouTube Data API**, ver el bloque de más abajo).
  *
  * Es un [DialogFragment] a pantalla completa, como el buscador o el editor de metadatos: se abre
  * encima de la principal sin cambiar de Activity, así que la música no se corta y el botón "atrás"
@@ -125,6 +126,7 @@ class SettingsDialogFragment : DialogFragment() {
 
     private lateinit var audioSectionTitle: TextView
     private lateinit var visualSectionTitle: TextView
+    private lateinit var showSongTagsCheck: MaterialCheckBox
     private lateinit var boostTitle: TextView
     private lateinit var slider: Slider
     private lateinit var ruler: ValueRuler
@@ -193,6 +195,10 @@ class SettingsDialogFragment : DialogFragment() {
     /** Misma bandera que [updatingUi] pero para los controles del ecualizador, independiente de ella. */
     private var updatingEqUi = false
 
+    /** Misma idea que [updatingUi] pero para [showSongTagsCheck]: evita que repintar la casilla desde
+     *  [VisualPreferences.showSongTags] dispare a su vez su propio listener. */
+    private var updatingVisualUi = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
@@ -216,6 +222,7 @@ class SettingsDialogFragment : DialogFragment() {
         val toolbar = view.findViewById<MaterialToolbar>(R.id.settingsToolbar)
         audioSectionTitle = view.findViewById(R.id.audioSectionTitle)
         visualSectionTitle = view.findViewById(R.id.visualSectionTitle)
+        showSongTagsCheck = view.findViewById(R.id.showSongTagsCheck)
         boostTitle = view.findViewById(R.id.boostTitle)
         slider = view.findViewById(R.id.boostSlider)
         ruler = view.findViewById(R.id.boostRuler)
@@ -273,12 +280,23 @@ class SettingsDialogFragment : DialogFragment() {
         // llega nunca por accidente (ver la cabecera de ValueRuler).
         ruler.maxValue = BOOST_MAX_PERCENT
 
+        setupVisualPreferences()
         setupBoostControls()
         setupLibraryRoots(libraryRootsRecycler, addLibraryRootButton)
         setupGreylist(greylistRecycler, addGreylistFolderButton)
         setupEqualizer(eqBandsContainer)
         setupServices()
         observeState()
+    }
+
+    /** Casilla "Ver etiquetas en pestaña Canciones" (ver [VisualPreferences]): sin confirmación ni
+     *  rechazo posible -a diferencia de [noLimitCheck]-, así que basta con `setOnCheckedChangeListener`
+     *  directo, igual que [additionalOptionsCheck]. */
+    private fun setupVisualPreferences() {
+        showSongTagsCheck.setOnCheckedChangeListener { _, checked ->
+            if (updatingVisualUi) return@setOnCheckedChangeListener
+            VisualPreferences.setShowSongTags(checked)
+        }
     }
 
     /**
@@ -775,6 +793,13 @@ class SettingsDialogFragment : DialogFragment() {
                     playerViewModel.volumeBoost.collect { percent -> showValue(percent) }
                 }
                 launch {
+                    VisualPreferences.showSongTags.collect { enabled ->
+                        updatingVisualUi = true
+                        showSongTagsCheck.isChecked = enabled
+                        updatingVisualUi = false
+                    }
+                }
+                launch {
                     settingsViewModel.libraryRoots.collect { roots -> libraryRootAdapter.submit(roots) }
                 }
                 launch {
@@ -869,6 +894,7 @@ class SettingsDialogFragment : DialogFragment() {
                         val tint = ColorStateList.valueOf(accent)
                         audioSectionTitle.setTextColor(accent)
                         visualSectionTitle.setTextColor(accent)
+                        showSongTagsCheck.buttonTintList = tint
                         boostTitle.setTextColor(accent)
                         slider.trackActiveTintList = tint
                         slider.thumbTintList = tint

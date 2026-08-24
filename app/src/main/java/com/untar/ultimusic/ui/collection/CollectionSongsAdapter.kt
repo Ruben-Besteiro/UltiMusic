@@ -9,6 +9,7 @@ import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
+import androidx.annotation.StringRes
 import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
@@ -21,12 +22,19 @@ import com.untar.ultimusic.util.bindSongSubtitle
 import java.util.Collections
 
 /**
- * Lista de canciones de la ficha de una lista o un género (ver [CollectionDetailDialogFragment]):
- * misma fila que la pestaña Canciones (portada + "Título" + subtítulo de dos líneas con visitas de
- * YouTube, ver [bindSongSubtitle]), pero con [onSongClick] avisando de la POSICIÓN en vez de la
- * canción —hace falta para arrancar la
+ * Lista de canciones de la ficha de una lista, un género o una etiqueta (ver
+ * [CollectionDetailDialogFragment]): misma fila que la pestaña Canciones (portada + "Título" +
+ * subtítulo de dos líneas con visitas de YouTube, ver [bindSongSubtitle]), pero con [onSongClick]
+ * avisando de la POSICIÓN en vez de la canción —hace falta para arrancar la
  * reproducción de la colección justo por ahí, ver [com.untar.ultimusic.ui.PlayerViewModel.playCollection]—
  * y, en una lista, un manejador de arrastre para reordenar (ver [reorderable]).
+ *
+ * [setRemovable] enseña/oculta la X de cada fila (a la izquierda del menú de 3 puntos, ver
+ * item_collection_song.xml) que quita esa canción del destino que se esté mirando -una lista,
+ * siempre; una etiqueta, solo si tiene membresía real, ver [TagsViewModel.isEditable][com.untar.ultimusic.ui.library.TagsViewModel.isEditable]-,
+ * nunca en un género. [onRemove] hace la quita de verdad y [setRemovable] decide además QUÉ dice
+ * ([removeDescRes]: "Quitar de la lista" o "Quitar de la etiqueta"), porque
+ * [CollectionDetailDialogFragment] es quien sabe cuál de las dos se está mirando.
  */
 class CollectionSongsAdapter(
     private val reorderable: Boolean,
@@ -39,15 +47,33 @@ class CollectionSongsAdapter(
     private val onEditTags: (Song) -> Unit,
     private val onDeleteSong: (Song) -> Unit,
     private val onGoToAlbum: (Song) -> Unit,
-    private val onGoToArtist: (Song) -> Unit
+    private val onGoToArtist: (Song) -> Unit,
+    private val onRemove: (Song) -> Unit
 ) : RecyclerView.Adapter<CollectionSongsAdapter.SongViewHolder>() {
 
     private val songs: MutableList<Song> = mutableListOf()
+
+    /** Ver [setRemovable]. */
+    private var removable: Boolean = false
+
+    @StringRes
+    private var removeDescRes: Int = R.string.remove_song_from_tag_desc
 
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>) {
         songs.clear()
         songs.addAll(list)
+        notifyDataSetChanged()
+    }
+
+    /** [removable] enseña/oculta la X de cada fila; [descRes] es lo que lee un lector de pantalla al
+     *  enfocarla ("Quitar de la lista" o "Quitar de la etiqueta", ver [R.string.remove_song_from_playlist_desc]/
+     *  [R.string.remove_song_from_tag_desc]) — sin efecto mientras [removable] sea `false`. */
+    @SuppressLint("NotifyDataSetChanged")
+    fun setRemovable(removable: Boolean, @StringRes descRes: Int = this.removeDescRes) {
+        if (this.removable == removable && this.removeDescRes == descRes) return
+        this.removable = removable
+        this.removeDescRes = descRes
         notifyDataSetChanged()
     }
 
@@ -71,9 +97,9 @@ class CollectionSongsAdapter(
 
     override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
         holder.bind(
-            songs[position], reorderable,
+            songs[position], reorderable, removable, removeDescRes,
             onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags, onDeleteSong,
-            onGoToAlbum, onGoToArtist
+            onGoToAlbum, onGoToArtist, onRemove
         )
     }
 
@@ -88,12 +114,15 @@ class CollectionSongsAdapter(
         private val subtitleRest: TextView = itemView.findViewById(R.id.songSubtitleRest)
         private val youtubeIcon: ImageView = itemView.findViewById(R.id.songYoutubeIcon)
         private val youtubeViews: TextView = itemView.findViewById(R.id.songYoutubeViews)
+        private val removeButton: ImageButton = itemView.findViewById(R.id.btnRemoveSong)
         private val more: ImageButton = itemView.findViewById(R.id.btnSongMore)
 
         @SuppressLint("ClickableViewAccessibility")
         fun bind(
             song: Song,
             reorderable: Boolean,
+            removable: Boolean,
+            @StringRes removeDescRes: Int,
             onSongClick: (Int) -> Unit,
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
@@ -101,7 +130,8 @@ class CollectionSongsAdapter(
             onEditTags: (Song) -> Unit,
             onDeleteSong: (Song) -> Unit,
             onGoToAlbum: (Song) -> Unit,
-            onGoToArtist: (Song) -> Unit
+            onGoToArtist: (Song) -> Unit,
+            onRemove: (Song) -> Unit
         ) {
             title.text = song.title
             bindSongSubtitle(song, subtitleArtist, subtitleRest, youtubeIcon, youtubeViews)
@@ -114,6 +144,10 @@ class CollectionSongsAdapter(
                 if (reorderable && event.actionMasked == MotionEvent.ACTION_DOWN) onStartDrag(this)
                 false
             }
+
+            removeButton.isVisible = removable
+            removeButton.contentDescription = itemView.context.getString(removeDescRes)
+            removeButton.setOnClickListener { onRemove(song) }
 
             itemView.setOnClickListener { onSongClick(bindingAdapterPosition) }
             more.setOnClickListener { anchor ->
