@@ -34,6 +34,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.MiniPlayerController
@@ -43,6 +44,7 @@ import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.AddSongsToTagDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.library.SongTagsDialogFragment
+import com.untar.ultimusic.ui.library.TagEditorDialogFragment
 import com.untar.ultimusic.ui.library.TagsViewModel
 import com.untar.ultimusic.ui.playlists.AddSongsToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
@@ -78,6 +80,11 @@ class CollectionDetailDialogFragment : DialogFragment() {
     private val playerViewModel: PlayerViewModel by activityViewModels()
     private val playlistsViewModel: PlaylistsViewModel by activityViewModels()
     private val tagsViewModel: TagsViewModel by activityViewModels()
+
+    /** Etiqueta PERSONALIZADA que se está mirando ahora mismo, si la hay (ver el `launch` de
+     *  `tagsViewModel.tags` en `onViewCreated`): la usa `showTagMenu` para editar/borrar sin tener
+     *  que volver a resolverla al pulsar el botón de 3 puntos. */
+    private var currentEditableTag: TagSummary? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -228,10 +235,13 @@ class CollectionDetailDialogFragment : DialogFragment() {
         toolbar.setNavigationOnClickListener { dismiss() }
         btnAddSongs.setOnClickListener { showAddSongs() }
         toolbar.inflateMenu(R.menu.menu_collection_detail)
-        // El menú de 3 puntos solo sigue teniendo sentido para un Género: renombrar/borrar una Lista
-        // o una Etiqueta vive ahora en el menú de 3 puntos de su propia fila (PlaylistsAdapter /
-        // TagsAdapter), y "añadir a la cola"/"añadir a lista" de toda la colección ya no se ofrece
-        // ahí para esos dos casos (ver showCollectionMenu).
+        // El menú de 3 puntos tiene contenido distinto según de qué ficha se trate: para un Género
+        // sigue siendo "añadir a la cola"/"añadir a lista" de toda la colección
+        // (menu_collection_actions.xml, ver showCollectionMenu); para una Lista no ofrece nada aquí
+        // (renombrar/borrar vive en el menú de 3 puntos de su propia fila, ver PlaylistsAdapter) así
+        // que se queda oculto; para una Etiqueta PERSONALIZADA reaparece con editar/borrar
+        // (menu_tag_item.xml, ver showTagMenu/currentEditableTag más abajo) — la misma acción que ya
+        // ofrece su fila en TagsAdapter, para no obligar a salir de la ficha para poder tocarla.
         toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible =
             viewModel.currentKind == CollectionKind.GENRE
         toolbar.setOnMenuItemClickListener { item ->
@@ -240,7 +250,14 @@ class CollectionDetailDialogFragment : DialogFragment() {
                     playerViewModel.shuffleCollection(adapter.currentSongs(), viewModel.currentKey, viewModel.currentKind)
                     true
                 }
-                R.id.action_collection_menu -> { showCollectionMenu(toolbar, adapter); true }
+                R.id.action_collection_menu -> {
+                    if (viewModel.currentKind == CollectionKind.TAG) {
+                        currentEditableTag?.let { showTagMenu(toolbar, it) }
+                    } else {
+                        showCollectionMenu(toolbar, adapter)
+                    }
+                    true
+                }
                 else -> false
             }
         }
@@ -255,8 +272,8 @@ class CollectionDetailDialogFragment : DialogFragment() {
                 }
                 // Botón "+" y X de cada fila: en una LISTA los dos se enseñan siempre (a cualquiera
                 // se le puede añadir/quitar una canción). En una ETIQUETA solo con membresía real
-                // (ver TagsViewModel.isEditable) -Favoritos, Vídeo sincronizado o una personalizada-,
-                // nunca en las 3 calculadas. En un GÉNERO ninguno de los dos llega a mostrarse
+                // (ver TagsViewModel.isEditable) -Favoritos, Vídeo sincronizado, Remix / Cover o una
+                // personalizada-, nunca en las 3 calculadas. En un GÉNERO ninguno de los dos llega a mostrarse
                 // (deriva solo de los metadatos, no se puede tocar a mano).
                 when (viewModel.currentKind) {
                     CollectionKind.LISTA -> {
@@ -272,6 +289,13 @@ class CollectionDetailDialogFragment : DialogFragment() {
                             val editable = tag != null && tagsViewModel.isEditable(tag)
                             btnAddSongs.isVisible = editable
                             adapter.setRemovable(editable, R.string.remove_song_from_tag_desc)
+                            // Editar/eliminar (menú de 3 puntos de la cabecera) solo para una
+                            // PERSONALIZADA, mismo criterio que TagsAdapter.isCustom: las predefinidas
+                            // (incluida Favoritos, que sí es `editable`) no se pueden renombrar ni
+                            // borrar.
+                            val isCustom = tag != null && tag.systemKey == null && !tag.isAutoAssigned
+                            currentEditableTag = if (isCustom) tag else null
+                            toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible = isCustom
                         }
                     }
                     else -> Unit
@@ -386,6 +410,43 @@ class CollectionDetailDialogFragment : DialogFragment() {
             }
             show()
         }
+    }
+
+    /** Menú de 3 puntos de la cabecera cuando la ficha es de una etiqueta PERSONALIZADA (ver el
+     *  `launch` de `tagsViewModel.tags` en `onViewCreated`, que solo lo deja visible entonces):
+     *  editar/borrar, mismo contenido y mismos destinos que el de su fila en TagsAdapter, para poder
+     *  tocarla sin tener que salir de la ficha y volver a la pestaña Etiquetas. */
+    private fun showTagMenu(toolbar: MaterialToolbar, tag: TagSummary) {
+        val anchor = toolbar.findViewById<View>(R.id.action_collection_menu) ?: toolbar
+        PopupMenu(requireContext(), anchor).apply {
+            menuInflater.inflate(R.menu.menu_tag_item, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_edit_tag -> {
+                        TagEditorDialogFragment.newEdit(tag).show(parentFragmentManager, TagEditorDialogFragment.TAG)
+                        true
+                    }
+                    R.id.action_delete_tag -> { showDeleteTagDialog(tag); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    /** Confirmación antes de borrar; misma redacción que `TagsFragment.showDeleteTagDialog`. A
+     *  diferencia de esa, borrar aquí cierra también la ficha (ya no queda nada que mostrar). */
+    private fun showDeleteTagDialog(tag: TagSummary) {
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.playlist_delete)
+            .setMessage(TextUtils.expandTemplate(resources.getText(R.string.tag_delete_confirm), tag.name))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.playlist_delete) { _, _ ->
+                tagsViewModel.deleteTag(tag.id)
+                dismiss()
+            }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
     /** Abre el diálogo de "añadir canciones de golpe" que toque según [CollectionKind.currentKind]:

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Grupo de álbum ADICIONAL para el editor de metadatos: se infla dinámicamente al tocar
+  "+ Añadir otro álbum" (ver MetadataEditorDialogFragment.addAlbumGroup), o al reabrir una canción
+  que ya estuviera en más de un álbum. Mismos tres campos que el primer álbum (fijo, con ids
+  inputAlbum/inputDiscNumber/inputTrackNumber, en dialog_metadata_editor.xml), más una papelera
+  para quitar el grupo entero.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="8dp"
+    android:orientation="vertical">
+
+    <!-- FrameLayout para clavar la papelera en la esquina de ARRIBA, igual que btnClearLyrics/
+         btnClearVideoUrl en dialog_metadata_editor.xml. -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/groupLayoutAlbum"
+            style="@style/Widget.UltiMusic.TextField.Dropdown"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="@string/field_albums">
+
+            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                android:id="@+id/groupInputAlbum"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:imeOptions="actionNext"
+                android:inputType="textCapWords"
+                android:maxLines="1"
+                android:textSize="18sp" />
+        </com.google.android.material.textfield.TextInputLayout>
+
+        <ImageButton
+            android:id="@+id/btnRemoveAlbumGroup"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:layout_gravity="top|end"
+            android:layout_marginTop="8dp"
+            android:layout_marginEnd="4dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:contentDescription="@string/editor_remove_album"
+            android:padding="4dp"
+            android:src="@drawable/ic_delete"
+            android:tint="@color/um_on_surface_muted" />
+    </FrameLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/groupLayoutDiscNumber"
+        style="@style/Widget.UltiMusic.TextField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/field_disc_number">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/groupInputDiscNumber"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/groupLayoutTrackNumber"
+        style="@style/Widget.UltiMusic.TextField"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="@string/field_track_number">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/groupInputTrackNumber"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:maxLines="1" />
+    </com.google.android.material.textfield.TextInputLayout>
+</LinearLayout>

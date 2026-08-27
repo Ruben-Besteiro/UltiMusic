@@ -45,6 +45,7 @@ import com.untar.ultimusic.model.Album
 import com.untar.ultimusic.model.Artist
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.SongAlbumEntry
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
@@ -260,16 +261,20 @@ class MainActivity : AppCompatActivity() {
     /**
      * Al pasar a segundo plano, exportamos una copia visible de la base de datos a
      * ~/UltiMusic/databases (best-effort, prioridad baja). El scope de la app garantiza que
-     * termine aunque la Activity se destruya. También detenemos el monitor de cambios del
-     * filesystem y guardamos qué estaba sonando: si Android mata el proceso mientras la app está
-     * en segundo plano (frecuente pasado un rato), sin esto `PlayerViewModel` se recrearía en
-     * blanco y la app "olvidaría" la canción, aunque la base de datos siga intacta.
+     * termine aunque la Activity se destruya. También retiramos nuestro interés en el monitor de
+     * cambios del filesystem (ver el recuento de referencias en
+     * [LibraryRepository.startWatchingLibraryChanges]) y guardamos qué estaba sonando: si Android
+     * mata el proceso mientras la app está en segundo plano (frecuente pasado un rato), sin esto
+     * `PlayerViewModel` se recrearía en blanco y la app "olvidaría" la canción, aunque la base de
+     * datos siga intacta. El monitor en sí puede seguir vivo pese a esto: si hay una sesión de
+     * reproducción activa, [com.untar.ultimusic.playback.PlaybackService] también lo tiene pedido, y
+     * no se para hasta que él también lo suelte.
      */
     override fun onStop() {
         super.onStop()
         playerViewModel.savePlaybackState()
         val repository = LibraryRepository.get(this)
-        repository.stopWatchingLibraryChanges()
+        repository.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.ACTIVITY)
         appScope.launch { repository.exportDatabaseCopy() }
     }
 
@@ -641,7 +646,7 @@ class MainActivity : AppCompatActivity() {
     private fun loadIfPermitted() {
         if (hasStoragePermission()) {
             songsViewModel.loadIfNeeded()
-            LibraryRepository.get(this).startWatchingLibraryChanges()
+            LibraryRepository.get(this).startWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.ACTIVITY)
         } else if (!permissionDialogPending) {
             Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
         }
@@ -726,7 +731,15 @@ class MainActivity : AppCompatActivity() {
         filePath = filePath,
         title = title,
         artists = artist?.let { listOf(Artist(name = it, imageName = null)) } ?: emptyList(),
-        album = album?.let { Album(title = it, artists = emptyList(), year = year, genres = genres, imageName = null) },
+        albums = album?.let {
+            listOf(
+                SongAlbumEntry(
+                    album = Album(title = it, artists = emptyList(), year = year, genres = genres, imageName = null),
+                    trackNumber = trackNumber,
+                    discNumber = discNumber
+                )
+            )
+        } ?: emptyList(),
         producers = producer?.let { listOf(Producer(name = it, imageName = null)) } ?: emptyList(),
         duration = duration,
         year = year,
@@ -739,11 +752,8 @@ class MainActivity : AppCompatActivity() {
         videoThumbnailName = null,
         videoOffsetMs = 0L,
         lyricsOffsetMs = 0L,
-        trackNumber = trackNumber,
-        discNumber = discNumber,
         ogTitle = null,
         ogArtist = null,
-        ogAlbum = null,
         ogYear = null,
         youtubeViewCount = null
     )

@@ -39,13 +39,16 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
+import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.editor.AlbumEditorDialogFragment
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
+import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.LibraryTab
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
@@ -67,6 +70,7 @@ class DetailDialogFragment : DialogFragment() {
 
     private val viewModel: DetailViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
+    private val songsViewModel: SongsViewModel by activityViewModels()
 
     /** Color de fondo actual de la cabecera; se guarda para reteñir sus líneas al recrearlas. */
     private var currentHeaderColor: Int = Color.BLACK
@@ -79,6 +83,10 @@ class DetailDialogFragment : DialogFragment() {
             DetailKind.valueOf(args.getString(ARG_KIND)!!),
             args.getLong(ARG_ID)
         )
+        // Ver DetailViewModel.bindSongsSort: el ojo de esta ficha (solo para un artista) comparte
+        // criterio con la pestaña Canciones, así que se apunta al SongsViewModel COMPARTIDO de la
+        // actividad, no a uno propio de esta ficha.
+        viewModel.bindSongsSort { songsViewModel.sort }
     }
 
     override fun onCreateView(
@@ -123,6 +131,7 @@ class DetailDialogFragment : DialogFragment() {
         val adapter = DetailSongsAdapter(
             // Se fija en onCreate (ver setTarget), antes de que este método se ejecute.
             currentKind = viewModel.currentKind!!,
+            albumId = viewModel.currentAlbumId,
             onSongClick = { position ->
                 playerViewModel.playCollection(viewModel.songs, position, collectionKind = collectionKind())
             },
@@ -169,6 +178,8 @@ class DetailDialogFragment : DialogFragment() {
         // las canciones a la vez, en orden de pista; editar SUS metadatos, que son distintos de los
         // de una canción). En la de un artista, ni pista ni un editor de álbum pintarían nada.
         toolbar.menu.findItem(R.id.action_album_menu)?.isVisible = viewModel.currentKind == DetailKind.ALBUM
+        // El ojo de ordenar, al revés: solo en la de un artista (ver menu_library_detail.xml).
+        toolbar.menu.findItem(R.id.action_sort_artist_songs)?.isVisible = viewModel.currentKind == DetailKind.ARTIST
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_shuffle -> {
@@ -177,6 +188,12 @@ class DetailDialogFragment : DialogFragment() {
                 }
                 R.id.action_album_menu -> {
                     showAlbumMenu(toolbar)
+                    true
+                }
+                R.id.action_sort_artist_songs -> {
+                    if (parentFragmentManager.findFragmentByTag(SortDialogFragment.TAG) == null) {
+                        SortDialogFragment.newInstance(LibraryTab.SONGS).show(parentFragmentManager, SortDialogFragment.TAG)
+                    }
                     true
                 }
                 else -> false
@@ -275,6 +292,7 @@ class DetailDialogFragment : DialogFragment() {
         toolbar.setNavigationIconTint(onBackground)
         toolbar.menu.findItem(R.id.action_shuffle)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_album_menu)?.icon?.setTint(onBackground)
+        toolbar.menu.findItem(R.id.action_sort_artist_songs)?.icon?.setTint(onBackground)
         applyTextColor(infoLines, onBackground)
     }
 

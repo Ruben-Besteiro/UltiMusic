@@ -11,10 +11,11 @@ import coil.load
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.albumDisplay
+import com.untar.ultimusic.util.artistDisplay
 import com.untar.ultimusic.util.joinNonBlank
 
 /**
@@ -82,8 +83,7 @@ class SongCheckboxAdapter(
 
         fun bind(song: Song, checked: Boolean, accentColor: Int, onToggle: (Song) -> Unit) {
             title.text = song.title
-            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-            subtitle.text = joinNonBlank(artist, song.album?.title)
+            subtitle.text = joinNonBlank(song.artistDisplay(), song.albumDisplay())
 
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
 

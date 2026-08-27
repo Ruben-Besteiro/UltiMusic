@@ -61,11 +61,21 @@ class VideoScreenController(
     /** True en cuanto se ha pedido la inicialización, para no pedirla dos veces. */
     private var initializing = false
 
-    /** Vídeo pedido antes de que el reproductor estuviera listo (ver [load]). */
+    /**
+     * Vídeo pedido antes de que el reproductor estuviera listo (ver [load]). Guarda cómo consultar
+     * la posición y el estado del audio, no sus valores en el momento del pedido: la primera
+     * inicialización del `WebView` (ver [load]) puede tardar segundos, y el audio local no se
+     * espera. Si aquí se guardara el número fijo de entonces, el vídeo arrancaría ya atrasado por
+     * lo que haya tardado esa inicialización, offset aparte.
+     */
     private var pending: Request? = null
 
     /** Lo que hace falta para arrancar un vídeo, para poder guardarlo si aún no se puede. */
-    private data class Request(val videoId: String, val startMs: Long, val isPlaying: Boolean)
+    private data class Request(
+        val videoId: String,
+        val positionMs: () -> Long,
+        val isPlaying: () -> Boolean
+    )
 
     /** Última posición y estado conocidos del vídeo, para no repetir órdenes en [sync]. */
     private var lastKnownPositionMs = 0L
@@ -79,6 +89,16 @@ class VideoScreenController(
      * enseña su miniatura habitual con el HUD propio (título, botón de play…) en vez de negro.
      */
     private var pauseOnceStarted = false
+
+    /**
+     * False desde que se pide un vídeo (ver [YouTubePlayer.start]) hasta que llega su primer estado
+     * PLAYING (ver [onStateChange]). Mientras esté a false, [sync] no debe mandar `play()`/`pause()`
+     * directamente: la IFrame Player API de YouTube ignora esas órdenes si el vídeo todavía no ha
+     * arrancado de verdad (sigue en buffering o "cued"), y en cuanto esté listo se pone en marcha él
+     * solo pase lo que pase con esas órdenes perdidas. Por eso mientras tanto [sync] se limita a
+     * actualizar [pauseOnceStarted], que sí se aplica de forma fiable en [onStateChange].
+     */
+    private var videoStarted = false
 
     /**
      * True entre que se pide un vídeo (ver [load]) y que llega el primer aviso de estado del
@@ -118,11 +138,15 @@ class VideoScreenController(
                 onLoadingChanged(false)
             }
             lastKnownPlaying = state == PlayerConstants.PlayerState.PLAYING
-            // Ver [pauseOnceStarted]: en cuanto el vídeo arranca de verdad (ya hay fotograma), se
-            // pausa si el audio local estaba en pausa.
-            if (pauseOnceStarted && state == PlayerConstants.PlayerState.PLAYING) {
-                pauseOnceStarted = false
-                youTubePlayer.pause()
+            if (state == PlayerConstants.PlayerState.PLAYING) {
+                videoStarted = true
+                // Ver [pauseOnceStarted]: en cuanto el vídeo arranca de verdad (ya hay fotograma), se
+                // pausa si el audio local estaba en pausa (de entrada, o porque [sync] lo pidió
+                // mientras aún cargaba).
+                if (pauseOnceStarted) {
+                    pauseOnceStarted = false
+                    youTubePlayer.pause()
+                }
             }
             // Cada vídeo nuevo puede recargar su propio módulo de subtítulos forzados (ver
             // [hideCaptions]), así que se repite en cada cambio de estado y no solo en [onReady].
@@ -151,19 +175,21 @@ class VideoScreenController(
     }
 
     /**
-     * Carga [videoId] desde [startMs], que es la posición que lleva el audio local. [offsetMs] es el
-     * desplazamiento guardado de la canción (ver `Song.videoOffsetMs`); se aplica aquí y queda
-     * recordado para que [sync] y [seekTo] lo sigan aplicando mientras dure este vídeo.
+     * Carga [videoId] a partir de lo que devuelvan [positionMs] e [isPlaying], que son la posición y
+     * el estado del audio local. Se piden como funciones, no como valores ya leídos, porque si el
+     * reproductor aún no está listo (ver más abajo) el vídeo no arranca hasta que llegue [onReady],
+     * y para entonces el audio puede llevar ya un rato avanzando: llamarlas en ese momento, y no
+     * ahora, es lo que evita que el vídeo nazca atrasado por lo que haya tardado la inicialización.
      *
-     * [isPlaying] tiene que valer lo que esté haciendo el audio local: si la canción está en pausa,
-     * el vídeo se ve congelado también. Cambiar de modo no es darle al play.
+     * [offsetMs] es el desplazamiento guardado de la canción (ver `Song.videoOffsetMs`); se aplica
+     * aquí y queda recordado para que [sync] y [seekTo] lo sigan aplicando mientras dure este vídeo.
      */
-    fun load(videoId: String, startMs: Long, isPlaying: Boolean, offsetMs: Long = 0) {
+    fun load(videoId: String, positionMs: () -> Long, isPlaying: () -> Boolean, offsetMs: Long = 0) {
         this.offsetMs = offsetMs
-        lastKnownPositionMs = withOffset(startMs)
+        lastKnownPositionMs = withOffset(positionMs())
         awaitingFirstState = true
         onLoadingChanged(true)
-        val request = Request(videoId, withOffset(startMs), isPlaying)
+        val request = Request(videoId, positionMs, isPlaying)
         val ready = player
         if (ready != null) {
             ready.start(request)
@@ -185,7 +211,11 @@ class VideoScreenController(
      */
     fun sync(targetPositionMs: Long, targetIsPlaying: Boolean, driftThresholdMs: Long = 500) {
         val ready = player ?: return
-        if (targetIsPlaying != lastKnownPlaying) {
+        if (!videoStarted) {
+            // Ver [videoStarted]: todavía cargando, así que en vez de mandar una orden que YouTube
+            // va a ignorar, se deja anotado para que [onStateChange] la aplique en cuanto arranque.
+            pauseOnceStarted = !targetIsPlaying
+        } else if (targetIsPlaying != lastKnownPlaying) {
             if (targetIsPlaying) ready.play() else ready.pause()
         }
         val target = withOffset(targetPositionMs)
@@ -219,11 +249,16 @@ class VideoScreenController(
      * `loadVideo` deja el vídeo cargándose y reproduciéndose (mudo). Si el audio local no estaba
      * sonando, se pausa en cuanto arranque de verdad (ver [pauseOnceStarted]), no en el mismo
      * instante de pedir la carga. La librería trabaja en segundos con decimales, de ahí la división.
+     *
+     * [Request.positionMs] e [Request.isPlaying] se leen aquí, justo antes de arrancar, y no antes:
+     * ver [load] para por qué importa.
      */
     private fun YouTubePlayer.start(request: Request) {
         mute()
-        pauseOnceStarted = !request.isPlaying
-        loadVideo(request.videoId, request.startMs / 1000f)
+        videoStarted = false
+        val playing = request.isPlaying()
+        pauseOnceStarted = !playing
+        loadVideo(request.videoId, withOffset(request.positionMs()) / 1000f)
     }
 
     /**

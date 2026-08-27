@@ -6,8 +6,7 @@
   de dos líneas: el artista solo (puede ser una lista larga si hay varios) y, debajo, el resto
   -álbum y, si la canción tiene vídeo asignado, sus visitas de YouTube al final (ver SongsAdapter).
 
-  songTagsContainer es una tercera línea OPCIONAL, oculta salvo que el ajuste "Ver etiquetas en
-  pestaña Canciones" esté activo (ver VisualPreferences/SettingsDialogFragment): las etiquetas de la
+  songTagsContainer es una tercera línea, siempre visible (ver SongsAdapter): las etiquetas de la
   canción en miniatura (item_tag_chip_mini.xml), dentro de un FlowLayout que las desborda a una
   segunda línea (y una tercera, y las que hagan falta) en vez de recortarlas si no caben todas.
 -->
@@ -141,7 +140,7 @@
         android:id="@+id/btnSongMore"
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:layout_marginEnd="10dp"
+        android:layout_marginEnd="15dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/song_more"
         android:src="@drawable/ic_more_vert" />

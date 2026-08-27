@@ -13,6 +13,7 @@ import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
+import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
@@ -32,6 +33,7 @@ import java.io.File
         AlbumEntity::class,
         ProducerEntity::class,
         SongArtistCrossRef::class,
+        SongAlbumCrossRef::class,
         AlbumArtistCrossRef::class,
         SongProducerCrossRef::class,
         GreylistFolderEntity::class,
@@ -72,7 +74,47 @@ import java.io.File
     // migración hace además un backfill: las canciones que ya tuvieran un desplazamiento guardado
     // desde antes de esta versión entran en la etiqueta de una vez, sin esperar a que se les vuelva
     // a tocar el desplazamiento.
-    version = 21,
+    // v22: retira SongEntity.ogAlbum ("Álbum original" ya no existe en el editor de metadatos, ni a
+    // mano ni por autorrelleno de Genius), con migración escrita a mano (MIGRATION_21_22 en
+    // Migrations.kt) por el mismo motivo que las anteriores: recrea la tabla `songs` sin esa columna
+    // y copia el resto de datos tal cual, sin tocar ediciones, carátulas ni enlaces de vídeo.
+    // v23: añade TagEntity.isAutoAssigned para las etiquetas de IDIOMA (una por idioma detectado en
+    // la letra, ver LibraryRepository.syncLanguageTag), con migración escrita a mano (migration22To23
+    // en Migrations.kt) por el mismo motivo que las anteriores. A diferencia de las 5 predefinidas, no
+    // hay un valor fijo de SystemTagKey por idioma -se crean sobre la marcha, con el nombre del
+    // idioma y blancas (ver R.color.um_tag_language)-, así que necesitan su propio candado en vez de
+    // colgar de `systemKey`. La migración hace además un backfill: las canciones que ya tuvieran
+    // `language` relleno desde antes de esta versión entran en su etiqueta de idioma de una vez, sin
+    // esperar a que se les vuelva a tocar la letra.
+    // v24: sin cambio de esquema — corrige el `name` ya sembrado de la etiqueta predefinida
+    // "Descargada recientemente" (migration23To24 en Migrations.kt), que se había quedado con el
+    // texto viejo ("Canciones descargadas recientemente") de cuando se sembró por primera vez: pone
+    // al día `tags.name` con el texto actual de R.string.tag_recently_added_name.
+    // v25: sin cambio de esquema — vuelve a sembrar `library_roots` con Download/Music (MIGRATION_24_25
+    // en Migrations.kt) si la tabla está del todo vacía: una instalación "limpia" puede en realidad
+    // restaurar la copia de ~/UltiMusic/databases/ (ver restoreFromBackupIfNeeded más abajo), que se
+    // salta tanto el Callback.onCreate como MIGRATION_15_16, así que si esa copia tenía la tabla vacía
+    // -por ejemplo, justo después de quitar las dos carpetas a mano y que la app exportara esa foto al
+    // pasar a segundo plano- Download/Music no volvían a aparecer solos.
+    // v26: sin cambio de esquema — recolorea 4 de las etiquetas predefinidas ("En ninguna lista" y
+    // "Sin etiquetas personalizadas" a un gris casi negro compartido, "Descargada recientemente" y
+    // "Vídeo sincronizado" a blanco) y siembra la 6ª, "Remix / Cover" (migration25To26 en
+    // Migrations.kt, reutiliza seedDefaultTags para instalación nueva). Igual que "Vídeo
+    // sincronizado", usa membresía real (systemKey == SystemTagKey.REMIX_COVER, fila en `song_tag`,
+    // no calculada): LibraryRepository.syncRemixCoverTag la mantiene sola según Song.ogTitle ("Título
+    // original" del editor de metadatos), y el usuario también puede tocarla a mano desde la ficha de
+    // la etiqueta. Mismo backfill que "Vídeo sincronizado" en v21: las canciones que ya tuvieran
+    // "Título original" relleno desde antes de esta versión entran en la etiqueta de una vez.
+    // v27: la relación canción↔álbum vuelve a ser N:M (tabla de cruce `song_album`, ver
+    // SongAlbumCrossRef), con MIGRATION_26_27 (Migrations.kt) escrita a mano por el mismo motivo que
+    // todas las de arriba: es justo la migración inversa de MIGRATION_12_13 (que en su día la había
+    // simplificado a N:1, columnas `albumId`/`trackNumber`/`discNumber` directas en `songs`), y ahora
+    // vuelve a hacer falta poder catalogar una canción en más de un álbum (un recopilatorio y el
+    // álbum original, por ejemplo) desde el editor de metadatos ("+ Añadir otro álbum", ver
+    // MetadataEditorDialogFragment). Las tres columnas viejas se van de `songs` (había que recrear la
+    // tabla, SQLite no tiene DROP COLUMN en minSdk 24) y sus valores migran a `song_album` como
+    // álbum principal (`position = 0`) de cada canción que ya tuviera uno.
+    version = 27,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -96,16 +138,21 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         DB_NAME
                     )
                         // MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
-                        // migration17To18, migration18To19, MIGRATION_19_20 y migration20To21
-                        // conservan la biblioteca (ver Migrations.kt sobre por qué cada una se
-                        // escribió a mano). Las que no son `val` necesitan el `context` para sembrar
-                        // las etiquetas predefinidas (nombres/colores salen de strings.xml/
-                        // colors.xml, ver seedDefaultTags), así que se construyen aquí, donde sí hay
-                        // uno a mano; MIGRATION_19_20 es `val` porque solo borra una fila por
-                        // `systemKey`, sin leer ningún recurso. El resto de saltos de versión
-                        // anteriores nunca tuvieron migración, así que para esos (y para cualquier
-                        // salto futuro sin migración) sigue habiendo fallbackToDestructiveMigration:
-                        // el esquema se recrea vacío en vez de fallar al abrir la base de datos.
+                        // migration17To18, migration18To19, MIGRATION_19_20, migration20To21,
+                        // MIGRATION_21_22, migration22To23, migration23To24, MIGRATION_24_25,
+                        // migration25To26 y MIGRATION_26_27 conservan la biblioteca (ver Migrations.kt
+                        // sobre por qué cada una se escribió a mano). Las que no son `val` necesitan el
+                        // `context` -para sembrar las etiquetas predefinidas (nombres/colores salen de
+                        // strings.xml/colors.xml, ver seedDefaultTags), en migration22To23 solo el
+                        // color blanco de las etiquetas de idioma (R.color.um_tag_language), en
+                        // migration23To24 el texto vigente de R.string.tag_recently_added_name, o en
+                        // migration25To26 los colores vigentes de 4 etiquetas más el sembrado de
+                        // "Remix / Cover"-, así que se construyen aquí, donde sí hay uno a mano;
+                        // MIGRATION_19_20, MIGRATION_21_22, MIGRATION_24_25 y MIGRATION_26_27 son `val`
+                        // porque ninguna lee ningún recurso. El resto de saltos de versión anteriores
+                        // nunca tuvieron migración, así que para esos (y para cualquier salto futuro
+                        // sin migración) sigue habiendo fallbackToDestructiveMigration: el esquema se
+                        // recrea vacío en vez de fallar al abrir la base de datos.
                         .addMigrations(
                             MIGRATION_12_13,
                             MIGRATION_14_15,
@@ -114,7 +161,13 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             migration17To18(context.applicationContext),
                             migration18To19(context.applicationContext),
                             MIGRATION_19_20,
-                            migration20To21(context.applicationContext)
+                            migration20To21(context.applicationContext),
+                            MIGRATION_21_22,
+                            migration22To23(context.applicationContext),
+                            migration23To24(context.applicationContext),
+                            MIGRATION_24_25,
+                            migration25To26(context.applicationContext),
+                            MIGRATION_26_27
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true)
                         // Instalación nueva: la tabla `library_roots` se crea ya en v16 (con el
@@ -122,9 +175,9 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         // sabe que es de verdad nueva, sin pasar nunca por MIGRATION_15_16 -que es
                         // quien siembra Download/Music en quien SÍ actualiza desde v15-. Lo mismo
                         // aplica a `tags` (creada ya en v18) y seedDefaultTags/migration17To18 —
-                        // instalación nueva siembra directamente las 5 etiquetas predefinidas
-                        // vigentes (sin "Debug"), sin pasar por migration18To19, MIGRATION_19_20 ni
-                        // migration20To21.
+                        // instalación nueva siembra directamente las 6 etiquetas predefinidas
+                        // vigentes (sin "Debug"), sin pasar por migration18To19, MIGRATION_19_20,
+                        // migration20To21 ni migration25To26.
                         .addCallback(object : RoomDatabase.Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)

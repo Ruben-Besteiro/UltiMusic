@@ -15,8 +15,8 @@ import com.untar.ultimusic.util.DynamicColor
  * Lista de etiquetas: el nombre dentro de una "salchicha" de color (ver item_tag.xml/bg_tag_chip.xml,
  * inspirada en Top Drives: borde vivo, relleno del mismo color pero oscuro) y debajo cuántas
  * canciones tiene, igual de estructura que [GenresAdapter] pero sin texto plano. Menú de 3 puntos
- * (editar/eliminar) SOLO en las etiquetas personalizadas del usuario (`systemKey == null`); las 5
- * predefinidas lo ocultan, igual que hoy.
+ * (editar/eliminar) SOLO en las etiquetas personalizadas del usuario (`systemKey == null` y no
+ * `isAutoAssigned`); las 6 predefinidas y las de idioma lo ocultan, igual que hoy.
  */
 class TagsAdapter(
     private val onTagClick: (TagSummary) -> Unit,
@@ -66,9 +66,11 @@ class TagsAdapter(
             )
             itemView.setOnClickListener { onTagClick(tag) }
 
-            // Editar/eliminar solo tiene sentido para una etiqueta personalizada: las 5 predefinidas
-            // no se pueden renombrar ni borrar (confirmado con el usuario al diseñar esta pantalla).
-            val isCustom = tag.systemKey == null
+            // Editar/eliminar solo tiene sentido para una etiqueta personalizada: las 6 predefinidas
+            // no se pueden renombrar ni borrar (confirmado con el usuario al diseñar esta pantalla), y
+            // una de idioma (tag.isAutoAssigned) tiene las mismas restricciones aunque su systemKey
+            // sea null (no cuelga de un valor fijo de SystemTagKey, ver TagEntity.isAutoAssigned).
+            val isCustom = tag.systemKey == null && !tag.isAutoAssigned
             more.visibility = if (isCustom) View.VISIBLE else View.GONE
             if (isCustom) {
                 more.setOnClickListener { anchor ->

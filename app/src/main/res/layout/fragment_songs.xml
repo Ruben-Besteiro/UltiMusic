@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
     android:background="@color/um_background">
 
     <!-- El resumen de la fonoteca (nº de canciones + duración total) ya NO va aquí como vista fija:
@@ -37,4 +36,4 @@
         android:indeterminateTint="@color/um_yellow"
         android:visibility="gone" />
 
-</LinearLayout>
+</FrameLayout>

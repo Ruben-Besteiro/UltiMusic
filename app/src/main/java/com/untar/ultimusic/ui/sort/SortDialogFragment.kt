@@ -102,8 +102,16 @@ class SortDialogFragment : DialogFragment() {
         // ninguna, con un orden que no hace nada (siempre el mismo, sin ningún dato de popularidad
         // que consultar). El radio tiene que seguir bloqueado sin clave pase lo que pase; lo único
         // que cambia con el rechazo es si se vuelve a ofrecer el diálogo o solo se avisa por Toast.
+        //
+        // En Canciones, además, la popularidad sale del vídeo de YouTube de CADA canción ([Song.videoUrl]),
+        // así que con clave puesta pero ninguna canción con ese campo relleno el orden tampoco tiene
+        // nada que consultar: se revierte igual que sin clave, pero solo con un Toast (no tiene
+        // sentido un diálogo de configuración para un dato que se rellena canción a canción desde el
+        // editor de metadatos, no desde Ajustes).
         var lastFieldId = fieldsGroup.checkedRadioButtonId
         fieldsGroup.setOnCheckedChangeListener { group, checkedId ->
+            val noSongHasVideoUrl = checkedId == R.id.sortByPopularity && tab == LibraryTab.SONGS &&
+                songsViewModel.songs.value.none { !it.videoUrl.isNullOrBlank() }
             if (checkedId == R.id.sortByPopularity && YouTubeApiKeyStore.key.isEmpty()) {
                 group.check(lastFieldId)
                 if (YouTubeApiKeyStore.shouldOfferSetup) {
@@ -119,6 +127,11 @@ class SortDialogFragment : DialogFragment() {
                         requireContext(), R.string.youtube_setup_declined_hint, Toast.LENGTH_LONG
                     ).show()
                 }
+            } else if (noSongHasVideoUrl) {
+                group.check(lastFieldId)
+                Toast.makeText(
+                    requireContext(), R.string.songs_popularity_no_video_url, Toast.LENGTH_LONG
+                ).show()
             } else {
                 lastFieldId = checkedId
             }

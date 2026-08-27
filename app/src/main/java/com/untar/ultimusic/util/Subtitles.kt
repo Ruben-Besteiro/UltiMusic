@@ -7,12 +7,27 @@ import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 
 /**
- * Une trozos de un subtítulo tipo "Artista | Álbum" saltándose los que estén vacíos, para que una
- * canción sin artista o sin álbum (ver [com.untar.ultimusic.data.scan.MusicScanner.UNKNOWN_ARTIST])
- * no deje un separador colgando (" | Álbum" en vez de "Álbum").
+ * Une trozos de un subtítulo tipo "Artista | Álbum" saltándose los que estén vacíos (o null), para
+ * que un trozo ausente no deje un separador colgando (" | Álbum" en vez de "Álbum").
  */
 fun joinNonBlank(vararg parts: String?, separator: String = " | "): String =
     parts.filter { !it.isNullOrBlank() }.joinToString(separator)
+
+/**
+ * Nombre(s) de artista para mostrar, o el placeholder [MusicScanner.UNKNOWN_ARTIST] si la canción
+ * no tiene ninguno etiquetado.
+ */
+fun Song.artistDisplay(): String =
+    artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
+
+/**
+ * Título(s) de álbum para mostrar -todos los de [Song.albums], no solo el principal ([Song.album])-
+ * o el placeholder [MusicScanner.UNKNOWN_ALBUM] (vacío) si la canción no tiene ninguno. Al ser
+ * vacío, [joinNonBlank] ya se lo salta -junto con el separador que lo acompañaría- sin necesidad de
+ * mirar aquí si la canción tiene o no artista.
+ */
+fun Song.albumDisplay(): String =
+    albums.joinToString(", ") { it.album.title }.ifBlank { MusicScanner.UNKNOWN_ALBUM }
 
 /**
  * Rellena el subtítulo de dos líneas de una fila de canción, compartido por `SongsAdapter`
@@ -21,9 +36,6 @@ fun joinNonBlank(vararg parts: String?, separator: String = " | "): String =
  * año de la canción y, si la canción tiene vídeo asignado y ya se le conocen visitas (ver
  * [com.untar.ultimusic.model.Song.youtubeViewCount], que se refresca como mucho una vez al día), el
  * icono de YouTube y sus visitas compactadas al final (ver [formatCompactCount]).
- *
- * La línea de artista se oculta entera si viene vacía (sin tag de artista, ver
- * [MusicScanner.UNKNOWN_ARTIST]): dejarla puesta solo dejaría un hueco en blanco encima del álbum.
  */
 fun bindSongSubtitle(
     song: Song,
@@ -32,11 +44,14 @@ fun bindSongSubtitle(
     youtubeIcon: ImageView,
     youtubeViews: TextView
 ) {
-    val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-    subtitleArtist.text = artist
-    subtitleArtist.isVisible = artist.isNotBlank()
+    subtitleArtist.text = song.artistDisplay()
+    subtitleArtist.isVisible = true
 
-    subtitleRest.text = joinNonBlank(song.album?.title ?: MusicScanner.UNKNOWN_ALBUM, song.year?.toString())
+    val rest = joinNonBlank(song.albumDisplay(), song.year?.toString())
+    subtitleRest.text = rest
+    // Sin álbum ni año no hay nada que enseñar en esta línea: ocultarla del todo, si no se queda
+    // vacía pero sigue ocupando su alto y deja un hueco en blanco entre el artista y las etiquetas.
+    subtitleRest.isVisible = rest.isNotBlank()
 
     // Solo se enseñan visitas de una canción CON vídeo: youtubeViewCount podría quedar como un
     // valor viejo si el usuario quita el enlace sin que haya pasado por medio otro refresco diario.

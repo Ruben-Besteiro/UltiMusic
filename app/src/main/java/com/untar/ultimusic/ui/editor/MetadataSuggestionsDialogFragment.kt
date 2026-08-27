@@ -250,9 +250,9 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
      * cierra este diálogo entero. Al cancelar no se manda nada y se libera [resultSent] para poder
      * elegir otra fila.
      *
-     * Los cuatro campos `og*` (canción original de un remix) viajan bajo UNA sola casilla: Genius los
-     * da siempre los cuatro juntos o ninguno (ver [GeniusApi.SongDetails.ogTitle]), así que separarlos
-     * no tendría sentido.
+     * El vídeo musical y la canción original (`og*`) que también sabía dar Genius YA NO se ofrecen
+     * aquí: se equivocaba con demasiada frecuencia (canción original sobre todo) y no compensaba
+     * arriesgarse a rellenar mal un campo que el usuario no pidió. Ver [GeniusApi.SongDetails].
      */
     private fun showOverwritePicker(
         suggestion: MetadataSuggestion,
@@ -268,11 +268,6 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
         val discNumber = suggestion.discNumber ?: NO_VALUE
         val coverUrl = coverUrlFor(suggestion, details).orEmpty()
         val producers = details?.producers?.joinToString(", ").orEmpty()
-        val videoUrl = details?.videoUrl.orEmpty()
-        val ogTitle = details?.ogTitle.orEmpty()
-        val ogArtist = details?.ogArtist.orEmpty()
-        val ogAlbum = details?.ogAlbum.orEmpty()
-        val ogYear = details?.ogYear ?: NO_VALUE
 
         val fullResult = bundleOf(
             RESULT_TITLE to title,
@@ -284,11 +279,6 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
             RESULT_DISC_NUMBER to discNumber,
             RESULT_COVER_URL to coverUrl,
             RESULT_PRODUCERS to producers,
-            RESULT_VIDEO_URL to videoUrl,
-            RESULT_OG_TITLE to ogTitle,
-            RESULT_OG_ARTIST to ogArtist,
-            RESULT_OG_ALBUM to ogAlbum,
-            RESULT_OG_YEAR to ogYear,
             RESULT_GENIUS_TOKEN_INVALID to tokenInvalid
         )
 
@@ -297,12 +287,16 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
         // campo nuevo con nombre propio. El título es distinto según el tipo de ficha, porque así lo
         // es también en cada editor (canción vs. álbum).
         //
-        // Pista, disco, productores, vídeo y og* no existen en el editor de ÁLBUM (ver el javadoc de
+        // Pista, disco y productores no existen en el editor de ÁLBUM (ver el javadoc de
         // AlbumEditorDialogFragment.applySuggestion), así que no se ofrecen ahí; en la práctica ya
         // llegarían vacíos (enrich() no llama a Genius fuera de SONG), pero omitir la casilla entera
         // es más claro que enseñar una que nunca puede traer nada.
+        //
+        // Esta misma lista, ANTES de quedarse solo con lo presente, es también de dónde sale
+        // [missingFields] más abajo: son exactamente los metadatos que la app utiliza de una
+        // sugerencia, así que "falta" y "no se ofrece casilla" son la misma condición.
         val titleLabel = if (kind == SuggestionKind.SONG) R.string.field_title else R.string.field_album_title
-        val fields = buildList {
+        val allFields = buildList {
             add(OverwriteField(getString(titleLabel), title.isNotEmpty()) {
                 it.putString(RESULT_TITLE, "")
             })
@@ -335,17 +329,9 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
                 add(OverwriteField(getString(R.string.field_producers), producers.isNotEmpty()) {
                     it.putString(RESULT_PRODUCERS, "")
                 })
-                add(OverwriteField(getString(R.string.field_video_url), videoUrl.isNotEmpty()) {
-                    it.putString(RESULT_VIDEO_URL, "")
-                })
-                add(OverwriteField(getString(R.string.overwrite_field_original_song), ogTitle.isNotEmpty()) {
-                    it.putString(RESULT_OG_TITLE, "")
-                    it.putString(RESULT_OG_ARTIST, "")
-                    it.putString(RESULT_OG_ALBUM, "")
-                    it.putInt(RESULT_OG_YEAR, NO_VALUE)
-                })
             }
-        }.filter { it.present }
+        }
+        val fields = allFields.filter { it.present }
 
         val content = LayoutInflater.from(requireContext())
             .inflate(R.layout.dialog_suggestion_overwrite, null, false)
@@ -373,18 +359,16 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
             checkboxes.forEach { it.isChecked = checkAll }
         }
 
-        // Solo en una sugerencia de CANCIÓN sin nada de Genius (sin token, sin conexión, o Genius no
-        // la tiene): ahí es donde de verdad faltan campos que pedir, y la carátula cae de vuelta a la
-        // del álbum (ver coverUrlFor). Que Genius SÍ responda pero esta canción en concreto no tenga
-        // productor, vídeo o no sea un remix es normal (ver los campos og* en CLAUDE.md) y no un fallo
-        // que avisar aquí; por eso el disparador es "no hay `details`", no "falta este campo suelto".
-        if (kind == SuggestionKind.SONG && details == null) {
-            val missingLabels = listOf(
-                getString(R.string.field_producers),
-                getString(R.string.field_video_url),
-                getString(R.string.overwrite_field_original_song)
-            )
-            val joined = missingLabels.dropLast(1).joinToString(", ") + " y " + missingLabels.last()
+        // Cualquiera de los metadatos que la app de verdad utiliza (los de allFields) que no haya
+        // traído la sugerencia se avisa aquí, sea cual sea el motivo (iTunes no lo dio, o Genius no
+        // está configurado, no tiene la canción, o no tiene ese dato en concreto).
+        val missingLabels = allFields.filterNot { it.present }.map { it.label }
+        if (missingLabels.isNotEmpty()) {
+            val joined = if (missingLabels.size == 1) {
+                missingLabels.single()
+            } else {
+                missingLabels.dropLast(1).joinToString(", ") + " y " + missingLabels.last()
+            }
             missingFields.text = getString(R.string.overwrite_missing_fields, joined)
             missingFields.isVisible = true
         } else {
@@ -485,15 +469,10 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
          * [coverUrlFor]). */
         const val RESULT_COVER_URL = "coverUrl"
 
-        /** Los cuatro campos que aporta Genius y que iTunes no conoce (ver [GeniusApi]). Llegan
-         * vacíos, o con [NO_VALUE] en el año, cuando no hay token configurado, cuando Genius no
-         * tiene la canción, o en una sugerencia de álbum (donde no se le pregunta). */
+        /** Productores, que aporta Genius y que iTunes no conoce (ver [GeniusApi]). Llega vacío
+         * cuando no hay token configurado, cuando Genius no tiene la canción, o en una sugerencia de
+         * álbum (donde no se le pregunta). */
         const val RESULT_PRODUCERS = "producers"
-        const val RESULT_VIDEO_URL = "videoUrl"
-        const val RESULT_OG_TITLE = "ogTitle"
-        const val RESULT_OG_ARTIST = "ogArtist"
-        const val RESULT_OG_ALBUM = "ogAlbum"
-        const val RESULT_OG_YEAR = "ogYear"
 
         /**
          * `true` si al enriquecer este candidato Genius rechazó el token por inválido. No es un dato

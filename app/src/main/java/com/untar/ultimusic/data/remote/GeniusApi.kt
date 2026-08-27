@@ -20,16 +20,19 @@ import java.net.URLEncoder
  * La lista de candidatos la manda **siempre** iTunes, porque su unidad es "una fila por
  * publicación" y eso es lo que deja elegir el single en vez del álbum (ver [ItunesApi]). Genius no
  * podría producir esas filas: da un único álbum por canción, sin ediciones que comparar. Pero sabe
- * tres cosas que iTunes no sabe, y que además son campos que UltiMusic modela y que hasta ahora no
- * rellenaba nadie:
- * - **Productores** (`producer_artists`), que aquí tienen su propio campo en el editor de metadatos.
- * - **La canción original de un remix** (`song_relationships` → `remix_of`), que es exactamente lo
- *   que guardan los campos `og*` (ver [com.untar.ultimusic.model.Song]).
- * - **El enlace del videoclip** (`media`), que si no hay que buscar a mano en el iPod.
+ * algo que iTunes no sabe, y que además es un campo que UltiMusic modela y que hasta ahora no
+ * rellenaba nadie: los **productores** (`producer_artists`), que aquí tienen su propio campo en el
+ * editor de metadatos.
  *
- * Estos tres solo se piden del candidato que el usuario ELIGE (ver [detailsFor]): son dos peticiones
- * más por candidato (buscar y luego pedir la ficha completa) y no tendría sentido gastarlas en
- * veinticinco filas que a lo mejor no se llegan ni a mirar.
+ * Genius también da la canción original de un remix (`song_relationships` → `remix_of`, los campos
+ * `og*` de [com.untar.ultimusic.model.Song]) y el enlace del videoclip (`media`), pero el autorrelleno
+ * ya NO los ofrece: se equivocaba con demasiada frecuencia —sobre todo con la canción original— y no
+ * compensaba el riesgo de rellenar mal un campo que el usuario no pidió. Los dos siguen siendo
+ * editables a mano en el editor de metadatos, solo que Genius ha dejado de sugerirlos.
+ *
+ * Los productores solo se piden del candidato que el usuario ELIGE (ver [detailsFor]): son dos
+ * peticiones más por candidato (buscar y luego pedir la ficha completa) y no tendría sentido
+ * gastarlas en veinticinco filas que a lo mejor no se llegan ni a mirar.
  *
  * La **carátula de la canción** (`song_art_image_url`) es distinta: sale ya en la propia respuesta de
  * búsqueda, sin ficha completa de por medio, así que [songArtFor] la pide fila a fila según se
@@ -109,8 +112,7 @@ object GeniusApi {
 
     /**
      * Lo que Genius aporta sobre un candidato ya elegido. Todos los campos son opcionales: Genius
-     * puede conocer la canción pero no tener productores anotados, o no ser un remix, o no tener
-     * vídeo enlazado.
+     * puede conocer la canción pero no tener productores anotados.
      */
     data class SongDetails(
         /** Artistas acreditados, ya SEPARADOS uno por uno: el principal más los colaboradores.
@@ -123,15 +125,7 @@ object GeniusApi {
         val artists: List<String>,
         val producers: List<String>,
         /** Carátula propia de la canción, no la del álbum. */
-        val songArtUrl: String?,
-        /** Enlace de YouTube del videoclip, tal cual lo publica Genius en `media`. */
-        val videoUrl: String?,
-        /** Datos de la canción ORIGINAL si esta es un remix (ver los campos `og*` de
-         * [com.untar.ultimusic.model.Song]). Van los cuatro juntos o no va ninguno. */
-        val ogTitle: String?,
-        val ogArtist: String?,
-        val ogAlbum: String?,
-        val ogYear: Int?
+        val songArtUrl: String?
     )
 
     /**
@@ -158,22 +152,10 @@ object GeniusApi {
             val song = httpGet("$BASE_URL/songs/$songId?text_format=plain")
                 .optJSONObject("response")?.optJSONObject("song") ?: return@runCatching null
 
-            val original = song.optJSONArray("song_relationships").firstRelated("remix_of")
-            // El álbum y el año de la canción original solo están en su ficha completa, no en la
-            // versión reducida que viene dentro de la relación: se pide aparte, UNA sola vez, y
-            // solo si de verdad es un remix (lo más común es que no lo sea y no cueste nada).
-            val originalFull = original?.let { fullSongOf(it) }
-
             SongDetails(
                 artists = song.creditedArtists(),
                 producers = song.optJSONArray("producer_artists").artistNames(),
-                songArtUrl = song.optString("song_art_image_url", null)?.takeIf { it.isNotBlank() },
-                videoUrl = youtubeUrl(song.optJSONArray("media")),
-                ogTitle = original?.optString("title", null)?.takeIf { it.isNotBlank() },
-                ogArtist = original?.creditedArtist(),
-                ogAlbum = originalFull?.optJSONObject("album")?.optString("name", null)
-                    ?.takeIf { it.isNotBlank() },
-                ogYear = (originalFull ?: original)?.let { releaseYear(it) }
+                songArtUrl = song.optString("song_art_image_url", null)?.takeIf { it.isNotBlank() }
             )
         }.getOrElse { error -> rethrowIfActionable(error) }
     }
@@ -256,18 +238,6 @@ object GeniusApi {
         return null
     }
 
-    /** Ficha completa de una canción que solo se conoce por su versión reducida (la que viene
-     * dentro de `song_relationships`). Best-effort: si falla, quien llama se queda con lo que ya
-     * tenía de la versión reducida. */
-    private fun fullSongOf(lean: JSONObject): JSONObject? {
-        val id = lean.optLong("id", 0L)
-        if (id == 0L) return null
-        return runCatching {
-            httpGet("$BASE_URL/songs/$id?text_format=plain")
-                .optJSONObject("response")?.optJSONObject("song")
-        }.getOrNull()
-    }
-
     // --- Ayudas de parseo ---
 
     /** Genius acredita a los artistas de dos formas según el endpoint: `artist_names` (ya con las
@@ -294,41 +264,6 @@ object GeniusApi {
         return (0 until length())
             .mapNotNull { optJSONObject(it)?.optString("name", null) }
             .filter { it.isNotBlank() }
-    }
-
-    /** La primera canción relacionada del tipo pedido (p. ej. `remix_of`), o null si esta canción
-     * no tiene esa relación. Cada entrada del array agrupa un tipo de relación con TODAS las
-     * canciones que la cumplen, así que hay que entrar dos niveles. */
-    private fun JSONArray?.firstRelated(relationshipType: String): JSONObject? {
-        if (this == null) return null
-        for (i in 0 until length()) {
-            val relationship = optJSONObject(i) ?: continue
-            if (relationship.optString("relationship_type") != relationshipType) continue
-            val songs = relationship.optJSONArray("songs") ?: continue
-            if (songs.length() > 0) return songs.optJSONObject(0)
-        }
-        return null
-    }
-
-    /** El primer enlace de YouTube de `media` (Genius lista ahí también Spotify, SoundCloud…, que
-     * no sirven para el modo vídeo del iPod). */
-    private fun youtubeUrl(media: JSONArray?): String? {
-        if (media == null) return null
-        for (i in 0 until media.length()) {
-            val entry = media.optJSONObject(i) ?: continue
-            if (entry.optString("provider") != "youtube") continue
-            val url = entry.optString("url", null)
-            if (!url.isNullOrBlank()) return url
-        }
-        return null
-    }
-
-    /** Genius da la fecha en dos formatos según la antigüedad del dato: desglosada en
-     * `release_date_components` o como texto ISO en `release_date`. Basta el año. */
-    private fun releaseYear(song: JSONObject): Int? {
-        song.optJSONObject("release_date_components")?.optInt("year", 0)?.takeIf { it > 0 }
-            ?.let { return it }
-        return song.optString("release_date", null)?.take(4)?.toIntOrNull()
     }
 
     // --- Peticiones HTTP ---

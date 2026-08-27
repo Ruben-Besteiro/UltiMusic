@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Celda de la rejilla de álbumes: carátula cuadrada + título + subtítulo de dos líneas: artista y
-  año en la primera, número de canciones en la segunda (ver AlbumsAdapter.AlbumViewHolder).
+  Celda de la rejilla de álbumes: carátula cuadrada + título + número de canciones + subtítulo de
+  artista y año (ver AlbumsAdapter.AlbumViewHolder).
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -43,19 +43,31 @@
         tools:text="Meteora" />
 
     <TextView
-        android:id="@+id/albumSubtitle"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:textColor="@color/um_on_surface_muted"
-        android:textSize="12sp"
-        tools:text="Linkin Park | 2003" />
-
-    <TextView
         android:id="@+id/albumSongCount"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:textColor="@color/um_on_surface_muted"
         android:textSize="12sp"
         tools:text="12 canciones" />
+
+    <!--
+      Sin `maxLines`: el artista puede ser una lista larga (álbumes con varios artistas) y aquí se
+      ve entero, envuelva a las líneas que envuelva, en vez de cortarse con "…".
+
+      `minLines="1"` (que ya es el valor por defecto de un TextView) se deja explícito solo para
+      que un subtítulo vacío (`joinNonBlank` devolviendo "") no colapse a 0dp de alto y descuadre la
+      fila más de lo necesario; no reserva una 2ª línea de más cuando no hace falta. Dos celdas de
+      la misma fila con distinto número de líneas de subtítulo (una corta, la de al lado larga)
+      pueden seguir dejando hueco en blanco bajo la corta -GridLayoutManager no iguala el alto de
+      las celdas de una fila-, pero es un caso puntual, no el habitual.
+    -->
+    <TextView
+        android:id="@+id/albumSubtitle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:minLines="1"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="12sp"
+        tools:text="Linkin Park | 2003" />
 
 </LinearLayout>

@@ -53,7 +53,7 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
         val scrollbar = recycler.attachScrollbarDrag { position ->
-            sectionLetter(tagsViewModel.tags.value.getOrNull(position)?.name)
+            sectionLetter(tagsViewModel.visibleTags.value.getOrNull(position)?.name)
         }
 
         createButton.setOnClickListener {
@@ -63,7 +63,7 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    tagsViewModel.tags.collect { list ->
+                    tagsViewModel.visibleTags.collect { list ->
                         adapter.submit(list)
                         emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
                     }

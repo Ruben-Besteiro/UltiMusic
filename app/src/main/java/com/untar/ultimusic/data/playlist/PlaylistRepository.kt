@@ -155,12 +155,21 @@ class PlaylistRepository private constructor() {
     suspend fun resolveSongs(name: String, byFilename: Map<String, Song>): List<Song> =
         readFilenames(name).mapNotNull { byFilename[it] }
 
-    /** Rechaza nombres con separadores de ruta, que romperían el mapeo nombre↔archivo. */
-    private fun isValidName(name: String): Boolean =
-        !name.contains('/') && !name.contains('\\')
+    /**
+     * Rechaza nombres con caracteres que el sistema de archivos no admite: separadores de ruta y el
+     * resto de los que rechaza FAT32/exFAT, el sistema típico de la tarjeta donde vive
+     * `~/UltiMusic/Playlists`. Si se dejaran pasar, `File.createNewFile()`/`renameTo()` fallarían en
+     * silencio más abajo (ver [createPlaylist]/[renamePlaylist]).
+     *
+     * Público (no `private`, a diferencia de antes) para que la UI valide ANTES de tocar disco y
+     * pueda avisar con un toast en vez de que la creación falle sin más (ver
+     * `PlaylistsFragment.showNameDialog`/`AddToPlaylistDialogFragment.showCreateAndAdd`).
+     */
+    fun isValidName(name: String): Boolean = INVALID_NAME_CHARS.none { it in name }
 
     companion object {
         private const val EXT = ".txt"
+        private val INVALID_NAME_CHARS = charArrayOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
 
         @Volatile
         private var instance: PlaylistRepository? = null

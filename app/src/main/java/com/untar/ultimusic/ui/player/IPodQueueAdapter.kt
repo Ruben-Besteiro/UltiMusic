@@ -15,11 +15,11 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.artistDisplay
 import com.untar.ultimusic.util.joinNonBlank
 import java.util.Collections
 
@@ -124,8 +124,7 @@ class IPodQueueAdapter(
         /** [offset] = posición relativa a la actual: 0 = suena ahora, <0 = ya sonó, >0 = próxima. */
         @SuppressLint("ClickableViewAccessibility")
         fun bind(song: Song, offset: Int, showDivider: Boolean, accent: Int) {
-            val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-            subtitle.text = joinNonBlank(song.title, artist)
+            subtitle.text = joinNonBlank(song.title, song.artistDisplay())
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
 
             val isCurrent = offset == 0

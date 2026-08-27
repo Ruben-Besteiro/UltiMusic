@@ -4,9 +4,20 @@
   álbum (sus acciones son "de álbum": añadir todas sus canciones, editar SUS metadatos...), así que
   el código lo oculta para la de un artista. Va después en el XML para quedar más a la derecha,
   que es justo el hueco que deja al moverse el aleatorio.
+
+  El ojo de ordenar, en cambio, solo tiene sentido en la de un artista: un álbum ya ordena sus
+  canciones por pista, orden fijo que no tiene sentido cambiar (ver DetailDialogFragment). Va
+  ANTES que el aleatorio en el XML para quedar a su izquierda, mismo icono y mismo diálogo que el
+  ojo de la barra superior de la pestaña Canciones (ver MainActivity.showSort/SortDialogFragment).
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_sort_artist_songs"
+        android:icon="@drawable/ic_eye"
+        android:title="@string/action_sort"
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/action_shuffle"

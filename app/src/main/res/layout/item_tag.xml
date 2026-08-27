@@ -2,7 +2,7 @@
 <!-- Fila de la lista de Etiquetas: el nombre dentro de una "salchicha" de color (bg_tag_chip,
      inspirada en Top Drives) en vez del texto plano de item_genre.xml, y debajo el recuento de
      canciones. Botón de 3 puntos (editar/eliminar) SOLO visible en etiquetas personalizadas
-     (systemKey == null); las 5 predefinidas lo ocultan (GONE), ver TagsAdapter. -->
+     (systemKey == null); las 6 predefinidas lo ocultan (GONE), ver TagsAdapter. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
@@ -46,6 +46,7 @@
         android:id="@+id/btnTagMore"
         android:layout_width="40dp"
         android:layout_height="40dp"
+        android:layout_marginEnd="5dp"
         android:background="?attr/selectableItemBackgroundBorderless"
         android:contentDescription="@string/tag_more"
         android:src="@drawable/ic_more_vert" />

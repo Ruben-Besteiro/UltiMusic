@@ -7,9 +7,14 @@ data class Song(
     val filePath: String,
     val title: String,
     val artists: List<Artist>,
-    /** Álbum al que pertenece, o null si no está catalogada en ninguno. A diferencia de artistas y
-     * productores, una canción pertenece como mucho a UN álbum (ver [com.untar.ultimusic.data.db.entities.SongEntity.albumId]). */
-    val album: Album?,
+    /**
+     * Álbumes a los que pertenece, en el orden en que se enlazaron (ver
+     * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef.position]); vacío si no está
+     * catalogada en ninguno. A diferencia de la época N:1 de la app (v13-v26), una canción puede
+     * estar en más de uno a la vez (un recopilatorio y el álbum original, por ejemplo), cada uno
+     * con su propia posición ([SongAlbumEntry.trackNumber]/[SongAlbumEntry.discNumber]).
+     */
+    val albums: List<SongAlbumEntry>,
     val producers: List<Producer>,
     val duration: Long,
     val year: Int?,
@@ -38,14 +43,8 @@ data class Song(
      * desplazar. */
     val lyricsOffsetMs: Long,
 
-    /** Posición dentro de [album] (número de pista y de disco). Null si no pertenece a ningún
-     * álbum o si el álbum no la trae. */
-    val trackNumber: Int?,
-    val discNumber: Int?,
-
     val ogTitle: String?,
     val ogArtist: String?,
-    val ogAlbum: String?,
     val ogYear: Int?,
 
     /** Visitas del vídeo de [videoUrl] en YouTube, o null si no tiene vídeo o todavía no se han
@@ -57,9 +56,32 @@ data class Song(
      * construcciones con nombre existentes. */
     val dateAdded: Long = 0
 ) : SortableLibraryItem {
+    /**
+     * Álbum "principal" (el primero de [albums]), para el resto de la aplicación que solo necesita
+     * enseñar uno (la notificación de reproducción, el menú "ir al álbum" de una ficha de artista...).
+     * Null si [albums] está vacío.
+     */
+    val album: Album? get() = albums.firstOrNull()?.album
+
+    /** Posición dentro de [album] (el principal). Ver [SongAlbumEntry.trackNumber]/[discNumber]. */
+    val trackNumber: Int? get() = albums.firstOrNull()?.trackNumber
+    val discNumber: Int? get() = albums.firstOrNull()?.discNumber
+
     override val sortName: String get() = title
     override val sortDuration: Long get() = duration
     override val sortYear: Int? get() = year
     override val sortPopularity: Long? get() = youtubeViewCount
     override val sortSongCount: Int get() = 0
 }
+
+/**
+ * Un álbum al que pertenece una [Song], con la posición ([trackNumber]/[discNumber]) que ocupa
+ * DENTRO de ese álbum concretamente: la misma canción puede ser la pista 5 de un álbum y la 12 de
+ * un recopilatorio, así que esa posición es del enlace, no de la canción ni del álbum en sí (ver
+ * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]).
+ */
+data class SongAlbumEntry(
+    val album: Album,
+    val trackNumber: Int?,
+    val discNumber: Int?
+)

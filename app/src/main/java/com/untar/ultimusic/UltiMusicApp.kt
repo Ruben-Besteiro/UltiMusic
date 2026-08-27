@@ -2,7 +2,6 @@ package com.untar.ultimusic
 
 import android.app.Application
 import com.untar.ultimusic.data.SortPreferences
-import com.untar.ultimusic.data.VisualPreferences
 import com.untar.ultimusic.data.remote.ApiCache
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
@@ -16,8 +15,8 @@ import kotlinx.coroutines.launch
 
 /**
  * Existe solo para darles un `Context` a [ApiCache], [GeniusTokenStore], [YouTubeApiKeyStore],
- * [YouTubeStatsRefresh], [SortPreferences], [VisualPreferences] y [PlaylistResumeStore] antes de que
- * exista ninguna pantalla.
+ * [YouTubeStatsRefresh], [SortPreferences] y [PlaylistResumeStore] antes de que exista ninguna
+ * pantalla.
  *
  * Podría hacerse desde `MainActivity.onCreate`, pero entonces dependerían de acordarse de llamarlas
  * desde todos los sitios que puedan acabar pidiendo algo por red; el día que se olvidara uno, la
@@ -38,7 +37,6 @@ class UltiMusicApp : Application() {
         YouTubeApiKeyStore.init(this)
         YouTubeStatsRefresh.init(this)
         SortPreferences.init(this)
-        VisualPreferences.init(this)
         PlaylistResumeStore.init(this)
         // Poda por tiempo, una vez por arranque y fuera del hilo principal: abrir la base de datos y
         // borrar filas no puede retrasar el primer frame de la aplicación.

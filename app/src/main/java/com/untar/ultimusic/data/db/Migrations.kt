@@ -233,18 +233,19 @@ private fun backfillDateAdded(db: SupportSQLiteDatabase) {
 
 /**
  * Siembra las etiquetas predefinidas, en el mismo orden del enunciado del feature (Favoritos,
- * Descargadas recientemente, En ninguna lista, Sin etiquetas personalizadas, Vídeo sincronizado). Se
- * llama tanto desde [migration17To18] (quien actualiza desde v17) como desde el `Callback` de
- * [UltiMusicDatabase] (instalación nueva, que crea la tabla `tags` ya en v18 y nunca pasa por ninguna
- * migración) — mismo patrón que [seedDefaultLibraryRoots]. `INSERT OR IGNORE` sobre `systemKey` la
- * hace segura de repetir sin duplicar nada.
+ * Descargadas recientemente, En ninguna lista, Sin etiquetas personalizadas, Vídeo sincronizado,
+ * Remix / Cover). Se llama tanto desde [migration17To18] (quien actualiza desde v17) como desde el
+ * `Callback` de [UltiMusicDatabase] (instalación nueva, que crea la tabla `tags` ya en v18 y nunca
+ * pasa por ninguna migración) — mismo patrón que [seedDefaultLibraryRoots]. `INSERT OR IGNORE` sobre
+ * `systemKey` la hace segura de repetir sin duplicar nada.
  *
  * Hubo una fila más, "Debug" (ver [SystemTagKey]), sembrada por [migration18To19] y retirada por
  * [migration19To20] en cuanto dejó de hacer falta: por eso ya no aparece aquí, aunque instalaciones
- * viejas pasaran por sembrarla. "Vídeo sincronizado" es la más nueva (ver [migration20To21]): a
- * diferencia de las 3 calculadas, SÍ hace falta sembrarla aquí para una instalación nueva -usa
- * membresía real, como Favoritos- pero no hace falta backfill ninguno, porque una instalación nueva
- * todavía no tiene ninguna canción con desplazamiento de vídeo guardado.
+ * viejas pasaran por sembrarla. "Vídeo sincronizado" (ver [migration20To21]) y "Remix / Cover" (ver
+ * [migration25To26]) no son de las calculadas -SÍ hace falta sembrarlas aquí para una instalación
+ * nueva, usan membresía real como Favoritos- pero no hace falta backfill ninguno para ninguna de las
+ * dos, porque una instalación nueva todavía no tiene ninguna canción con desplazamiento de vídeo ni
+ * título original guardados.
  *
  * Nombres y colores salen de `strings.xml`/`colors.xml` (`R.string.tag_*_name`/`R.color.um_tag_*`),
  * NO de literales sueltos aquí: son datos que el desarrollador edita en el sitio de siempre. El
@@ -257,7 +258,8 @@ internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context) {
         Triple(SystemTagKey.RECENTLY_ADDED, R.string.tag_recently_added_name, R.color.um_tag_recently_added),
         Triple(SystemTagKey.NOT_IN_PLAYLIST, R.string.tag_not_in_playlist_name, R.color.um_tag_not_in_playlist),
         Triple(SystemTagKey.NO_CUSTOM_TAGS, R.string.tag_no_custom_tags_name, R.color.um_tag_no_custom_tags),
-        Triple(SystemTagKey.SYNCED_VIDEO, R.string.tag_synced_video_name, R.color.um_tag_synced_video)
+        Triple(SystemTagKey.SYNCED_VIDEO, R.string.tag_synced_video_name, R.color.um_tag_synced_video),
+        Triple(SystemTagKey.REMIX_COVER, R.string.tag_remix_cover_name, R.color.um_tag_remix_cover)
     )
     rows.forEachIndexed { sortOrder, (systemKey, nameRes, colorRes) ->
         db.execSQL(
@@ -331,6 +333,336 @@ fun migration20To21(context: Context): Migration = object : Migration(20, 21) {
                 val tagId = cursor.getLong(0)
                 db.execSQL(
                     "INSERT OR IGNORE INTO song_tag (songId, tagId) SELECT id, ? FROM songs WHERE videoOffsetMs != 0",
+                    arrayOf<Any>(tagId)
+                )
+            }
+        }
+    }
+}
+
+/**
+ * v21 → v22: retira `songs.ogAlbum` (ver [com.untar.ultimusic.data.db.entities.SongEntity]): el
+ * editor de metadatos ya no ofrece "Álbum original", ni a mano ni por autorrelleno de Genius (se
+ * equivocaba con demasiada frecuencia y el dato por sí solo no compensaba pedirlo). `ogTitle`,
+ * `ogArtist` y `ogYear` se quedan tal cual, solo se va la columna del álbum.
+ *
+ * SQLite no tiene `ALTER TABLE ... DROP COLUMN` en las versiones que puede llevar un dispositivo con
+ * minSdk 24, así que se recrea la tabla entera sin esa columna y se copian los datos —mismo patrón
+ * que [MIGRATION_16_17] para `artists`—, en vez de dejar `fallbackToDestructiveMigration`: perder
+ * ediciones, carátulas y enlaces de vídeo de toda la fonoteca por una sola columna que ya nadie usa
+ * sería un coste absurdo para el usuario.
+ */
+val MIGRATION_21_22 = object : Migration(21, 22) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE songs_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                filePath TEXT NOT NULL,
+                title TEXT NOT NULL,
+                duration INTEGER NOT NULL,
+                year INTEGER,
+                genres TEXT NOT NULL,
+                lyrics TEXT,
+                language TEXT,
+                imageName TEXT,
+                comment TEXT,
+                videoUrl TEXT,
+                videoThumbnailName TEXT,
+                videoOffsetMs INTEGER NOT NULL DEFAULT 0,
+                lyricsOffsetMs INTEGER NOT NULL DEFAULT 0,
+                hiddenByGreylist INTEGER NOT NULL DEFAULT 0,
+                youtubeViewCount INTEGER,
+                youtubeChannelId TEXT,
+                albumId INTEGER REFERENCES albums(id) ON DELETE SET NULL,
+                trackNumber INTEGER,
+                discNumber INTEGER,
+                ogTitle TEXT,
+                ogArtist TEXT,
+                ogYear INTEGER,
+                dateAdded INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        db.execSQL(
+            """
+            INSERT INTO songs_new (
+                id, filePath, title, duration, year, genres, lyrics, language, imageName, comment,
+                videoUrl, videoThumbnailName, videoOffsetMs, lyricsOffsetMs, hiddenByGreylist,
+                youtubeViewCount, youtubeChannelId, albumId, trackNumber, discNumber, ogTitle,
+                ogArtist, ogYear, dateAdded
+            )
+            SELECT
+                id, filePath, title, duration, year, genres, lyrics, language, imageName, comment,
+                videoUrl, videoThumbnailName, videoOffsetMs, lyricsOffsetMs, hiddenByGreylist,
+                youtubeViewCount, youtubeChannelId, albumId, trackNumber, discNumber, ogTitle,
+                ogArtist, ogYear, dateAdded
+            FROM songs
+            """
+        )
+        db.execSQL("DROP TABLE songs")
+        db.execSQL("ALTER TABLE songs_new RENAME TO songs")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_songs_filePath ON songs(filePath)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_songs_albumId ON songs(albumId)")
+    }
+}
+
+/**
+ * v22 → v23: añade [com.untar.ultimusic.data.db.entities.TagEntity.isAutoAssigned] (`INTEGER NOT NULL
+ * DEFAULT 0`) para las etiquetas de IDIOMA (ver
+ * [com.untar.ultimusic.data.LibraryRepository.syncLanguageTag]): se crean solas con el nombre del
+ * idioma que detecta la letra y tienen las mismas restricciones que una predefinida -no se pueden
+ * renombrar/recolorear/borrar ni asignar/quitar de una canción a mano, ver `LibraryDao.updateTag`/
+ * `deleteTag`- aunque su `systemKey` sea `null` (no cuelgan de un valor fijo de [SystemTagKey], hay una
+ * distinta por cada idioma que aparezca).
+ *
+ * Backfill: igual que [migration20To21] con "Vídeo sincronizado", ya puede haber canciones con
+ * `language` relleno desde antes de esta versión (el editor de metadatos lleva tiempo autorellenando
+ * ese campo desde la letra, ver
+ * [com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment.updateLanguageFromLyrics]). Sin este
+ * backfill se quedarían sin su etiqueta de idioma hasta la próxima vez que alguien volviera a guardar
+ * esa canción en concreto. Por cada valor de `language` distinto (recortado de espacios, los vacíos
+ * fuera) se reutiliza una etiqueta existente con ese nombre exacto si ya la hay -por ejemplo una
+ * personalizada que el usuario ya se hubiera creado antes, tal cual esté, sin tocarle el color ni
+ * marcarla [isAutoAssigned]- o se crea una nueva blanca ([R.color.um_tag_language]) sí marcada
+ * [isAutoAssigned], y se enlazan en `song_tag` todas las canciones que comparten ese idioma.
+ *
+ * Se resuelve fila a fila con cursores en vez de una única sentencia SQL con funciones de ventana
+ * (`ROW_NUMBER`, etc.) porque la versión de SQLite embebida varía según el dispositivo (minSdk 24) y no
+ * se puede dar por hecho que las soporte; mismo estilo que [migration20To21].
+ */
+fun migration22To23(context: Context): Migration = object : Migration(22, 23) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE tags ADD COLUMN isAutoAssigned INTEGER NOT NULL DEFAULT 0")
+
+        var nextSortOrder = 0
+        db.query("SELECT COALESCE(MAX(sortOrder), -1) FROM tags").use { cursor ->
+            if (cursor.moveToFirst()) nextSortOrder = cursor.getInt(0) + 1
+        }
+        val languageColor = ContextCompat.getColor(context, R.color.um_tag_language)
+
+        val languages = mutableListOf<String>()
+        db.query(
+            "SELECT DISTINCT TRIM(language) FROM songs WHERE language IS NOT NULL AND TRIM(language) != ''"
+        ).use { cursor ->
+            while (cursor.moveToNext()) languages.add(cursor.getString(0))
+        }
+
+        languages.forEach { language ->
+            val tagId = db.query("SELECT id FROM tags WHERE name = ? LIMIT 1", arrayOf<Any>(language))
+                .use { cursor -> if (cursor.moveToFirst()) cursor.getLong(0) else null }
+                ?: run {
+                    db.execSQL(
+                        "INSERT INTO tags (name, colorArgb, systemKey, sortOrder, isAutoAssigned) VALUES (?, ?, NULL, ?, 1)",
+                        arrayOf<Any>(language, languageColor, nextSortOrder)
+                    )
+                    nextSortOrder++
+                    db.query("SELECT id FROM tags WHERE name = ? LIMIT 1", arrayOf<Any>(language)).use { cursor ->
+                        cursor.moveToFirst()
+                        cursor.getLong(0)
+                    }
+                }
+            db.execSQL(
+                "INSERT OR IGNORE INTO song_tag (songId, tagId) SELECT id, ? FROM songs WHERE TRIM(language) = ?",
+                arrayOf<Any>(tagId, language)
+            )
+        }
+    }
+}
+
+/**
+ * v24 → v25: sin cambio de esquema — vuelve a sembrar `library_roots` con `Download`/`Music` (ver
+ * [seedDefaultLibraryRoots]) si la tabla está completamente vacía.
+ *
+ * [UltiMusicDatabase.restoreFromBackupIfNeeded] restaura la copia de `~/UltiMusic/databases/` en
+ * cuanto la BD interna no existe -el caso típico de una instalación limpia, ya que esa carpeta
+ * externa sobrevive a desinstalar la app o borrar sus datos-, y esa restauración pasa por alto tanto
+ * el `Callback.onCreate` (el fichero ya existe) como [MIGRATION_15_16] (la copia ya puede estar muy
+ * por delante de la v15). Si la copia restaurada tenía `library_roots` vacía -por ejemplo, una hecha
+ * antes de que existiera el sembrado de fábrica, o justo después de que el usuario quitara las dos
+ * carpetas a mano y la app exportara esa foto al pasar a segundo plano-, una instalación "limpia"
+ * nunca llegaba a tener Download/Music por defecto.
+ *
+ * Solo se resiembra si la tabla está DEL TODO vacía (`COUNT(*) = 0`), no con el mismo `INSERT OR
+ * IGNORE` incondicional de [seedDefaultLibraryRoots]: si el usuario ya tiene aunque sea una carpeta
+ * raíz guardada (una de las dos por defecto, o una suya propia), esta migración no toca nada, para no
+ * resucitar una carpeta que haya quitado a mano a propósito.
+ */
+val MIGRATION_24_25 = object : Migration(24, 25) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        val isEmpty = db.query("SELECT COUNT(*) FROM library_roots").use { cursor ->
+            cursor.moveToFirst() && cursor.getInt(0) == 0
+        }
+        if (isEmpty) seedDefaultLibraryRoots(db)
+    }
+}
+
+/**
+ * v23 → v24: sin cambio de esquema — corrige el `name` ya sembrado de la etiqueta predefinida
+ * "Descargada recientemente" (`SystemTagKey.RECENTLY_ADDED`). [seedDefaultTags] usa `INSERT OR
+ * IGNORE`, así que quien ya tuviera esa fila desde [migration17To18] se quedó con el texto que hubiera
+ * entonces en `R.string.tag_recently_added_name` aunque el recurso cambiara después: hace falta un
+ * `UPDATE` explícito para que las instalaciones ya migradas se pongan al día con el texto actual del
+ * recurso, igual que verían una instalación nueva.
+ */
+fun migration23To24(context: Context): Migration = object : Migration(23, 24) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            "UPDATE tags SET name = ? WHERE systemKey = ?",
+            arrayOf<Any>(
+                context.getString(R.string.tag_recently_added_name),
+                SystemTagKey.RECENTLY_ADDED.name
+            )
+        )
+    }
+}
+
+/**
+ * v26 → v27: la relación canción↔álbum vuelve a ser N:M (tabla de cruce `song_album`, ver
+ * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]) — justo la migración inversa de
+ * [MIGRATION_12_13], que en su día la había simplificado a N:1 (columnas `albumId`/`trackNumber`/
+ * `discNumber` directas en `songs`). Ahora vuelve a hacer falta poder catalogar una canción en más
+ * de un álbum a la vez (un recopilatorio y el álbum original, por ejemplo) desde el editor de
+ * metadatos ("+ Añadir otro álbum", ver
+ * [com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment.addAlbumGroup]).
+ *
+ * Se escribe a mano, como todas las de arriba: destruir la fonoteca de quien ya tenga la app
+ * instalada por un cambio de modelado interno tiraría ediciones, carátulas y enlaces de vídeo que no
+ * se pueden recuperar.
+ *
+ * Orden de los pasos:
+ *  1. Se crea `song_album` (mismo patrón que [MIGRATION_12_13] al revés).
+ *  2. Se copia a `song_album` el álbum/pista/disco que ya tuviera cada canción en las columnas
+ *     viejas de `songs`, como su álbum PRINCIPAL (`position = 0`, ver
+ *     [com.untar.ultimusic.model.Song.album]) — así ninguna canción ya catalogada pierde su álbum al
+ *     actualizar.
+ *  3. Se recrea `songs` sin `albumId`/`trackNumber`/`discNumber` (SQLite no tiene `ALTER TABLE ...
+ *     DROP COLUMN` en las versiones que puede llevar un dispositivo con minSdk 24, mismo motivo que
+ *     [MIGRATION_21_22]/[MIGRATION_16_17]), copiando el resto de columnas tal cual.
+ */
+val MIGRATION_26_27 = object : Migration(26, 27) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS song_album (
+                songId INTEGER NOT NULL,
+                albumId INTEGER NOT NULL,
+                trackNumber INTEGER,
+                discNumber INTEGER,
+                position INTEGER NOT NULL,
+                PRIMARY KEY(songId, albumId),
+                FOREIGN KEY(songId) REFERENCES songs(id) ON DELETE CASCADE,
+                FOREIGN KEY(albumId) REFERENCES albums(id) ON DELETE CASCADE
+            )
+            """
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_song_album_albumId ON song_album(albumId)")
+
+        db.execSQL(
+            """
+            INSERT INTO song_album (songId, albumId, trackNumber, discNumber, position)
+            SELECT id, albumId, trackNumber, discNumber, 0 FROM songs WHERE albumId IS NOT NULL
+            """
+        )
+
+        db.execSQL(
+            """
+            CREATE TABLE songs_new (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                filePath TEXT NOT NULL,
+                title TEXT NOT NULL,
+                duration INTEGER NOT NULL,
+                year INTEGER,
+                genres TEXT NOT NULL,
+                lyrics TEXT,
+                language TEXT,
+                imageName TEXT,
+                comment TEXT,
+                videoUrl TEXT,
+                videoThumbnailName TEXT,
+                videoOffsetMs INTEGER NOT NULL DEFAULT 0,
+                lyricsOffsetMs INTEGER NOT NULL DEFAULT 0,
+                hiddenByGreylist INTEGER NOT NULL DEFAULT 0,
+                youtubeViewCount INTEGER,
+                youtubeChannelId TEXT,
+                ogTitle TEXT,
+                ogArtist TEXT,
+                ogYear INTEGER,
+                dateAdded INTEGER NOT NULL DEFAULT 0
+            )
+            """
+        )
+        db.execSQL(
+            """
+            INSERT INTO songs_new (
+                id, filePath, title, duration, year, genres, lyrics, language, imageName, comment,
+                videoUrl, videoThumbnailName, videoOffsetMs, lyricsOffsetMs, hiddenByGreylist,
+                youtubeViewCount, youtubeChannelId, ogTitle, ogArtist, ogYear, dateAdded
+            )
+            SELECT
+                id, filePath, title, duration, year, genres, lyrics, language, imageName, comment,
+                videoUrl, videoThumbnailName, videoOffsetMs, lyricsOffsetMs, hiddenByGreylist,
+                youtubeViewCount, youtubeChannelId, ogTitle, ogArtist, ogYear, dateAdded
+            FROM songs
+            """
+        )
+        db.execSQL("DROP TABLE songs")
+        db.execSQL("ALTER TABLE songs_new RENAME TO songs")
+        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_songs_filePath ON songs(filePath)")
+    }
+}
+
+/**
+ * v25 → v26: sin cambio de esquema — recolorea 4 de las etiquetas predefinidas y siembra la 6ª,
+ * "Remix / Cover" (ver [SystemTagKey.REMIX_COVER]):
+ *
+ * - "En ninguna lista" y "Sin etiquetas personalizadas" pasan a compartir el mismo gris casi negro
+ *   ([R.color.um_tag_no_custom_tags], más oscuro que el gris medio que tenían antes).
+ * - "Descargada recientemente" y "Vídeo sincronizado" pasan a blanco.
+ *
+ * [seedDefaultTags] usa `INSERT OR IGNORE`, así que quien ya tuviera esas 4 filas desde una migración
+ * anterior se quedó con el color de entonces aunque el recurso cambiara después -mismo problema que
+ * [migration23To24] con el nombre de "Descargada recientemente"-, de ahí los `UPDATE` explícitos en
+ * vez de confiar en el reseed.
+ *
+ * "Remix / Cover" es nueva de aquí, con membresía real ([R.color.um_tag_remix_cover] blanco) igual que
+ * "Vídeo sincronizado" en [migration20To21]: a partir de ahora
+ * [com.untar.ultimusic.data.LibraryRepository.syncRemixCoverTag] la mantiene sola en `song_tag` según
+ * `Song.ogTitle` ("Título original" del editor de metadatos). Como con "Vídeo sincronizado", ya puede
+ * haber canciones con ese campo relleno desde antes de esta versión (el editor lleva tiempo dejando
+ * editarlo), así que tras sembrar la fila se hace el mismo backfill: se enlazan en `song_tag` todas las
+ * que ya cumplan la condición, para que no se queden sin la etiqueta hasta que alguien vuelva a tocar
+ * el campo a mano.
+ */
+fun migration25To26(context: Context): Migration = object : Migration(25, 26) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        val recoloredTags = listOf(
+            SystemTagKey.NOT_IN_PLAYLIST to R.color.um_tag_not_in_playlist,
+            SystemTagKey.NO_CUSTOM_TAGS to R.color.um_tag_no_custom_tags,
+            SystemTagKey.RECENTLY_ADDED to R.color.um_tag_recently_added,
+            SystemTagKey.SYNCED_VIDEO to R.color.um_tag_synced_video
+        )
+        recoloredTags.forEach { (systemKey, colorRes) ->
+            db.execSQL(
+                "UPDATE tags SET colorArgb = ? WHERE systemKey = ?",
+                arrayOf<Any>(ContextCompat.getColor(context, colorRes), systemKey.name)
+            )
+        }
+
+        db.execSQL(
+            "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder) VALUES (?, ?, ?, ?)",
+            arrayOf<Any>(
+                context.getString(R.string.tag_remix_cover_name),
+                ContextCompat.getColor(context, R.color.um_tag_remix_cover),
+                SystemTagKey.REMIX_COVER.name,
+                5
+            )
+        )
+        db.query("SELECT id FROM tags WHERE systemKey = ?", arrayOf(SystemTagKey.REMIX_COVER.name)).use { cursor ->
+            if (cursor.moveToFirst()) {
+                val tagId = cursor.getLong(0)
+                db.execSQL(
+                    "INSERT OR IGNORE INTO song_tag (songId, tagId) SELECT id, ? FROM songs WHERE ogTitle IS NOT NULL AND TRIM(ogTitle) != ''",
                     arrayOf<Any>(tagId)
                 )
             }

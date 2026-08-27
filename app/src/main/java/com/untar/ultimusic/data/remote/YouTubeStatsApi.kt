@@ -95,14 +95,18 @@ object YouTubeStatsApi {
      * Suscriptores de hasta [MAX_IDS_PER_CALL] canales a la vez, mapeados por id de canal. La usa
      * [com.untar.ultimusic.data.LibraryRepository.refreshYouTubeStatsIfDue] para resolver el canal "de
      * cada artista" (los candidatos salen de `LibraryDao.artistChannelCandidates`) y guardar sus
-     * suscriptores directamente en la fila del artista. Mismo contrato que [videoStats]: nunca lanza,
-     * mapa vacío ante cualquier fallo.
+     * suscriptores directamente en la fila del artista. Nunca lanza, pero a diferencia de [videoStats]
+     * SÍ distingue "pregunté y no había dato" de "no llegué ni a preguntar": null cuando la llamada
+     * falla entera (red, cuota, lo que sea) y mapa —vacío o no— cuando YouTube de verdad respondió. La
+     * distinción importa porque quien llama, a falta de dato, escribe explícitamente `null` en el
+     * artista (canal borrado / sin candidato válido) — algo que solo tiene sentido si de verdad se
+     * preguntó; confundirlo con un fallo de red borraría suscriptores buenos por una cuota agotada.
      *
      * Un canal con el recuento de suscriptores oculto (`hiddenSubscriberCount = true`) no trae
-     * `subscriberCount` en la respuesta, así que cae en el mismo caso que uno que no responda: sin
-     * dato válido, se prueba con el siguiente candidato del artista.
+     * `subscriberCount` en la respuesta, así que cae en el mismo caso que uno que no exista: sin dato
+     * válido dentro de una llamada que SÍ respondió, se prueba con el siguiente candidato del artista.
      */
-    suspend fun channelStats(channelIds: List<String>): Map<String, Long> {
+    suspend fun channelStats(channelIds: List<String>): Map<String, Long>? {
         if (channelIds.isEmpty() || !isConfigured) return emptyMap()
         require(channelIds.size <= MAX_IDS_PER_CALL) {
             "La API de YouTube no acepta más de $MAX_IDS_PER_CALL ids por llamada"
@@ -118,7 +122,7 @@ object YouTubeStatsApi {
                     ttlMs = TimeUnit.HOURS.toMillis(12)
                 )
                 parseChannelSubscriberCounts(body)
-            }.getOrDefault(emptyMap())
+            }.getOrNull()
         }
     }
 

@@ -72,8 +72,8 @@ object DynamicColor {
 
     /**
      * Elige qué [Palette.Swatch] usar, de más a menos "vivo": vibrante, apagado, oscuro, claro...
-     * El dominante (el color que más superficie ocupa) es el último recurso, porque en una
-     * portada oscura suele ser casi negro (por eso [readable] lo rescata después).
+     * El dominante (el color que más superficie ocupa) es el último recurso real, y si ni siquiera
+     * ese tiene color de verdad se cae directamente a [DEFAULT] (ver más abajo el porqué).
      *
      * Antes de aceptar un candidato "vivo" se comprueba que represente al menos
      * [MIN_POPULATION_FRACTION] de los píxeles analizados: un `vibrantSwatch` sacado de un detalle
@@ -81,6 +81,15 @@ object DynamicColor {
      * acento respecto a lo que se ve a simple vista. Si ningún "vivo" llega a ese umbral, se cae al
      * dominante de verdad -el color que de hecho ocupa más carátula-, y solo si ni eso hay se
      * rescata el primer candidato "vivo" encontrado, por pequeño que sea, antes que rendirse.
+     *
+     * Todos los candidatos (incluido el dominante) pasan además por [hasColor]: un swatch casi
+     * acromático -gris o negro, típico del dominante de una portada oscura- no vale como base para
+     * el acento. El motivo es [readable]: fuerza la saturación de lo que le llegue pero no toca el
+     * matiz, y el matiz que calcula `ColorUtils.colorToHSL` para un color sin saturación real (R≈G≈B)
+     * es arbitrario -normalmente 0°, es decir, rojo-. Sin este filtro, `readable` "rescataba" un
+     * negro convirtiéndolo en un rojo oscuro que no estaba en ningún sitio de la carátula. Por eso
+     * el último recurso ya no es el dominante a pelo, sino [DEFAULT]: mejor el amarillo de siempre
+     * que un color inventado.
      */
     private fun pickSwatch(palette: Palette): Palette.Swatch {
         val totalPopulation = palette.swatches.sumOf { it.population }.coerceAtLeast(1)
@@ -91,12 +100,21 @@ object DynamicColor {
             palette.mutedSwatch,
             palette.lightMutedSwatch,
             palette.darkMutedSwatch
-        )
+        ).filter { it.hasColor() }
+        val dominant = palette.dominantSwatch?.takeIf { it.hasColor() }
+
         return vividCandidates.firstOrNull { it.population.toFloat() / totalPopulation >= MIN_POPULATION_FRACTION }
-            ?: palette.dominantSwatch
+            ?: dominant
             ?: vividCandidates.firstOrNull()
             ?: Palette.Swatch(DEFAULT, 0)
     }
+
+    /**
+     * `true` si el swatch tiene matiz de verdad -saturación nativa por encima de
+     * [MIN_SOURCE_SATURATION]-, y no es un gris o negro casi puro cuyo matiz calculado sería
+     * arbitrario. Ver el porqué en [pickSwatch].
+     */
+    private fun Palette.Swatch.hasColor(): Boolean = hsl[1] >= MIN_SOURCE_SATURATION
 
     /**
      * Caché en memoria de acentos ya calculados, para que la misma carátula (ver [cacheKey]) no se
@@ -235,6 +253,7 @@ object DynamicColor {
 
     private const val SAMPLE_SIZE = 128
     private const val MIN_POPULATION_FRACTION = 0.08f
+    private const val MIN_SOURCE_SATURATION = 0.12f
     private const val MIN_SATURATION = 0.35f
     private const val MIN_LIGHTNESS = 0.45f
     private const val MAX_LIGHTNESS = 0.72f

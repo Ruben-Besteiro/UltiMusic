@@ -43,7 +43,7 @@
             android:textStyle="bold"
             tools:text="Desmarcar todo" />
 
-        <!-- Solo visible en una sugerencia de canción sin Genius disponible (ver
+        <!-- Visible cuando a la sugerencia le falta alguno de los metadatos que se utilizan (ver
              MetadataSuggestionsDialogFragment.showOverwritePicker). -->
         <TextView
             android:id="@+id/overwriteMissingFields"
@@ -53,7 +53,7 @@
             android:textColor="@color/um_on_surface_muted"
             android:textSize="13sp"
             android:visibility="gone"
-            tools:text="No se han podido obtener los campos Productores, Vídeo musical y Canción original ni la carátula de la canción (se utilizará la del álbum)"
+            tools:text="No se han podido obtener los campos Año, Género(s) y Productor(es)"
             tools:visibility="visible" />
 
     </LinearLayout>

@@ -113,6 +113,10 @@
     <string name="editor_saving_wait">Un momento…</string>
     <string name="editor_clear_lyrics">Borrar la letra</string>
     <string name="editor_clear_video_url">Quitar el videoclip</string>
+    <!-- Duplica el grupo de campos "Álbum + Nº de disco + Nº de pista" para catalogar la canción en
+         otro álbum más (N:M, ver SongAlbumCrossRef). Ver MetadataEditorDialogFragment.addAlbumGroup. -->
+    <string name="editor_add_another_album">+ Añadir otro álbum</string>
+    <string name="editor_remove_album">Quitar este álbum</string>
 
     <!-- Autorrelleno de metadatos (iTunes): botón de la toolbar de los dos editores (canción
          y álbum) y el diálogo de sugerencias que abre. Ver MetadataSuggestionsDialogFragment. -->
@@ -141,11 +145,11 @@
     <string name="overwrite_check_all">Marcar todo</string>
     <string name="overwrite_uncheck_all">Desmarcar todo</string>
     <string name="overwrite_field_cover">Carátula</string>
-    <string name="overwrite_field_original_song">Canción original</string>
-    <!-- Aviso en gris al pie del diálogo, solo en una sugerencia de canción sin datos de Genius (sin
-         token, o Genius no tiene esa canción): %1$s es la lista de campos que solo aporta Genius,
-         ya unidos en una frase ("Productor(es), URL del vídeo y Canción original"). -->
-    <string name="overwrite_missing_fields">No se han podido obtener los campos %1$s ni la carátula de la canción (se utilizará la del álbum)</string>
+    <!-- Aviso en gris al pie del diálogo cuando la sugerencia no trae alguno de los metadatos que la
+         app utiliza (título, álbum, artista(s), año, género(s), nº de pista, nº de disco, carátula o
+         productor(es)): %1$s es la lista de los que faltan, ya unidos en una frase ("Año, Género(s)
+         y Carátula"). -->
+    <string name="overwrite_missing_fields">No se han podido obtener los campos %1$s</string>
 
     <!-- Diálogo de "Acción requerida" que sale al tocar la varita del editor de CANCIÓN sin token de
          Genius configurado (ver GeniusTokenDialogFragment). No sale en el editor de álbum: ese
@@ -210,6 +214,11 @@
          idea. -->
     <string name="youtube_setup_declined_hint">No podrás ordenar por popularidad sin la clave de la YouTube Data API. Puedes configurarla desde Ajustes &gt; Servicios externos</string>
 
+    <!-- Aviso al tocar "Popularidad" en Canciones con la clave puesta pero ninguna canción con el
+         campo de vídeo relleno (SortDialogFragment): ese campo es la única fuente de la popularidad
+         de una canción, así que sin él el orden no tendría nada que consultar. -->
+    <string name="songs_popularity_no_video_url">Rellena el campo \'URL de YouTube\' de alguna canción</string>
+
     <!-- Diálogo de ordenar (ver SortDialogFragment), abierto desde el botón del ojo de la barra
          superior. %1$s es el nombre de la pestaña actual (tab_songs, tab_albums…). -->
     <string name="sort_title">Ordenar %1$s</string>
@@ -271,11 +280,9 @@
     <string name="field_disc_number">Nº de disco</string>
     <string name="field_og_title">Título original</string>
     <string name="field_og_artist">Artista original</string>
-    <string name="field_og_album">Álbum original</string>
     <string name="field_og_year">Año original</string>
 
     <string name="section_details">Detalles</string>
-    <string name="section_album_position">Posición en el álbum</string>
     <string name="section_original">Grabación original (remix)</string>
     <string name="multi_value_hint">Separa varios valores con comas</string>
 
@@ -295,6 +302,20 @@
     <string name="ipod_now_playing">Sonando ahora</string>
     <string name="ipod_toggle_video">Alternar audio y vídeo</string>
     <string name="ipod_no_lyrics">No se ha detectado letra para esta canción. Añádela tocando aquí</string>
+    <!-- Botón flotante inferior derecho del contenedor de la letra: encoge la carátula/vídeo hasta
+         desaparecer y le cede su hueco a la letra (ver IPodDialogFragment). Cambia a
+         ipod_lyrics_collapse mientras está desplegado. -->
+    <string name="ipod_lyrics_expand">Ver más</string>
+    <string name="ipod_lyrics_collapse">Ver menos</string>
+    <!-- Botón flotante superior derecho del contenedor de la letra: la "a" en hiragana (あ) que
+         traduce la letra al idioma del sistema (ver IPodDialogFragment/LyricsTranslator). Solo
+         aparece si el idioma detectado de la canción no es el del sistema. -->
+    <string name="ipod_translate_lyrics_glyph">あ</string>
+    <string name="ipod_translate_lyrics_desc">Traducir la letra al idioma del sistema</string>
+    <string name="ipod_translate_lyrics_failed">No se ha podido traducir la letra</string>
+    <!-- Mientras LyricsTranslator/LingvaTranslateApi tienen la petición en marcha: sin este aviso,
+         la espera se ve igual que si el botón no hiciera nada. -->
+    <string name="ipod_translate_lyrics_working">Traduciendo letra…</string>
     <!-- Lo que queda de cola, en @+id/tvTitle (ver IPodDialogFragment.updateInfoBox), mientras se ve
          la cola/lista en vez de la carátula. No cuenta la canción actual: son las que quedan POR
          sonar. Debajo, en tvMeta, va lo que duran todas ellas juntas (TimeFormat.hhmmss). -->
@@ -343,6 +364,7 @@
     <string name="playlist_more">Más opciones de la lista</string>
     <string name="playlist_create">Nueva lista</string>
     <string name="playlist_name_hint">Nombre de la lista</string>
+    <string name="playlist_name_invalid">Ese nombre contiene caracteres no válidos</string>
     <string name="playlist_rename">Renombrar</string>
     <string name="playlist_delete">Eliminar</string>
     <string name="playlist_delete_confirm">¿Eliminar la lista <b>^1</b>? Los archivos de audio no se tocarán</string>
@@ -367,6 +389,10 @@
     <!-- Membresía real como Favoritos, pero LibraryRepository.syncSyncedVideoTag la mantiene sola en
          cuanto Song.videoOffsetMs deja de ser 0 (ver SystemTagKey.SYNCED_VIDEO). -->
     <string name="tag_synced_video_name">Vídeo sincronizado</string>
+    <!-- Membresía real como Vídeo sincronizado, pero LibraryRepository.syncRemixCoverTag la mantiene
+         sola en cuanto "Título original" deja de estar vacío en el editor de metadatos (ver
+         SystemTagKey.REMIX_COVER). -->
+    <string name="tag_remix_cover_name">Remix / Cover</string>
 
     <!-- Diálogo de etiquetas de una canción (SongTagsDialogFragment/TagPickerDialogFragment). El
          "_multi" es para la edición múltiple (selección de varias canciones, ver
@@ -427,7 +453,6 @@
     <string name="settings_back">Cerrar los ajustes</string>
     <string name="settings_audio_section_title">Ajustes auditivos</string>
     <string name="settings_visual_section_title">Ajustes visuales</string>
-    <string name="settings_show_song_tags">Ver etiquetas en pestaña Canciones</string>
     <string name="settings_boost_title">Amplificador de volumen</string>
     <string name="settings_boost_subtitle">Untar Technologies no se hace legalmente responsable de cualquier pérdida auditiva causada por su uso</string>
     <string name="settings_boost_no_limit">Desactivar límite</string>

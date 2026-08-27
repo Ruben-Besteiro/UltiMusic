@@ -12,6 +12,7 @@ import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
+import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
@@ -63,8 +64,9 @@ abstract class LibraryDao {
             -- de más abajo, en observeAlbumsOfArtist): un fallback SOLO para pintar, nunca se
             -- escribe en la fila del álbum.
             COALESCE(a.year, (SELECT s.year FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
                 LIMIT 1)) AS year,
             -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
             -- en el orden en que se enlazaron, no solo el primero (GROUP_CONCAT sobre la subconsulta
@@ -86,20 +88,25 @@ abstract class LibraryDao {
                 NULLIF(a.tagAlbumArtist, ''),
                 (SELECT ar.name FROM song_artist x
                     JOIN songs s ON s.id = x.songId
+                    JOIN song_album sa ON sa.songId = s.id
                     JOIN artists ar ON ar.id = x.artistId
-                    WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+                    WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
                     GROUP BY x.artistId
                     ORDER BY COUNT(*) DESC, LENGTH(ar.name), x.artistId
                     LIMIT 1)
             ) AS artistName,
             (SELECT COUNT(*) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
         FROM albums a
         WHERE (:id IS NULL OR a.id = :id)
           AND EXISTS (
-              SELECT 1 FROM songs s WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+              SELECT 1 FROM songs s
+              JOIN song_album sa ON sa.songId = s.id
+              WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
           )
         ORDER BY LOWER(a.title)
         """
@@ -136,8 +143,9 @@ abstract class LibraryDao {
             (SELECT COUNT(*) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
                 WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS songCount,
-            (SELECT COUNT(DISTINCT s.albumId) FROM song_artist x
+            (SELECT COUNT(DISTINCT sa.albumId) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
+                JOIN song_album sa ON sa.songId = s.id
                 WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS albumCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
@@ -164,47 +172,38 @@ abstract class LibraryDao {
     // El número de disco manda sobre el de pista (un CD2 pista 1 va después de todo el CD1, aunque
     // su número de pista sea menor). Sin disco asignado se trata como disco 1 con COALESCE, para que
     // esas canciones se mezclen con las del disco 1 en vez de irse al final.
-    // `s.trackNumber IS NULL` como criterio de orden aparte es el truco para mandar al final las
+    // `sa.trackNumber IS NULL` como criterio de orden aparte es el truco para mandar al final las
     // canciones sin número de pista: en SQLite un booleano vale 0 (falso) o 1 (verdadero), así que
     // las que sí lo tienen (0) van antes que las que no (1).
 
+    /**
+     * Canciones de un álbum concreto, en el orden de SU pista/disco dentro de ÉL (ver
+     * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]): una canción en varios álbumes puede
+     * tener una posición distinta en cada uno, así que el `JOIN` fija cuál de todas se usa aquí.
+     */
     @Transaction
     @Query(
         """
         SELECT s.* FROM songs s
-        WHERE s.albumId = :albumId AND s.hiddenByGreylist = 0
-        ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+        JOIN song_album sa ON sa.songId = s.id
+        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0
+        ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
         """
     )
     abstract fun observeSongsOfAlbum(albumId: Long): Flow<List<SongWithRelations>>
 
     /**
-     * Canciones de un artista: primero por el año del álbum al que pertenecen, del más
-     * reciente al más antiguo (sin año al final), luego por el título de ese álbum, luego por el
-     * número de disco (sin disco asignado cuenta como disco 1), luego por su número de pista (sin
-     * pista al final de ese álbum) y por último por el título de la canción.
+     * Canciones de un artista, por el título de la canción (a diferencia de
+     * [observeSongsOfAlbum], que respeta el orden de pista/disco: aquí no hay un álbum único del
+     * que tomar ese orden, así que se ordena alfabéticamente).
      */
     @Transaction
     @Query(
         """
         SELECT s.* FROM songs s
         JOIN song_artist x ON x.songId = s.id
-        LEFT JOIN albums al ON al.id = s.albumId
         WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
-        ORDER BY
-            -- Mismo fallback que observeAlbumsOfArtist: si el álbum no tiene año puesto, se usa el
-            -- de su primera canción, para que este orden cuadre con el del carrusel de arriba.
-            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
-                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
-                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
-                LIMIT 1))) IS NULL,
-            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
-                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
-                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
-                LIMIT 1))) DESC,
-            LOWER(al.title),
-            COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber,
-            LOWER(s.title)
+        ORDER BY LOWER(s.title)
         """
     )
     abstract fun observeSongsOfArtist(artistId: Long): Flow<List<SongWithRelations>>
@@ -224,8 +223,9 @@ abstract class LibraryDao {
             -- Fallback si el usuario no ha puesto año: el de su primera canción (nunca se
             -- escribe en la fila del álbum, solo se calcula para pintar y para ordenar el carrusel).
             COALESCE(a.year, (SELECT s.year FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
                 LIMIT 1)) AS year,
             -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
             -- en el orden en que se enlazaron, no solo el primero (GROUP_CONCAT sobre la subconsulta
@@ -247,31 +247,37 @@ abstract class LibraryDao {
                 NULLIF(a.tagAlbumArtist, ''),
                 (SELECT ar.name FROM song_artist x
                     JOIN songs s ON s.id = x.songId
+                    JOIN song_album sa ON sa.songId = s.id
                     JOIN artists ar ON ar.id = x.artistId
-                    WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
+                    WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
                     GROUP BY x.artistId
                     ORDER BY COUNT(*) DESC, LENGTH(ar.name), x.artistId
                     LIMIT 1)
             ) AS artistName,
             (SELECT COUNT(*) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
         FROM albums a
         WHERE EXISTS (
             SELECT 1 FROM songs s
+            JOIN song_album sa ON sa.songId = s.id
             JOIN song_artist x ON x.songId = s.id
-            WHERE s.albumId = a.id AND x.artistId = :artistId AND s.hiddenByGreylist = 0
+            WHERE sa.albumId = a.id AND x.artistId = :artistId AND s.hiddenByGreylist = 0
         )
         ORDER BY
             (COALESCE(a.year, (SELECT s.year FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
                 LIMIT 1))) IS NULL,
             (COALESCE(a.year, (SELECT s.year FROM songs s
-                WHERE s.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
-                LIMIT 1))) DESC,
+                JOIN song_album sa ON sa.songId = s.id
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
+                LIMIT 1))) ASC,
             LOWER(a.title)
         """
     )
@@ -292,8 +298,9 @@ abstract class LibraryDao {
         SELECT s.imageName AS imageName, s.filePath AS filePath,
             s.videoThumbnailName AS videoThumbnailName
         FROM songs s
-        WHERE s.albumId = :albumId AND s.hiddenByGreylist = 0
-        ORDER BY COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber, LOWER(s.title)
+        JOIN song_album sa ON sa.songId = s.id
+        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0
+        ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
         """
     )
     abstract suspend fun collageCandidatesForAlbum(albumId: Long): List<CollageCandidateRow>
@@ -304,22 +311,10 @@ abstract class LibraryDao {
             s.videoThumbnailName AS videoThumbnailName
         FROM songs s
         JOIN song_artist x ON x.songId = s.id
-        LEFT JOIN albums al ON al.id = s.albumId
         WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
-        ORDER BY
-            -- Mismo fallback que observeSongsOfArtist (ver su comentario): así el collage se forma
-            -- con las mismas primeras canciones que ve el usuario en la ficha.
-            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
-                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
-                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
-                LIMIT 1))) IS NULL,
-            (SELECT COALESCE(al.year, (SELECT s2.year FROM songs s2
-                WHERE s2.albumId = al.id AND s2.hiddenByGreylist = 0
-                ORDER BY COALESCE(s2.discNumber, 1), s2.trackNumber IS NULL, s2.trackNumber, LOWER(s2.title)
-                LIMIT 1))) DESC,
-            LOWER(al.title),
-            COALESCE(s.discNumber, 1), s.trackNumber IS NULL, s.trackNumber,
-            LOWER(s.title)
+        -- Mismo orden que observeSongsOfArtist (ver su comentario): así el collage se forma con
+        -- las mismas primeras canciones que ve el usuario en la ficha.
+        ORDER BY LOWER(s.title)
         """
     )
     abstract suspend fun collageCandidatesForArtist(artistId: Long): List<CollageCandidateRow>
@@ -479,18 +474,27 @@ abstract class LibraryDao {
     @Query("SELECT * FROM tags WHERE systemKey = :key LIMIT 1")
     abstract suspend fun findTagBySystemKey(key: String): TagEntity?
 
+    /** Lectura puntual por nombre EXACTO, para el "crea la etiqueta a no ser que ya exista" de
+     *  [com.untar.ultimusic.data.LibraryRepository.syncLanguageTag]: no hay índice único sobre
+     *  [com.untar.ultimusic.data.db.entities.TagEntity.name] (nunca lo hubo, ver el comentario de esa
+     *  entidad), así que puede haber más de una fila con el mismo nombre si el usuario ya tenía una
+     *  personalizada igual; `LIMIT 1` se queda con la primera y la reutiliza tal cual. */
+    @Query("SELECT * FROM tags WHERE name = :name LIMIT 1")
+    abstract suspend fun findTagByName(name: String): TagEntity?
+
     @Insert
     abstract suspend fun insertTag(tag: TagEntity): Long
 
-    /** `WHERE systemKey IS NULL` como cinturón de seguridad: la UI ya no deja llegar hasta aquí para
-     *  una etiqueta predefinida (Favoritos, Debug...), pero así un bug de la UI tampoco podría
-     *  renombrarlas/recolorearlas por accidente. */
-    @Query("UPDATE tags SET name = :name, colorArgb = :colorArgb WHERE id = :id AND systemKey IS NULL")
+    /** `WHERE systemKey IS NULL AND isAutoAssigned = 0` como cinturón de seguridad: la UI ya no deja
+     *  llegar hasta aquí para una etiqueta predefinida (Favoritos, Debug...) ni para una de idioma
+     *  (ver [com.untar.ultimusic.data.db.entities.TagEntity.isAutoAssigned]), pero así un bug de la UI
+     *  tampoco podría renombrarlas/recolorearlas por accidente. */
+    @Query("UPDATE tags SET name = :name, colorArgb = :colorArgb WHERE id = :id AND systemKey IS NULL AND isAutoAssigned = 0")
     abstract suspend fun updateTag(id: Long, name: String, colorArgb: Int)
 
     /** Mismo cinturón de seguridad que [updateTag]. `song_tag` se limpia sola vía el
      *  `ON DELETE CASCADE` de `SongTagCrossRef.tagId`, no hace falta borrar sus filas a mano. */
-    @Query("DELETE FROM tags WHERE id = :id AND systemKey IS NULL")
+    @Query("DELETE FROM tags WHERE id = :id AND systemKey IS NULL AND isAutoAssigned = 0")
     abstract suspend fun deleteTag(id: Long)
 
     /** Para insertar la próxima etiqueta personalizada al final de la lista (ver
@@ -528,6 +532,9 @@ abstract class LibraryDao {
     abstract suspend fun insertSongArtist(ref: SongArtistCrossRef)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
+    abstract suspend fun insertSongAlbum(ref: SongAlbumCrossRef)
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
     abstract suspend fun insertSongProducer(ref: SongProducerCrossRef)
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
@@ -551,6 +558,9 @@ abstract class LibraryDao {
 
     @Query("DELETE FROM song_artist WHERE songId = :songId")
     abstract suspend fun clearSongArtists(songId: Long)
+
+    @Query("DELETE FROM song_album WHERE songId = :songId")
+    abstract suspend fun clearSongAlbums(songId: Long)
 
     @Query("DELETE FROM song_producer WHERE songId = :songId")
     abstract suspend fun clearSongProducers(songId: Long)
@@ -636,10 +646,12 @@ abstract class LibraryDao {
     /**
      * Un canal candidato por cada combinación (artista, canal) que aparezca entre las canciones
      * donde ese artista es el PRINCIPAL (`x.position = 0`), con cuántas veces se repite. La usa
-     * [com.untar.ultimusic.data.LibraryRepository.refreshYouTubeStatsIfDue] para hallar, en Kotlin,
-     * la moda de cada artista (agrupando por `artistId` y quedándose con el `cnt` más alto) y
-     * descartar los canales que no respondan al pedir sus estadísticas — "el más repetido que sea
-     * válido" cae así al siguiente candidato de la lista, no se resuelve aquí en SQL.
+     * [com.untar.ultimusic.data.LibraryRepository.refreshYouTubeStatsIfDue] para hallar, en Kotlin, la
+     * moda de cada artista (agrupando por `artistId` y quedándose con el `cnt` más alto); la moda no
+     * se calcula aquí en SQL porque `GROUP BY` no puede quedarse con "la fila del máximo" sin un
+     * subquery más caro que resolverlo en Kotlin. Un candidato con menos repeticiones que la moda NO
+     * se usa como reserva si esta falla: suele ser una sola canción resubida a otro canal, y sus
+     * suscriptores no son los del artista.
      */
     @Query(
         """
@@ -695,7 +707,7 @@ abstract class LibraryDao {
     )
     abstract suspend fun pruneOrphanArtists()
 
-    @Query("DELETE FROM albums WHERE id NOT IN (SELECT albumId FROM songs WHERE albumId IS NOT NULL)")
+    @Query("DELETE FROM albums WHERE id NOT IN (SELECT albumId FROM song_album)")
     abstract suspend fun pruneOrphanAlbums()
 
     @Query("DELETE FROM producers WHERE id NOT IN (SELECT producerId FROM song_producer)")
@@ -727,12 +739,16 @@ abstract class LibraryDao {
     )
     abstract suspend fun fillAlbumGaps(keepId: Long, dupId: Long)
 
-    /** Reapunta de un plumazo todas las canciones del duplicado al álbum que sobrevive: al no haber
-     * tabla de cruce (ver [SongEntity.albumId][com.untar.ultimusic.data.db.entities.SongEntity.albumId]),
-     * no hay clave primaria compuesta que pueda entrar en conflicto, así que basta un UPDATE simple
-     * (a diferencia de [moveAlbumArtistLinksTo], que sí necesita el `OR IGNORE` + borrado). */
-    @Query("UPDATE songs SET albumId = :keepId WHERE albumId = :dupId")
+    /** Reapunta las filas de `song_album` del duplicado al álbum que sobrevive. `OR IGNORE` +
+     * [deleteSongAlbumLinksOf] por el mismo motivo que [moveAlbumArtistLinksTo]: si una canción ya
+     * estaba enlazada a los DOS álbumes a la vez (no debería, pero por si acaso), reapuntar su fila
+     * de [dupId] chocaría con la clave primaria compuesta `(songId, albumId)` que ya tiene para
+     * [keepId]. */
+    @Query("UPDATE OR IGNORE song_album SET albumId = :keepId WHERE albumId = :dupId")
     abstract suspend fun moveSongAlbumLinksTo(keepId: Long, dupId: Long)
+
+    @Query("DELETE FROM song_album WHERE albumId = :dupId")
+    abstract suspend fun deleteSongAlbumLinksOf(dupId: Long)
 
     @Query("UPDATE OR IGNORE album_artist SET albumId = :keepId WHERE albumId = :dupId")
     abstract suspend fun moveAlbumArtistLinksTo(keepId: Long, dupId: Long)
@@ -843,10 +859,10 @@ abstract class LibraryDao {
 
         // Fase 4: altas reales.
         for (s in inserted) {
-            // El álbum se resuelve ANTES de insertar la canción: ahora vive como columna suya
-            // (SongEntity.albumId), no en una tabla de cruce aparte, así que hace falta el id antes
-            // de poder construir la fila. Sin etiqueta de álbum no hay fila de álbum, en vez de
-            // agrupar todo lo suelto bajo un "Álbum desconocido" común.
+            // El álbum se resuelve ANTES de insertar la canción: hace falta su id para enlazarlo en
+            // `song_album` en cuanto se conozca el id de la canción, un par de líneas más abajo. Sin
+            // etiqueta de álbum no hay fila de álbum, en vez de agrupar todo lo suelto bajo un "Álbum
+            // desconocido" común.
             val albumTitle = s.album
             val albumId = if (albumTitle != null) {
                 val albumArtistNames = splitTagNames(s.albumArtist ?: s.artist)
@@ -861,7 +877,19 @@ abstract class LibraryDao {
                 null
             }
 
-            val songId = insertSong(s.toEntity(hidden = isHidden(s.filePath), albumId = albumId))
+            val songId = insertSong(s.toEntity(hidden = isHidden(s.filePath)))
+            // El escaneo de una etiqueta solo puede dar UN álbum por canción (es lo que trae la
+            // etiqueta ID3/similar): la posición 0 la deja como "álbum principal" (ver
+            // [com.untar.ultimusic.model.Song.album]); álbumes adicionales solo se añaden a mano
+            // desde el editor de metadatos (ver [saveSongEdits]).
+            if (albumId != null) {
+                insertSongAlbum(
+                    SongAlbumCrossRef(
+                        songId = songId, albumId = albumId,
+                        trackNumber = s.trackNumber, discNumber = s.discNumber, position = 0
+                    )
+                )
+            }
 
             // La etiqueta puede traer varios artistas separados por comas ("A, B"): se tratan como
             // varias personas, igual que hace el editor de metadatos manual (ver
@@ -918,7 +946,7 @@ abstract class LibraryDao {
             val keepId = ids.first()
             for (dupId in ids.drop(1)) {
                 fillAlbumGaps(keepId, dupId)
-                moveSongAlbumLinksTo(keepId, dupId)
+                moveSongAlbumLinks(keepId, dupId)
                 moveAlbumArtistLinks(keepId, dupId)
                 deleteAlbumById(dupId)
             }
@@ -933,6 +961,13 @@ abstract class LibraryDao {
         deleteAlbumArtistLinksOf(dupId)
     }
 
+    /** Gemela de [moveAlbumArtistLinks] pero para `song_album`: mismo patrón `UPDATE OR IGNORE` +
+     * limpieza de lo que no se haya podido reapuntar. */
+    private suspend fun moveSongAlbumLinks(keepId: Long, dupId: Long) {
+        moveSongAlbumLinksTo(keepId, dupId)
+        deleteSongAlbumLinksOf(dupId)
+    }
+
     // --- Edición desde el editor de metadatos ---
 
     /**
@@ -940,20 +975,23 @@ abstract class LibraryDao {
      * [Transaction] para que no exista un instante intermedio en el que la canción se haya quedado
      * sin artistas o sin álbumes (la UI observa la base de datos y lo pintaría).
      *
-     * Los nombres de [artistNames]/[albumTitle]/[producerNames] REENLAZAN la canción: se busca la
+     * Los nombres de [artistNames]/[albums]/[producerNames] REENLAZAN la canción: se busca la
      * entidad con ese nombre visible y, si no existe, se crea. Nunca se renombra un
      * artista/álbum/productor existente, porque eso afectaría a todas las demás canciones que
      * cuelgan de él.
      *
-     * [albumTitle] null desengancha la canción de cualquier álbum (columna [SongEntity.albumId] a
-     * null). El [song] que se recibe trae ya escritos [SongEntity.trackNumber]/[SongEntity.discNumber]
-     * (son campos suyos, como el título o el año): aquí solo se resuelve a qué álbum apuntan.
+     * [albums] REEMPLAZA por completo los álbumes de la canción (igual que [artistNames]/
+     * [producerNames] con los suyos), en el orden en que llega (posición 0 = álbum principal, ver
+     * [com.untar.ultimusic.model.Song.album]): una lista vacía desengancha la canción de cualquier
+     * álbum. A diferencia de artista/productor, aquí cada entrada trae también su propia posición
+     * ([AlbumEdit.trackNumber]/[AlbumEdit.discNumber]), porque una misma canción puede ser la pista
+     * 5 de un álbum y la 12 de otro.
      */
     @Transaction
     open suspend fun saveSongEdits(
         song: SongEntity,
         artistNames: List<String>,
-        albumTitle: String?,
+        albums: List<AlbumEdit>,
         producerNames: List<String>
     ) {
         clearSongArtists(song.id)
@@ -962,12 +1000,24 @@ abstract class LibraryDao {
             insertSongArtist(SongArtistCrossRef(songId = song.id, artistId = artistId, position = position))
         }
 
+        updateSong(song)
+
         // El "artista del álbum" con el que se crearía un álbum nuevo es el primero de la canción;
-        // si la canción se ha quedado sin artista, el álbum se crea sin artista también.
+        // si la canción se ha quedado sin artista, el álbum se crea sin artista también. Se reutiliza
+        // para CADA álbum de la lista, igual que antes se usaba para el único que había.
         val albumArtistName = artistNames.firstOrNull() ?: ""
         val albumArtistId = artistIds.firstOrNull()
-        val albumId = albumTitle?.let { resolveAlbum(it, albumArtistName, albumArtistId) }
-        updateSong(song.copy(albumId = albumId))
+        clearSongAlbums(song.id)
+        for ((position, albumEdit) in albums.withIndex()) {
+            val albumId = resolveAlbum(albumEdit.title, albumArtistName, albumArtistId)
+            insertSongAlbum(
+                SongAlbumCrossRef(
+                    songId = song.id, albumId = albumId,
+                    trackNumber = albumEdit.trackNumber, discNumber = albumEdit.discNumber,
+                    position = position
+                )
+            )
+        }
 
         // Ni artista, ni álbum ni productor tienen valor por defecto: si el usuario vacía el campo,
         // la canción se queda sin ninguno (y el que se quede huérfano desaparece de su pestaña).
@@ -1092,14 +1142,21 @@ private fun splitTagNames(raw: String?): List<String> =
     raw?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
 
 /**
+ * Un álbum a enlazar desde el editor de metadatos de canción (ver [LibraryDao.saveSongEdits]):
+ * título más la posición ([trackNumber]/[discNumber]) que ocupa la canción DENTRO de él, ya que con
+ * la relación N:M (ver [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]) esa posición es
+ * del enlace, no de la canción.
+ */
+data class AlbumEdit(val title: String, val trackNumber: Int?, val discNumber: Int?)
+
+/**
  * Convierte el resultado crudo del escaneo en su fila de la tabla de canciones. Los campos `og*`
  * (info de la canción original de un remix) quedan a null: no son datos de la etiqueta, los rellena
- * el usuario desde el editor cuando la canción sea efectivamente un remix. El productor tampoco
- * aparece aquí: se enlaza aparte en su tabla de cruce, igual que los artistas. [albumId] sí llega ya
- * resuelto (por [LibraryDao.reconcile], antes de llamar aquí), porque a diferencia del productor
- * vive como columna propia de esta fila, no en una tabla de cruce.
+ * el usuario desde el editor cuando la canción sea efectivamente un remix. Ni el álbum ni el
+ * productor aparecen aquí: los dos se enlazan aparte en su propia tabla de cruce (ver
+ * [LibraryDao.reconcile], que inserta la fila de `song_album` justo después de esta).
  */
-private fun ScannedSong.toEntity(hidden: Boolean, albumId: Long?): SongEntity = SongEntity(
+private fun ScannedSong.toEntity(hidden: Boolean): SongEntity = SongEntity(
     filePath = filePath,
     title = title,
     duration = duration,
@@ -1112,12 +1169,8 @@ private fun ScannedSong.toEntity(hidden: Boolean, albumId: Long?): SongEntity = 
     videoUrl = null,
     videoThumbnailName = null,
     hiddenByGreylist = hidden,
-    albumId = albumId,
-    trackNumber = trackNumber,
-    discNumber = discNumber,
     ogTitle = null,
     ogArtist = null,
-    ogAlbum = null,
     ogYear = null,
     dateAdded = File(filePath).lastModified()
 )

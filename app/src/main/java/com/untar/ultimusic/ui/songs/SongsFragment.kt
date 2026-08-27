@@ -15,10 +15,8 @@ import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.VisualPreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
-import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
@@ -33,16 +31,11 @@ import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.joinNonBlank
-import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import java.io.File
 
 /** Primer fragmento: lista de canciones. */
-@OptIn(ExperimentalCoroutinesApi::class)
 class SongsFragment : Fragment(R.layout.fragment_songs) {
 
     private val songsViewModel: SongsViewModel by activityViewModels()
@@ -160,13 +153,7 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                     songsViewModel.selectedIds.collect { ids -> adapter.setSelection(ids) }
                 }
                 launch {
-                    // flatMapLatest, no combine directo: con el ajuste desactivado no tiene sentido
-                    // suscribirse a tagsViewModel.songTagsById (recalcula TODA la biblioteca en cada
-                    // cambio de canciones/etiquetas, el mismo coste que la pestaña Etiquetas).
-                    VisualPreferences.showSongTags.flatMapLatest { show ->
-                        if (show) tagsViewModel.songTagsById.map { byId -> show to byId }
-                        else flowOf(show to emptyMap<Long, List<TagSummary>>())
-                    }.collect { (show, byId) -> adapter.setTags(show, byId) }
+                    tagsViewModel.songTagsById.collect { byId -> adapter.setTags(byId) }
                 }
             }
         }

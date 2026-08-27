@@ -614,18 +614,6 @@
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold" />
 
-            <!-- ===== Ajuste: etiquetas en la pestaña Canciones ===== -->
-
-            <com.google.android.material.checkbox.MaterialCheckBox
-                android:id="@+id/showSongTagsCheck"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="@string/settings_show_song_tags"
-                android:textColor="@color/um_on_background"
-                android:textSize="15sp"
-                app:rippleColor="@color/um_ripple_white" />
-
             <!-- ===== Grupo: servicios externos ===== -->
             <!--
               Genius y la YouTube Data API piden un token/clave por usuario (ver GeniusTokenStore y
@@ -727,6 +715,10 @@
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold"
                 tools:text="@string/settings_youtube_configure" />
+
+            <!-- Sin fila para la traducción de letras (botón "あ" del iPod): usa Lingva Translate,
+                 que no pide clave ni cuenta, así que no tiene nada que configurar aquí (ver
+                 LyricsTranslator). -->
 
         </LinearLayout>
 

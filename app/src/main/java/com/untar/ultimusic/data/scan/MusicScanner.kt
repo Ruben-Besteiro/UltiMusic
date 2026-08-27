@@ -21,7 +21,7 @@ object MusicScanner {            // OBJECT = SINGLETON
         "mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma", "mkv"
     )
 
-    const val UNKNOWN_ARTIST = ""
+    const val UNKNOWN_ARTIST = "Artista desconocido"
     const val UNKNOWN_ALBUM = ""
 
     /**

@@ -1,5 +1,7 @@
 package com.untar.ultimusic.ui.common
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.util.AttributeSet
@@ -17,7 +19,11 @@ import android.widget.FrameLayout
  * medida imponiendo el alto que toca según [aspectRatio].
  *
  * La pantalla del iPod usa además [animateAspectRatio] para pasar de cuadrada (carátula/cola) a
- * 16:9 (vídeo) con una animación corta en vez de un salto brusco.
+ * 16:9 (vídeo) con una animación corta en vez de un salto brusco, y para lo mismo con el botón
+ * "Ver más/menos" del contenedor de la letra (ver [com.untar.ultimusic.ui.player.IPodDialogFragment]):
+ * ahí el objetivo es 0f, así el recuadro se estrecha solo verticalmente hasta quedar en una línea,
+ * momento en el que [onEnd] lo oculta del todo (`isVisible = false`) para que ese hueco final no
+ * se quede ocupando espacio.
  */
 class SquareFrameLayout @JvmOverloads constructor(
     context: Context,
@@ -50,12 +56,30 @@ class SquareFrameLayout @JvmOverloads constructor(
         super.onMeasure(widthMeasureSpec, height)
     }
 
-    /** Anima [aspectRatio] hasta [target] en [durationMs]. Cancela cualquier animación en curso. */
-    fun animateAspectRatio(target: Float, durationMs: Long = 200) {
+    /**
+     * Anima [aspectRatio] hasta [target] en [durationMs]. Cancela cualquier animación en curso.
+     *
+     * [onEnd], si se pasa, se llama al terminar la animación de verdad (con `end()`, no con
+     * `cancel()`: una animación cancelada por otra que la reemplaza a medio camino no debe disparar
+     * el remate de la anterior). Lo usa el botón "Ver más/menos" del iPod para ocultar del todo el
+     * recuadro de la carátula/vídeo (`isVisible = false`) justo cuando ha terminado de encogerse
+     * hasta convertirse en una línea, no antes.
+     */
+    fun animateAspectRatio(target: Float, durationMs: Long = 200, onEnd: (() -> Unit)? = null) {
         ratioAnimator?.cancel()
         ratioAnimator = ValueAnimator.ofFloat(aspectRatio, target).apply {
             duration = durationMs
             addUpdateListener { aspectRatio = it.animatedValue as Float }
+            if (onEnd != null) {
+                // cancel() también dispara onAnimationEnd (además de onAnimationCancel), así que sin
+                // esta bandera un animateAspectRatio() que cancela al de arriba a medio camino
+                // dispararía el onEnd de ESE anterior igualmente.
+                var cancelled = false
+                addListener(object : AnimatorListenerAdapter() {
+                    override fun onAnimationCancel(animation: Animator) { cancelled = true }
+                    override fun onAnimationEnd(animation: Animator) { if (!cancelled) onEnd() }
+                })
+            }
             start()
         }
     }

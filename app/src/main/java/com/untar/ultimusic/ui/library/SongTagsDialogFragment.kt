@@ -160,13 +160,15 @@ class SongTagsDialogFragment : DialogFragment() {
         renderMulti()
     }
 
-    /** Eliminable = tiene membresía real: Favoritos, Vídeo sincronizado o una personalizada
-     *  (systemKey null). Las 3 calculadas nunca lo son, no hay fila que borrar. Mismo criterio que
-     *  [TagsViewModel.isEditable], repetido aquí en vez de reutilizado porque ese trabaja sobre la
+    /** Eliminable = tiene membresía real: Favoritos, Vídeo sincronizado, Remix / Cover o una
+     *  personalizada (systemKey null y no [TagSummary.isAutoAssigned]). Las 3 calculadas nunca lo son,
+     *  no hay fila que borrar; una de idioma tampoco -SÍ tiene fila real, pero se gestiona sola desde
+     *  el editor de metadatos, no a mano desde aquí (ver [TagsViewModel.isEditable])-. Mismo criterio
+     *  que [TagsViewModel.isEditable], repetido aquí en vez de reutilizado porque ese trabaja sobre la
      *  ETIQUETA (ficha de una etiqueta) y este sobre las etiquetas DE UNA CANCIÓN. */
     private fun isRemovable(tag: TagSummary) =
-        tag.systemKey == null || tag.systemKey == SystemTagKey.FAVORITES.name ||
-            tag.systemKey == SystemTagKey.SYNCED_VIDEO.name
+        (tag.systemKey == null && !tag.isAutoAssigned) || tag.systemKey == SystemTagKey.FAVORITES.name ||
+            tag.systemKey == SystemTagKey.SYNCED_VIDEO.name || tag.systemKey == SystemTagKey.REMIX_COVER.name
 
     private fun renderSingle(tags: List<TagSummary>) {
         renderRows(tags, isRemovable = ::isRemovable) { tag ->

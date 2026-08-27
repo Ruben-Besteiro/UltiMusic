@@ -5,6 +5,7 @@ import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.LibraryRootEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
+import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 import com.untar.ultimusic.data.db.entities.TagEntity
@@ -19,6 +20,7 @@ import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.SongAlbumEntry
 import com.untar.ultimusic.model.Tag
 import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.GroupCoverSource
@@ -75,7 +77,10 @@ fun SongWithRelations.toDomain(): Song = Song(
     filePath = song.filePath,
     title = song.title,
     artists = artists.sortedByArtistLink(artistLinks).map { it.toDomain() },
-    album = album?.toDomain(),
+    albums = albums.sortedByAlbumLink(albumLinks).map { albumEntity ->
+        val link = albumLinks.first { it.albumId == albumEntity.id }
+        SongAlbumEntry(album = albumEntity.toDomain(), trackNumber = link.trackNumber, discNumber = link.discNumber)
+    },
     producers = producers.sortedByProducerLink(producerLinks).map { it.toDomain() },
     duration = song.duration,
     year = song.year,
@@ -88,11 +93,8 @@ fun SongWithRelations.toDomain(): Song = Song(
     videoThumbnailName = song.videoThumbnailName,
     videoOffsetMs = song.videoOffsetMs,
     lyricsOffsetMs = song.lyricsOffsetMs,
-    trackNumber = song.trackNumber,
-    discNumber = song.discNumber,
     ogTitle = song.ogTitle,
     ogArtist = song.ogArtist,
-    ogAlbum = song.ogAlbum,
     ogYear = song.ogYear,
     youtubeViewCount = song.youtubeViewCount,
     dateAdded = song.dateAdded
@@ -141,5 +143,13 @@ private fun List<ArtistEntity>.sortedByArtistLink(links: List<SongArtistCrossRef
 
 private fun List<ProducerEntity>.sortedByProducerLink(links: List<SongProducerCrossRef>): List<ProducerEntity> {
     val order = links.associate { it.producerId to it.position }
+    return sortedBy { order[it.id] ?: Int.MAX_VALUE }
+}
+
+/** Igual que [sortedByArtistLink]/[sortedByProducerLink] pero para los álbumes de una canción (ver
+ *  [SongAlbumCrossRef.position]): el primero de la lista ordenada es el "álbum principal" que usa
+ *  [Song.album][com.untar.ultimusic.model.Song.album]. */
+private fun List<AlbumEntity>.sortedByAlbumLink(links: List<SongAlbumCrossRef>): List<AlbumEntity> {
+    val order = links.associate { it.albumId to it.position }
     return sortedBy { order[it.id] ?: Int.MAX_VALUE }
 }

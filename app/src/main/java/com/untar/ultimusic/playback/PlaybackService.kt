@@ -29,7 +29,6 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.EqBand
@@ -44,6 +43,7 @@ import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
 import com.untar.ultimusic.util.PlaylistResumeStore
+import com.untar.ultimusic.util.artistDisplay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -401,6 +401,12 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             library.songs.collect { librarySongsPool.value = it }
         }
+        // El vigilante de cambios del filesystem también nos interesa a nosotros, no solo a
+        // MainActivity: mientras haya sesión de reproducción activa (sonando o en pausa) el proceso
+        // sigue vivo aunque la Activity esté en segundo plano, así que aprovechamos para detectar
+        // canciones nuevas sin depender de que el usuario reabra la app. Recuento de referencias en
+        // [LibraryRepository.startWatchingLibraryChanges]: no pisa lo que ya tuviera pedido la Activity.
+        library.startWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
         restorePlaybackState()
 
         mediaSession = MediaSession.Builder(this, QueueAwarePlayer(player))
@@ -426,6 +432,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         savePlaybackState()
+        library.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         loudnessEnhancer?.release(); loudnessEnhancer = null
@@ -678,8 +685,9 @@ class PlaybackService : MediaSessionService() {
     /**
      * Si la canción que suena ahora mismo pertenece a [collection] (p. ej. el usuario ya la estaba
      * escuchando y entra a mezclar ese mismo género o lista), solo se reordena la cola —igual que
-     * [reorderQueue]— para no cortar la reproducción en curso. Si no, es una mezcla normal: se
-     * arranca desde el principio de la colección ya barajada.
+     * [reorderQueue]— para no cortar la reproducción en curso, dejando la canción actual en la
+     * posición 0 y barajando el resto detrás. Si no, es una mezcla normal: se arranca desde el
+     * principio de la colección ya barajada.
      */
     fun shuffleCollection(
         collection: List<Song>,
@@ -692,7 +700,9 @@ class PlaybackService : MediaSessionService() {
             _isLooseQueue.value = false
             _currentPlaylistName.value = playlistName
             _currentCollectionKind.value = collectionKind
-            reorderQueue(collection.shuffled())
+            val rest = collection.filterNot { it.id == currentId }.shuffled()
+            val current = collection.first { it.id == currentId }
+            reorderQueue(listOf(current) + rest)
         } else {
             playCollection(collection.shuffled(), 0, playlistName, collectionKind)
         }
@@ -894,7 +904,7 @@ class PlaybackService : MediaSessionService() {
      * miraba esta metadata; ahora la mira la notificación (y, con ella, la pantalla de bloqueo).
      */
     private fun buildMediaItem(song: Song, path: String): MediaItem {
-        val artistName = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
+        val artistName = song.artistDisplay()
         val albumName = song.album?.title
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)

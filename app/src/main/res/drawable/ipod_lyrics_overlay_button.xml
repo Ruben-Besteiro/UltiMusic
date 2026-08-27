@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo compartido por los dos botones flotantes del contenedor de la letra del iPod ("Ver
+     más/Ver menos" y el de traducir, "あ"): un rectángulo con las esquinas tan redondeadas que
+     Android las recorta a la mitad del lado corto, dando una píldora en el botón ancho (texto) y
+     un círculo perfecto en el cuadrado de 36dp (traducir). Semitransparente para no tapar del todo
+     la letra que quede debajo. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/um_lyrics_overlay_button" />
+    <corners android:radius="999dp" />
+</shape>

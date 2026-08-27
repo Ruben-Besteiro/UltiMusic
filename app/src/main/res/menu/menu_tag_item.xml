@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Menú del botón de 3 puntos de cada etiqueta PERSONALIZADA (ver TagsAdapter): editar (nombre y
-     color) y borrar. Las 5 predefinidas no muestran este botón, así que este menú nunca se infla
-     para ellas. -->
+<!-- Menú del botón de 3 puntos de cada etiqueta PERSONALIZADA: editar (nombre y color) y borrar.
+     Lo usan tanto su fila en la pestaña Etiquetas (ver TagsAdapter) como la cabecera de su propia
+     ficha (ver CollectionDetailDialogFragment.showTagMenu). Las 6 predefinidas no muestran este
+     botón, así que este menú nunca se infla para ellas. -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
         android:id="@+id/action_edit_tag"

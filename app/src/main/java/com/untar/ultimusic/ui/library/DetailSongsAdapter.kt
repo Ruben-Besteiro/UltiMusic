@@ -11,11 +11,11 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.TimeFormat
+import com.untar.ultimusic.util.albumDisplay
 import com.untar.ultimusic.util.formatCompactCount
 import com.untar.ultimusic.util.joinNonBlank
 
@@ -29,9 +29,17 @@ import com.untar.ultimusic.util.joinNonBlank
  * [currentKind] es de qué ficha se trata: decide si se ve el número de pista (solo en álbum, ver
  * [TrackViewHolder.bind]) y qué opción "Ir a..." del menú se oculta por inútil (la de esta misma
  * ficha, ver [onGoToAlbum]/[onGoToArtist]).
+ *
+ * [albumId] es el álbum que se está mirando (solo tiene valor con [currentKind] == [DetailKind.ALBUM]):
+ * hace falta para saber QUÉ número de pista/disco enseñar de cada canción, ya que con la relación
+ * N:M (ver [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]) una misma canción puede tener
+ * una posición distinta en cada álbum al que pertenece — no basta con
+ * [com.untar.ultimusic.model.Song.trackNumber] (el del álbum PRINCIPAL), que podría ser el de un
+ * álbum distinto de este si la canción está en más de uno.
  */
 class DetailSongsAdapter(
     private val currentKind: DetailKind,
+    private val albumId: Long?,
     private val onSongClick: (Int) -> Unit,
     private val onAddToQueue: (Song) -> Unit,
     private val onAddToPlaylist: (Song) -> Unit,
@@ -58,7 +66,7 @@ class DetailSongsAdapter(
 
     override fun onBindViewHolder(holder: TrackViewHolder, position: Int) {
         holder.bind(
-            tracks[position], position, currentKind,
+            tracks[position], position, currentKind, albumId,
             onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags, onDeleteSong,
             onGoToAlbum, onGoToArtist
         )
@@ -77,6 +85,7 @@ class DetailSongsAdapter(
             song: Song,
             position: Int,
             currentKind: DetailKind,
+            albumId: Long?,
             onSongClick: (Int) -> Unit,
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
@@ -92,8 +101,7 @@ class DetailSongsAdapter(
             duration.text = if (currentKind == DetailKind.ALBUM) {
                 TimeFormat.mmss(song.duration)
             } else {
-                val album = song.album?.title ?: MusicScanner.UNKNOWN_ALBUM
-                joinNonBlank(album, TimeFormat.mmss(song.duration))
+                joinNonBlank(song.albumDisplay(), TimeFormat.mmss(song.duration))
             }
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
 
@@ -108,9 +116,12 @@ class DetailSongsAdapter(
 
             if (currentKind == DetailKind.ALBUM) {
                 number.visibility = View.VISIBLE
-                // Un álbum sin número de pista tampoco tiene dato que mostrar: un guión en vez de
-                // dejar la columna vacía, que descuadraría los títulos.
-                number.text = song.trackNumber?.toString() ?: "-"
+                // El número de pista de ESTE álbum, no el del principal (Song.trackNumber): con la
+                // relación N:M (ver SongAlbumCrossRef) pueden ser distintos si la canción está en más
+                // de uno. Un álbum sin número de pista tampoco tiene dato que mostrar: un guión en
+                // vez de dejar la columna vacía, que descuadraría los títulos.
+                val trackNumber = song.albums.firstOrNull { it.album.id == albumId }?.trackNumber
+                number.text = trackNumber?.toString() ?: "-"
             } else {
                 // En la de un artista el número de pista es un dato del álbum, no de la persona:
                 // fuera del todo en vez de un guión que no significaría nada aquí.

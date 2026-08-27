@@ -2,7 +2,6 @@ package com.untar.ultimusic.data.db.entities
 
 import androidx.room.ColumnInfo
 import androidx.room.Entity
-import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
 
@@ -10,16 +9,16 @@ import androidx.room.PrimaryKey
  * Fila de la tabla de canciones. El [filePath] es la clave estable que ancla la canción entre
  * escaneos (aunque el [id] autogenerado cambie de instalación a instalación).
  *
- * [albumId] enlaza con el álbum al que pertenece esta canción, con [trackNumber]/[discNumber] como
- * la posición que ocupa en él. A diferencia de los artistas y productores (donde una colaboración es
- * habitual), una canción pertenece como mucho a UN álbum: no hay tabla de cruce, es una relación
- * N:1 normal como cualquier clave foránea. `SET_NULL` en vez de `CASCADE` porque borrar el álbum no
- * debe borrar sus canciones, solo deshacer el enlace (en la práctica esto no llega a pasar: un álbum
- * solo se borra cuando ya no le queda ninguna canción enlazada, ver `LibraryDao.pruneOrphanAlbums`).
+ * El álbum (o álbumes: N:M, ver [SongAlbumCrossRef]) al que pertenece esta canción NO vive aquí,
+ * a diferencia de los artistas y productores tampoco viven aquí: se enlaza en su propia tabla de
+ * cruce ([SongAlbumCrossRef]), con el número de pista/disco de cada enlace como columnas suyas
+ * (una misma canción puede ser la pista 5 de un álbum y la 12 de un recopilatorio).
  *
- * Los campos `og*` guardan la info de la canción ORIGINAL cuando esta es un remix (título, artista,
- * álbum y año del tema original). No provienen de la etiqueta del archivo: los rellena el usuario
- * desde el editor y quedan a null mientras la canción no se marque como remix.
+ * Los campos `og*` guardan la info de la canción ORIGINAL cuando esta es un remix (título, artista
+ * y año del tema original; no hay `ogAlbum` — se quitó del editor porque Genius se equivocaba
+ * demasiado rellenándolo y el dato por sí solo no compensaba pedirlo a mano). No provienen de la
+ * etiqueta del archivo: los rellena el usuario desde el editor y quedan a null mientras la canción
+ * no se marque como remix.
  *
  * [videoUrl] es el enlace de YouTube del videoclip, para el modo vídeo del iPod. Lo introduce SIEMPRE
  * el usuario (a mano en el editor, o eligiendo un vídeo en el buscador que abre el propio iPod): no
@@ -65,15 +64,7 @@ import androidx.room.PrimaryKey
  */
 @Entity(
     tableName = "songs",
-    indices = [Index(value = ["filePath"], unique = true), Index("albumId")],
-    foreignKeys = [
-        ForeignKey(
-            entity = AlbumEntity::class,
-            parentColumns = ["id"],
-            childColumns = ["albumId"],
-            onDelete = ForeignKey.SET_NULL
-        )
-    ]
+    indices = [Index(value = ["filePath"], unique = true)]
 )
 data class SongEntity(
     @PrimaryKey(autoGenerate = true) val id: Long = 0,
@@ -94,13 +85,8 @@ data class SongEntity(
     val youtubeViewCount: Long? = null,
     val youtubeChannelId: String? = null,
 
-    val albumId: Long?,
-    val trackNumber: Int?,
-    val discNumber: Int?,
-
     val ogTitle: String?,
     val ogArtist: String?,
-    val ogAlbum: String?,
     val ogYear: Int?,
 
     /**

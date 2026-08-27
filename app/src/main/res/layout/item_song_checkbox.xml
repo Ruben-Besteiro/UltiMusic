@@ -6,6 +6,7 @@
      aparte. Toda la fila es clicable y alterna la casilla -no hace falta acertar justo en el
      cuadradito-, ver SongCheckboxAdapter. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:id="@+id/songCheckboxRow"
     android:layout_width="match_parent"
@@ -22,7 +23,8 @@
         android:layout_height="wrap_content"
         android:layout_marginEnd="8dp"
         android:clickable="false"
-        android:focusable="false" />
+        android:focusable="false"
+        app:rippleColor="@color/um_ripple_white" />
 
     <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/cover"

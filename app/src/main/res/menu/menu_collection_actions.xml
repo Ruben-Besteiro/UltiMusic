@@ -6,8 +6,10 @@
   mismos títulos que en el menú de una canción suelta (menu_song_item.xml) y el de un álbum
   (menu_album_actions.xml), solo que aplicadas a todas las canciones a la vez. Borrar/renombrar una
   lista vive en el menú de 3 puntos de su propia fila (ver PlaylistsAdapter/menu_playlist_item.xml);
-  editar/borrar una etiqueta, en el de la suya (ver TagsAdapter/menu_tag_item.xml). Un género no
-  tiene fila propia editable, así que aquí nunca hubo ni hace falta esa opción.
+  editar/borrar una etiqueta usa directamente menu_tag_item.xml, tanto en su propia fila (ver
+  TagsAdapter) como en el de la cabecera de su ficha (ver
+  CollectionDetailDialogFragment.showTagMenu). Un género no tiene fila propia editable, así que
+  aquí nunca hubo ni hace falta esa opción.
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item

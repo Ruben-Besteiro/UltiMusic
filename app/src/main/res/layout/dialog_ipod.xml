@@ -321,24 +321,74 @@
             </FrameLayout>
         </LinearLayout>
 
-        <!-- Contenedor de la letra: ocupa todo el espacio restante (weight=1). Lo rellena
-             IPodDialogFragment.onViewCreated con Song.lyrics, una fila por línea (ver
-             IPodLyricsAdapter); si la canción no tiene letra guardada, una única fila con un aviso
-             invitando a rellenarla en el editor de metadatos. Es un RecyclerView (no un
-             NestedScrollView con un TextView, como antes) porque con letra sincronizada hace falta
-             poder resaltar y centrar la línea que toca cantar ahora; con letra sin sincronizar se
-             ve exactamente igual que antes (una fila = el texto entero, centrado, scrolleable si no
-             cabe entera). -->
-        <androidx.recyclerview.widget.RecyclerView
-            android:id="@+id/lyricsBox"
+        <!-- Contenedor de la letra: ocupa todo el espacio restante (weight=1). Envuelve a lyricsBox
+             (el RecyclerView de siempre) y a sus dos botones flotantes semitransparentes en un
+             FrameLayout porque ambos se dibujan ENCIMA de la letra, no al lado: lyricsBox ya no
+             lleva el weight/los márgenes directamente, los lleva este envoltorio, y él pasa a
+             match_parent dentro para seguir ocupando exactamente el mismo hueco que antes. -->
+        <FrameLayout
+            android:id="@+id/lyricsBoxContainer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
             android:layout_marginTop="16dp"
-            android:layout_marginBottom="4dp"
-            android:background="@drawable/ipod_info_box"
-            android:clipToPadding="false"
-            android:padding="14dp" />
+            android:layout_marginBottom="4dp">
+
+            <!-- Lo rellena IPodDialogFragment.onViewCreated con Song.lyrics, una fila por línea (ver
+                 IPodLyricsAdapter); si la canción no tiene letra guardada, una única fila con un
+                 aviso invitando a rellenarla en el editor de metadatos. Es un RecyclerView (no un
+                 NestedScrollView con un TextView, como antes) porque con letra sincronizada hace
+                 falta poder resaltar y centrar la línea que toca cantar ahora; con letra sin
+                 sincronizar se ve exactamente igual que antes (una fila = el texto entero, centrado,
+                 scrolleable si no cabe entera). -->
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/lyricsBox"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/ipod_info_box"
+                android:clipToPadding="false"
+                android:padding="14dp" />
+
+            <!-- Botón superior derecho: la "a" en hiragana que traduce la letra al idioma del
+                 sistema (ver IPodDialogFragment/LyricsTranslator). Empieza oculto; solo se muestra
+                 si el idioma detectado de la canción no es el del sistema Y hay letra que traducir. -->
+            <TextView
+                android:id="@+id/btnTranslateLyrics"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="top|end"
+                android:layout_margin="10dp"
+                android:background="@drawable/ipod_lyrics_overlay_button"
+                android:clickable="true"
+                android:contentDescription="@string/ipod_translate_lyrics_desc"
+                android:focusable="true"
+                android:foreground="@drawable/ipod_lyrics_overlay_button_ripple"
+                android:gravity="center"
+                android:text="@string/ipod_translate_lyrics_glyph"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <!-- Botón inferior derecho: encoge la carátula/vídeo (topBox) solo en el eje vertical
+                 hasta desaparecer, cediéndole su hueco a esta letra; pasa a decir "Ver menos" y
+                 vuelve a encogerla al revés (ver IPodDialogFragment). Misma animación corta que el
+                 cambio entre modo carátula y modo vídeo (SquareFrameLayout.animateAspectRatio). -->
+            <TextView
+                android:id="@+id/btnExpandLyrics"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="bottom|end"
+                android:layout_margin="10dp"
+                android:background="@drawable/ipod_lyrics_overlay_button"
+                android:clickable="true"
+                android:focusable="true"
+                android:foreground="@drawable/ipod_lyrics_overlay_button_ripple"
+                android:paddingHorizontal="14dp"
+                android:paddingVertical="8dp"
+                android:text="@string/ipod_lyrics_expand"
+                android:textColor="@android:color/white"
+                android:textSize="13sp" />
+        </FrameLayout>
 
         <!-- Regla de desplazamiento vídeo/audio del modo vídeo (ver IPodDialogFragment.startVideo /
              ValueRuler.onReleased): mismo aspecto que infoBox (fondo y contorno ipod_info_box) pero

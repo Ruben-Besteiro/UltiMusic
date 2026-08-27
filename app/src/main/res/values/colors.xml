@@ -28,6 +28,10 @@
     <!-- Velo semitransparente sobre la carátula cuando el iPod muestra la cola encima de ella
          (ver IPodDialogFragment): la carátula se ve de fondo, atenuada, en vez de desaparecer. -->
     <color name="um_queue_scrim">#D9000000</color>
+    <!-- Fondo de los dos botones flotantes del contenedor de la letra del iPod ("Ver más/menos" y
+         el de traducir, ver ipod_lyrics_overlay_button.xml): semitransparente para no tapar del
+         todo la letra que quede debajo, fijo en vez de con el color dinámico porque no es amarillo. -->
+    <color name="um_lyrics_overlay_button">#99000000</color>
     <!-- Rojo de "esto ha ido mal" (de momento solo el token de Genius que no vale, ver
          GeniusTokenDialogFragment). NO se tiñe con el color dinámico a propósito: la regla del
          proyecto es para lo amarillo, que es decorativo, y un error tiene que leerse como error
@@ -35,14 +39,25 @@
          oscuro, lo bastante claro para leerse encima de um_background. -->
     <color name="um_error">#FFF2B8B5</color>
 
-    <!-- Colores de borde de las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags): el
+    <!-- Colores de borde de las 6 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags): el
          relleno oscuro de su "salchicha" (ver item_tag.xml/TagsAdapter) sale de aplicar
          DynamicColor.dim a este mismo color en vez de guardarse aparte. NO son amarillos, así que no
          les aplica la regla de color dinámico del resto de la app: son fijos a propósito, uno por
-         etiqueta. -->
+         etiqueta. "En ninguna lista" y "Sin etiquetas personalizadas" comparten el mismo gris casi
+         negro a propósito; "Descargada recientemente", "Vídeo sincronizado" y "Remix / Cover" son
+         blancas. -->
     <color name="um_tag_favorites">#FFE91E63</color>       <!-- rosa -->
-    <color name="um_tag_recently_added">#FF0D47A1</color>  <!-- azul oscuro -->
-    <color name="um_tag_not_in_playlist">#FF6A1B9A</color> <!-- morado -->
-    <color name="um_tag_no_custom_tags">#FF616161</color>  <!-- gris -->
-    <color name="um_tag_synced_video">#FFD32F2F</color>     <!-- rojo -->
+    <color name="um_tag_recently_added">#FFFFFFFF</color>  <!-- blanco -->
+    <color name="um_tag_not_in_playlist">#FF333333</color> <!-- gris casi negro -->
+    <color name="um_tag_no_custom_tags">#FF333333</color>  <!-- gris casi negro -->
+    <color name="um_tag_synced_video">#FFFFFFFF</color>    <!-- blanco -->
+    <!-- Se asigna sola si "Título original" no está vacío en el editor de metadatos (ver
+         SystemTagKey.REMIX_COVER); membresía real en song_tag, mantenida por
+         LibraryRepository.syncRemixCoverTag, igual que "Vídeo sincronizado". -->
+    <color name="um_tag_remix_cover">#FFFFFFFF</color>     <!-- blanco -->
+
+    <!-- Etiquetas de IDIOMA (ver TagEntity.isAutoAssigned/LibraryRepository.syncLanguageTag): se crea
+         una por idioma detectado, siempre con este mismo blanco fijo, no una por color como las 6 de
+         arriba. Mismo motivo que ellas para no seguir el color dinámico: no es un amarillo. -->
+    <color name="um_tag_language">#FFFFFFFF</color>
 </resources>

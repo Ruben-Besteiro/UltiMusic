@@ -44,7 +44,7 @@
 
             <!-- Portada: cuadrada (SquareFrameLayout). Tocarla o el botón abajo-derecha abre el selector. -->
 
-            <!-- ===== Campos principales: Título y Álbum(es), en su propio bloque de color ===== -->
+            <!-- ===== Campo principal: Título, en su propio bloque de color ===== -->
 
             <com.untar.ultimusic.ui.common.SquareFrameLayout
                 android:layout_width="match_parent"
@@ -96,23 +96,6 @@
                         android:textSize="20sp"
                         android:textStyle="bold" />
                 </com.google.android.material.textfield.TextInputLayout>
-
-                <com.google.android.material.textfield.TextInputLayout
-                    android:id="@+id/layoutAlbum"
-                    style="@style/Widget.UltiMusic.TextField.Dropdown"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:hint="@string/field_albums">
-
-                    <com.google.android.material.textfield.MaterialAutoCompleteTextView
-                        android:id="@+id/inputAlbum"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:imeOptions="actionNext"
-                        android:inputType="textCapWords"
-                        android:maxLines="1"
-                        android:textSize="18sp" />
-                </com.google.android.material.textfield.TextInputLayout>
             </LinearLayout>
 
             <!-- ===== Resto de campos siempre visibles: Artista(s) y Productor(es) ===== -->
@@ -149,7 +132,8 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="@string/field_producers"
-                    app:helperText="@string/multi_value_hint">
+                    app:helperText="@string/multi_value_hint"
+                    android:layout_marginBottom="16dp">
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/inputProducers"
@@ -159,6 +143,87 @@
                         android:inputType="textCapWords"
                         android:maxLines="1" />
                 </com.google.android.material.textfield.TextInputLayout>
+
+                <!-- ===== Álbum(es): título y su posición (disco/pista) dentro de cada uno. Una
+                     canción puede estar en más de uno a la vez (N:M, ver SongAlbumCrossRef);
+                     "+ Añadir otro álbum" duplica este grupo de campos para el siguiente (ver
+                     MetadataEditorDialogFragment.addAlbumGroup). El primer grupo, con ids fijos, es
+                     el álbum PRINCIPAL (el que usa el resto de la aplicación cuando solo hace falta
+                     enseñar uno). ===== -->
+
+                <LinearLayout
+                    android:id="@+id/albumGroupsContainer"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <LinearLayout
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            android:id="@+id/layoutAlbum"
+                            style="@style/Widget.UltiMusic.TextField.Dropdown"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/field_albums">
+
+                            <com.google.android.material.textfield.MaterialAutoCompleteTextView
+                                android:id="@+id/inputAlbum"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:imeOptions="actionNext"
+                                android:inputType="textCapWords"
+                                android:maxLines="1"
+                                android:textSize="18sp" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Widget.UltiMusic.TextField"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/field_disc_number">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/inputDiscNumber"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:maxLines="1" />
+                        </com.google.android.material.textfield.TextInputLayout>
+
+                        <com.google.android.material.textfield.TextInputLayout
+                            style="@style/Widget.UltiMusic.TextField"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:hint="@string/field_track_number">
+
+                            <com.google.android.material.textfield.TextInputEditText
+                                android:id="@+id/inputTrackNumber"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:inputType="number"
+                                android:maxLines="1" />
+                        </com.google.android.material.textfield.TextInputLayout>
+                    </LinearLayout>
+                </LinearLayout>
+
+                <TextView
+                    android:id="@+id/linkAddAlbum"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:layout_marginBottom="8dp"
+                    android:background="?attr/selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"
+                    android:paddingHorizontal="4dp"
+                    android:paddingVertical="4dp"
+                    android:text="@string/editor_add_another_album"
+                    android:textColor="@color/um_yellow"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
 
                 <!-- ===== Detalles ===== -->
 
@@ -460,56 +525,6 @@
                     </LinearLayout>
                 </LinearLayout>
 
-                <!-- ===== Posición en el álbum ===== -->
-
-                <LinearLayout
-                    android:id="@+id/sectionPositionHeader"
-                    style="@style/Widget.UltiMusic.SectionHeader"
-                    android:layout_width="match_parent"
-                    android:layout_height="48dp">
-
-                    <TextView
-                        style="@style/Widget.UltiMusic.SectionTitle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="@string/section_album_position" />
-                </LinearLayout>
-
-                <LinearLayout
-                    android:id="@+id/sectionPositionContent"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.UltiMusic.TextField"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="@string/field_track_number">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inputTrackNumber"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="number"
-                            android:maxLines="1" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.UltiMusic.TextField"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="@string/field_disc_number">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inputDiscNumber"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="number"
-                            android:maxLines="1" />
-                    </com.google.android.material.textfield.TextInputLayout>
-                </LinearLayout>
-
                 <!-- ===== Grabación original (campos og*) ===== -->
 
                 <LinearLayout
@@ -553,20 +568,6 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputOgArtist"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:inputType="textCapWords"
-                            android:maxLines="1" />
-                    </com.google.android.material.textfield.TextInputLayout>
-
-                    <com.google.android.material.textfield.TextInputLayout
-                        style="@style/Widget.UltiMusic.TextField"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:hint="@string/field_og_album">
-
-                        <com.google.android.material.textfield.TextInputEditText
-                            android:id="@+id/inputOgAlbum"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"

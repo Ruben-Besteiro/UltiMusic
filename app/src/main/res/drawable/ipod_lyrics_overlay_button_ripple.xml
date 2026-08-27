@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Ripple de los botones flotantes del contenedor de la letra (ver ipod_lyrics_overlay_button.xml,
+     en android:foreground junto a ese background), recortado a la misma forma que él, igual que
+     ipod_round_button_ripple hace con los botones circulares de la fila de controles. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android"
+    android:color="?android:attr/colorControlHighlight">
+    <item android:id="@android:id/mask">
+        <shape android:shape="rectangle">
+            <corners android:radius="999dp" />
+            <solid android:color="@android:color/white" />
+        </shape>
+    </item>
+</ripple>

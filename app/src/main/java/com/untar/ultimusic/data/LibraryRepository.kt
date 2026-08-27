@@ -5,7 +5,10 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Environment
+import androidx.core.content.ContextCompat
 import coil.request.ImageRequest
+import com.untar.ultimusic.R
+import com.untar.ultimusic.data.db.AlbumEdit
 import com.untar.ultimusic.data.db.LibraryDao
 import com.untar.ultimusic.data.db.UltiMusicDatabase
 import com.untar.ultimusic.data.db.entities.AlbumEntity
@@ -54,13 +57,20 @@ class LibraryRepository private constructor(
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private var libraryObserver: MusicLibraryObserver? = null
 
+    /** Quién puede pedir que el vigilante de la fonoteca esté vivo (ver [startWatchingLibraryChanges]). */
+    enum class LibraryWatchRequester { ACTIVITY, PLAYBACK_SERVICE }
+
     /**
-     * Evita observers duplicados: [startWatchingLibraryChanges] necesita leer las carpetas raíz
-     * guardadas (una consulta suspend), así que ya no es síncrona. Sin este flag, dos llamadas
-     * seguidas (dos `onResume`, por ejemplo) podrían colarse ambas antes de que la primera termine y
-     * crear dos observers, dejando uno huérfano sin `stopWatching()`.
+     * Qué interesados quieren el vigilante vivo ahora mismo. Un SET, no un contador: `MainActivity`
+     * puede llamar a [startWatchingLibraryChanges] varias veces seguidas con [LibraryWatchRequester.ACTIVITY]
+     * sin haber soltado antes (p. ej. `onResume` y, en la misma ventana `onStart`/`onStop`, el callback
+     * de permisos de almacenamiento), y solo suelta una vez desde `onStop`. Con un contador puro esas
+     * llamadas de más dejarían el vigilante encendido para siempre; con un set, pedirlo dos veces
+     * seguidas con el mismo interesado no hace nada la segunda vez, tal como pasaba con el flag
+     * booleano de antes de que [LibraryWatchRequester.PLAYBACK_SERVICE] necesitara pedirlo también por
+     * su lado.
      */
-    private var watchingStarted = false
+    private val activeWatchRequesters = mutableSetOf<LibraryWatchRequester>()
 
     /** Canciones persistidas, reactivas: cualquier edición reemite la lista. */
     val songs: Flow<List<Song>> =
@@ -121,11 +131,13 @@ class LibraryRepository private constructor(
 
     // --- Pestaña de Etiquetas ---
     //
-    // Las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags) están sembradas en la tabla
+    // Las 6 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags) están sembradas en la tabla
     // `tags` desde la instalación/migración, así que [tagEntities] siempre las trae; lo único que se
-    // calcula aquí es CUÁNTAS canciones tiene cada una y CUÁLES. Favoritos y Debug usan membresía real
-    // ([tagCrossRefs], escrita desde SongTagsDialogFragment/TagPickerDialogFragment); las otras 3 se
-    // derivan al vuelo de [songs] en [resolveSongsOfTag]. "En ninguna lista" necesita saber qué
+    // calcula aquí es CUÁNTAS canciones tiene cada una y CUÁLES. Favoritos, Vídeo sincronizado y
+    // Remix / Cover usan membresía real ([tagCrossRefs], escrita desde
+    // SongTagsDialogFragment/TagPickerDialogFragment, o sincronizada sola por syncSyncedVideoTag/
+    // syncRemixCoverTag); las otras 3 se derivan al vuelo de [songs] en [resolveSongsOfTag]. "En
+    // ninguna lista" necesita saber qué
     // canciones están en alguna Lista, dato que vive en PlaylistRepository (archivos .txt, ajeno a
     // este repositorio): en vez de leerlo directamente -lo que acoplaría LibraryRepository a
     // PlaylistRepository y rompería la reactividad instantánea, ya que los .txt no reemiten solos-,
@@ -152,21 +164,25 @@ class LibraryRepository private constructor(
         return tags.map { tag ->
             val resolved = resolveSongsOfTag(tag, allSongs, members[tag.id].orEmpty(), inPlaylist, songsWithCustomTag)
             val summary = TagSummary(
-                tag.id, tag.name, tag.colorArgb, resolved.size, resolved.sumOf { it.duration }, tag.systemKey
+                tag.id, tag.name, tag.colorArgb, resolved.size, resolved.sumOf { it.duration }, tag.systemKey,
+                tag.isAutoAssigned
             )
             ResolvedTag(summary, resolved.mapTo(mutableSetOf()) { it.id })
         }
     }
 
-    /** Canciones con AL MENOS una etiqueta personalizada (`systemKey == null`), para resolver "Sin
-     *  etiquetas personalizadas" (ver [resolveSongsOfTag]). Se calcula una sola vez por resolución en
-     *  vez de dentro de cada `tag.map`, porque no depende de qué etiqueta se esté resolviendo. */
+    /** Canciones con AL MENOS una etiqueta personalizada de verdad (`systemKey == null` y no
+     *  [TagEntity.isAutoAssigned]), para resolver "Sin etiquetas personalizadas" (ver
+     *  [resolveSongsOfTag]). Una etiqueta de idioma no cuenta: la pone la app sola, no el usuario, así
+     *  que una canción con solo idioma detectado sigue contando como "sin etiquetas personalizadas"
+     *  hasta que el usuario le ponga una de verdad. Se calcula una sola vez por resolución en vez de
+     *  dentro de cada `tag.map`, porque no depende de qué etiqueta se esté resolviendo. */
     private fun songsWithCustomTag(tags: List<TagEntity>, crossRefs: List<SongTagCrossRef>): Set<Long> {
-        val customTagIds = tags.filter { it.systemKey == null }.mapTo(mutableSetOf()) { it.id }
+        val customTagIds = tags.filter { it.systemKey == null && !it.isAutoAssigned }.mapTo(mutableSetOf()) { it.id }
         return crossRefs.filter { it.tagId in customTagIds }.mapTo(mutableSetOf()) { it.songId }
     }
 
-    /** Resúmenes de las 5 etiquetas (más las personalizadas que haya en el futuro), para la pestaña
+    /** Resúmenes de las 6 etiquetas (más las personalizadas que haya en el futuro), para la pestaña
      *  de Etiquetas. [filenamesInAnyPlaylist] es el "bind" externo descrito arriba. */
     fun tagSummaries(filenamesInAnyPlaylist: Flow<Set<String>>): Flow<List<TagSummary>> =
         combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
@@ -193,12 +209,12 @@ class LibraryRepository private constructor(
             resolveAllTags(tags, crossRefs, allSongs, inPlaylist)
                 .filter { songId in it.matchedSongIds }
                 .map { it.summary }
+                .sortedBy { it.name }
         }
 
     /**
      * Igual que [tagsOfSong] pero para TODAS las canciones a la vez, indexadas por id (reales +
-     * calculadas). La usa la pestaña Canciones cuando el ajuste "Ver etiquetas en pestaña Canciones"
-     * está activo (ver [com.untar.ultimusic.data.VisualPreferences] y
+     * calculadas). La usa la pestaña Canciones para pintar la tercera línea de cada fila (ver
      * [com.untar.ultimusic.ui.songs.SongsAdapter]): resuelve [resolveAllTags] UNA sola vez para toda
      * la biblioteca en vez de una vez por fila visible, que sería tan caro como abrir la pestaña
      * Etiquetas una vez por canción.
@@ -211,7 +227,7 @@ class LibraryRepository private constructor(
                     bySong.getOrPut(songId) { mutableListOf() }.add(resolved.summary)
                 }
             }
-            bySong
+            bySong.mapValues { (_, list) -> list.sortedBy { it.name } }
         }
 
     /** Añade/quita la membresía real de una canción en una etiqueta (ver
@@ -277,6 +293,8 @@ class LibraryRepository private constructor(
      *   personalizada ([songsWithCustomTag]).
      * - Vídeo sincronizado: membresía real, igual que Favoritos -aquí solo se LEE [memberIds]; quien
      *   la mantiene sincronizada con [Song.videoOffsetMs] es [syncSyncedVideoTag]-.
+     * - Remix / Cover: membresía real, igual que Vídeo sincronizado -aquí solo se LEE [memberIds];
+     *   quien la mantiene sincronizada con [Song.ogTitle] es [syncRemixCoverTag]-.
      * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que Favoritos.
      */
     private fun resolveSongsOfTag(
@@ -292,6 +310,7 @@ class LibraryRepository private constructor(
             SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { File(it.filePath).name !in inPlaylist }
             SystemTagKey.NO_CUSTOM_TAGS -> allSongs.filter { it.id !in songsWithCustomTag }
             SystemTagKey.SYNCED_VIDEO -> allSongs.filter { it.id in memberIds }
+            SystemTagKey.REMIX_COVER -> allSongs.filter { it.id in memberIds }
             null -> allSongs.filter { it.id in memberIds }
         }
 
@@ -323,8 +342,8 @@ class LibraryRepository private constructor(
     fun artist(id: Long): Flow<PersonSummary?> =
         dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
 
-    /** Canciones de un álbum, ya ordenadas por número de pista (y de disco): ver
-     * [com.untar.ultimusic.data.db.entities.SongEntity.trackNumber]. */
+    /** Canciones de un álbum, ya ordenadas por número de pista (y de disco) DENTRO de ese álbum: ver
+     * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]. */
     fun albumTracks(albumId: Long): Flow<List<Song>> =
         dao.observeSongsOfAlbum(albumId).map { list -> list.map { it.toDomain() } }
 
@@ -466,45 +485,72 @@ class LibraryRepository private constructor(
     }
 
     /**
-     * Resuelve, para cada artista presente en [candidates], cuál de sus canales candidatos es "el
-     * suyo" (el más repetido que responda con suscriptores válidos) y lo guarda. Compartido por
+     * Resuelve, para cada artista presente en [candidates], cuál es su canal (el más repetido entre
+     * las canciones donde es el PRINCIPAL) y guarda sus suscriptores. Compartido por
      * [refreshYouTubeStatsIfDue] (con TODOS los candidatos de la fonoteca) y
      * [refreshYouTubeStatsForSong] (con los de un solo artista): la lógica de elegir moda y pedir
      * suscriptores es la misma, solo cambia el alcance de la lista de entrada.
+     *
+     * A propósito NO hay reserva a un segundo candidato si el más repetido resulta inválido: un
+     * candidato secundario suele ser una sola canción resubida a otro canal (una versión, un cover, un
+     * reupload de terceros), y sus suscriptores no tienen nada que ver con los del artista — usarlo
+     * como reserva daría un dato falso, peor que no tener ninguno.
      */
     private suspend fun resolveArtistChannels(candidates: List<ArtistChannelCandidateRow>) {
         // artistChannelCandidates ya viene agrupado por (artista, canal) con su recuento; aquí solo
-        // hace falta quedarse, por artista, con los candidatos ordenados de más a menos repetido.
-        val candidatesByArtist = candidates
+        // hace falta quedarse, por artista, con el candidato más repetido (la moda).
+        val topChannelByArtist = candidates
             .groupBy({ it.artistId }, { it.channelId to it.cnt })
-            .mapValues { (_, cands) -> cands.sortedByDescending { it.second }.map { it.first } }
-        if (candidatesByArtist.isEmpty()) return
+            .mapValues { (_, cands) -> cands.maxBy { it.second }.first }
+        if (topChannelByArtist.isEmpty()) return
 
-        // Una sola tanda de peticiones para TODOS los canales candidatos de TODOS los artistas de
-        // este lote, sin repetir el mismo canal si lo comparten varios.
-        val allChannelIds = candidatesByArtist.values.flatten().distinct()
+        // Una sola tanda de peticiones para los canales de TODOS los artistas de este lote, sin
+        // repetir el mismo canal si lo comparten varios.
+        val allChannelIds = topChannelByArtist.values.distinct()
         val channelSubscribers = mutableMapOf<String, Long>()
+        // Canales cuya llamada SÍ ha respondido, aunque haya sido con datos vacíos (channelStats
+        // devuelve null, no mapa vacío, cuando la llamada entera falla): sin esto no se puede
+        // distinguir "YouTube contestó y este canal no tiene suscriptores válidos" de "la cuota se
+        // agotó a media consulta y no llegamos a preguntar por él".
+        val queriedChannelIds = mutableSetOf<String>()
         for (chunk in allChannelIds.chunked(YouTubeStatsApi.MAX_IDS_PER_CALL)) {
-            channelSubscribers.putAll(YouTubeStatsApi.channelStats(chunk))
+            val stats = YouTubeStatsApi.channelStats(chunk) ?: continue
+            queriedChannelIds += chunk
+            channelSubscribers.putAll(stats)
         }
 
-        // Por artista: el candidato más repetido que SÍ haya respondido con suscriptores ("válido",
-        // ver el comentario de artistChannelCandidates); null si ninguno lo hizo.
-        val resolved = candidatesByArtist.mapValues { (_, channelIds) ->
-            channelIds.firstOrNull { it in channelSubscribers }
-                ?.let { channelId -> channelId to channelSubscribers.getValue(channelId) }
-        }
+        // Por artista: los suscriptores de su canal si YouTube los dio. Si YouTube respondió pero sin
+        // dato válido (canal borrado, o con el recuento oculto), es un "sin canal" de verdad y se
+        // borra (null). Si la llamada de ese canal falló entera, no se toca esa fila hoy: se
+        // reintentará en el próximo refresco en vez de arriesgarse a borrar un dato bueno por un fallo
+        // de red.
+        val resolved = topChannelByArtist.mapNotNull { (artistId, channelId) ->
+            when {
+                channelId in channelSubscribers -> artistId to (channelId to channelSubscribers.getValue(channelId))
+                channelId in queriedChannelIds -> artistId to null
+                else -> null
+            }
+        }.toMap()
         dao.setArtistYoutubeChannels(resolved)
     }
 
-    fun startWatchingLibraryChanges() {
-        if (watchingStarted) return
-        watchingStarted = true
+    /**
+     * Arranca el vigilante si aún no lo estaba para [requester]. `MainActivity` (mientras está en
+     * primer plano) y [com.untar.ultimusic.playback.PlaybackService] (mientras hay sesión de
+     * reproducción activa) lo piden cada uno por su lado, y ninguno sabe si el otro también lo quiere
+     * vivo. Cada [requester] que llame aquí debe soltar luego con [stopWatchingLibraryChanges]: el
+     * vigilante solo se para de verdad cuando el último interesado se da de baja, para no perder
+     * cambios de la fonoteca mientras a alguien todavía le importan (p. ej. la Activity pasa a segundo
+     * plano pero sigue sonando música).
+     */
+    fun startWatchingLibraryChanges(requester: LibraryWatchRequester) {
+        if (!activeWatchRequesters.add(requester)) return // este interesado ya lo tenía pedido
+        if (activeWatchRequesters.size > 1) return // ya lo tenía pedido algún otro interesado
 
         observerScope.launch {
             val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
             if (!ultiMusic.exists() || !ultiMusic.isDirectory) {
-                watchingStarted = false
+                activeWatchRequesters.clear()
                 return@launch
             }
 
@@ -522,10 +568,12 @@ class LibraryRepository private constructor(
         }
     }
 
-    fun stopWatchingLibraryChanges() {
+    /** Contraparte de [startWatchingLibraryChanges]: ver su doc para el reparto entre interesados. */
+    fun stopWatchingLibraryChanges(requester: LibraryWatchRequester) {
+        if (!activeWatchRequesters.remove(requester)) return
+        if (activeWatchRequesters.isNotEmpty()) return
         libraryObserver?.stopWatching()
         libraryObserver = null
-        watchingStarted = false
     }
 
     // --- Lista gris ---
@@ -616,6 +664,10 @@ class LibraryRepository private constructor(
      * el enlace cambia de verdad, borra la miniatura anterior (si tenía) y descarga la del vídeo
      * nuevo. Así da igual por cuál de los dos caminos llegue el enlace: los dos dejan la miniatura
      * lista para cuando haga falta como carátula de reserva.
+     *
+     * También pide, como [refreshYouTubeStatsForSong], las visitas del vídeo nuevo al instante: sin
+     * esto se quedarían en null (o en las del vídeo viejo) hasta el refresco diario, igual que le
+     * pasaría al editor de metadatos si no hiciera lo mismo tras guardar.
      */
     suspend fun setVideoUrl(song: Song, videoUrl: String?): String? = withContext(Dispatchers.IO) {
         if (videoUrl == song.videoUrl) return@withContext song.videoThumbnailName
@@ -624,6 +676,9 @@ class LibraryRepository private constructor(
             YouTubeUrl.videoId(url)?.let { downloadVideoThumbnail(it, song.title) }
         }
         dao.setVideoUrl(songId = song.id, videoUrl = videoUrl, videoThumbnailName = thumbnailName)
+        if (videoUrl != null) {
+            refreshYouTubeStatsForSong(song.id, videoUrl)
+        }
         thumbnailName
     }
 
@@ -650,15 +705,29 @@ class LibraryRepository private constructor(
         syncSyncedVideoTag(song.id, offsetMs)
     }
 
-    /** Guardado completo desde el editor de metadatos (fila + reenlazado de artistas y álbum). */
+    /**
+     * Guardado completo desde el editor de metadatos (fila + reenlazado de artistas y álbum(es)).
+     *
+     * [albums] REEMPLAZA por completo los álbumes de la canción, en el orden en que llega (ver
+     * [LibraryDao.saveSongEdits]): una canción puede estar en más de uno a la vez (N:M, ver
+     * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]).
+     *
+     * [previousLanguage] es el [Song.language] que tenía la canción ANTES de este guardado (lo trae
+     * ya en la mano [com.untar.ultimusic.ui.editor.MetadataEditorViewModel.writeSong], que parte del
+     * `Song` cargado del flujo): hace falta para saber si hay que mover la etiqueta de idioma de una a
+     * otra, no solo para crear/asignar la nueva (ver [syncLanguageTag]).
+     */
     suspend fun saveSongEdits(
         song: SongEntity,
         artistNames: List<String>,
-        albumTitle: String?,
-        producerNames: List<String>
+        albums: List<AlbumEdit>,
+        producerNames: List<String>,
+        previousLanguage: String?
     ) {
-        dao.saveSongEdits(song, artistNames, albumTitle, producerNames)
+        dao.saveSongEdits(song, artistNames, albums, producerNames)
         syncSyncedVideoTag(song.id, song.videoOffsetMs)
+        syncRemixCoverTag(song.id, song.ogTitle)
+        syncLanguageTag(song.id, previousLanguage, song.language)
     }
 
     /**
@@ -682,6 +751,66 @@ class LibraryRepository private constructor(
             dao.insertSongTag(SongTagCrossRef(songId, tag.id))
         } else {
             dao.deleteSongTag(songId, tag.id)
+        }
+    }
+
+    /**
+     * Mantiene la etiqueta predefinida "Remix / Cover" (ver [SystemTagKey.REMIX_COVER]) en línea con
+     * [ogTitle] ("Título original" del editor de metadatos): la añade en cuanto deja de estar vacío,
+     * la quita en cuanto vuelve a estarlo. Mismo patrón que [syncSyncedVideoTag] -membresía real, fila
+     * en `song_tag`, el usuario también puede añadirla/quitarla a mano desde la ficha de la etiqueta-,
+     * pero con UN solo sitio que puede cambiar `ogTitle` ([saveSongEdits], el editor de metadatos) en
+     * vez de dos: a diferencia de `videoOffsetMs`, no hay ninguna regla del iPod que lo toque.
+     *
+     * `findTagBySystemKey` puede devolver null en teoría (una instalación que nunca haya pasado por
+     * `migration25To26` ni por el `Callback` de instalación nueva), aunque en la práctica siempre hay
+     * fila: se ignora sin más en vez de reventar, por si acaso.
+     */
+    private suspend fun syncRemixCoverTag(songId: Long, ogTitle: String?) {
+        val tag = dao.findTagBySystemKey(SystemTagKey.REMIX_COVER.name) ?: return
+        if (!ogTitle.isNullOrBlank()) {
+            dao.insertSongTag(SongTagCrossRef(songId, tag.id))
+        } else {
+            dao.deleteSongTag(songId, tag.id)
+        }
+    }
+
+    /**
+     * Mantiene la etiqueta de IDIOMA de [songId] en línea con [newLanguage] ([Song.language], que
+     * [com.untar.ultimusic.util.LanguageDetector] deduce sola a partir de la letra, ver
+     * [com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment.updateLanguageFromLyrics]): si el
+     * idioma ha cambiado de verdad, quita la canción de la etiqueta ANTERIOR ([previousLanguage]) y la
+     * mete en la NUEVA, creándola primero si no existe ya una etiqueta con ese nombre exacto.
+     *
+     * A diferencia de [syncSyncedVideoTag] (un booleano: la etiqueta está o no está) aquí hay que
+     * saber de dónde viene la canción, no solo a dónde va -si el idioma pasa de "Inglés" a "Español" no
+     * basta con añadir "Español", hay que soltar "Inglés" también-, así que hace falta [previousLanguage]
+     * (ver el javadoc de [saveSongEdits]). Si no ha cambiado (incluido "seguir sin letra"), no toca nada.
+     *
+     * Reutiliza una etiqueta existente con ese nombre tal cual esté -color, [TagEntity.isAutoAssigned]-
+     * en vez de sobrescribirla: si el usuario ya se había creado a mano una etiqueta "Inglés" con su
+     * propio color, esta función solo la usa para la membresía, no la convierte en una etiqueta de
+     * idioma ni le toca el color. Blanco fijo ([R.color.um_tag_language], la excepción de color dinámico
+     * documentada en `TagsAdapter`) y [TagEntity.isAutoAssigned] a `true` son solo para una etiqueta que
+     * esta función CREA de cero.
+     */
+    private suspend fun syncLanguageTag(songId: Long, previousLanguage: String?, newLanguage: String?) {
+        val previous = previousLanguage?.trim().orEmpty()
+        val current = newLanguage?.trim().orEmpty()
+        if (previous == current) return
+        if (previous.isNotEmpty()) {
+            dao.findTagByName(previous)?.let { dao.deleteSongTag(songId, it.id) }
+        }
+        if (current.isNotEmpty()) {
+            val tag = dao.findTagByName(current) ?: run {
+                val sortOrder = dao.maxTagSortOrder() + 1
+                val colorArgb = ContextCompat.getColor(appContext, R.color.um_tag_language)
+                val id = dao.insertTag(
+                    TagEntity(name = current, colorArgb = colorArgb, systemKey = null, sortOrder = sortOrder, isAutoAssigned = true)
+                )
+                dao.findTagByName(current) ?: TagEntity(id, current, colorArgb, null, sortOrder, true)
+            }
+            dao.insertSongTag(SongTagCrossRef(songId, tag.id))
         }
     }
 

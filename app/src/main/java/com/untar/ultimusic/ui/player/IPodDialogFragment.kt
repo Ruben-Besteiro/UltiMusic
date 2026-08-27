@@ -59,14 +59,19 @@ import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.LanguageDetector
 import com.untar.ultimusic.util.LrcParser
 import com.untar.ultimusic.util.LyricLine
+import com.untar.ultimusic.util.LyricsTranslator
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.YouTubeUrl
+import com.untar.ultimusic.util.albumDisplay
+import com.untar.ultimusic.util.artistDisplay
 import com.untar.ultimusic.util.joinNonBlank
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 
 /**
  * Ventana a pantalla completa con forma de iPod. Se abre de dos formas: tocando la carátula del
@@ -297,6 +302,8 @@ class IPodDialogFragment : DialogFragment() {
         val tvTitle = view.findViewById<TextView>(R.id.tvTitle)
         val tvMeta = view.findViewById<TextView>(R.id.tvMeta)
         val lyricsBox = view.findViewById<RecyclerView>(R.id.lyricsBox)
+        val btnExpandLyrics = view.findViewById<TextView>(R.id.btnExpandLyrics)
+        val btnTranslateLyrics = view.findViewById<TextView>(R.id.btnTranslateLyrics)
         val progressBar = view.findViewById<SeekBar>(R.id.ipodProgress)
         val btnClose = view.findViewById<ImageButton>(R.id.btnClose)
         val btnMenu = view.findViewById<ImageButton>(R.id.btnMenu)
@@ -354,6 +361,67 @@ class IPodDialogFragment : DialogFragment() {
         // acaba de guardar un valor distinto: no se toca mientras se arrastra el slider (eso no llega
         // aquí hasta guardar, ver MetadataEditorDialogFragment.setupOffsetControls), solo al guardar.
         var appliedVideoOffsetMs = 0L
+        // Estado del botón "あ" (ver más abajo): true mientras lyricsBox muestra la traducción en
+        // vez de la letra original. Se resetea solo al cambiar de canción (ver el collect de
+        // currentSong), nunca se arrastra de una canción a otra.
+        var lyricsTranslated = false
+        // True mientras LyricsTranslator está trabajando (identificando idioma, bajando el modelo
+        // si hace falta, o traduciendo línea a línea): evita que un segundo toque al botón dispare
+        // otra traducción por encima de la que ya está en marcha.
+        var translatingLyrics = false
+
+        /**
+         * Pinta [lyricsBox] con la letra ORIGINAL (sin traducir) de [song]: sincronizada línea a
+         * línea si tiene marcas LRC, o una única fila con el texto entero / el aviso de "sin letra".
+         * Dejaba [lyricLines] y [lyricsOffsetMs] listos para el collect de progress de más abajo.
+         * La usan tanto el collect de currentSong como el botón "あ" al volver de la traducción.
+         */
+        val paintOriginalLyrics = { song: Song? ->
+            val rawLyrics = song?.lyrics?.takeIf { it.isNotBlank() }
+            lyricLines = rawLyrics?.let { LrcParser.parse(it) } ?: emptyList()
+            lyricsOffsetMs = song?.lyricsOffsetMs ?: 0L
+            if (lyricLines.isNotEmpty()) {
+                lyricsAdapter.submit(lyricLines.map { it.text }, synced = true)
+            } else if (song != null) {
+                // Solo avisamos de "sin letra" si de verdad suena algo: sin canción (app recién
+                // abierta en frío) el recuadro debe quedarse vacío, no fingir que hay una canción
+                // sin letra.
+                lyricsAdapter.submit(
+                    listOf(rawLyrics ?: getString(R.string.ipod_no_lyrics)),
+                    synced = false
+                )
+            } else {
+                lyricsAdapter.submit(emptyList(), synced = false)
+            }
+        }
+
+        /**
+         * Muestra/oculta el botón "あ": solo si suena algo, tiene letra y su idioma no es el del
+         * sistema. NO mira [Song.language] para decidirlo —ese campo solo se rellena al editar la
+         * letra a mano en el editor de metadatos (ver [LanguageDetector] y
+         * `MetadataEditorDialogFragment.updateLanguageFromLyrics`), así que una letra puesta desde
+         * el buscador de lrclib.net (el propio recuadro de la letra, o
+         * [LyricsSuggestionsDialogFragment]) se queda sin él y el botón nunca aparecería aunque la
+         * letra esté clarísimamente en otro idioma—: en su lugar redetecta el idioma EN VIVO sobre
+         * el propio texto, con [LanguageDetector.detectTag] (asíncrono, por eso [song]?.id se
+         * revalida al llegar la respuesta: si para entonces ya suena otra canción, el resultado se
+         * descarta en vez de aplicarse a destiempo).
+         */
+        val updateTranslateButtonVisibility = { song: Song? ->
+            val lyrics = song?.lyrics?.takeIf { it.isNotBlank() }
+            if (lyrics == null) {
+                btnTranslateLyrics.isVisible = false
+            } else {
+                val songId = song.id
+                LanguageDetector.detectTag(lyrics) { tag ->
+                    if (playerViewModel.currentSong.value?.id == songId) {
+                        val sourceLanguage = tag?.let { Locale.forLanguageTag(it).language }
+                        btnTranslateLyrics.isVisible =
+                            !sourceLanguage.isNullOrEmpty() && sourceLanguage != Locale.getDefault().language
+                    }
+                }
+            }
+        }
 
         // Sin letra guardada, tocar el recuadro abre el mismo buscador de lrclib.net que el campo
         // "Letra" del editor de metadatos ([MetadataEditorDialogFragment.openLyricsPicker], la
@@ -569,7 +637,6 @@ class IPodDialogFragment : DialogFragment() {
             queueList.isVisible = false
             updateInfoBox(queueList, tvTitle, tvMeta)
 
-            val playingNow = playerViewModel.isPlaying.value
             youtubePlayer.isVisible = true
             videoContainer.isVisible = true
             videoOffsetBox.isVisible = true
@@ -579,7 +646,16 @@ class IPodDialogFragment : DialogFragment() {
             // La pantalla del iPod pasa de cuadrada a 16:9 para no dejar bandas vacías arriba y
             // abajo del videoclip.
             topBox.animateAspectRatio(VIDEO_ASPECT_RATIO)
-            controller.load(videoId, playerViewModel.currentPositionMs(), playingNow, song.videoOffsetMs)
+            // Se pasan como funciones, no como valores ya leídos: si el reproductor de YouTube aún
+            // no está inicializado (la primera vez puede tardar segundos), el vídeo no arranca hasta
+            // que esté listo, y para entonces el audio ya habrá avanzado. Leer la posición y el
+            // estado en ese momento, no ahora, es lo que evita que el vídeo nazca atrasado.
+            controller.load(
+                videoId,
+                { playerViewModel.currentPositionMs() },
+                { playerViewModel.isPlaying.value },
+                song.videoOffsetMs
+            )
             appliedVideoOffsetMs = song.videoOffsetMs
         }
 
@@ -610,6 +686,81 @@ class IPodDialogFragment : DialogFragment() {
             }
         }
         setupNormalControls()
+
+        // Botón "Ver más/Ver menos": encoge topBox (carátula, cola o vídeo, lo que se esté viendo)
+        // SOLO en el eje vertical hasta convertirlo en una línea horizontal y ocultarlo del todo
+        // (misma animación corta que el cambio entre modo carátula y modo vídeo, ver
+        // SquareFrameLayout.animateAspectRatio), cediéndole su hueco a lyricsBox — que ya lo
+        // absorbe solo, por tener layout_weight=1 en el mismo LinearLayout vertical que topBox. Al
+        // volver, la proporción objetivo es la que le toque a lo que topBox esté mostrando AHORA
+        // (cuadrada en modo carátula/cola, 16:9 en modo vídeo): así encaja también si el modo vídeo
+        // se ha alternado mientras la letra estaba desplegada.
+        var lyricsExpanded = false
+        var lyricsExpandAnimating = false
+        btnExpandLyrics.setOnClickListener {
+            if (lyricsExpandAnimating) return@setOnClickListener
+            lyricsExpandAnimating = true
+            lyricsExpanded = !lyricsExpanded
+            btnExpandLyrics.setText(
+                if (lyricsExpanded) R.string.ipod_lyrics_collapse else R.string.ipod_lyrics_expand
+            )
+            if (lyricsExpanded) {
+                topBox.animateAspectRatio(0f) {
+                    topBox.isVisible = false
+                    lyricsExpandAnimating = false
+                }
+            } else {
+                topBox.isVisible = true
+                topBox.animateAspectRatio(if (videoMode) VIDEO_ASPECT_RATIO else 1f) {
+                    lyricsExpandAnimating = false
+                }
+            }
+        }
+
+        // Botón "あ": traduce la letra visible al idioma del sistema con LyricsTranslator (Lingva
+        // Translate, sin clave ni cuenta de por medio), en el mismo orden que lyricsBox (así una
+        // letra sincronizada sigue resaltando la fila correcta). Un segundo toque, ya traducida,
+        // vuelve a la letra original sin llamar de nuevo al traductor.
+        btnTranslateLyrics.setOnClickListener {
+            if (translatingLyrics) return@setOnClickListener
+            val song = playerViewModel.currentSong.value ?: return@setOnClickListener
+            if (lyricsTranslated) {
+                paintOriginalLyrics(song)
+                lyricsTranslated = false
+                return@setOnClickListener
+            }
+            val originalLines =
+                if (lyricLines.isNotEmpty()) lyricLines.map { it.text }
+                else listOfNotNull(song.lyrics?.takeIf { it.isNotBlank() })
+            if (originalLines.isEmpty()) return@setOnClickListener
+
+            translatingLyrics = true
+            // isEnabled a secas no se nota a la vista (el fondo/texto del botón no tienen un estado
+            // "deshabilitado" propio, solo pierde el ripple): la petición puede tardar un momento,
+            // así que sin más pista un toque que SÍ ha hecho algo se ve igual que uno que no ha
+            // hecho nada. El aviso y la atenuación cubren esa espera.
+            btnTranslateLyrics.isEnabled = false
+            btnTranslateLyrics.alpha = 0.4f
+            Toast.makeText(requireContext(), R.string.ipod_translate_lyrics_working, Toast.LENGTH_SHORT).show()
+            viewLifecycleOwner.lifecycleScope.launch {
+                val translated = LyricsTranslator.translate(originalLines)
+                translatingLyrics = false
+                btnTranslateLyrics.isEnabled = true
+                btnTranslateLyrics.alpha = 1f
+                // Si la canción ha cambiado mientras se traducía (o el usuario ya volvió a la
+                // original a mano), la traducción que llega tarde se descarta: pintarla ahora
+                // pisaría la letra de otra canción, o una que ya no toca mostrar.
+                if (playerViewModel.currentSong.value?.id != song.id || lyricsTranslated) return@launch
+                if (translated != null) {
+                    lyricsAdapter.submit(translated, synced = lyricLines.isNotEmpty())
+                    lyricsTranslated = true
+                } else {
+                    Toast.makeText(
+                        requireContext(), R.string.ipod_translate_lyrics_failed, Toast.LENGTH_SHORT
+                    ).show()
+                }
+            }
+        }
 
         // Arrastrar/tocar la barra mueve la reproducción; mientras se toca, mostramos el tiempo
         // destino en tvPosition y evitamos que la actualización periódica pise la posición. Esto
@@ -754,23 +905,17 @@ class IPodDialogFragment : DialogFragment() {
                         // metadatos. Si tiene marcas de tiempo LRC (una sugerencia sincronizada de
                         // lrclib.net, ver LrcParser) se pinta línea a línea, resaltando la que toca
                         // cantar ahora (lo hace el collect de progress, más abajo); si no, una única
-                        // fila con el texto entero — o el aviso de "sin letra" si no hay ninguna.
-                        val rawLyrics = song?.lyrics?.takeIf { it.isNotBlank() }
-                        lyricLines = rawLyrics?.let { LrcParser.parse(it) } ?: emptyList()
-                        lyricsOffsetMs = song?.lyricsOffsetMs ?: 0L
-                        if (lyricLines.isNotEmpty()) {
-                            lyricsAdapter.submit(lyricLines.map { it.text }, synced = true)
-                        } else if (song != null) {
-                            // Solo avisamos de "sin letra" si de verdad suena algo: sin canción (app
-                            // recién abierta en frío) el recuadro debe quedarse vacío, no fingir que
-                            // hay una canción sin letra.
-                            lyricsAdapter.submit(
-                                listOf(rawLyrics ?: getString(R.string.ipod_no_lyrics)),
-                                synced = false
-                            )
-                        } else {
-                            lyricsAdapter.submit(emptyList(), synced = false)
-                        }
+                        // fila con el texto entero — o el aviso de "sin letra" si no hay ninguna. Al
+                        // cambiar de canción se vuelve SIEMPRE a la letra original, nunca se arrastra
+                        // una traducción de la canción anterior (ver el botón "あ" más abajo).
+                        paintOriginalLyrics(song)
+                        lyricsTranslated = false
+                        // Por si venía de otra canción con una traducción todavía en marcha: el
+                        // botón de ESTA canción tiene que nacer siempre habilitado.
+                        translatingLyrics = false
+                        btnTranslateLyrics.isEnabled = true
+                        btnTranslateLyrics.alpha = 1f
+                        updateTranslateButtonVisibility(song)
                         // Sin nada en reproducción no hay nada que arrastrar: se deshabilita la barra.
                         progressBar.isEnabled = song != null
                     }
@@ -966,11 +1111,8 @@ class IPodDialogFragment : DialogFragment() {
     }
 
     /** Construye la línea "Artista | Álbum | Año" omitiendo el año si no existe. */
-    private fun metaLine(song: Song): String {
-        val artist = song.artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
-        val album = song.album?.title ?: MusicScanner.UNKNOWN_ALBUM
-        return joinNonBlank(artist, album, song.year?.toString())
-    }
+    private fun metaLine(song: Song): String =
+        joinNonBlank(song.artistDisplay(), song.albumDisplay(), song.year?.toString())
 
     /**
      * Actualiza [R.id.infoBox] según si se ve la cola/lista o la carátula.

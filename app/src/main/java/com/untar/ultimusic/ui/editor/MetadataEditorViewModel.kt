@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.db.AlbumEdit
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.CoverArt
@@ -234,14 +235,8 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
             videoThumbnailName = thumbnailName,
             videoOffsetMs = form.videoOffsetMs,
             lyricsOffsetMs = form.lyricsOffsetMs,
-            // El álbum lo resuelve saveSongEdits a partir de albumTitle; este valor es
-            // provisional y se sobrescribe ahí.
-            albumId = current.album?.id,
-            trackNumber = form.trackNumber,
-            discNumber = form.discNumber,
             ogTitle = form.ogTitle,
             ogArtist = form.ogArtist,
-            ogAlbum = form.ogAlbum,
             ogYear = form.ogYear,
             // El editor no toca las visitas de YouTube (las pone solo el refresco diario, ver
             // LibraryRepository.refreshYouTubeStatsIfDue): sin esto, cada edición de metadatos
@@ -250,11 +245,23 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
             dateAdded = current.dateAdded
         )
 
+        // El primero es el de los campos fijos del editor (form.album/trackNumber/discNumber); el
+        // resto viene de "+ Añadir otro álbum" (form.extraAlbums, ver
+        // MetadataEditorDialogFragment.addAlbumGroup). Un título en blanco descarta el grupo entero
+        // (su número de pista/disco no significa nada sin álbum al que pertenecer).
+        val albums = buildList {
+            form.album?.let { add(AlbumEdit(it, form.trackNumber, form.discNumber)) }
+            for (extra in form.extraAlbums) {
+                extra.title?.let { add(AlbumEdit(it, extra.trackNumber, extra.discNumber)) }
+            }
+        }
+
         repository.saveSongEdits(
             song = entity,
             artistNames = form.artists,
-            albumTitle = form.album,
-            producerNames = form.producers
+            albums = albums,
+            producerNames = form.producers,
+            previousLanguage = current.language
         )
         // El vídeo ha cambiado de verdad (uno nuevo, o distinto del que tenía antes): sin esto,
         // sus visitas se quedarían en null (o en las del vídeo viejo) hasta el refresco diario,
@@ -277,6 +284,8 @@ data class SaveResult(val song: Song)
  */
 data class EditorForm(
     val title: String,
+    /** Título del álbum PRINCIPAL (el de los campos fijos del editor, con [trackNumber]/
+     *  [discNumber]); los demás van en [extraAlbums] (ver "+ Añadir otro álbum"). */
     val album: String?,
     val artists: List<String>,
     val producers: List<String>,
@@ -292,9 +301,20 @@ data class EditorForm(
     val discNumber: Int?,
     val ogTitle: String?,
     val ogArtist: String?,
-    val ogAlbum: String?,
-    val ogYear: Int?
+    val ogYear: Int?,
+    /** Álbumes adicionales (más allá del principal), uno por cada "+ Añadir otro álbum" que haya
+     *  en pantalla. Solo el editor de UNA sola canción los muestra/edita (ver
+     *  [com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment.isMultiEdit]); en edición
+     *  múltiple una canción conserva los suyos tal cual, sin que el formulario los toque (ver
+     *  [mergeUnedited]). */
+    val extraAlbums: List<AlbumSlot>
 )
+
+/**
+ * Un grupo "Álbum + posición" del formulario, ya limpio (título recortado o null, números o null).
+ * Título null = grupo vacío: se descarta al guardar (ver [MetadataEditorViewModel.writeSong]).
+ */
+data class AlbumSlot(val title: String?, val trackNumber: Int?, val discNumber: Int?)
 
 /**
  * Qué campos del formulario ha tocado de verdad el usuario en una edición múltiple (ver
@@ -318,7 +338,6 @@ data class EditedFields(
     val discNumber: Boolean,
     val ogTitle: Boolean,
     val ogArtist: Boolean,
-    val ogAlbum: Boolean,
     val ogYear: Boolean
 )
 
@@ -345,6 +364,8 @@ private fun Song.mergeUnedited(form: EditorForm, edited: EditedFields): EditorFo
     discNumber = if (edited.discNumber) form.discNumber else discNumber,
     ogTitle = if (edited.ogTitle) form.ogTitle else ogTitle,
     ogArtist = if (edited.ogArtist) form.ogArtist else ogArtist,
-    ogAlbum = if (edited.ogAlbum) form.ogAlbum else ogAlbum,
-    ogYear = if (edited.ogYear) form.ogYear else ogYear
+    ogYear = if (edited.ogYear) form.ogYear else ogYear,
+    // La edición múltiple no enseña "+ Añadir otro álbum" (no tiene sentido tocarlos a la vez para
+    // canciones distintas): esta canción conserva los suyos, más allá del principal, tal cual.
+    extraAlbums = albums.drop(1).map { AlbumSlot(it.album.title, it.trackNumber, it.discNumber) }
 )

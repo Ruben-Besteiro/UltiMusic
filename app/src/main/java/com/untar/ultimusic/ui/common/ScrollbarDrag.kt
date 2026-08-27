@@ -9,7 +9,6 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import android.widget.TextView
-import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.util.DynamicColor
 
@@ -73,9 +72,9 @@ class ScrollbarController internal constructor(private val thumb: View, private 
  * ancha que el pulgar visible ([THUMB_WIDTH_DP]), para que sea fácil agarrarla sin apuntar con
  * precisión de píxel.
  *
- * Sirve igual para una lista ([LinearLayoutManager]) que para una rejilla
- * ([androidx.recyclerview.widget.GridLayoutManager], que es subclase de aquel): la posición de
- * scroll se calcula por fracción sobre el total de elementos, no por filas.
+ * Sirve igual para una lista ([androidx.recyclerview.widget.LinearLayoutManager]) que para una
+ * rejilla ([androidx.recyclerview.widget.GridLayoutManager], que es subclase de aquel): la posición
+ * de scroll se calcula por fracción sobre el total de contenido, no por filas.
  */
 fun RecyclerView.attachScrollbarDrag(
     hitboxWidthDp: Int = DEFAULT_HITBOX_WIDTH_DP,
@@ -166,24 +165,15 @@ fun RecyclerView.attachScrollbarDrag(
 
     fun isScrollable(): Boolean = computeVerticalScrollRange() > computeVerticalScrollExtent()
 
-    // `computeVerticalScrollOffset()/Range()` de LinearLayoutManager son sólo una ESTIMACIÓN basada
-    // en la altura media de las filas actualmente visibles, no de la lista entera. Cuando nosotros
-    // mismos disparamos el scroll (arrastrando la barra, vía `scrollToPositionWithOffset` en
-    // `dragTo`), ya hemos colocado el pulgar con la fracción EXACTA del dedo; si encima dejamos que
-    // este listener lo vuelva a colocar con esa estimación, puede no coincidir (p. ej. si las filas
-    // donde soltaste tienen una altura media distinta a la del resto: títulos de 1 vs 2 líneas,
-    // cabeceras de sección...) y el pulgar "salta" solo justo después de soltar — que es tardío
-    // porque `scrollToPositionWithOffset` no aplica el scroll al instante, sino en el siguiente
-    // layout pass, así que este onScrolled puede llegar ya con el dedo levantado. Por eso ese caso
-    // se ignora aquí con [ignoreNextScrollSync]; el resto de scrolls (arrastre normal de la lista,
-    // saltos desde otro sitio) sí deben seguir sincronizando el pulgar.
-    var ignoreNextScrollSync = false
+    // Mientras arrastramos la barra ya hemos colocado el pulgar con la fracción EXACTA del dedo (en
+    // `dragTo`); si dejamos que este listener lo reposicione a la vez con su propia lectura de
+    // `computeVerticalScrollOffset()/Range()`, es trabajo redundante en el mejor de los casos. Se
+    // ignora aquí con [ignoreScrollSync] durante todo el gesto (se apaga en `endDrag`, no en cada
+    // `dragTo`, para no dejar huecos entre pasadas de layout consecutivas).
+    var ignoreScrollSync = false
     addOnScrollListener(object : RecyclerView.OnScrollListener() {
         override fun onScrolled(recyclerView: RecyclerView, dx: Int, dy: Int) {
-            if (ignoreNextScrollSync) {
-                ignoreNextScrollSync = false
-                return
-            }
+            if (ignoreScrollSync) return
             if (!isScrollable()) return
             val range = (computeVerticalScrollRange() - computeVerticalScrollExtent()).coerceAtLeast(1)
             moveThumbTo(computeVerticalScrollOffset().toFloat() / range)
@@ -194,26 +184,47 @@ fun RecyclerView.attachScrollbarDrag(
 
     var isDraggingScrollbar = false
 
-    /** Salta al punto de la lista que corresponde a la altura [touchY] del dedo. */
+    /**
+     * Salta al punto de la lista que corresponde a la altura [touchY] del dedo.
+     *
+     * OJO: mueve la lista con [RecyclerView.scrollBy] sobre un desplazamiento en PÍXELES, calculado
+     * con la misma estimación (`computeVerticalScrollRange/Offset/Extent`) que ya usa el pulgar para
+     * su propia posición — así los dos coinciden siempre por construcción, nunca pueden desincronizarse.
+     *
+     * Antes se usaba `LinearLayoutManager.scrollToPositionWithOffset(position, 0)`, que en la
+     * rejilla de Álbumes (filas de alto variable por el subtítulo) provocaba que, sobre todo con
+     * arrastres rápidos, la lista se recolocara sola justo DESPUÉS de soltar el dedo — un efecto
+     * observado incluso con la fila reservando 2 líneas fijas de subtítulo. `scrollToPositionWithOffset`
+     * dispara un mecanismo de "ancla pendiente" propio de `LinearLayoutManager` (pensado para saltos
+     * puntuales tipo "ir al principio de la sección X"), no para redibujar en cada frame de un
+     * arrastre; encadenar muchos saltos por segundo dejaba ese mecanismo inestable durante varios
+     * pases de layout más. `scrollBy` es justo lo que usa el `FastScroller` nativo de
+     * `androidx.recyclerview` para esto mismo, y es el mismo camino que ya recorre un scroll normal
+     * con el dedo (que nunca mostró este problema).
+     */
     fun dragTo(touchY: Float) {
-        val layoutManager = layoutManager as? LinearLayoutManager ?: return
         val itemCount = adapter?.itemCount ?: 0
+        if (itemCount == 0) return
         val fraction = (touchY / height).coerceIn(0f, 1f)
-        val targetPosition = (itemCount * fraction).toInt().coerceIn(0, (itemCount - 1).coerceAtLeast(0))
-
-        ignoreNextScrollSync = true
-        layoutManager.scrollToPositionWithOffset(targetPosition, 0)
+        val range = (computeVerticalScrollRange() - computeVerticalScrollExtent()).coerceAtLeast(1)
+        val targetOffset = (fraction * range).toInt()
+        scrollBy(0, targetOffset - computeVerticalScrollOffset())
         // Mueve las dos vistas a la vez: la burbuja ya no se coloca a la altura del dedo por su
         // cuenta, va pegada al pulgar.
         moveThumbTo(fraction)
-        if (bubble != null && sectionFor != null) bubble.text = sectionFor(targetPosition)
+        if (bubble != null && sectionFor != null) {
+            val targetPosition = (itemCount * fraction).toInt().coerceIn(0, itemCount - 1)
+            bubble.text = sectionFor(targetPosition)
+        }
     }
 
     fun endDrag() {
         if (!isDraggingScrollbar) return
         isDraggingScrollbar = false
+        stopScroll()
         bubble?.animate()?.alpha(0f)?.setDuration(FADE_DURATION_MS)?.start()
         scheduleHide()
+        ignoreScrollSync = false
     }
 
     // OJO: esto NO puede ser un `setOnTouchListener`. Un RecyclerView es un ViewGroup, y un
@@ -233,6 +244,7 @@ fun RecyclerView.attachScrollbarDrag(
                 val isOnScrollbar = event.x >= width - hitboxWidthPx
                 if (isOnScrollbar && isScrollable()) {
                     isDraggingScrollbar = true
+                    ignoreScrollSync = true
                     showThumb()
                     bubble?.animate()?.cancel()
                     bubble?.alpha = 1f

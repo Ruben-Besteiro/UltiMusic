@@ -16,6 +16,7 @@ import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.activityViewModels
 import com.google.android.material.checkbox.MaterialCheckBox
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.util.AccentTint
 
@@ -128,10 +129,15 @@ class AddToPlaylistDialogFragment : DialogFragment() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.playlist_add_button) { _, _ ->
                 val name = input.text.toString().trim()
-                if (name.isNotEmpty()) {
-                    vm.create(name)
-                    vm.addSongs(name, filenames)
-                    showAddedToast(name, filenames.size, context)
+                when {
+                    name.isEmpty() -> Unit
+                    !PlaylistRepository.get().isValidName(name) ->
+                        Toast.makeText(context, R.string.playlist_name_invalid, Toast.LENGTH_SHORT).show()
+                    else -> {
+                        vm.create(name)
+                        vm.addSongs(name, filenames)
+                        showAddedToast(name, filenames.size, context)
+                    }
                 }
             }
             .create()

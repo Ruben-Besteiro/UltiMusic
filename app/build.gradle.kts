@@ -42,6 +42,10 @@ val youtubeApiKey: String = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }.getProperty("youtube.api_key").orEmpty()
 
+// La traducción de letras (botón "あ" del iPod) usa Lingva Translate (ver
+// `data/remote/LingvaTranslateApi.kt`), que no pide clave ni cuenta: no hace falta nada aquí para
+// ella, a diferencia de geniusToken/youtubeApiKey.
+
 android {
     namespace = "com.untar.ultimusic"
     compileSdk {

@@ -6,6 +6,7 @@ import android.text.TextUtils
 import android.view.View
 import android.widget.EditText
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.widget.doAfterTextChanged
@@ -18,6 +19,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.PlaylistSummary
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
@@ -140,7 +142,14 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
             .setTitle(title)
             .setView(input, padding, padding / 2, padding, 0)
             .setNegativeButton(R.string.dialog_cancel, null)
-            .setPositiveButton(positive) { _, _ -> onAccept(input.text.toString().trim()) }
+            .setPositiveButton(positive) { _, _ ->
+                val name = input.text.toString().trim()
+                if (PlaylistRepository.get().isValidName(name)) {
+                    onAccept(name)
+                } else {
+                    Toast.makeText(requireContext(), R.string.playlist_name_invalid, Toast.LENGTH_SHORT).show()
+                }
+            }
             .create()
         dialog.setOnShowListener {
             val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)

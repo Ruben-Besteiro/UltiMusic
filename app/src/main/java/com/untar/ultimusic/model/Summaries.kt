@@ -72,13 +72,19 @@ data class GenreSummary(
  * duran entre todas. A diferencia de [GenreSummary], una etiqueta SÍ es una entidad propia de la
  * base de datos ([com.untar.ultimusic.data.db.entities.TagEntity]) — de ahí el [id] —, pero su
  * recuento de canciones se sigue calculando aquí en Kotlin (ver
- * [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]) porque 3 de las 4 predefinidas no
+ * [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]) porque 3 de las 6 predefinidas no
  * tienen membresía guardada en ninguna tabla, se derivan al vuelo de la biblioteca.
  *
  * [systemKey] (ver [com.untar.ultimusic.model.SystemTagKey]) va aquí, no solo en [Tag]/[TagEntity],
  * porque la UI necesita saberlo sin resolver nada aparte: para decidir si la X de "quitar etiqueta"
- * se muestra (solo si tiene membresía real: `null` o `FAVORITES`) y para filtrarlas del buscador de
- * "+ Añadir" (las 3 calculadas nunca aparecen ahí, ver `TagsViewModel.assignableTags`).
+ * se muestra (solo si tiene membresía real: `null`, `FAVORITES`, `SYNCED_VIDEO` o `REMIX_COVER`) y
+ * para filtrarlas del buscador de "+ Añadir" (las 3 calculadas nunca aparecen ahí, ver
+ * `TagsViewModel.assignableTags`).
+ *
+ * [isAutoAssigned] (ver [com.untar.ultimusic.data.db.entities.TagEntity.isAutoAssigned]) viaja igual
+ * que [systemKey] por el mismo motivo: una etiqueta de idioma tiene [systemKey] a null (no cuelga de
+ * un valor fijo de [com.untar.ultimusic.model.SystemTagKey]) pero necesita las mismas restricciones
+ * que una predefinida, así que la UI la reconoce por este campo en vez de por `systemKey`.
  */
 data class TagSummary(
     val id: Long,
@@ -86,7 +92,8 @@ data class TagSummary(
     val colorArgb: Int,
     val songCount: Int,
     val totalDuration: Long,
-    val systemKey: String?
+    val systemKey: String?,
+    val isAutoAssigned: Boolean = false
 ) : SortableLibraryItem {
     override val sortName: String get() = name
     override val sortDuration: Long get() = totalDuration

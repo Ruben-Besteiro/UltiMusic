@@ -17,6 +17,7 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
+import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.ComponentDialog
@@ -49,6 +50,7 @@ import com.google.android.material.textfield.TextInputLayout
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.model.SongAlbumEntry
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.ValueRuler
@@ -69,9 +71,12 @@ import kotlinx.coroutines.launch
  * lanza. Con [STYLE_NO_FRAME] y `setLayout(MATCH_PARENT, MATCH_PARENT)` deja de parecer un diálogo
  * flotante y ocupa toda la pantalla.
  *
- * Todos los campos están siempre visibles, agrupados bajo cabeceras ("Detalles", "Posición en el
- * álbum", "Grabación original"). Lo que se escribe aquí se guarda en Room, de modo que persiste
- * aunque se cierre la aplicación y el escaneo del disco no lo pisa.
+ * Todos los campos están siempre visibles, agrupados bajo cabeceras ("Detalles", "Grabación
+ * original") salvo el/los grupo(s) de álbum (título + disco + pista), que van sueltos justo debajo
+ * de Productor(es): una canción puede estar en más de uno a la vez (N:M, ver
+ * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]), y "+ Añadir otro álbum" (ver
+ * [addAlbumGroup]) duplica ese grupo de campos para el siguiente. Lo que se escribe aquí se guarda
+ * en Room, de modo que persiste aunque se cierre la aplicación y el escaneo del disco no lo pisa.
  *
  * Se abre siempre igual, ocupando toda la pantalla, sea cual sea el sitio desde el que se lanza
  * (Canciones, una ficha de álbum/artista, el buscador o el iPod).
@@ -126,6 +131,36 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
     private var accentColor: Int = 0
 
+    /**
+     * Todos los [TextInputLayout]/[EditText] del formulario que deben seguir el color dinámico (ver
+     * [styleTextField]/[styleEditTextHandles]) o marcarse como "tocados" al escribir (ver
+     * [wireFieldDirtyTracking]/[touchedFields]). Instancias, no locales de [onViewCreated]: un grupo
+     * de álbum añadido en caliente (ver [addAlbumGroup]) se apunta aquí mismo para engancharse a los
+     * dos mecanismos exactamente igual que si hubiera estado en el XML desde el principio.
+     */
+    private val textFields = mutableListOf<TextInputLayout>()
+    private val editTexts = mutableListOf<EditText>()
+
+    /** Últimos títulos de álbum conocidos (ver [viewModel.albumTitles]), para poder ofrecerlos en el
+     *  desplegable de un grupo de álbum recién creado sin esperar a la siguiente emisión del flujo. */
+    private var albumTitleSuggestions: List<String> = emptyList()
+
+    private lateinit var albumGroupsContainer: LinearLayout
+    private lateinit var linkAddAlbum: TextView
+
+    /** Vistas de un grupo de álbum "extra" (más allá del principal, que usa los campos fijos
+     *  [inputAlbum]/[inputDiscNumber]/[inputTrackNumber]): uno por cada "+ Añadir otro álbum"
+     *  pulsado, o ya reconstruidos al abrir una canción que estuviera en más de un álbum (ver
+     *  [fillForm]). */
+    private data class AlbumGroupViews(
+        val root: View,
+        val album: MaterialAutoCompleteTextView,
+        val discNumber: EditText,
+        val trackNumber: EditText
+    )
+
+    private val extraAlbumGroups = mutableListOf<AlbumGroupViews>()
+
     /** Se activa mientras se sincronizan entre sí cada regla de desplazamiento y su caja de texto
      * (ver [setupOffsetControls]: vale tanto para vídeo como para letra), para que ese repintado
      * no se confunda con un cambio del usuario y entre en bucle (mismo patrón que
@@ -153,7 +188,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private lateinit var inputDiscNumber: EditText
     private lateinit var inputOgTitle: EditText
     private lateinit var inputOgArtist: EditText
-    private lateinit var inputOgAlbum: EditText
     private lateinit var inputOgYear: EditText
     private lateinit var cover: ImageView
     private lateinit var btnPickCover: ImageButton
@@ -216,21 +250,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
         setupOffsetControls(offsetRuler, offsetValue)
         setupOffsetControls(lyricsOffsetRuler, lyricsOffsetValue)
 
-        val textFields = mutableListOf<TextInputLayout>()
         collectTextInputLayouts(view, textFields)
-        val editTexts = mutableListOf<EditText>()
         collectEditTexts(view, editTexts)
-        editTexts.forEach { field ->
-            field.addTextChangedListener {
-                if (!isFillingForm) {
-                    markDirty()
-                    // Solo importa en edición múltiple (ver [buildEditedFields]), pero no cuesta
-                    // nada llevar la cuenta siempre: es la única forma de distinguir "el usuario ha
-                    // escrito exactamente lo mismo que ya había" de "no ha tocado este campo".
-                    touchedFields.add(field)
-                }
-            }
-        }
+        editTexts.forEach { field -> wireFieldDirtyTracking(field) }
 
         // "Varios valores" (edición múltiple, ver [fillMultiField]) se pone como CONTENIDO en gris,
         // no como hint: así la etiqueta de arriba ("Título", "Álbum"...) se queda fija y en pequeño
@@ -260,6 +282,19 @@ class MetadataEditorDialogFragment : DialogFragment() {
         // El autorrelleno busca en iTunes/Genius por el título y artista de UNA canción: no tiene
         // sentido en edición múltiple (¿de cuál de las seleccionadas?), así que se esconde entero.
         if (isMultiEdit) fabAutofill.visibility = View.GONE
+
+        // "+ Añadir otro álbum" tampoco tiene sentido en edición múltiple: cada canción seleccionada
+        // conserva sus álbumes adicionales tal cual (ver Song.mergeUnedited), sin que el formulario
+        // los toque -mismo motivo que el autorrelleno de arriba, ¿a cuál de las seleccionadas se le
+        // añadiría?-.
+        if (isMultiEdit) {
+            linkAddAlbum.visibility = View.GONE
+        } else {
+            linkAddAlbum.setOnClickListener {
+                addAlbumGroup()
+                markDirty()
+            }
+        }
 
         val openPicker = {
             pickImage.launch(
@@ -390,7 +425,11 @@ class MetadataEditorDialogFragment : DialogFragment() {
                     viewModel.artistNames.collect { names -> setSuggestions(inputArtists, names) }
                 }
                 launch {
-                    viewModel.albumTitles.collect { titles -> setSuggestions(inputAlbum, titles) }
+                    viewModel.albumTitles.collect { titles ->
+                        albumTitleSuggestions = titles
+                        setSuggestions(inputAlbum, titles)
+                        extraAlbumGroups.forEach { setSuggestions(it.album, titles) }
+                    }
                 }
                 launch {
                     viewModel.producerNames.collect { names -> setSuggestions(inputProducers, names) }
@@ -438,7 +477,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
                 // enfocarlos y del cursor de texto sigue el color de lo que suena: por defecto
                 // Material usa colorPrimary (amarillo fijo) para las tres cosas.
                 launch {
-                    val defaultStroke = ContextCompat.getColor(requireContext(), R.color.um_divider)
                     playerViewModel.accentColor.collect { accent ->
                         accentColor = accent
                         offsetRuler.accentColor = accent
@@ -449,32 +487,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
                         AccentTint.contentOnAccent(fabAutofill, accent)
                         linkVideoUrl.setTextColor(accent)
                         linkVideoUrl.compoundDrawableTintList = ColorStateList.valueOf(accent)
-                        val strokeColors = ColorStateList(
-                            arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
-                            intArrayOf(accent, defaultStroke)
-                        )
-                        textFields.forEach { field ->
-                            field.setBoxStrokeColorStateList(strokeColors)
-                            field.setHintTextColor(ColorStateList.valueOf(accent))
-                        }
-                        // La rayita del cursor (setCursorColor, vía TextInputLayout) y la gota para
-                        // arrastrarlo (setTextSelectHandle*, API de View) son dos dibujos aparte, y
-                        // la gota solo tiene API pública para recolorearse desde Android 10 (API
-                        // 29). Por debajo de esa versión NO tocamos ninguna de las dos, para que no
-                        // quede una en el acento y la otra en el blanco fijo del tema (themes.xml):
-                        // las dos se quedan blancas.
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            val cursorTint = ColorStateList.valueOf(accent)
-                            textFields.forEach { it.setCursorColor(cursorTint) }
-                            editTexts.forEach { field ->
-                                // Instancia nueva por cada llamada: si una selección muestra la
-                                // gota izquierda y la derecha a la vez y comparten Drawable, cada
-                                // una pisaría los bounds de la otra al posicionarse.
-                                field.setTextSelectHandle(handleDrawable(accent))
-                                field.setTextSelectHandleLeft(handleDrawable(accent))
-                                field.setTextSelectHandleRight(handleDrawable(accent))
-                            }
-                        }
+                        linkAddAlbum.setTextColor(accent)
+                        textFields.forEach { styleTextField(it, accent) }
+                        editTexts.forEach { styleEditTextHandles(it, accent) }
                     }
                 }
             }
@@ -505,6 +520,110 @@ class MetadataEditorDialogFragment : DialogFragment() {
         return drawable
     }
 
+    /**
+     * Tiñe [field] con el color dinámico [accent]: el contorno al enfocarlo, la etiqueta flotante y
+     * -desde Android 10- la rayita del cursor. Extraído del `collect` de `playerViewModel.accentColor`
+     * para poder aplicarse también, de inmediato, a un grupo de álbum recién creado (ver
+     * [addAlbumGroup]) sin tener que esperar al siguiente cambio de canción.
+     */
+    private fun styleTextField(field: TextInputLayout, accent: Int) {
+        val defaultStroke = ContextCompat.getColor(requireContext(), R.color.um_divider)
+        val strokeColors = ColorStateList(
+            arrayOf(intArrayOf(android.R.attr.state_focused), intArrayOf()),
+            intArrayOf(accent, defaultStroke)
+        )
+        field.setBoxStrokeColorStateList(strokeColors)
+        field.setHintTextColor(ColorStateList.valueOf(accent))
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            field.setCursorColor(ColorStateList.valueOf(accent))
+        }
+    }
+
+    /**
+     * Gemela de [styleTextField] pero para la gota de selección de [field] (API de `View`, no de
+     * `TextInputLayout`): solo tiene API pública para recolorearse desde Android 10, igual que el
+     * cursor de arriba -por debajo de esa versión no se toca, para que no quede una en el acento y la
+     * otra en el blanco fijo del tema-.
+     */
+    private fun styleEditTextHandles(field: EditText, accent: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            // Instancia nueva por cada llamada: si una selección muestra la gota izquierda y la
+            // derecha a la vez y comparten Drawable, cada una pisaría los bounds de la otra al
+            // posicionarse.
+            field.setTextSelectHandle(handleDrawable(accent))
+            field.setTextSelectHandleLeft(handleDrawable(accent))
+            field.setTextSelectHandleRight(handleDrawable(accent))
+        }
+    }
+
+    /** Engancha [field] al seguimiento de "sucio"/"tocado" (ver [touchedFields]/[markDirty]), igual
+     *  para cualquier campo del formulario, esté ya en el XML o se haya creado en caliente (ver
+     *  [addAlbumGroup]). */
+    private fun wireFieldDirtyTracking(field: EditText) {
+        field.addTextChangedListener {
+            if (!isFillingForm) {
+                markDirty()
+                // Solo importa en edición múltiple (ver [buildEditedFields]), pero no cuesta nada
+                // llevar la cuenta siempre: es la única forma de distinguir "el usuario ha escrito
+                // exactamente lo mismo que ya había" de "no ha tocado este campo".
+                touchedFields.add(field)
+            }
+        }
+    }
+
+    /**
+     * Añade un grupo de álbum al final de [albumGroupsContainer]: vacío al tocar
+     * "+ Añadir otro álbum", o ya relleno con [prefill] al reconstruir los álbumes adicionales de una
+     * canción que ya estuviera en más de uno (ver [fillForm]). Sus campos se enganchan a los mismos
+     * mecanismos que si hubieran estado en el XML desde el principio: color dinámico ([styleTextField]/
+     * [styleEditTextHandles], aplicados YA con el acento actual, sin esperar al próximo cambio de
+     * canción), seguimiento de "sucio" ([wireFieldDirtyTracking]) y sugerencias de álbum
+     * ([albumTitleSuggestions]).
+     *
+     * No hace falta más -no hay "Varios valores" que gestionar aquí (ver [placeholderFields]): estos
+     * grupos solo existen en edición de UNA sola canción, [isMultiEdit] los esconde por completo-.
+     */
+    private fun addAlbumGroup(prefill: SongAlbumEntry? = null) {
+        val root = LayoutInflater.from(requireContext())
+            .inflate(R.layout.item_editor_album_group, albumGroupsContainer, false)
+        val albumLayout = root.findViewById<TextInputLayout>(R.id.groupLayoutAlbum)
+        val albumInput = root.findViewById<MaterialAutoCompleteTextView>(R.id.groupInputAlbum)
+        val discLayout = root.findViewById<TextInputLayout>(R.id.groupLayoutDiscNumber)
+        val discInput = root.findViewById<EditText>(R.id.groupInputDiscNumber)
+        val trackLayout = root.findViewById<TextInputLayout>(R.id.groupLayoutTrackNumber)
+        val trackInput = root.findViewById<EditText>(R.id.groupInputTrackNumber)
+        val removeButton = root.findViewById<ImageButton>(R.id.btnRemoveAlbumGroup)
+
+        if (prefill != null) {
+            albumInput.setText(prefill.album.title, false)
+            discInput.setText(prefill.discNumber?.toString().orEmpty())
+            trackInput.setText(prefill.trackNumber?.toString().orEmpty())
+        }
+        setSuggestions(albumInput, albumTitleSuggestions)
+
+        val group = AlbumGroupViews(root, albumInput, discInput, trackInput)
+        extraAlbumGroups.add(group)
+        albumGroupsContainer.addView(root)
+
+        val layouts = listOf(albumLayout, discLayout, trackLayout)
+        val fields = listOf(albumInput, discInput, trackInput)
+        textFields.addAll(layouts)
+        editTexts.addAll(fields)
+        layouts.forEach { styleTextField(it, accentColor) }
+        fields.forEach { field ->
+            styleEditTextHandles(field, accentColor)
+            wireFieldDirtyTracking(field)
+        }
+
+        removeButton.setOnClickListener {
+            extraAlbumGroups.remove(group)
+            albumGroupsContainer.removeView(root)
+            textFields.removeAll(layouts)
+            editTexts.removeAll(fields)
+            markDirty()
+        }
+    }
+
     private fun bindViews(view: View) {
         cover = view.findViewById(R.id.editorCover)
         btnPickCover = view.findViewById(R.id.btnPickCover)
@@ -528,9 +647,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
         offsetValue = view.findViewById(R.id.offsetValue)
         inputTrackNumber = view.findViewById(R.id.inputTrackNumber)
         inputDiscNumber = view.findViewById(R.id.inputDiscNumber)
+        albumGroupsContainer = view.findViewById(R.id.albumGroupsContainer)
+        linkAddAlbum = view.findViewById(R.id.linkAddAlbum)
         inputOgTitle = view.findViewById(R.id.inputOgTitle)
         inputOgArtist = view.findViewById(R.id.inputOgArtist)
-        inputOgAlbum = view.findViewById(R.id.inputOgAlbum)
         inputOgYear = view.findViewById(R.id.inputOgYear)
     }
 
@@ -697,6 +817,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputGenres.setText(song.genres.joinToString(SEPARATOR))
         inputTrackNumber.setText(song.trackNumber?.toString().orEmpty())
         inputDiscNumber.setText(song.discNumber?.toString().orEmpty())
+        // El primero de song.albums ya está en los campos fijos de arriba (song.album/trackNumber/
+        // discNumber, el principal); el resto ("+ Añadir otro álbum") se reconstruye aquí, uno por
+        // cada álbum adicional que ya tuviera guardado.
+        song.albums.drop(1).forEach { addAlbumGroup(it) }
         inputLyrics.setText(song.lyrics.orEmpty())
         inputLanguage.setText(song.language.orEmpty())
         inputComment.setText(song.comment.orEmpty())
@@ -705,7 +829,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         showOffset(lyricsOffsetRuler, lyricsOffsetValue, song.lyricsOffsetMs.toInt())
         inputOgTitle.setText(song.ogTitle.orEmpty())
         inputOgArtist.setText(song.ogArtist.orEmpty())
-        inputOgAlbum.setText(song.ogAlbum.orEmpty())
         inputOgYear.setText(song.ogYear?.toString().orEmpty())
 
         isFillingForm = false
@@ -748,7 +871,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         fillMultiOffset(lyricsOffsetRuler, lyricsOffsetValue, songs.map { it.lyricsOffsetMs })
         fillMultiField(inputOgTitle, songs.map { it.ogTitle.orEmpty() })
         fillMultiField(inputOgArtist, songs.map { it.ogArtist.orEmpty() })
-        fillMultiField(inputOgAlbum, songs.map { it.ogAlbum.orEmpty() })
         fillMultiField(inputOgYear, songs.map { it.ogYear?.toString().orEmpty() })
 
         isFillingForm = false
@@ -836,7 +958,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         discNumber = inputDiscNumber in touchedFields,
         ogTitle = inputOgTitle in touchedFields,
         ogArtist = inputOgArtist in touchedFields,
-        ogAlbum = inputOgAlbum in touchedFields,
         ogYear = inputOgYear in touchedFields
     )
 
@@ -922,8 +1043,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
     /**
      * Vuelca en el formulario la sugerencia elegida en [MetadataSuggestionsDialogFragment]. El
-     * grueso viene de iTunes; productores, canción original y videoclip los aporta Genius cuando
-     * está configurado (ver [com.untar.ultimusic.data.remote.GeniusApi]), y llegan vacíos si no.
+     * grueso viene de iTunes; los productores los aporta Genius cuando está configurado (ver
+     * [com.untar.ultimusic.data.remote.GeniusApi]), y llegan vacíos si no. La canción original y el
+     * videoclip no forman parte de la sugerencia: se rellenan siempre a mano.
      *
      * Artistas y productores se tratan igual, como manda el proyecto: los dos se SUSTITUYEN por lo
      * que traiga la sugerencia, no se acumulan. Acumular parece más prudente, pero acaba dejando el
@@ -960,24 +1082,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
         val discNumber = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_DISC_NUMBER, MetadataSuggestionsDialogFragment.NO_VALUE)
         if (discNumber > 0) inputDiscNumber.setText(discNumber.toString())
 
-        // Los og* solo llegan con algo si Genius sabe que esta canción es un remix; si no, se
-        // quedan como estaban (normalmente vacíos, que es justo lo que significan).
-        val ogTitle = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_OG_TITLE).orEmpty()
-        if (ogTitle.isNotEmpty()) inputOgTitle.setText(ogTitle)
-
-        val ogArtist = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_OG_ARTIST).orEmpty()
-        if (ogArtist.isNotEmpty()) inputOgArtist.setText(ogArtist)
-
-        val ogAlbum = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_OG_ALBUM).orEmpty()
-        if (ogAlbum.isNotEmpty()) inputOgAlbum.setText(ogAlbum)
-
-        val ogYear = bundle.getInt(MetadataSuggestionsDialogFragment.RESULT_OG_YEAR, MetadataSuggestionsDialogFragment.NO_VALUE)
-        if (ogYear > 0) inputOgYear.setText(ogYear.toString())
-
-        // El videoclip solo se pone si el campo está VACÍO, a diferencia del resto: si ya hay uno,
-        // lo eligió el usuario a mano en el buscador de YouTube y sabe mejor que Genius cuál quiere.
-        val videoUrl = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_VIDEO_URL).orEmpty()
-        if (videoUrl.isNotEmpty() && inputVideoUrl.text.isNullOrBlank()) inputVideoUrl.setText(videoUrl)
+        // La canción original (og*) y el videoclip ya NO llegan en la sugerencia (ver
+        // GeniusApi): Genius se equivocaba con demasiada frecuencia rellenándolos, así que se
+        // quedan como campos de edición manual únicamente.
 
         isFillingForm = false
         markDirty()
@@ -1052,8 +1159,14 @@ class MetadataEditorDialogFragment : DialogFragment() {
         discNumber = inputDiscNumber.intOrNull(),
         ogTitle = inputOgTitle.textOrNull(),
         ogArtist = inputOgArtist.textOrNull(),
-        ogAlbum = inputOgAlbum.textOrNull(),
-        ogYear = inputOgYear.intOrNull()
+        ogYear = inputOgYear.intOrNull(),
+        extraAlbums = extraAlbumGroups.map { group ->
+            AlbumSlot(
+                title = group.album.textOrNull(),
+                trackNumber = group.trackNumber.intOrNull(),
+                discNumber = group.discNumber.intOrNull()
+            )
+        }
     )
 
     /**

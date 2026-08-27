@@ -36,9 +36,7 @@ import com.untar.ultimusic.util.bindSongSubtitle
  * sobre la carátula (ver item_song.xml), tiñendo el círculo del check con el acento dinámico como
  * manda el proyecto para todo lo amarillo (ver [AccentTint]).
  *
- * [setTags] añade una tercera línea opcional con las etiquetas de cada canción en miniatura, solo
- * si el ajuste "Ver etiquetas en pestaña Canciones" está activo (ver
- * [com.untar.ultimusic.data.VisualPreferences]).
+ * [setTags] añade una tercera línea con las etiquetas de cada canción en miniatura, siempre visible.
  *
  * La fila 0 es siempre la cabecera de resumen (ver [setSummary] e item_songs_header.xml): va
  * dentro de la lista -no como vista fija en fragment_songs.xml- para que haga scroll con el resto
@@ -69,8 +67,7 @@ class SongsAdapter(
 
     private var accentColor: Int = 0xFFFFD000.toInt()
 
-    /** Ver [setTags]: si mostrar la tercera línea de etiquetas y de dónde sacar las de cada canción. */
-    private var showTags: Boolean = false
+    /** Ver [setTags]: de dónde sacar las etiquetas de la tercera línea de cada fila. */
     private var tagsById: Map<Long, List<TagSummary>> = emptyMap()
 
     private var summaryText: String = ""
@@ -88,13 +85,11 @@ class SongsAdapter(
         notifyItemChanged(0)
     }
 
-    /** Ajuste "Ver etiquetas en pestaña Canciones" (ver [com.untar.ultimusic.data.VisualPreferences]):
-     *  [show] decide si se pinta la tercera línea, [byId] trae las etiquetas de TODA la biblioteca de
-     *  golpe (ver `LibraryRepository.songTagsById`), indexadas por id de canción. */
+    /** Etiquetas de TODA la biblioteca de golpe (ver `LibraryRepository.songTagsById`), indexadas por
+     *  id de canción: de ahí sale la tercera línea de cada fila, siempre visible. */
     @SuppressLint("NotifyDataSetChanged")
-    fun setTags(show: Boolean, byId: Map<Long, List<TagSummary>>) {
-        if (showTags == show && tagsById == byId) return
-        showTags = show
+    fun setTags(byId: Map<Long, List<TagSummary>>) {
+        if (tagsById == byId) return
         tagsById = byId
         notifyDataSetChanged()
     }
@@ -138,7 +133,7 @@ class SongsAdapter(
             song,
             selected = song.id in selectedIds,
             accentColor = accentColor,
-            tags = if (showTags) tagsById[song.id].orEmpty() else emptyList(),
+            tags = tagsById[song.id].orEmpty(),
             onSongClick, onSongLongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags,
             onDeleteSong, onGoToAlbum, onGoToArtist
         )
@@ -216,11 +211,10 @@ class SongsAdapter(
             }
         }
 
-        /** Tercera línea opcional de la fila (ver item_song.xml/setTags): una "salchicha" en
-         *  miniatura por etiqueta (item_tag_chip_mini.xml) dentro de un [FlowLayout] que las
-         *  desborda a una línea nueva en vez de recortarlas si no caben todas, reinflada en cada bind
-         *  porque el número de etiquetas cambia de una canción a otra. Oculta entera si [tags] llega
-         *  vacía -ajuste desactivado, o canción sin ninguna-. */
+        /** Tercera línea de la fila (ver item_song.xml/setTags): una "salchicha" en miniatura por
+         *  etiqueta (item_tag_chip_mini.xml) dentro de un [FlowLayout] que las desborda a una línea
+         *  nueva en vez de recortarlas si no caben todas, reinflada en cada bind porque el número de
+         *  etiquetas cambia de una canción a otra. Oculta entera si la canción no tiene ninguna. */
         private fun bindTags(tags: List<TagSummary>) {
             tagsContainer.isVisible = tags.isNotEmpty()
             tagsContainer.removeAllViews()
