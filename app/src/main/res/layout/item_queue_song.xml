@@ -43,14 +43,40 @@
                 android:textSize="14sp" />
         </FrameLayout>
 
-        <com.google.android.material.imageview.ShapeableImageView
-            android:id="@+id/queueCover"
+        <!-- Carátula + overlay de selección (ver IPodQueueAdapter.bind): mismo mecanismo que
+             item_song.xml, ver su comentario. -->
+        <FrameLayout
             android:layout_width="32dp"
             android:layout_height="32dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/cover_placeholder"
-            android:contentDescription="@string/album_cover_desc"
-            android:scaleType="centerCrop" />
+            android:layout_marginStart="8dp">
+
+            <com.google.android.material.imageview.ShapeableImageView
+                android:id="@+id/queueCover"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@drawable/cover_placeholder"
+                android:contentDescription="@string/album_cover_desc"
+                android:scaleType="centerCrop" />
+
+            <View
+                android:id="@+id/selectionScrim"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@color/um_queue_scrim"
+                android:visibility="gone" />
+
+            <ImageView
+                android:id="@+id/selectionCheck"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_circle_selection"
+                android:contentDescription="@string/song_selected_desc"
+                android:padding="2dp"
+                android:src="@drawable/ic_check_circle"
+                android:visibility="gone" />
+
+        </FrameLayout>
 
         <TextView
             android:id="@+id/queueSubtitle"

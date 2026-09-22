@@ -11,6 +11,7 @@ import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.ui.common.SongSelection
 import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.SortOption
 import com.untar.ultimusic.util.TimeFormat
@@ -56,8 +57,31 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
 
     private val repository = LibraryRepository.get(app)
 
-    /** Qué ficha se está mirando. Lo fija el fragmento nada más crearse. */
+    /** Qué ficha se PIDIÓ ver. Lo fija el fragmento nada más crearse; ver [resolvedTarget] para lo
+     *  que de verdad se enseña. */
     private val target = MutableStateFlow<Pair<DetailKind, Long>?>(null)
+
+    /**
+     * Lo mismo que [target], salvo que un artista agrupado dentro de "Otros" (ver
+     * [PersonSummary.OTHERS_ARTIST_ID] y [LibraryRepository.smallArtistIds]) se sustituye por el
+     * propio "Otros": así da igual por dónde se llegue a un artista con pocas canciones -su propia
+     * fila en la pestaña Artistas (que ya lista "Otros" directamente, nunca llega aquí con su id
+     * real), el menú de una canción, la cabecera de un álbum, la búsqueda...-, siempre se acaba
+     * viendo la misma ficha de "Otros", nunca la suya propia.
+     *
+     * [header]/[tracks]/[albums] cuelgan de ESTE flujo y no de [target] directamente por eso mismo.
+     */
+    private val resolvedTarget: StateFlow<Pair<DetailKind, Long>?> = target
+        .flatMapLatest { t ->
+            if (t == null || t.first != DetailKind.ARTIST || t.second == PersonSummary.OTHERS_ARTIST_ID) {
+                flowOf(t)
+            } else {
+                repository.smallArtistIds.map { small ->
+                    if (t.second in small) DetailKind.ARTIST to PersonSummary.OTHERS_ARTIST_ID else t
+                }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
 
     /**
      * Cómo resolver el criterio de orden compartido con la pestaña Canciones. Lo fija el fragmento
@@ -74,11 +98,12 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
         songsSortSource.flatMapLatest { it?.invoke() ?: flowOf(SortOption.DEFAULT) }
 
     /**
-     * Cabecera. `flatMapLatest` es lo que permite que un flujo cambie de fuente: cuando [target]
-     * emite, este flujo se suscribe al de ESE álbum/persona y se desengancha del anterior. Sin él
-     * tendríamos un "flujo de flujos" (`Flow<Flow<...>>`), que no se puede observar directamente.
+     * Cabecera. `flatMapLatest` es lo que permite que un flujo cambie de fuente: cuando
+     * [resolvedTarget] emite, este flujo se suscribe al de ESE álbum/persona y se desengancha del
+     * anterior. Sin él tendríamos un "flujo de flujos" (`Flow<Flow<...>>`), que no se puede observar
+     * directamente.
      */
-    val header: StateFlow<DetailHeader?> = target
+    val header: StateFlow<DetailHeader?> = resolvedTarget
         .flatMapLatest { t ->
             when (t?.first) {
                 null -> flowOf(null)
@@ -99,7 +124,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
      * con [songsSort], el mismo criterio -y el mismo ojo para cambiarlo- que la pestaña Canciones
      * (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
      */
-    val tracks: StateFlow<List<Song>> = target
+    val tracks: StateFlow<List<Song>> = resolvedTarget
         .flatMapLatest { t ->
             when (t?.first) {
                 null -> flowOf(emptyList())
@@ -118,7 +143,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
      * Álbumes del carrusel horizontal, solo para artista (en un álbum va vacío: no tiene sentido
      * enseñar el propio álbum dentro de su ficha).
      */
-    val albums: StateFlow<List<AlbumSummary>> = target
+    val albums: StateFlow<List<AlbumSummary>> = resolvedTarget
         .flatMapLatest { t ->
             when (t?.first) {
                 DetailKind.ARTIST -> repository.artistAlbums(t.second)
@@ -129,11 +154,28 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Qué tipo de ficha es esta. Lo necesita el fragmento para saber si el menú de 3 puntos (acciones
      * de álbum: añadir todo a una lista, editar el álbum...) tiene sentido aquí, porque solo existe
-     * para álbumes. */
-    val currentKind: DetailKind? get() = target.value?.first
+     * para álbumes. Lee [resolvedTarget], no [target]: si redirige a "Otros" hay que reflejarlo
+     * también aquí. */
+    val currentKind: DetailKind? get() = resolvedTarget.value?.first
 
     /** El id del álbum en edición; solo tiene valor cuando [currentKind] es [DetailKind.ALBUM]. */
-    val currentAlbumId: Long? get() = target.value?.takeIf { it.first == DetailKind.ALBUM }?.second
+    val currentAlbumId: Long? get() = resolvedTarget.value?.takeIf { it.first == DetailKind.ALBUM }?.second
+
+    /** El id del artista de esta ficha; solo tiene valor cuando [currentKind] es [DetailKind.ARTIST]
+     *  (ver el botón de discografía de [DetailDialogFragment]). Puede ser
+     *  [PersonSummary.OTHERS_ARTIST_ID] si se redirigió a "Otros" (ver [resolvedTarget]): quien lo
+     *  use para algo que solo tiene sentido con UN artista real (discografía, renombrar) debe
+     *  comprobarlo aparte. */
+    val currentArtistId: Long? get() = resolvedTarget.value?.takeIf { it.first == DetailKind.ARTIST }?.second
+
+    /** Selección múltiple por pulsación larga (ver [SongSelection]): mismo mecanismo que
+     *  [com.untar.ultimusic.ui.SongsViewModel.selectedIds], aplicado a la lista de canciones de
+     *  ESTA ficha (ver [DetailSongsAdapter]/[DetailDialogFragment]). */
+    private val selection = SongSelection()
+    val selectedIds: StateFlow<Set<Long>> = selection.selectedIds
+    fun startSelection(songId: Long) = selection.start(songId)
+    fun toggleSelection(songId: Long) = selection.toggle(songId)
+    fun clearSelection() = selection.clear()
 
     /** Borra una canción de verdad (archivo y fila de la base de datos). */
     fun deleteSong(song: Song) {
@@ -161,6 +203,24 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
     fun setTarget(kind: DetailKind, id: Long) {
         if (target.value != null) return
         target.value = kind to id
+    }
+
+    /**
+     * Renombra el artista de esta ficha (ver [DetailDialogFragment.showRenameArtistDialog]): cambia
+     * [com.untar.ultimusic.data.db.entities.ArtistEntity.name] directamente, no el de cada canción
+     * suelta, así que [header]/[tracks] -que observan por id, no por nombre- se enteran solos con el
+     * próximo valor que emita Room. La única vez que hay que tocar [target] a mano es si el nombre
+     * nuevo ya lo tenía OTRO artista: [LibraryDao.renameArtist] los funde en uno y este `id` deja de
+     * existir, así que hay que reapuntar al que sobrevive o la ficha se quedaría mirando a la nada.
+     */
+    fun renameArtist(newName: String) {
+        // "Otros" no es un artista de verdad (ver currentArtistId): no hay ninguna fila que
+        // renombrar, y el menú que llama a esto ya se esconde para él (ver DetailDialogFragment).
+        val id = currentArtistId?.takeIf { it != PersonSummary.OTHERS_ARTIST_ID } ?: return
+        viewModelScope.launch {
+            val survivingId = repository.renameArtist(id, newName)
+            if (survivingId != id) target.value = DetailKind.ARTIST to survivingId
+        }
     }
 
     /** Ver [songsSortSource]. Se fija una sola vez, antes de que [tracks] se observe. */

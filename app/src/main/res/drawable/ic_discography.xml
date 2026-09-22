@@ -1,0 +1,17 @@
+<!-- Disco (arriba a la derecha) + lupa (abajo a la izquierda): botón de "ver discografía" de la
+     ficha de artista (ver menu_library_detail.xml/DetailDialogFragment). El tinte real lo pone
+     applyAccent() en tiempo de ejecución, como el resto de iconos de esa toolbar. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <path
+        android:fillColor="@android:color/white"
+        android:fillType="evenOdd"
+        android:pathData="M8.5,7.5 A6,6 0 1,0 20.5,7.5 A6,6 0 1,0 8.5,7.5 Z M12.9,7.5 A1.6,1.6 0 1,0 16.1,7.5 A1.6,1.6 0 1,0 12.9,7.5 Z" />
+    <path
+        android:fillColor="@android:color/white"
+        android:fillType="evenOdd"
+        android:pathData="M3,17 A4,4 0 1,0 11,17 A4,4 0 1,0 3,17 Z M4.4,17 A2.6,2.6 0 1,0 9.6,17 A2.6,2.6 0 1,0 4.4,17 Z M9.26,20.4 L10.4,19.26 L13.37,22.23 L12.23,23.37 Z" />
+</vector>

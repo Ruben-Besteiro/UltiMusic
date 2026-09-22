@@ -8,9 +8,9 @@ import androidx.room.Index
  * Relación N:N canción ↔ etiqueta. A diferencia de [SongArtistCrossRef]/[SongProducerCrossRef] no
  * lleva `position`: el orden de las etiquetas de una canción no se pinta en ningún sitio.
  *
- * Hoy solo la etiqueta "Favoritos" llega a tener filas aquí (las otras 3 predefinidas se calculan al
- * vuelo, ver [TagEntity]), y ni siquiera esa: todavía no hay UI para añadir/quitar canciones de
- * ninguna etiqueta (llega en un mensaje futuro). La tabla se crea ya como andamiaje.
+ * Tienen filas aquí las predefinidas de membresía real (Vídeo sincronizado, Remix / Cover, ver
+ * [TagEntity]) y las etiquetas personalizadas; las otras 3 predefinidas se calculan al vuelo, sin
+ * ninguna fila en esta tabla.
  */
 @Entity(
     tableName = "song_tag",

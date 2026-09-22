@@ -136,6 +136,12 @@ dependencies {
     // la primera vez a través de Google Play Services y a partir de ahí funciona en el dispositivo,
     // sin mandar la letra a ningún servidor ni necesitar un proyecto de Firebase (ver LanguageDetector).
     implementation(libs.mlkit.language.id)
+    // WorkManager: SOLO para el aviso anual de UltiMusic Recount la última semana de diciembre
+    // (ver RecountReminderWorker). Hace falta una de verdad y no el patrón oportunista de
+    // YouTubeStatsRefresh.isDue -"compruébalo la próxima vez que se abra la app"- porque la gracia
+    // del aviso es justo llegar cuando el usuario NO está usando la app; comprobarlo al abrirla lo
+    // dejaría redundante con el diálogo de arranque, que ya sale ahí mismo.
+    implementation(libs.androidx.work.runtime.ktx)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

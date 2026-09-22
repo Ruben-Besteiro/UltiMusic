@@ -16,6 +16,7 @@ import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.bindSongSubtitle
@@ -35,10 +36,18 @@ import java.util.Collections
  * nunca en un género. [onRemove] hace la quita de verdad y [setRemovable] decide además QUÉ dice
  * ([removeDescRes]: "Quitar de la lista" o "Quitar de la etiqueta"), porque
  * [CollectionDetailDialogFragment] es quien sabe cuál de las dos se está mirando.
+ *
+ * Selección múltiple: mantener pulsada una fila la marca (ver [onSongLongClick] y
+ * [CollectionDetailViewModel.selectedIds]), igual que en la pestaña Canciones (ver
+ * [com.untar.ultimusic.ui.songs.SongsAdapter]). Mientras dure, el manejador de arrastre y la X de
+ * cada fila se ocultan (ver [setSelection]): no tiene sentido reordenar o quitar una sola fila con
+ * varias marcadas a la vez, esas acciones masivas viven en el menú de 3 puntos de la selección
+ * (ver [CollectionDetailDialogFragment.showSelectionMenu]).
  */
 class CollectionSongsAdapter(
     private val reorderable: Boolean,
     private val onSongClick: (Int) -> Unit,
+    private val onSongLongClick: (Int) -> Unit,
     private val onStartDrag: (RecyclerView.ViewHolder) -> Unit,
     private val onReordered: (List<Song>) -> Unit,
     private val onAddToQueue: (Song) -> Unit,
@@ -59,11 +68,30 @@ class CollectionSongsAdapter(
     @StringRes
     private var removeDescRes: Int = R.string.remove_song_from_tag_desc
 
+    /** Ids de las canciones marcadas; no vacío = selección múltiple activa. */
+    private var selectedIds: Set<Long> = emptySet()
+
+    private var accentColor: Int = 0xFFFFD000.toInt()
+
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>) {
         songs.clear()
         songs.addAll(list)
         notifyDataSetChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun setSelection(ids: Set<Long>) {
+        if (selectedIds == ids) return
+        selectedIds = ids
+        notifyDataSetChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun setAccentColor(color: Int) {
+        if (accentColor == color) return
+        accentColor = color
+        if (selectedIds.isNotEmpty()) notifyDataSetChanged()
     }
 
     /** [removable] enseña/oculta la X de cada fila; [descRes] es lo que lee un lector de pantalla al
@@ -96,10 +124,22 @@ class CollectionSongsAdapter(
     }
 
     override fun onBindViewHolder(holder: SongViewHolder, position: Int) {
+        val song = songs[position]
         holder.bind(
-            songs[position], reorderable, removable, removeDescRes,
-            onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags, onDeleteSong,
-            onGoToAlbum, onGoToArtist, onRemove
+            song, reorderable, removable, removeDescRes,
+            selected = song.id in selectedIds,
+            selectionActive = selectedIds.isNotEmpty(),
+            accentColor = accentColor,
+            onSongClick = onSongClick,
+            onSongLongClick = onSongLongClick,
+            onAddToQueue = onAddToQueue,
+            onAddToPlaylist = onAddToPlaylist,
+            onEditMetadata = onEditMetadata,
+            onEditTags = onEditTags,
+            onDeleteSong = onDeleteSong,
+            onGoToAlbum = onGoToAlbum,
+            onGoToArtist = onGoToArtist,
+            onRemove = onRemove
         )
     }
 
@@ -109,6 +149,8 @@ class CollectionSongsAdapter(
     ) : RecyclerView.ViewHolder(itemView) {
         private val handle: ImageView = itemView.findViewById(R.id.dragHandle)
         private val cover: ShapeableImageView = itemView.findViewById(R.id.cover)
+        private val selectionScrim: View = itemView.findViewById(R.id.selectionScrim)
+        private val selectionCheck: ImageView = itemView.findViewById(R.id.selectionCheck)
         private val title: TextView = itemView.findViewById(R.id.songTitle)
         private val subtitleArtist: TextView = itemView.findViewById(R.id.songSubtitleArtist)
         private val subtitleRest: TextView = itemView.findViewById(R.id.songSubtitleRest)
@@ -123,7 +165,11 @@ class CollectionSongsAdapter(
             reorderable: Boolean,
             removable: Boolean,
             @StringRes removeDescRes: Int,
+            selected: Boolean,
+            selectionActive: Boolean,
+            accentColor: Int,
             onSongClick: (Int) -> Unit,
+            onSongLongClick: (Int) -> Unit,
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
             onEditMetadata: (Song) -> Unit,
@@ -138,18 +184,26 @@ class CollectionSongsAdapter(
 
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
 
-            // Sin orden que guardar (género), no hay manejador que mostrar ni arrastre que arrancar.
-            handle.isVisible = reorderable
+            selectionScrim.visibility = if (selected) View.VISIBLE else View.GONE
+            selectionCheck.visibility = if (selected) View.VISIBLE else View.GONE
+            if (selected) AccentTint.fill(itemView, R.id.selectionCheck, accentColor)
+
+            // Sin orden que guardar (género), no hay manejador que mostrar ni arrastre que arrancar;
+            // con una selección en marcha tampoco (ver la cabecera de la clase).
+            handle.isVisible = reorderable && !selectionActive
             handle.setOnTouchListener { _, event ->
-                if (reorderable && event.actionMasked == MotionEvent.ACTION_DOWN) onStartDrag(this)
+                if (reorderable && !selectionActive && event.actionMasked == MotionEvent.ACTION_DOWN) {
+                    onStartDrag(this)
+                }
                 false
             }
 
-            removeButton.isVisible = removable
+            removeButton.isVisible = removable && !selectionActive
             removeButton.contentDescription = itemView.context.getString(removeDescRes)
             removeButton.setOnClickListener { onRemove(song) }
 
             itemView.setOnClickListener { onSongClick(bindingAdapterPosition) }
+            itemView.setOnLongClickListener { onSongLongClick(bindingAdapterPosition); true }
             more.setOnClickListener { anchor ->
                 PopupMenu(anchor.context, anchor).apply {
                     menuInflater.inflate(R.menu.menu_song_item, menu)

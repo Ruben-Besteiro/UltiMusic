@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Última fila de TagsAdapter mientras no exista ninguna etiqueta personalizada (ver
+     TagsAdapter.HintViewHolder): va debajo de las predefinidas que se estén viendo, y desaparece en
+     cuanto se cree la primera personalizada. Sustituye al antiguo emptyView de fragment_tags.xml. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center"
+    android:paddingHorizontal="32dp"
+    android:paddingVertical="24dp"
+    android:text="@string/tags_no_custom_hint"
+    android:textColor="@color/um_on_surface_muted"
+    android:textSize="16sp" />

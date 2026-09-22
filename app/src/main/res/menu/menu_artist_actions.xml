@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Contenido del PopupMenu que abre el botón de 3 puntos de la ficha de un ARTISTA (ver
+  DetailDialogFragment.showArtistMenu). Por ahora solo "Renombrar": cambia el nombre visible del
+  artista (ArtistEntity.name), que ya es una fila propia de Room, así que no hace falta tocar
+  canción por canción -a diferencia de un género, que no tiene tabla propia (ver
+  menu_collection_actions.xml/CollectionDetailDialogFragment.showRenameGenreDialog).
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_rename_artist"
+        android:title="@string/action_rename" />
+</menu>

@@ -68,6 +68,11 @@ class SearchAdapter(
 
     override fun getItemCount(): Int = items.size
 
+    /** La canción de [position], o `null` si esa fila no es una canción (cabecera, álbum o
+     *  persona). Lo usa [com.untar.ultimusic.ui.common.attachSwipeToQueue] para saber qué encolar
+     *  al arrastrar una fila hacia la derecha. */
+    fun songAt(position: Int): Song? = (items.getOrNull(position) as? SearchResult.SongRow)?.song
+
     override fun getItemViewType(position: Int): Int = when (items[position]) {
         is SearchResult.Header -> TYPE_HEADER
         is SearchResult.SongRow -> TYPE_SONG

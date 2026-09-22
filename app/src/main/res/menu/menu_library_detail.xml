@@ -1,22 +1,51 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  El aleatorio va SIEMPRE (álbum o artista); el de 3 puntos solo tiene sentido en un
-  álbum (sus acciones son "de álbum": añadir todas sus canciones, editar SUS metadatos...), así que
-  el código lo oculta para la de un artista. Va después en el XML para quedar más a la derecha,
-  que es justo el hueco que deja al moverse el aleatorio.
+  El aleatorio va SIEMPRE (álbum o artista); el de 3 puntos sale en los dos, pero con contenido
+  distinto según cuál sea (ver DetailDialogFragment.showAlbumMenu/showArtistMenu, y
+  menu_album_actions.xml/menu_artist_actions.xml): en un álbum son "acciones de álbum" (añadir
+  todas sus canciones, editar SUS metadatos...); en un artista, de momento solo "Renombrar". Va
+  después en el XML para quedar más a la derecha, que es justo el hueco que deja al moverse el
+  aleatorio.
 
   El ojo de ordenar, en cambio, solo tiene sentido en la de un artista: un álbum ya ordena sus
   canciones por pista, orden fijo que no tiene sentido cambiar (ver DetailDialogFragment). Va
   ANTES que el aleatorio en el XML para quedar a su izquierda, mismo icono y mismo diálogo que el
   ojo de la barra superior de la pestaña Canciones (ver MainActivity.showSort/SortDialogFragment).
+
+  La discografía, solo en la de un artista y a la IZQUIERDA DEL TODO (primero en el XML): abre
+  DiscographyDialogFragment con el catálogo oficial completo del artista (ver
+  com.untar.ultimusic.data.remote.MusicBrainzApi), no solo lo que ya hay catalogado.
+
+  action_discography_album y action_play_album, al revés que los dos de arriba: solo en la ficha
+  de un ÁLBUM. Van justo antes del aleatorio para quedar a su izquierda (reproducir desde el
+  principio) y, más a la izquierda aún, el mismo diálogo de discografía de arriba pero acotado a
+  este álbum (ver DiscographyDialogFragment.showForAlbum).
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
 
     <item
+        android:id="@+id/action_discography"
+        android:icon="@drawable/ic_discography"
+        android:title="@string/discography_action_desc"
+        app:showAsAction="always" />
+
+    <item
         android:id="@+id/action_sort_artist_songs"
         android:icon="@drawable/ic_eye"
         android:title="@string/action_sort"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_discography_album"
+        android:icon="@drawable/ic_discography"
+        android:title="@string/discography_action_desc_album"
+        app:showAsAction="always" />
+
+    <item
+        android:id="@+id/action_play_album"
+        android:icon="@drawable/ic_play"
+        android:title="@string/play_album_action_desc"
         app:showAsAction="always" />
 
     <item
@@ -26,7 +55,7 @@
         app:showAsAction="always" />
 
     <item
-        android:id="@+id/action_album_menu"
+        android:id="@+id/action_more_menu"
         android:icon="@drawable/ic_more_vert"
         android:title="@string/action_more"
         app:showAsAction="always" />

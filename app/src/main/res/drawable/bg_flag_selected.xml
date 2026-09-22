@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Contorno que marca cuál de las dos banderas del selector de idioma está elegida
+     (dialog_settings.xml). El color de aquí es solo un PLACEHOLDER: SettingsDialogFragment lo muta
+     en runtime con AccentTint.stroke, igual que bg_tag_chip.xml. Se enseña/oculta con visibility en
+     vez de tener un shape "sin marcar", porque no hay nada que pintar cuando no está seleccionada. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="8dp" />
+    <solid android:color="@android:color/transparent" />
+    <stroke
+        android:width="@dimen/flag_selected_stroke_width"
+        android:color="@color/um_yellow" />
+</shape>

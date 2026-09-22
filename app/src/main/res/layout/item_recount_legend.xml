@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una entrada de la leyenda de la tarta de géneros (ver RecountDialogFragment.renderLegend), que
+     se infla a mano dentro de un FlowLayout, igual que las etiquetas mini de una fila de canción
+     (item_tag_chip_mini.xml en item_song.xml).
+
+     El cuadradito se tiñe en runtime con el color del sector que le toca (PieChartView.colorAt), que
+     sale del acento dinámico: aquí no hay ningún color fijo que valga. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="14dp"
+    android:layout_marginBottom="6dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <View
+        android:id="@+id/legendSwatch"
+        android:layout_width="10dp"
+        android:layout_height="10dp"
+        android:background="@drawable/bg_legend_swatch" />
+
+    <TextView
+        android:id="@+id/legendLabel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="6dp"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="13sp"
+        tools:text="Rock 38%" />
+
+</LinearLayout>

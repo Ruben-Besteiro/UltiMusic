@@ -55,7 +55,10 @@ import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.ui.search.SearchBarController
 import com.untar.ultimusic.ui.search.SearchViewModel
+import com.untar.ultimusic.recount.RecountReminder
+import com.untar.ultimusic.ui.recount.RecountDialogFragment
 import com.untar.ultimusic.ui.settings.SettingsDialogFragment
+import com.untar.ultimusic.ui.preview.PreviewSearchDialogFragment
 import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.LibraryTab
@@ -65,6 +68,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.Calendar
 
 class MainActivity : AppCompatActivity() {
 
@@ -165,6 +169,8 @@ class MainActivity : AppCompatActivity() {
         checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
         requestNotificationPermissionIfNeeded()
         handleViewIntent(intent)       /** "Abrir con UltiMusic" desde un gestor de archivos **/
+        handleRecountIntent(intent)    /** Toque en la notificación de UltiMusic Recount **/
+        offerRecountIfDue()            /** Última semana de diciembre: se ofrece solo **/
     }
 
     /**
@@ -175,6 +181,60 @@ class MainActivity : AppCompatActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleViewIntent(intent)
+        handleRecountIntent(intent)
+    }
+
+    /**
+     * UltiMusic Recount, cuando llega de fuera: el usuario ha tocado la notificación de la última
+     * semana de diciembre (ver [RecountReminder]). El extra se consume al leerlo para que, si el
+     * sistema reentrega el mismo `Intent` -al girar la pantalla, por ejemplo-, la pantalla no se
+     * vuelva a abrir sola encima de lo que estuviera haciendo.
+     */
+    private fun handleRecountIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra(RecountReminder.EXTRA_OPEN_RECOUNT, false) != true) return
+        intent.removeExtra(RecountReminder.EXTRA_OPEN_RECOUNT)
+        openRecount()
+    }
+
+    /**
+     * El aviso de arranque de la última semana de diciembre. Es la otra mitad del recordatorio, y
+     * existe además de la notificación porque no depende de ningún permiso: si el usuario denegó
+     * `POST_NOTIFICATIONS`, esta es la única forma de que se entere.
+     *
+     * "Ahora no" no marca nada a propósito: el aviso vuelve a salir en el siguiente arranque hasta
+     * que se entre al Recount o hasta que se acabe el año. Lo que sí lo apaga -las dos vías a la
+     * vez- es ENTRAR, y de eso se encarga [openRecount].
+     */
+    private fun offerRecountIfDue() {
+        if (!RecountReminder.shouldRemind()) return
+        val year = Calendar.getInstance().get(Calendar.YEAR)
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(getString(R.string.recount_reminder_title, year))
+            .setMessage(R.string.recount_reminder_text)
+            .setPositiveButton(R.string.recount_reminder_see) { _, _ -> openRecount() }
+            .setNegativeButton(R.string.recount_reminder_later, null)
+            .show()
+        // Este aviso sale en el arranque, ANTES de que el servicio se enlace (ver
+        // PlayerViewModel.accentColor y bindService en el propio ViewModel): un AccentTint.buttons
+        // de una sola lectura de accentColor.value casi siempre pillaría el valor por defecto
+        // (el amarillo fijo), aunque hubiera una canción sonando de fondo. Se sigue el acento en
+        // vivo mientras el diálogo esté en pantalla -igual que la pestaña en setupDynamicColor- y
+        // se corta el collect al cerrarlo.
+        val accentJob = lifecycleScope.launch {
+            playerViewModel.accentColor.collect { accent -> AccentTint.buttons(dialog, accent) }
+        }
+        dialog.setOnDismissListener { accentJob.cancel() }
+    }
+
+    /**
+     * Abre UltiMusic Recount y da por visto el aviso de este año, que es lo que hace desaparecer a la
+     * vez la notificación y el diálogo de arranque. Entrar desde Ajustes pasa por
+     * [SettingsDialogFragment][com.untar.ultimusic.ui.settings.SettingsDialogFragment] y no por aquí,
+     * pero también marca el año como visto por su cuenta.
+     */
+    private fun openRecount() {
+        RecountReminder.markSeen(this)
+        RecountDialogFragment.show(supportFragmentManager)
     }
 
     /**
@@ -279,19 +339,24 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun setupToolbar() {
-        // El engranaje de la izquierda abre los ajustes; la ayuda de la derecha, de momento, no hace
-        // nada. La barra de búsqueda del centro la engancha setupSearch().
+        // El engranaje de la izquierda abre los ajustes; el "+" de la derecha, el buscador de
+        // fragmentos. La barra de búsqueda del centro la engancha setupSearch().
         findViewById<View>(R.id.btnSettings).setOnClickListener { showSettings() }
+        findViewById<View>(R.id.btnHelp).setOnClickListener { showPreviewSearch() }
 
         val btnSort = findViewById<ImageButton>(R.id.btnSort)
         btnSort.setOnClickListener {
             if (songsViewModel.selectedIds.value.isEmpty()) showSort() else showSelectionMenu(btnSort)
         }
 
+        val searchBar = findViewById<View>(R.id.searchBar)
+        val tvSelectionCount = findViewById<TextView>(R.id.tvSelectionCount)
+
         // Mientras haya canciones marcadas (pulsación larga en la pestaña Canciones, ver
-        // SongsAdapter/SongsFragment) el ojo de ordenar se convierte en el menú de 3 puntos de la
-        // selección: songsViewModel es la MISMA instancia de ámbito de actividad que usa
-        // SongsFragment, así que esto se entera al instante de cada marca/desmarca.
+        // SongsAdapter/SongsFragment): el ojo de ordenar se convierte en el menú de 3 puntos de la
+        // selección y la barra de búsqueda deja su hueco a "N seleccionadas". songsViewModel es la
+        // MISMA instancia de ámbito de actividad que usa SongsFragment, así que esto se entera al
+        // instante de cada marca/desmarca.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
                 songsViewModel.selectedIds.collect { ids ->
@@ -300,6 +365,12 @@ class MainActivity : AppCompatActivity() {
                     btnSort.contentDescription =
                         getString(if (selecting) R.string.song_selection_more else R.string.action_sort)
                     selectionBackCallback.isEnabled = selecting
+                    searchBar.visibility = if (selecting) View.GONE else View.VISIBLE
+                    tvSelectionCount.visibility = if (selecting) View.VISIBLE else View.GONE
+                    if (selecting) {
+                        tvSelectionCount.text =
+                            resources.getQuantityString(R.plurals.song_selection_count, ids.size, ids.size)
+                    }
                 }
             }
         }
@@ -314,6 +385,14 @@ class MainActivity : AppCompatActivity() {
         override fun handleOnBackPressed() {
             songsViewModel.clearSelection()
         }
+    }
+
+    /** Abre el buscador de fragmentos (ver [PreviewSearchDialogFragment]). El guard evita apilar
+     * dos si se toca el botón dos veces seguidas antes de que aparezca el primero. */
+    private fun showPreviewSearch() {
+        if (supportFragmentManager.findFragmentByTag(PreviewSearchDialogFragment.TAG) != null) return
+        PreviewSearchDialogFragment.newInstance()
+            .show(supportFragmentManager, PreviewSearchDialogFragment.TAG)
     }
 
     /**

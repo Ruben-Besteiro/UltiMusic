@@ -16,31 +16,56 @@ import com.untar.ultimusic.util.DynamicColor
  * inspirada en Top Drives: borde vivo, relleno del mismo color pero oscuro) y debajo cuántas
  * canciones tiene, igual de estructura que [GenresAdapter] pero sin texto plano. Menú de 3 puntos
  * (editar/eliminar) SOLO en las etiquetas personalizadas del usuario (`systemKey == null` y no
- * `isAutoAssigned`); las 6 predefinidas y las de idioma lo ocultan, igual que hoy.
+ * `isAutoAssigned`); las 5 predefinidas y las de idioma lo ocultan, igual que hoy.
+ *
+ * Mientras no exista NINGUNA etiqueta personalizada, se añade una última fila con un aviso (ver
+ * [HintViewHolder]/item_tags_no_custom_hint.xml) debajo de las predefinidas que se estén viendo;
+ * desaparece sola en cuanto se crea la primera. Sustituye al antiguo `emptyView` de
+ * `fragment_tags.xml` (ese solo saltaba con la lista TOTALMENTE vacía, ver [TagsFragment]).
  */
 class TagsAdapter(
     private val onTagClick: (TagSummary) -> Unit,
     private val onEditTag: (TagSummary) -> Unit,
     private val onDeleteTag: (TagSummary) -> Unit
-) : RecyclerView.Adapter<TagsAdapter.TagViewHolder>() {
+) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+
+    companion object {
+        private const val VIEW_TYPE_TAG = 0
+        private const val VIEW_TYPE_HINT = 1
+    }
 
     private var tags: List<TagSummary> = emptyList()
 
+    /** Ver la cabecera de la clase: true si [tags] no trae ninguna personalizada todavía. */
+    private var showHint = false
+
     fun submit(list: List<TagSummary>) {
         tags = list
+        showHint = list.none { it.systemKey == null && !it.isAutoAssigned }
         notifyDataSetChanged()
     }
 
-    override fun getItemCount(): Int = tags.size
+    override fun getItemCount(): Int = tags.size + if (showHint) 1 else 0
 
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TagViewHolder {
+    override fun getItemViewType(position: Int): Int =
+        if (showHint && position == tags.size) VIEW_TYPE_HINT else VIEW_TYPE_TAG
+
+    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
         val inflater = LayoutInflater.from(parent.context)
-        return TagViewHolder(inflater.inflate(R.layout.item_tag, parent, false))
+        return if (viewType == VIEW_TYPE_HINT) {
+            HintViewHolder(inflater.inflate(R.layout.item_tags_no_custom_hint, parent, false))
+        } else {
+            TagViewHolder(inflater.inflate(R.layout.item_tag, parent, false))
+        }
     }
 
-    override fun onBindViewHolder(holder: TagViewHolder, position: Int) {
-        holder.bind(tags[position], onTagClick, onEditTag, onDeleteTag)
+    override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
+        if (holder is TagViewHolder) holder.bind(tags[position], onTagClick, onEditTag, onDeleteTag)
     }
+
+    /** Fila estática (ver la cabecera de la clase): su layout ya trae el texto puesto, no hay nada
+     *  que enlazar en cada bind. */
+    class HintViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView)
 
     class TagViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val chip: TextView = itemView.findViewById(R.id.tagChip)
@@ -66,7 +91,7 @@ class TagsAdapter(
             )
             itemView.setOnClickListener { onTagClick(tag) }
 
-            // Editar/eliminar solo tiene sentido para una etiqueta personalizada: las 6 predefinidas
+            // Editar/eliminar solo tiene sentido para una etiqueta personalizada: las 5 predefinidas
             // no se pueden renombrar ni borrar (confirmado con el usuario al diseñar esta pantalla), y
             // una de idioma (tag.isAutoAssigned) tiene las mismas restricciones aunque su systemKey
             // sea null (no cuelga de un valor fijo de SystemTagKey, ver TagEntity.isAutoAssigned).

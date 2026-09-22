@@ -5,14 +5,14 @@ import androidx.room.Index
 import androidx.room.PrimaryKey
 
 /**
- * Fila de la tabla de etiquetas. Las 6 predefinidas (Favoritos, Descargada recientemente, En
- * ninguna lista, Sin etiquetas personalizadas, Vídeo sincronizado, Remix / Cover) se siembran al
- * instalar/migrar (ver `Migrations.kt.seedDefaultTags`) con [systemKey] a uno de los valores de
+ * Fila de la tabla de etiquetas. Las 5 predefinidas (Descargada recientemente, En ninguna lista,
+ * Sin etiquetas personalizadas, Vídeo sincronizado, Remix / Cover) se siembran al instalar/migrar
+ * (ver `Migrations.kt.seedDefaultTags`) con [systemKey] a uno de los valores de
  * [com.untar.ultimusic.model.SystemTagKey]; una etiqueta personalizada futura tendrá [systemKey] a
  * null.
  *
- * Favoritos, Vídeo sincronizado y Remix / Cover usan membresía real (tabla `song_tag`, ver
- * [SongTagCrossRef]): las otras 3 predefinidas se calculan al vuelo a partir de la biblioteca (ver
+ * Vídeo sincronizado y Remix / Cover usan membresía real (tabla `song_tag`, ver [SongTagCrossRef]):
+ * las otras 3 predefinidas se calculan al vuelo a partir de la biblioteca (ver
  * [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]), sin ninguna fila en `song_tag`.
  */
 @Entity(tableName = "tags", indices = [Index(value = ["systemKey"], unique = true)])

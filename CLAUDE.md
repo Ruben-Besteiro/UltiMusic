@@ -24,3 +24,7 @@ Al hacer ediciones dentro de la aplicación, lo nuevo debe aparecer instantánea
 
 Al tocar la base de datos, se debe crear una migración de BD y destruir la anterior.
 
+
+
+Cuando se vaya a tocar un string, ese cambio se debe aplicar a todos los idiomas
+

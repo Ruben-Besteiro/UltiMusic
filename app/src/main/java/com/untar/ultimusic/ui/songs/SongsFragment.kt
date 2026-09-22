@@ -19,6 +19,7 @@ import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.TimeFormat
@@ -90,6 +91,16 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
         // no una canción.
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(songsViewModel.songs.value.getOrNull(position - 1)?.title)
+        }
+
+        // Arrastrar una fila hacia la derecha la añade a la cola, como el propio "Añadir a cola" del
+        // menú de 3 puntos (ver SwipeToQueue.kt); la cabecera (posición 0) no responde.
+        attachSwipeToQueue(
+            recycler,
+            accentColor = { playerViewModel.accentColor.value },
+            canSwipe = { position -> position > 0 }
+        ) { position ->
+            songsViewModel.songs.value.getOrNull(position - 1)?.let { playerViewModel.addToQueue(it) }
         }
 
         /** Pintamos las canciones en la pantalla **/

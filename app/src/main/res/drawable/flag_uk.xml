@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono de bandera del Reino Unido para el selector de idioma (ver settings_language_* en
+     dialog_settings.xml). Versión simplificada de la Union Jack: fondo azul marino, aspas blancas y
+     rojas y la cruz de San Jorge (blanca y roja) encima. No busca precisión heráldica, solo ser
+     reconocible a tamaño de icono. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp"
+    android:height="36dp"
+    android:viewportWidth="60"
+    android:viewportHeight="36">
+    <path
+        android:fillColor="#0A17A7"
+        android:pathData="M0,0h60v36h-60z" />
+    <!-- Aspa blanca -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,0 L8,0 L60,32 L60,36 L52,36 L0,4 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M0,36 L8,36 L60,4 L60,0 L52,0 L0,32 Z" />
+    <!-- Aspa roja, más estrecha, encima de la blanca -->
+    <path
+        android:fillColor="#C8102E"
+        android:pathData="M0,0 L4,0 L60,34 L60,36 L56,36 L0,2 Z" />
+    <path
+        android:fillColor="#C8102E"
+        android:pathData="M0,36 L4,36 L60,2 L60,0 L56,0 L0,34 Z" />
+    <!-- Cruz de San Jorge -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M24,0 L36,0 L36,36 L24,36 Z M0,12 L60,12 L60,24 L0,24 Z" />
+    <path
+        android:fillColor="#C8102E"
+        android:pathData="M27,0 L33,0 L33,36 L27,36 Z M0,15 L60,15 L60,21 L0,21 Z" />
+</vector>

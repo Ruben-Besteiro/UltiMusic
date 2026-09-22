@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.playback.PlaybackService
+import com.untar.ultimusic.ui.common.SongSelection
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -363,6 +364,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun play(song: Song) = withService { it.play(song) }
 
+    /** Ver `PlaybackService.playFromGenre`. */
+    fun playFromGenre(song: Song, genreName: String) = withService { it.playFromGenre(song, genreName) }
+
     /** Ver `PlaybackService.playRandomFromLibrary`. */
     fun playRandomFromLibrary() = withService { it.playRandomFromLibrary() }
 
@@ -372,6 +376,24 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Ver `PlaybackService.reorderQueue` (arrastrar y soltar una fila de la cola en el iPod). */
     fun reorderQueue(songs: List<Song>) = withService { it.reorderQueue(songs) }
+
+    /** Selección múltiple por pulsación larga en la cola del iPod (ver [SongSelection] y
+     *  [com.untar.ultimusic.ui.player.IPodQueueAdapter]/[com.untar.ultimusic.ui.player.IPodDialogFragment]):
+     *  mismo mecanismo que [com.untar.ultimusic.ui.SongsViewModel.selectedIds], pero vive aquí -no en
+     *  el propio [com.untar.ultimusic.ui.player.IPodDialogFragment], que se destruye al cerrar la
+     *  ventana- porque el iPod se puede cerrar y reabrir sin que la selección tenga por qué
+     *  sobrevivir; de hecho conviene que NO sobreviva, así que
+     *  [com.untar.ultimusic.ui.player.IPodDialogFragment] la limpia también al cerrarse (ver su
+     *  `onDestroyView`). */
+    private val queueSelection = SongSelection()
+    val queueSelectedIds: StateFlow<Set<Long>> = queueSelection.selectedIds
+    fun startQueueSelection(songId: Long) = queueSelection.start(songId)
+    fun toggleQueueSelection(songId: Long) = queueSelection.toggle(songId)
+    fun clearQueueSelection() = queueSelection.clear()
+
+    /** Ver `PlaybackService.removeFromQueue`: quita de la cola las canciones marcadas, nunca la que
+     *  suena ahora mismo. */
+    fun removeFromQueue(ids: Set<Long>) = withService { it.removeFromQueue(ids) }
 
     fun playCollection(
         collection: List<Song>,
@@ -386,11 +408,22 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         collectionKind: CollectionKind? = null
     ) = withService { it.shuffleCollection(collection, playlistName, collectionKind) }
 
+    /** Ver `PlaybackService.setListaShuffle` (toggle de barajar de la ficha de una Lista). */
+    fun setListaShuffle(playlistName: String, songs: List<Song>, enabled: Boolean) =
+        withService { it.setListaShuffle(playlistName, songs, enabled) }
+
+    /** Ver `PlaybackService.resetListaHistory` (botón de "N reproducidas" de la ficha de una Lista). */
+    fun resetListaHistory(playlistName: String, songs: List<Song>) =
+        withService { it.resetListaHistory(playlistName, songs) }
+
     fun skipToPrevious() = withService { it.skipToPrevious() }
 
     fun skipToNext() = withService { it.skipToNext() }
 
     fun jumpTo(d: Int, forcePlay: Boolean = true) = withService { it.jumpTo(d, forcePlay) }
+
+    /** Ver `PlaybackService.selectFromQueue` (tocar una fila cualquiera de la cola del iPod). */
+    fun selectFromQueue(position: Int) = withService { it.selectFromQueue(position) }
 
     fun refreshSong(song: Song) {
         service?.refreshSong(song)

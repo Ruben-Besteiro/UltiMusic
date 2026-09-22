@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fondo del ImageView de una bandera del selector de idioma (dialog_settings.xml): solo existe
+     para darle esquinas redondeadas al recorte (android:clipToOutline="true" en el ImageView usa el
+     outline de este shape). El color no se ve nunca, lo tapa la bandera. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="6dp" />
+    <solid android:color="@android:color/white" />
+</shape>

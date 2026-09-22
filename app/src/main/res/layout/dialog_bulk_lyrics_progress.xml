@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Contenido (sin título ni botones, que pone el AlertDialog.Builder de
+  BulkLyricsProgressDialogFragment) del diálogo de progreso de "Añadir todas las letras".
+
+  Está basado en el diálogo de operación de archivo de MixPlorer que enseñó el usuario al pedir esta
+  pantalla, con tres diferencias: sin subtítulo (aquí no hay nada parecido a "Borrando 7 carpetas,
+  1275 archivos" que resumir), la fila que allí era el nombre del archivo aquí es el título de la
+  canción tal cual está en la base de datos con el tiempo transcurrido al lado, y no hay nada debajo
+  del contador "X/N" — ni el desplegable "Más" con la ruta de origen, ni el botón de pausa: los
+  únicos dos controles son los botones del propio AlertDialog (Cancelar / Segundo plano).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginHorizontal="20dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/bulkLyricsSongTitle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="15sp"
+            tools:text="Nombre de la canción" />
+
+        <TextView
+            android:id="@+id/bulkLyricsElapsed"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="13sp"
+            tools:text="0:33" />
+
+    </LinearLayout>
+
+    <ProgressBar
+        android:id="@+id/bulkLyricsProgressBar"
+        style="?android:attr/progressBarStyleHorizontal"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:max="100" />
+
+    <TextView
+        android:id="@+id/bulkLyricsCounter"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textColor="@color/um_on_surface_muted"
+        android:textSize="13sp"
+        tools:text="5/1282" />
+
+</LinearLayout>

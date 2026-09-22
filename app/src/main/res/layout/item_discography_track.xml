@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Pista dentro de la discografía (ver DiscographyDialogFragment/DiscographyAdapter): número de
+  pista + título + duración, en una sola fila (sin carátula ni menú, a diferencia de
+  item_detail_song.xml: aquí solo se enseña, no se toca nada). El color lo pone el adaptador según
+  si esa pista está o no en el dispositivo (blanco/gris, ver DiscographyViewModel.crossReference).
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="6dp">
+
+    <TextView
+        android:id="@+id/discographyTrackNumber"
+        android:layout_width="28dp"
+        android:layout_height="wrap_content"
+        android:gravity="start"
+        android:textSize="14sp"
+        tools:text="1"
+        tools:textColor="@color/um_on_background" />
+
+    <TextView
+        android:id="@+id/discographyTrackTitle"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:textSize="14sp"
+        tools:text="Hit the Lights"
+        tools:textColor="@color/um_on_background" />
+
+    <TextView
+        android:id="@+id/discographyTrackDuration"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:textSize="14sp"
+        tools:text="4:15"
+        tools:textColor="@color/um_on_background" />
+
+</LinearLayout>

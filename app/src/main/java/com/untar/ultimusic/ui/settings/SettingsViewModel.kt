@@ -4,6 +4,7 @@ import android.app.Application
 import android.os.Environment
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.untar.ultimusic.data.ArtistGroupingPreferences
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.model.GreylistFolder
 import com.untar.ultimusic.model.LibraryRoot
@@ -72,5 +73,15 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun removeLibraryRoot(path: String) {
         viewModelScope.launch { repository.removeLibraryRoot(path) }
+    }
+
+    // --- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) ---
+
+    val artistGroupingThreshold: StateFlow<Int> = ArtistGroupingPreferences.threshold
+
+    /** Guarda el umbral nuevo. Repository.artists reacciona al instante -[artistGroupingThreshold]
+     *  es el mismo `StateFlow` que consulta, no hace falta recargar nada aquí. */
+    fun setArtistGroupingThreshold(value: Int) {
+        ArtistGroupingPreferences.set(value)
     }
 }

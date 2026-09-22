@@ -239,11 +239,12 @@ private fun backfillDateAdded(db: SupportSQLiteDatabase) {
  * pasa por ninguna migración) — mismo patrón que [seedDefaultLibraryRoots]. `INSERT OR IGNORE` sobre
  * `systemKey` la hace segura de repetir sin duplicar nada.
  *
- * Hubo una fila más, "Debug" (ver [SystemTagKey]), sembrada por [migration18To19] y retirada por
- * [migration19To20] en cuanto dejó de hacer falta: por eso ya no aparece aquí, aunque instalaciones
- * viejas pasaran por sembrarla. "Vídeo sincronizado" (ver [migration20To21]) y "Remix / Cover" (ver
- * [migration25To26]) no son de las calculadas -SÍ hace falta sembrarlas aquí para una instalación
- * nueva, usan membresía real como Favoritos- pero no hace falta backfill ninguno para ninguna de las
+ * Hubo dos filas más: "Debug" (ver [SystemTagKey]), sembrada por [migration18To19] y retirada por
+ * [migration19To20] en cuanto dejó de hacer falta; y "Favoritos", sembrada aquí hasta que se retiró
+ * por decisión de producto (ver [MIGRATION_27_28]). Ninguna de las dos aparece ya en esta lista,
+ * aunque instalaciones viejas pasaran por sembrarlas. "Vídeo sincronizado" (ver [migration20To21]) y
+ * "Remix / Cover" (ver [migration25To26]) no son de las calculadas -SÍ hace falta sembrarlas aquí para
+ * una instalación nueva, usan membresía real- pero no hace falta backfill ninguno para ninguna de las
  * dos, porque una instalación nueva todavía no tiene ninguna canción con desplazamiento de vídeo ni
  * título original guardados.
  *
@@ -254,7 +255,6 @@ private fun backfillDateAdded(db: SupportSQLiteDatabase) {
  */
 internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context) {
     val rows = listOf(
-        Triple(SystemTagKey.FAVORITES, R.string.tag_favorites_name, R.color.um_tag_favorites),
         Triple(SystemTagKey.RECENTLY_ADDED, R.string.tag_recently_added_name, R.color.um_tag_recently_added),
         Triple(SystemTagKey.NOT_IN_PLAYLIST, R.string.tag_not_in_playlist_name, R.color.um_tag_not_in_playlist),
         Triple(SystemTagKey.NO_CUSTOM_TAGS, R.string.tag_no_custom_tags_name, R.color.um_tag_no_custom_tags),
@@ -609,6 +609,63 @@ val MIGRATION_26_27 = object : Migration(26, 27) {
         db.execSQL("DROP TABLE songs")
         db.execSQL("ALTER TABLE songs_new RENAME TO songs")
         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_songs_filePath ON songs(filePath)")
+    }
+}
+
+/**
+ * v27 → v28: sin cambio de esquema — retira la etiqueta predefinida "Favoritos"
+ * (`SystemTagKey.FAVORITES`, ya quitada del enum) por decisión de producto. El `DELETE` se lleva por
+ * delante, en cascada (`ON DELETE CASCADE` de `SongTagCrossRef.tagId`), la membresía (`song_tag`) de
+ * cualquier canción que el usuario tuviera marcada como Favorita: es la consecuencia esperada de
+ * eliminar la etiqueta, no una pérdida de datos accidental. [seedDefaultTags] ya no la siembra, así
+ * que una instalación nueva a partir de aquí nunca llega a tener esa fila. No necesita `Context` (no
+ * lee ningún recurso), así que es un `val` de nivel de fichero como [MIGRATION_19_20], que retiró la
+ * predefinida "Debug" con el mismo mecanismo.
+ */
+val MIGRATION_27_28 = object : Migration(27, 28) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DELETE FROM tags WHERE systemKey = 'FAVORITES'")
+    }
+}
+
+/**
+ * v28 → v29: crea la tabla `play_events` de UltiMusic Recount (ver [PlayEventEntity]), donde se
+ * anota una fila por cada escucha que llegue al 50% de la canción. Es una tabla nueva y vacía: no
+ * hay nada que migrar ni que rellenar, la app simplemente empieza a contar desde aquí. Aun así se
+ * escribe a mano, y no se deja caer en `fallbackToDestructiveMigration`, por el mismo motivo que
+ * todas las de arriba: ese fallback recrearía el esquema entero VACÍO y se llevaría por delante la
+ * fonoteca y las ediciones del usuario, que es justo lo que nunca puede pasar.
+ *
+ * Dos detalles del `CREATE TABLE` que NO son descuidos:
+ *
+ * - **Sin `FOREIGN KEY` a `songs`**, a diferencia de todas las demás tablas que guardan un `songId`.
+ *   Una cascada borraría estas filas al borrar la canción, y son justo las que hacen falta enteras
+ *   para el cubo "Canciones borradas" del Recount. Ver la cabecera de [PlayEventEntity].
+ * - **`year` es una columna de verdad**, desnormalizada, en vez de calcularse al consultar con
+ *   `strftime('%Y', startedAt/1000, 'unixepoch', 'localtime')`: ese `'localtime'` usa la zona
+ *   horaria del dispositivo en el momento de la consulta, así que un cambio de país reasignaría de
+ *   año las escuchas de fin de diciembre. Ver también la cabecera de [PlayEventEntity].
+ *
+ * `INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL` es exactamente lo que genera Room para un
+ * `@PrimaryKey(autoGenerate = true) val id: Long = 0`; hay que escribirlo igual o Room se queja al
+ * validar el esquema al abrir. Los dos índices replican los `Index("year")`/`Index("songId")` de la
+ * entidad, con los nombres que Room espera (`index_<tabla>_<columna>`).
+ */
+val MIGRATION_28_29 = object : Migration(28, 29) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(
+            """
+            CREATE TABLE IF NOT EXISTS play_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                songId INTEGER NOT NULL,
+                startedAt INTEGER NOT NULL,
+                playedMs INTEGER NOT NULL,
+                year INTEGER NOT NULL
+            )
+            """
+        )
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_play_events_year ON play_events(year)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_play_events_songId ON play_events(songId)")
     }
 }
 

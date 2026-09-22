@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Menú de 3 puntos de la selección múltiple de la cola del iPod (ver IPodDialogFragment.
+  showQueueSelectionMenu y R.id.btnMenu mientras dura): igual que menu_song_selection.xml (el de la
+  pestaña Canciones), pero sin "Añadir a la cola" -ya están en ella- y con "Quitar de la cola" en su
+  lugar.
+-->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_add_to_playlist"
+        android:title="@string/add_to_playlist" />
+    <item
+        android:id="@+id/action_edit_metadata"
+        android:title="@string/edit_metadata" />
+    <item
+        android:id="@+id/action_edit_tags"
+        android:title="@string/edit_tags" />
+    <item
+        android:id="@+id/action_remove_from_queue"
+        android:title="@string/remove_from_queue" />
+    <item
+        android:id="@+id/action_delete_song"
+        android:title="@string/delete_song" />
+</menu>

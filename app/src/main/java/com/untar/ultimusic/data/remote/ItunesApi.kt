@@ -55,12 +55,23 @@ import java.util.Locale
 object ItunesApi {
 
     private const val BASE_URL = "https://itunes.apple.com/search"
+
+    /** Catálogo completo de un artista por su id, sin pasar por el buscador de texto libre (ver
+     * [artistCatalogMatches]). */
+    private const val LOOKUP_URL = "https://itunes.apple.com/lookup"
+
     private const val USER_AGENT = "UltiMusic/1.0 ( rbesteiro@proton.me )"
 
     /** Cuántos resultados se piden por página. iTunes admite hasta 200 de golpe, pero se piden de
      * 25 en 25 para que la primera pantalla de sugerencias llegue cuanto antes: el resto lo va
      * trayendo el scroll infinito conforme haga falta. */
     private const val PAGE_SIZE = 25
+
+    /** Tope de publicaciones que se piden del catálogo entero de un artista (ver
+     * [artistCatalog]): /lookup no pagina con `offset` como /search, así que se pide de una sola
+     * vez lo más grande que tenga sentido — y 200 es también el tope que acepta el propio
+     * parámetro `limit` de la API. */
+    private const val ARTIST_CATALOG_LIMIT = 200
 
     /** Tienda que se usa si el dispositivo no tiene ninguna región configurada (ver [storefront]).
      * La de EE. UU. es la de catálogo más amplio, así que es la reserva menos mala. */
@@ -152,14 +163,26 @@ object ItunesApi {
             val results = searchWithArtistFallback(entity = "song", main = title, artist = artist, offset = offset)
             val searchedArtists = splitArtists(artist)
 
+            // Antes que nada, se prueba con el catálogo real de alguno de los artistas buscados
+            // (ver artistCatalogMatches): solo en la primera página, porque /lookup no pagina como
+            // /search y no hay "página siguiente" suya que encadenar con el resto del scroll
+            // infinito. Van los primeros en combinedItems para que, más abajo, ganen el hueco de su
+            // collectionId si el texto libre trae la misma publicación, y para que dentro de su
+            // propio rank de matchRank queden delante por orden de inserción (sortedBy es estable).
+            val catalogMatches = if (offset == 0) {
+                artistCatalogMatches(entity = "song", titleQuery = title, searchedArtists = searchedArtists)
+            } else {
+                emptyList()
+            }
+            val combinedItems = catalogMatches + results.asList()
+
             // Una misma publicación puede salir dos veces (la versión de estudio y una remasterizada
             // que comparten álbum, por ejemplo). Como todos los resultados son de la MISMA canción
             // buscada, quedarse con la primera de cada colección es quedarse con la más relevante.
             val usedCollections = mutableSetOf<Long>()
             val ranked = mutableListOf<RankedSuggestion>()
 
-            for (i in 0 until results.length()) {
-                val item = results.getJSONObject(i)
+            for (item in combinedItems) {
                 // media=music&entity=song no debería traer otra cosa, pero un videoclip colado
                 // rellenaría el formulario con datos que no son de la canción.
                 if (item.optString("kind") != "song") continue
@@ -209,11 +232,20 @@ object ItunesApi {
             val results = searchWithArtistFallback(entity = "album", main = album, artist = artist, offset = offset)
             val searchedArtists = splitArtists(artist)
 
+            // Mismo catálogo por artista que en searchSongs, y por el mismo motivo (ver el
+            // javadoc de artistCatalogMatches): "St. Anger" de Metallica es justo el caso que lo
+            // motivó — por texto libre no aparecía nunca, aunque sí está en su catálogo.
+            val catalogMatches = if (offset == 0) {
+                artistCatalogMatches(entity = "album", titleQuery = album, searchedArtists = searchedArtists)
+            } else {
+                emptyList()
+            }
+            val combinedItems = catalogMatches + results.asList()
+
             val usedCollections = mutableSetOf<Long>()
             val ranked = mutableListOf<RankedSuggestion>()
 
-            for (i in 0 until results.length()) {
-                val item = results.getJSONObject(i)
+            for (item in combinedItems) {
                 val collectionId = item.optLong("collectionId", 0L)
                 if (collectionId == 0L || !usedCollections.add(collectionId)) continue
 
@@ -280,6 +312,87 @@ object ItunesApi {
     private fun searchUrl(entity: String, term: String, offset: Int): String =
         "$BASE_URL?term=${URLEncoder.encode(term, "UTF-8")}" +
             "&country=$storefront&media=music&entity=$entity&limit=$PAGE_SIZE&offset=$offset"
+
+    // --- Catálogo por artista (ver artistCatalogMatches) ---
+
+    /**
+     * Busca [artistName] como artista de música (`entity=musicArtist`) y devuelve el `artistId`
+     * de iTunes del primer candidato cuyo nombre coincida EXACTAMENTE (normalizado, ver
+     * [TextMatch.normalize]) con el buscado — a propósito no laxo como [matchesAnyArtist]:
+     * "Metallica" en laxo también encontraría "SaD - Symphony and Metallica" o cualquier tributo
+     * que lleve el nombre dentro del suyo, y acabaría trayendo SU discografía en vez de la real.
+     *
+     * Devuelve null sin lanzar si no hay ninguna coincidencia exacta entre los primeros
+     * candidatos (nombre mal escrito, alias, artista que no está en esta tienda…) o si la propia
+     * petición falla — quien llama ([artistCatalogMatches]) prueba entonces con el siguiente
+     * artista buscado, o si no queda ninguno, se queda sin nada y el buscador sigue con el camino
+     * de siempre (texto libre).
+     */
+    private fun resolveArtistId(artistName: String): Long? {
+        if (artistName.isBlank()) return null
+        val url = "$BASE_URL?term=${URLEncoder.encode(artistName, "UTF-8")}" +
+            "&country=$storefront&media=music&entity=musicArtist&limit=5"
+        val results = runCatching { httpGetResults(url) }.getOrNull() ?: return null
+        val normalizedQuery = TextMatch.normalize(artistName)
+        for (i in 0 until results.length()) {
+            val item = results.getJSONObject(i)
+            if (TextMatch.normalize(item.optString("artistName")) == normalizedQuery) {
+                return item.optLong("artistId", 0L).takeIf { it != 0L }
+            }
+        }
+        return null
+    }
+
+    /**
+     * Catálogo entero de [artistId] (`entity` "album" o "song"), pedido de una sola vez (ver
+     * [ARTIST_CATALOG_LIMIT]: /lookup no pagina con `offset` como /search). El primer elemento de
+     * la respuesta es SIEMPRE la ficha del propio artista (`wrapperType` "artist"), no una
+     * publicación — se descarta aquí para que [artistCatalogMatches] no tenga que acordarse de
+     * saltarlo.
+     */
+    private fun artistCatalog(artistId: Long, entity: String): List<JSONObject> {
+        val url = "$LOOKUP_URL?id=$artistId&country=$storefront&entity=$entity&limit=$ARTIST_CATALOG_LIMIT"
+        return httpGetResults(url).asList().filter { it.optString("wrapperType") != "artist" }
+    }
+
+    /**
+     * Candidatos que salen del catálogo REAL de alguno de [searchedArtists] en vez de la búsqueda
+     * de texto libre de iTunes.
+     *
+     * Es lo que arregla casos donde el buscador de texto libre de iTunes es poco fiable con
+     * títulos cortos o genéricos: "St. Anger" (Metallica) no aparecía NUNCA por texto libre,
+     * enterrado bajo covers, karaokes y resultados sin relación con "Anger" o "Metallica" sueltos,
+     * aunque el álbum SÍ está en su catálogo; "Despacito" (Luis Fonsi) aparecía pero enterrado
+     * bajo un aluvión de remixes y versiones más populares que la original; "Niggas in Paris"
+     * (JAY-Z & Kanye West) no aparecía en absoluto.
+     *
+     * Prueba los artistas buscados EN ORDEN y se queda con el primero que, al resolverse a un
+     * artista real ([resolveArtistId]), tenga en su catálogo algo que case con [titleQuery]: esto
+     * importa porque el primer nombre puede resolver a un artista real pero EQUIVOCADO (mismo
+     * nombre normalizado, discografía distinta) — le pasa a "Jay-Z" en la tienda española, que
+     * resuelve antes a un artista menor sin ninguna canción que ver con esto, así que hay que
+     * seguir probando con "Kanye West" para llegar al álbum de verdad.
+     *
+     * Vacía —sin lanzar— si ningún artista buscado resuelve, o si resuelve pero no hay ninguna
+     * coincidencia de título en su catálogo: quien llama ([searchSongs]/[searchAlbums]) sigue
+     * entonces con su camino de siempre (búsqueda de texto libre, sin este añadido).
+     */
+    private fun artistCatalogMatches(
+        entity: String,
+        titleQuery: String,
+        searchedArtists: List<String>
+    ): List<JSONObject> {
+        val titleField = if (entity == "album") "collectionName" else "trackName"
+        for (name in searchedArtists) {
+            val artistId = resolveArtistId(name) ?: continue
+            val catalog = runCatching { artistCatalog(artistId, entity) }.getOrDefault(emptyList())
+            val matches = catalog.filter { TextMatch.looselyEqual(titleQuery, it.optString(titleField)) }
+            if (matches.isNotEmpty()) return matches
+        }
+        return emptyList()
+    }
+
+    private fun JSONArray.asList(): List<JSONObject> = (0 until length()).map { getJSONObject(it) }
 
     /** Castigo por rate limit de iTunes, independiente del de las otras dos APIs. Apple no publica
      *  un límite oficial pero recomienda no pasar de unas 20 peticiones por minuto **y por IP**;

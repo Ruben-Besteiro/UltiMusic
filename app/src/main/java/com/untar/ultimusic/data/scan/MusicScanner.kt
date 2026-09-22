@@ -16,8 +16,9 @@ import java.io.File
  */
 object MusicScanner {            // OBJECT = SINGLETON
 
-    /** Extensiones de audio reconocidas. */
-    private val AUDIO_EXTENSIONS = setOf(
+    /** Extensiones de audio reconocidas. `internal` porque también la usa
+     * [com.untar.ultimusic.util.StoreDownloader] para quedarse solo con el audio de un .zip. */
+    internal val AUDIO_EXTENSIONS = setOf(
         "mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma", "mkv"
     )
 

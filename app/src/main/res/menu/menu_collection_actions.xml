@@ -9,7 +9,8 @@
   editar/borrar una etiqueta usa directamente menu_tag_item.xml, tanto en su propia fila (ver
   TagsAdapter) como en el de la cabecera de su ficha (ver
   CollectionDetailDialogFragment.showTagMenu). Un género no tiene fila propia editable, así que
-  aquí nunca hubo ni hace falta esa opción.
+  "Renombrar" (ver showRenameGenreDialog) vive solo aquí: cambia el nombre del género en TODAS las
+  canciones que lo llevan de golpe (no hay una tabla de géneros aparte, ver SongEntity.genres).
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android">
     <item
@@ -18,4 +19,7 @@
     <item
         android:id="@+id/action_add_collection_to_playlist"
         android:title="@string/add_to_playlist" />
+    <item
+        android:id="@+id/action_rename_genre"
+        android:title="@string/action_rename" />
 </menu>

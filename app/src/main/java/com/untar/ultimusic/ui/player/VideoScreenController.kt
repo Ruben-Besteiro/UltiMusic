@@ -1,26 +1,37 @@
 package com.untar.ultimusic.ui.player
 
-import android.view.View
-import android.view.ViewGroup
-import android.webkit.WebView
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.PlayerConstants
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.YouTubePlayer
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.listeners.AbstractYouTubePlayerListener
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.options.IFramePlayerOptions
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
-import kotlin.math.abs
 
 /**
  * Envuelve el [YouTubePlayerView] para que el iPod no tenga que saber nada de la librería de
- * YouTube: le pide "carga este vídeo desde este milisegundo" y luego lo mantiene sincronizado con
- * lo que va marcando el audio local. Existe como clase aparte porque `IPodNanoDialogFragment` ya es
- * largo y porque así toda la conversación con la librería queda en un solo sitio.
+ * YouTube: le pide "carga este vídeo desde este milisegundo" y expone lo necesario para traspasar
+ * el sonido con el audio local al entrar y salir del modo vídeo. Existe como clase aparte porque
+ * `IPodDialogFragment` ya es largo y porque así toda la conversación con la librería queda en un
+ * solo sitio.
  *
- * **El vídeo nunca suena.** El audio de verdad es siempre el archivo local (ExoPlayer, en
- * `PlayerViewModel`); este vídeo es una capa puramente visual, silenciada con [YouTubePlayer.mute],
- * que se limita a seguir la posición y el play/pausa del audio local (ver [sync]). Así no hay que
- * traspasar el sonido de uno a otro al entrar o salir del modo vídeo: el audio local no se pausa
- * nunca, y por tanto no hay hueco de silencio ni nada que reconciliar al volver de segundo plano.
+ * **Solo suena una cosa a la vez.** Los términos de servicio de la API de YouTube prohíben aplicar
+ * una pista de audio distinta a su vídeo (`developers.google.com/youtube/terms/developer-policies`,
+ * sección III.I.7), así que este vídeo NUNCA sirve de capa muda sobre el audio local: mientras esté
+ * visible suena su propio audio real (ver [setAudible]), y `IPodDialogFragment` congela el audio
+ * local justo antes de mostrarlo. Al salir del modo vídeo pasa lo contrario: este controlador queda
+ * mudo y en pausa, y quien llama traduce la posición de vuelta al audio local con [localPositionMs]
+ * (resta el mismo [offsetMs] que sumó [load] para entrar). Por el mismo motivo (sección III.I.9,
+ * prohíbe un "background player" que no esté visible) `IPodDialogFragment` tiene que llamar a
+ * [setAudible] con `false` en cuanto la ventana deja de estar en primer plano, no solo al salir del
+ * modo vídeo a mano.
+ *
+ * **Controles reales.** [playerOptions] pide `controls(1)`: el propio reproductor de YouTube enseña
+ * sus mandos (play/pausa, barra, subtítulos, pantalla completa...) y los toques le llegan sin que
+ * nada los intercepte por el camino. Es la otra condición del mismo apartado de esa política
+ * (sección III.I.6, prohíbe modificar o bloquear cualquier función del reproductor): antes se
+ * escondían los mandos (`controls(0)`, opción documentada y sí permitida) y además se forzaba el
+ * apagado de los subtítulos llamando a un método interno no documentado de la librería
+ * (`unloadModule('captions')`); ahora, con los mandos reales visibles, el usuario los apaga él mismo
+ * si quiere, sin que la aplicación toque nada del reproductor.
  *
  * **Inicialización perezosa.** En el XML el reproductor lleva `enableAutomaticInitialization="false"`,
  * lo que desactiva el arranque automático de la librería. Sin eso, el `WebView` interno se prepararía
@@ -51,10 +62,19 @@ class VideoScreenController(
     private var player: YouTubePlayer? = null
 
     /**
+     * True mientras el vídeo debe sonar de verdad (ver [setAudible]). Se guarda como campo, y no
+     * solo como una llamada a [YouTubePlayer.mute]/[YouTubePlayer.unMute], porque hay que poder
+     * pedirlo ANTES de que el reproductor esté listo (ver [onReady]) o antes de que arranque un
+     * vídeo concreto (ver el `start` de [YouTubePlayer]): en ambos casos se aplica en cuanto el
+     * reproductor pueda recibir la orden, no antes.
+     */
+    private var audible = false
+
+    /**
      * Milisegundos que se suma a la posición del audio local para obtener la del vídeo: positivo lo
      * adelanta, negativo lo atrasa. Lo fijan los ajustes del reproductor de vídeo (ver [setOffset])
-     * y lo aplican [load], [sync] y [seekTo] para que todo el mundo hable siempre en "posición de
-     * vídeo" a partir de la posición real del audio.
+     * y lo aplican [load] y [seekTo] para que todo el mundo hable siempre en "posición de vídeo" a
+     * partir de la posición real del audio, y [localPositionMs] para deshacer esa cuenta al salir.
      */
     private var offsetMs: Long = 0
 
@@ -77,7 +97,8 @@ class VideoScreenController(
         val isPlaying: () -> Boolean
     )
 
-    /** Última posición y estado conocidos del vídeo, para no repetir órdenes en [sync]. */
+    /** Última posición y estado conocidos del vídeo (ver [onCurrentSecond]/[onStateChange]), que
+     * leen [localPositionMs] y [wasPlaying] para reanudar el audio local al salir del modo vídeo. */
     private var lastKnownPositionMs = 0L
     private var lastKnownPlaying = false
 
@@ -92,11 +113,11 @@ class VideoScreenController(
 
     /**
      * False desde que se pide un vídeo (ver [YouTubePlayer.start]) hasta que llega su primer estado
-     * PLAYING (ver [onStateChange]). Mientras esté a false, [sync] no debe mandar `play()`/`pause()`
-     * directamente: la IFrame Player API de YouTube ignora esas órdenes si el vídeo todavía no ha
-     * arrancado de verdad (sigue en buffering o "cued"), y en cuanto esté listo se pone en marcha él
-     * solo pase lo que pase con esas órdenes perdidas. Por eso mientras tanto [sync] se limita a
-     * actualizar [pauseOnceStarted], que sí se aplica de forma fiable en [onStateChange].
+     * PLAYING (ver [onStateChange]). La IFrame Player API de YouTube ignora una orden de
+     * `play()`/`pause()` mandada mientras el vídeo todavía no ha arrancado de verdad (sigue en
+     * buffering o "cued"), y en cuanto esté listo se pone en marcha él solo pase lo que pase con esa
+     * orden perdida; por eso el pedido inicial de pausa no se manda directo, se guarda en
+     * [pauseOnceStarted] y se aplica de forma fiable en cuanto llega el primer PLAYING.
      */
     private var videoStarted = false
 
@@ -111,10 +132,9 @@ class VideoScreenController(
 
         override fun onReady(youTubePlayer: YouTubePlayer) {
             android.util.Log.d("UMVideoDebug", "onReady")
-            // Antes de nada: mudo. Ni un fotograma debe sonar, porque el audio real ya lo está
-            // poniendo el ExoPlayer local.
-            youTubePlayer.mute()
-            hideCaptions()
+            // Aplica el mudo/sonido pedido antes de que el reproductor estuviera listo (ver
+            // [audible]); por defecto empieza mudo, como cualquier vídeo recién insertado.
+            if (audible) youTubePlayer.unMute() else youTubePlayer.mute()
             player = youTubePlayer
             // Si mientras se inicializaba ya se pidió un vídeo, se lanza ahora.
             pending?.let { request ->
@@ -141,16 +161,12 @@ class VideoScreenController(
             if (state == PlayerConstants.PlayerState.PLAYING) {
                 videoStarted = true
                 // Ver [pauseOnceStarted]: en cuanto el vídeo arranca de verdad (ya hay fotograma), se
-                // pausa si el audio local estaba en pausa (de entrada, o porque [sync] lo pidió
-                // mientras aún cargaba).
+                // pausa si el audio local estaba en pausa en el momento de entrar en modo vídeo.
                 if (pauseOnceStarted) {
                     pauseOnceStarted = false
                     youTubePlayer.pause()
                 }
             }
-            // Cada vídeo nuevo puede recargar su propio módulo de subtítulos forzados (ver
-            // [hideCaptions]), así que se repite en cada cambio de estado y no solo en [onReady].
-            hideCaptions()
         }
 
         override fun onError(
@@ -176,17 +192,25 @@ class VideoScreenController(
 
     /**
      * Carga [videoId] a partir de lo que devuelvan [positionMs] e [isPlaying], que son la posición y
-     * el estado del audio local. Se piden como funciones, no como valores ya leídos, porque si el
-     * reproductor aún no está listo (ver más abajo) el vídeo no arranca hasta que llegue [onReady],
-     * y para entonces el audio puede llevar ya un rato avanzando: llamarlas en ese momento, y no
-     * ahora, es lo que evita que el vídeo nazca atrasado por lo que haya tardado la inicialización.
+     * el estado del audio local EN EL MOMENTO DE ENTRAR en modo vídeo (quien llama ya lo ha
+     * congelado para entonces, ver `IPodDialogFragment.startVideo`). Se piden como funciones, y no
+     * como valores ya leídos, porque si el reproductor aún no está listo (ver más abajo) el vídeo no
+     * arranca hasta que llegue [onReady], que puede tardar segundos en la primera inicialización;
+     * llamarlas en ese momento, y no ahora, es lo único que evita que el vídeo nazca en un punto
+     * distinto al que se congeló el audio local.
      *
      * [offsetMs] es el desplazamiento guardado de la canción (ver `Song.videoOffsetMs`); se aplica
-     * aquí y queda recordado para que [sync] y [seekTo] lo sigan aplicando mientras dure este vídeo.
+     * aquí y queda recordado para que [seekTo] y [localPositionMs] lo sigan aplicando mientras dure
+     * este vídeo.
      */
     fun load(videoId: String, positionMs: () -> Long, isPlaying: () -> Boolean, offsetMs: Long = 0) {
         this.offsetMs = offsetMs
         lastKnownPositionMs = withOffset(positionMs())
+        // Se adelanta aquí, y no se deja solo a [onStateChange], para que [wasPlaying] conteste lo
+        // pedido incluso si el vídeo falla antes de llegar a ningún estado (ver [onError] en
+        // IPodDialogFragment.exitVideo): sin esto, un fallo inmediato dejaría el audio local pausado
+        // para siempre, aunque estuviera sonando justo antes de entrar en modo vídeo.
+        lastKnownPlaying = isPlaying()
         awaitingFirstState = true
         onLoadingChanged(true)
         val request = Request(videoId, positionMs, isPlaying)
@@ -204,57 +228,68 @@ class VideoScreenController(
     }
 
     /**
-     * Ajusta el vídeo para que coincida con [targetPositionMs]/[targetIsPlaying], que son la
-     * posición y el estado reales del audio local. Se llama tanto al alternar play/pausa como en
-     * cada tick de progreso del audio (unos 500 ms), así que también es lo que autocorrige
-     * cualquier deriva acumulada al volver de segundo plano, sin que el usuario tenga que hacer nada.
+     * Pide sonido real ([value] `true`) o mudo ([value] `false`). `IPodDialogFragment` lo pone a
+     * `true` justo antes de [load] al entrar en modo vídeo (a partir de ahí el vídeo es la única
+     * fuente de audio, nunca a la vez que el archivo local) y a `false` al salir de modo vídeo o en
+     * cuanto la ventana deja de estar en primer plano, antes de [pause] — los términos de servicio de
+     * la API de YouTube prohíben tanto aplicarle una pista de audio ajena (sección III.I.7) como
+     * dejarlo sonando sin estar a la vista (sección III.I.9, "background player").
+     *
+     * Se guarda en [audible] y no solo se manda al reproductor porque puede pedirse antes de que
+     * exista (ver [onReady]) o antes de arrancar el vídeo concreto que lo aplicará (ver el `start`
+     * de [YouTubePlayer]).
      */
-    fun sync(targetPositionMs: Long, targetIsPlaying: Boolean, driftThresholdMs: Long = 500) {
+    fun setAudible(value: Boolean) {
+        audible = value
         val ready = player ?: return
-        if (!videoStarted) {
-            // Ver [videoStarted]: todavía cargando, así que en vez de mandar una orden que YouTube
-            // va a ignorar, se deja anotado para que [onStateChange] la aplique en cuanto arranque.
-            pauseOnceStarted = !targetIsPlaying
-        } else if (targetIsPlaying != lastKnownPlaying) {
-            if (targetIsPlaying) ready.play() else ready.pause()
-        }
-        val target = withOffset(targetPositionMs)
-        if (abs(target - lastKnownPositionMs) > driftThresholdMs) {
-            ready.seekTo(target / 1000f)
-        }
+        if (value) ready.unMute() else ready.mute()
     }
 
-    /** Salta al instante a [positionMs] (posición del audio local), sin esperar al siguiente tick de
-     * [sync]. */
+    /** Salta al instante a [positionMs] (posición del audio local). */
     fun seekTo(positionMs: Long) {
         player?.seekTo(withOffset(positionMs) / 1000f)
     }
 
     /**
      * Cambia el desplazamiento en caliente a [newOffsetMs] y reposiciona el vídeo al instante a
-     * partir de [currentAudioPositionMs] (la posición real del audio ahora mismo), para que el
-     * ajuste se note en tiempo real mientras se edita en los ajustes del reproductor de vídeo, sin
-     * esperar al siguiente tick de [sync].
+     * partir de [currentAudioPositionMs] (la posición del audio local en el momento de ajustarlo, que
+     * mientras dura el modo vídeo está congelada, ver [load]), para que el ajuste se note en tiempo
+     * real mientras se edita en los ajustes del reproductor de vídeo.
      */
     fun setOffset(newOffsetMs: Long, currentAudioPositionMs: Long) {
         offsetMs = newOffsetMs
         seekTo(currentAudioPositionMs)
     }
 
+    /**
+     * Posición equivalente del audio local para donde vaya el vídeo AHORA MISMO (resta [offsetMs],
+     * lo contrario de [withOffset]). La usa `IPodDialogFragment` al salir del modo vídeo —a mano o
+     * porque la ventana pasó a segundo plano— para reanudar el audio local justo donde se quedó el
+     * vídeo, en vez de donde se congeló al entrar. [lastKnownPositionMs] se actualiza como mucho una
+     * vez por segundo (ver [onCurrentSecond]), así que puede ir hasta un segundo por detrás de la
+     * posición real; no hace falta más precisión para reanudar audio, y no vale la pena preguntarle
+     * al reproductor su posición exacta de forma asíncrona justo al salir.
+     */
+    fun localPositionMs(): Long = (lastKnownPositionMs - offsetMs).coerceAtLeast(0L)
+
+    /** Si el vídeo estaba sonando la última vez que se supo de él (ver [lastKnownPlaying]). Mismo uso
+     * que [localPositionMs]: reanudar el audio local en el mismo estado en que quedó el vídeo. */
+    fun wasPlaying(): Boolean = lastKnownPlaying
+
     /** Traduce una posición del audio local a la posición equivalente del vídeo, aplicando
      * [offsetMs]. Nunca negativa: YouTube no admite pedir un vídeo desde antes de su inicio. */
     private fun withOffset(audioPositionMs: Long): Long = (audioPositionMs + offsetMs).coerceAtLeast(0L)
 
     /**
-     * `loadVideo` deja el vídeo cargándose y reproduciéndose (mudo). Si el audio local no estaba
-     * sonando, se pausa en cuanto arranque de verdad (ver [pauseOnceStarted]), no en el mismo
-     * instante de pedir la carga. La librería trabaja en segundos con decimales, de ahí la división.
+     * `loadVideo` deja el vídeo cargándose y reproduciéndose. Si el audio local no estaba sonando, se
+     * pausa en cuanto arranque de verdad (ver [pauseOnceStarted]), no en el mismo instante de pedir
+     * la carga. La librería trabaja en segundos con decimales, de ahí la división.
      *
      * [Request.positionMs] e [Request.isPlaying] se leen aquí, justo antes de arrancar, y no antes:
      * ver [load] para por qué importa.
      */
     private fun YouTubePlayer.start(request: Request) {
-        mute()
+        if (audible) unMute() else mute()
         videoStarted = false
         val playing = request.isPlaying()
         pauseOnceStarted = !playing
@@ -262,11 +297,14 @@ class VideoScreenController(
     }
 
     /**
-     * Opciones con las que se arranca el reproductor. `controls = 0` **oculta los mandos propios de
-     * YouTube**: sin esto, al tocar el vídeo aparece encima su barra de controles (play, progreso,
-     * título, compartir…), que estorba porque el iPod ya tiene sus propios mandos y son esos los que
-     * gobiernan el vídeo. Es un parámetro documentado del IFrame Player API, así que ocultarlos está
-     * permitido; tapar el reproductor con una vista propia para tragarse los toques NO lo estaría.
+     * Opciones con las que se arranca el reproductor. `controls = 1` (el valor por defecto, pero se
+     * deja explícito) deja los mandos propios de YouTube visibles y funcionando: play/pausa, barra,
+     * subtítulos, pantalla completa... Antes se pedía `controls(0)` para esconderlos (una opción
+     * documentada, y por tanto permitida) y se tapaban los toques al vídeo con un contenedor propio
+     * para que no le llegara ninguno (ver el XML de `videoContainer`, ya no es así); eso dejaba el
+     * reproductor inerte, y los términos de servicio de la API de YouTube prohíben precisamente
+     * modificar o bloquear cualquier función suya (sección III.I.6). Ahora el vídeo es un reproductor
+     * de YouTube normal: sus mandos son los que gobiernan play/pausa/subtítulos mientras está visible.
      *
      * El `Builder` necesita el contexto porque él solo rellena el `origin` con el paquete de la app,
      * que es lo que YouTube exige desde julio de 2025 para dejar reproducir un vídeo embebido. Por
@@ -274,56 +312,10 @@ class VideoScreenController(
      * `origin`, el reproductor vuelve a fallar con el error 152.
      */
     private fun playerOptions(): IFramePlayerOptions =
-        IFramePlayerOptions.Builder(view.context).controls(0).build()
+        IFramePlayerOptions.Builder(view.context).controls(1).build()
 
-    /**
-     * Fuerza a apagar los subtítulos llamando a `player.unloadModule('captions')`.
-     *
-     * `controls(0)` quita los mandos de YouTube, pero no los subtítulos: si el dispositivo tiene
-     * activados los subtítulos de accesibilidad de Android (Ajustes > Accesibilidad > Subtítulos),
-     * YouTube los respeta y los pinta igualmente, ignorando el `cc_load_policy = 0` que ya pone por
-     * defecto la librería. Sin controles visibles no hay botón "CC" con el que el usuario pueda
-     * quitarlos a mano, así que hay que forzarlo desde fuera.
-     *
-     * Se probó primero a inyectar CSS (`display: none`) en el documento del `WebView`, pero no
-     * funcionaba: el vídeo y los subtítulos los pinta un `<iframe>` de youtube.com que la propia
-     * librería mete dentro de esa página, y por política de mismo origen el CSS del documento
-     * exterior no puede alcanzar el contenido de un iframe de otro origen.
-     *
-     * La variable `player` (el objeto `YT.Player`), en cambio, SÍ vive en el documento exterior —
-     * es la propia librería quien la crea ahí (ver `ayp_youtube_player.html`, el HTML que carga
-     * internamente) — y sus métodos hablan con el iframe mediante `postMessage`, que sí cruza esa
-     * frontera de origen sin tocar su DOM. `unloadModule('captions')` es uno de esos métodos: apaga
-     * el módulo de subtítulos del reproductor, forzados o no.
-     *
-     * Un vídeo nuevo puede volver a cargar su propio módulo de subtítulos, así que esto no basta con
-     * llamarlo una vez: se repite en cada cambio de estado (ver [onStateChange]), no solo en
-     * [onReady]. Es una llamada barata e inofensiva si ya estaban apagados.
-     */
-    private fun hideCaptions() {
-        val webView = findWebView(view) ?: return
-        webView.evaluateJavascript(
-            "if (typeof player !== 'undefined' && player.unloadModule) { player.unloadModule('captions'); }",
-            null
-        )
-    }
-
-    /**
-     * Busca el `WebView` que la librería esconde varias capas dentro de [YouTubePlayerView]. No
-     * expone ninguna forma pública de llegar a él, así que hay que recorrer el árbol de vistas a
-     * mano; existe ya en cuanto se infla el layout, antes de [load].
-     */
-    private fun findWebView(view: View): WebView? {
-        if (view is WebView) return view
-        if (view is ViewGroup) {
-            for (i in 0 until view.childCount) {
-                findWebView(view.getChildAt(i))?.let { return it }
-            }
-        }
-        return null
-    }
-
-    /** Congela el vídeo. Se usa al salir del modo vídeo, para que no siga corriendo mudo detrás. */
+    /** Congela el vídeo. Se usa al salir del modo vídeo (a mano o porque la ventana pasó a segundo
+     * plano), siempre después de [setAudible] con `false`. */
     fun pause() {
         player?.pause()
     }

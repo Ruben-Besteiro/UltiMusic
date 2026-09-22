@@ -36,6 +36,43 @@
             android:textSize="14sp"
             tools:text="12 canciones | 48:03" />
 
+        <!--
+          Cuántas canciones de la lista ya sonaron esta vuelta del ciclo "sin repeticiones" (ver
+          PlaylistHistoryStore), con un botón de reinicio justo al lado del texto (por eso van juntos
+          en un LinearLayout horizontal `wrap_content`, no estirados a todo el ancho de la fila).
+          Oculta por defecto: solo aparece mientras el historial tenga algo dentro.
+        -->
+        <LinearLayout
+            android:id="@+id/playlistHistoryRow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:visibility="gone"
+            tools:visibility="visible">
+
+            <TextView
+                android:id="@+id/playlistHistoryText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp"
+                tools:text="8 reproducidas" />
+
+            <ImageButton
+                android:id="@+id/btnResetPlaylistHistory"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_marginStart="6dp"
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:contentDescription="@string/playlist_reset_history_desc"
+                android:padding="2dp"
+                android:src="@drawable/ic_restart"
+                android:tint="@color/um_on_surface_muted" />
+
+        </LinearLayout>
+
     </LinearLayout>
 
     <ImageButton

@@ -28,6 +28,15 @@ internal object HttpJson {
 
     private const val TIMEOUT_MS = 8_000
 
+    /** Reintentos ante un fallo de CONEXIÓN (DNS, timeout, conexión rechazada/cortada...): son casi
+     *  siempre intermitentes —de ahí que tocar "reintentar" a mano casi siempre lo arregle sin que
+     *  haya cambiado nada— así que se reintentan solos antes de molestar al usuario. Un código HTTP
+     *  ya respondido (401, 429/403, 503...) no es un fallo de conexión y no se reintenta aquí: cada
+     *  uno tiene su propio significado (ver más abajo) y, en el caso de MusicBrainz, ya lo gestiona
+     *  su propio reintento en [MusicBrainzApi.discography]. */
+    private const val MAX_ATTEMPTS = 3
+    private const val RETRY_DELAY_MS = 500L
+
     /** El 429 de siempre y el 403 con el que Genius responde a veces al agotar la cuota del token. */
     private val RATE_LIMIT_CODES = setOf(429, HttpURLConnection.HTTP_FORBIDDEN)
 
@@ -36,6 +45,9 @@ internal object HttpJson {
      * @param guard el [RateLimitGuard] de ese servicio; cada uno lleva su cuenta por separado.
      * @param ttlMs cuánto vale lo cacheado para esta llamada.
      * @param headers cabeceras propias del servicio (el `Authorization` de Genius, por ejemplo).
+     * @param useCache `false` para saltarse la caché en lectura y escritura: lo usa [DeezerApi],
+     * cuyas URLs de preview vienen firmadas y caducan, y cuyos errores llegan con un 200 (cachearlos
+     * dejaría un error de cuota pegado a la búsqueda durante una semana).
      */
     fun get(
         url: String,
@@ -43,12 +55,38 @@ internal object HttpJson {
         guard: RateLimitGuard,
         userAgent: String,
         ttlMs: Long = ApiCache.DEFAULT_TTL_MS,
-        headers: Map<String, String> = emptyMap()
+        headers: Map<String, String> = emptyMap(),
+        useCache: Boolean = true
     ): String {
-        ApiCache.get(url, ttlMs)?.let { return it }
+        if (useCache) ApiCache.get(url, ttlMs)?.let { return it }
 
         guard.ensureNotBlocked()
 
+        var attempt = 0
+        while (true) {
+            attempt++
+            try {
+                return fetch(url, service, guard, userAgent, headers, useCache)
+            } catch (transient: ConnectionFailedException) {
+                if (attempt >= MAX_ATTEMPTS) throw transient.cause as IOException
+                Thread.sleep(RETRY_DELAY_MS * attempt)
+            }
+        }
+    }
+
+    /** Un único intento de la petición. Cualquier fallo ANTES de recibir un código de respuesta
+     *  (DNS, timeout, conexión rechazada o cortada a mitad de la lectura) se envuelve en
+     *  [ConnectionFailedException] para que [get] sepa que es él quien puede reintentar; un código de
+     *  respuesta ya recibido (aunque sea de error) es una respuesta real del servicio y sale tal
+     *  cual, sin reintento. */
+    private fun fetch(
+        url: String,
+        service: String,
+        guard: RateLimitGuard,
+        userAgent: String,
+        headers: Map<String, String>,
+        useCache: Boolean
+    ): String {
         val connection = URL(url).openConnection() as HttpURLConnection
         connection.setRequestProperty("User-Agent", userAgent)
         connection.setRequestProperty("Accept", "application/json")
@@ -57,7 +95,11 @@ internal object HttpJson {
         connection.readTimeout = TIMEOUT_MS
 
         try {
-            val code = connection.responseCode
+            val code = try {
+                connection.responseCode
+            } catch (connectionError: IOException) {
+                throw ConnectionFailedException(connectionError)
+            }
             if (code in RATE_LIMIT_CODES) {
                 guard.rateLimited(connection.getHeaderField("Retry-After"))
             }
@@ -74,15 +116,22 @@ internal object HttpJson {
             // UTF-8 explícito: iTunes sirve el JSON como `text/javascript` sin declarar codificación
             // y, con el valor por defecto de la plataforma, los títulos en japonés o con acentos
             // llegan rotos.
-            val body = connection.inputStream.reader(Charsets.UTF_8).use { it.readText() }
+            val body = try {
+                connection.inputStream.reader(Charsets.UTF_8).use { it.readText() }
+            } catch (connectionError: IOException) {
+                throw ConnectionFailedException(connectionError)
+            }
 
             guard.onSuccess()
-            ApiCache.put(url, body)
+            if (useCache) ApiCache.put(url, body)
             return body
         } finally {
             connection.disconnect()
         }
     }
+
+    /** Marca un fallo de conexión (no un código HTTP) como reintentable por [get]; ver [fetch]. */
+    private class ConnectionFailedException(cause: IOException) : IOException(cause)
 
     /**
      * Saca el `error=` de una cabecera `WWW-Authenticate`, que en un 401 de Bearer viene tal que

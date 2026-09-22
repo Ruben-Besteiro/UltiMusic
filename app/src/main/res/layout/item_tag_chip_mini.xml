@@ -19,4 +19,4 @@
     android:paddingVertical="1dp"
     android:textColor="@color/um_on_background"
     android:textSize="10sp"
-    tools:text="Favoritos" />
+    tools:text="Vídeo sincronizado" />

@@ -21,6 +21,7 @@ palette = "1.0.0"
 youtubePlayer = "13.0.0"
 browser = "1.8.0"
 mlkitLanguageId = "17.0.6"
+work = "2.10.5"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -47,6 +48,7 @@ androidx-palette = { group = "androidx.palette", name = "palette-ktx", version.r
 youtube-player = { group = "com.pierfrancescosoffritti.androidyoutubeplayer", name = "core", version.ref = "youtubePlayer" }
 androidx-browser = { group = "androidx.browser", name = "browser", version.ref = "browser" }
 mlkit-language-id = { group = "com.google.mlkit", name = "language-id", version.ref = "mlkitLanguageId" }
+androidx-work-runtime-ktx = { group = "androidx.work", name = "work-runtime-ktx", version.ref = "work" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

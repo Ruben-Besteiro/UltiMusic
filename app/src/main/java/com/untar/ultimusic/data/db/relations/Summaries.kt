@@ -92,3 +92,20 @@ data class ArtistChannelCandidateRow(
     val channelId: String,
     val cnt: Int
 )
+
+/**
+ * Lo que una canción sumó en un año: cuántas veces se escuchó y cuántos milisegundos sonó en total.
+ * Es la ÚNICA agregación del Recount que se hace en SQLite (`GROUP BY songId`, ver
+ * `LibraryDao.observePlayTotals`); todo lo demás -artistas, géneros, tarta- se deriva de estas
+ * filas en Kotlin, cruzándolas con la fonoteca del momento, porque un género no es una columna
+ * consultable (vive serializado dentro de `songs.genres`, ver `Converters`) y un artista se enlaza
+ * por tabla de cruce con multiplicidad.
+ *
+ * [songId] puede no corresponder ya a ninguna canción: ver `PlayEventEntity` sobre por qué esa
+ * tabla no tiene clave foránea y qué significa entonces el id huérfano.
+ */
+data class SongPlayTotalsRow(
+    val songId: Long,
+    val plays: Int,
+    val playedMs: Long
+)

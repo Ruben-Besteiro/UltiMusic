@@ -52,7 +52,7 @@
             android:textColor="@color/um_on_background"
             android:textSize="16sp"
             android:textStyle="bold"
-            tools:text="Añadir etiqueta «Favoritos» a canciones" />
+            tools:text="Añadir etiqueta «Vídeo sincronizado» a canciones" />
 
         <ImageButton
             android:id="@+id/btnConfirmAddSongs"

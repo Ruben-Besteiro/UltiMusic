@@ -1,0 +1,229 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  UltiMusic Recount: el resumen anual de lo que se ha escuchado. Solo se ofrece la última semana de
+  diciembre, desde el último ajuste de la pantalla de Ajustes ("Ver UltiMusic Recount"), el aviso de
+  arranque y su notificación (ver RecountReminder). Solo muestra el año actual.
+
+  Montada como una lista vertical dentro de un único ScrollView, igual que dialog_settings.xml, en
+  este orden:
+
+    - Histograma de la fonoteca por año de publicación. Este NO depende del año del Recount: es un
+      retrato de la biblioteca entera.
+    - Los tres tops del año actual: canciones, artistas y géneros.
+    - La tarta con el reparto de géneros, y su leyenda.
+
+  Todos los títulos van en @color/um_yellow y se repintan con el acento dinámico en
+  RecountDialogFragment.observeState(), igual que en el resto de la app.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/recountRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/recountToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_surface"
+        app:navigationContentDescription="@string/recount_back"
+        app:navigationIcon="@drawable/ic_arrow_back_toolbar"
+        app:title="@string/recount_title"
+        app:titleTextColor="@color/um_on_background" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:paddingTop="16dp"
+            android:paddingBottom="24dp">
+
+            <!-- ===== Histograma de la fonoteca ===== -->
+
+            <TextView
+                android:id="@+id/histogramTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:paddingHorizontal="20dp"
+                android:text="@string/recount_histogram_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:paddingHorizontal="20dp"
+                android:text="@string/recount_histogram_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp" />
+
+            <HorizontalScrollView
+                android:id="@+id/histogramScroll"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:clipToPadding="false"
+                android:paddingHorizontal="20dp"
+                android:scrollbars="none">
+
+                <com.untar.ultimusic.ui.recount.HistogramView
+                    android:id="@+id/recountHistogram"
+                    android:layout_width="wrap_content"
+                    android:layout_height="180dp" />
+
+            </HorizontalScrollView>
+
+            <!-- Las canciones sin año no caben en el eje X, así que se cuentan aquí (ver
+                 HistogramData.unknownYearCount). Oculto cuando no hay ninguna. -->
+            <TextView
+                android:id="@+id/histogramUnknown"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:paddingHorizontal="20dp"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="12sp"
+                android:visibility="gone"
+                tools:text="3 canciones sin año"
+                tools:visibility="visible" />
+
+            <TextView
+                android:id="@+id/histogramEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:paddingHorizontal="20dp"
+                android:text="@string/recount_histogram_empty"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp"
+                android:visibility="gone"
+                tools:visibility="visible" />
+
+            <!-- ===== Estado vacío del año actual ===== -->
+            <!-- Tapa los tres tops y la tarta cuando el año no tiene ni una escucha. -->
+            <TextView
+                android:id="@+id/recountEmpty"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:gravity="center"
+                android:paddingHorizontal="20dp"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="15sp"
+                android:visibility="gone"
+                tools:text="No escuchaste nada en 2025"
+                tools:visibility="visible" />
+
+            <!-- ===== Los tres tops y la tarta ===== -->
+
+            <LinearLayout
+                android:id="@+id/recountContent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/topSongsTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/recount_top_songs_title"
+                    android:textColor="@color/um_yellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/topSongsRecycler"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingHorizontal="20dp" />
+
+                <TextView
+                    android:id="@+id/topArtistsTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/recount_top_artists_title"
+                    android:textColor="@color/um_yellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/topArtistsRecycler"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingHorizontal="20dp" />
+
+                <TextView
+                    android:id="@+id/topGenresTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="28dp"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/recount_top_genres_title"
+                    android:textColor="@color/um_yellow"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <androidx.recyclerview.widget.RecyclerView
+                    android:id="@+id/topGenresRecycler"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:nestedScrollingEnabled="false"
+                    android:paddingHorizontal="20dp" />
+
+                <com.untar.ultimusic.ui.recount.PieChartView
+                    android:id="@+id/recountPie"
+                    android:layout_width="220dp"
+                    android:layout_height="220dp"
+                    android:layout_gravity="center_horizontal"
+                    android:layout_marginTop="12dp" />
+
+                <com.untar.ultimusic.ui.common.FlowLayout
+                    android:id="@+id/recountLegend"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:paddingHorizontal="20dp" />
+
+                <TextView
+                    android:id="@+id/pieEmpty"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:paddingHorizontal="20dp"
+                    android:text="@string/recount_pie_empty"
+                    android:textColor="@color/um_on_surface_muted"
+                    android:textSize="14sp"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </ScrollView>
+
+</LinearLayout>

@@ -79,11 +79,12 @@
                  así vale igual para la carátula, la cola y el vídeo sin recalcular nada al
                  cambiar de forma. Empieza oculto; solo aparece en modo vídeo.
 
-                 El envoltorio impide que los toques lleguen al reproductor: tocarlo lo pausaría, y
-                 en pausa YouTube saca siempre su capa de marca (título, compartir, logo), que no se
-                 puede ocultar de ninguna otra forma. Los mandos del iPod están fuera y siguen
-                 gobernando el vídeo. -->
-            <com.untar.ultimusic.ui.common.TouchBlockerFrameLayout
+                 Envoltorio simple (FrameLayout normal, sin bloquear toques): los mandos propios de
+                 YouTube (ver VideoScreenController.playerOptions, controls=1) tienen que recibir el
+                 toque tal cual, sin nada por delante que se lo trague ni lo intercepte -los términos
+                 de servicio de la API de YouTube prohíben modificar o bloquear cualquier función del
+                 reproductor. -->
+            <FrameLayout
                 android:id="@+id/videoContainer"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
@@ -96,7 +97,7 @@
                     android:visibility="gone"
                     app:autoPlay="false"
                     app:enableAutomaticInitialization="false" />
-            </com.untar.ultimusic.ui.common.TouchBlockerFrameLayout>
+            </FrameLayout>
 
             <!-- Va DESPUÉS de videoContainer a propósito: en modo vídeo el botón de las 3 rayas
                  sigue mostrando/ocultando esta misma cola (ver IPodDialogFragment), y para que se
@@ -110,6 +111,24 @@
                 android:layout_height="match_parent"
                 android:background="@color/um_queue_scrim"
                 android:clipToPadding="false"
+                android:visibility="gone" />
+
+            <!-- Aviso DENTRO de la cola, justo debajo de la fila que suena (ver
+                 IPodDialogFragment.updateInfoBox): solo se ve cuando la canción actual es la ÚNICA
+                 de una cola suelta, antes de que se alargue sola. Va después de queueList para
+                 dibujarse encima de su velo; no es clicable, así que los toques (y el scroll) siguen
+                 llegando a la lista. El margen superior deja libre la primera fila (item_queue_song:
+                 32dp de portada + 6dp de relleno arriba y abajo = 44dp). Empieza oculto. -->
+            <TextView
+                android:id="@+id/queueExpandHint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_gravity="top"
+                android:layout_marginTop="48dp"
+                android:gravity="center"
+                android:paddingHorizontal="16dp"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp"
                 android:visibility="gone" />
 
             <!-- Ruedecilla de carga: tapa el WebView mientras está en negro, entre que se pide el
@@ -176,7 +195,11 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
+        <!-- En modo vídeo se oculta ENTERA (ver IPodDialogFragment.startVideo/exitVideo), no solo
+             ipodProgress: con la barra fuera pero tvPosition/tvDuration a la vista, los dos números
+             quedaban pegados uno al otro sin nada que los separe (p.ej. "0:043:29"). -->
         <LinearLayout
+            android:id="@+id/positionRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
@@ -266,7 +289,13 @@
                     app:tint="@color/um_yellow" />
             </FrameLayout>
 
+            <!-- En modo vídeo se oculta la celda ENTERA (ver IPodDialogFragment.startVideo/exitVideo),
+                 no solo el botón: así el LinearLayout reparte el ancho entre las 4 celdas restantes
+                 en vez de dejar un hueco vacío donde iba esta -y de paso, con una celda de menos, les
+                 toca más ancho a las otras cuatro, que crecen para no dejar más separación entre
+                 ellas de la que había con las 5 (ver [IPodDialogFragment.resizeRowButtons]). -->
             <FrameLayout
+                android:id="@+id/btnPlayPauseCell"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1">

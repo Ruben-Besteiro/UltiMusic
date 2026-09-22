@@ -23,14 +23,40 @@
         android:textSize="18sp"
         tools:text="13" />
 
-    <com.google.android.material.imageview.ShapeableImageView
-        android:id="@+id/trackCover"
+    <!-- Carátula + overlay de selección (ver DetailSongsAdapter.bind): mismo mecanismo que
+         item_song.xml, ver su comentario. -->
+    <FrameLayout
         android:layout_width="40dp"
         android:layout_height="40dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/cover_placeholder"
-        android:contentDescription="@string/album_cover_desc"
-        android:scaleType="centerCrop" />
+        android:layout_marginStart="8dp">
+
+        <com.google.android.material.imageview.ShapeableImageView
+            android:id="@+id/trackCover"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/cover_placeholder"
+            android:contentDescription="@string/album_cover_desc"
+            android:scaleType="centerCrop" />
+
+        <View
+            android:id="@+id/selectionScrim"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/um_queue_scrim"
+            android:visibility="gone" />
+
+        <ImageView
+            android:id="@+id/selectionCheck"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_gravity="center"
+            android:background="@drawable/bg_circle_selection"
+            android:contentDescription="@string/song_selected_desc"
+            android:padding="3dp"
+            android:src="@drawable/ic_check_circle"
+            android:visibility="gone" />
+
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="0dp"

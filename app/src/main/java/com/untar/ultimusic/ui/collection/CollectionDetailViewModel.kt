@@ -7,6 +7,7 @@ import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
+import com.untar.ultimusic.ui.common.SongSelection
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -113,6 +114,15 @@ class CollectionDetailViewModel(app: Application) : AndroidViewModel(app) {
     /** True si esta ficha se puede reordenar arrastrando (solo una lista, ver [currentKind]). */
     val reorderable: Boolean get() = currentKind == CollectionKind.LISTA
 
+    /** Selección múltiple por pulsación larga (ver [SongSelection]): mismo mecanismo que
+     *  [com.untar.ultimusic.ui.SongsViewModel.selectedIds], aplicado a las canciones de ESTA ficha
+     *  (ver [CollectionSongsAdapter]/[CollectionDetailDialogFragment]). */
+    private val selection = SongSelection()
+    val selectedIds: StateFlow<Set<Long>> = selection.selectedIds
+    fun startSelection(songId: Long) = selection.start(songId)
+    fun toggleSelection(songId: Long) = selection.toggle(songId)
+    fun clearSelection() = selection.clear()
+
     fun setTarget(kind: CollectionKind, key: String) {
         if (target.value != null) return
         target.value = kind to key
@@ -133,11 +143,40 @@ class CollectionDetailViewModel(app: Application) : AndroidViewModel(app) {
         tagNameSource.value = source
     }
 
+    /**
+     * Renombra el género que se está mirando (ver
+     * [CollectionDetailDialogFragment.showRenameGenreDialog]): a diferencia de una etiqueta -una
+     * fila de Room con su propio id, que no cambia al renombrarla- la CLAVE de un género es su
+     * propio nombre (ver el javadoc de la clase), así que tras guardar hay que reapuntar [target] al
+     * nuevo nombre a mano: sin esto [songs] seguiría filtrando por el nombre VIEJO (ya no queda
+     * ninguna canción con él) y [displayTitle] se quedaría con el título antiguo.
+     */
+    fun renameGenre(newName: String) {
+        val key = currentKey?.takeIf { currentKind == CollectionKind.GENRE } ?: return
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty() || trimmed == key) return
+        viewModelScope.launch {
+            repository.renameGenre(key, trimmed)
+            target.value = CollectionKind.GENRE to trimmed
+        }
+    }
+
     /** Borra una canción de verdad (archivo y fila de la base de datos), y la olvida de toda lista. */
     fun deleteSong(song: Song) {
         viewModelScope.launch {
             repository.deleteSong(song)
             PlaylistRepository.get().removeSongFromAll(File(song.filePath).name)
+        }
+    }
+
+    /** Igual que [deleteSong] pero para varias a la vez (borrado desde la selección múltiple). */
+    fun deleteSongs(songs: List<Song>) {
+        viewModelScope.launch {
+            val playlists = PlaylistRepository.get()
+            for (song in songs) {
+                repository.deleteSong(song)
+                playlists.removeSongFromAll(File(song.filePath).name)
+            }
         }
     }
 }

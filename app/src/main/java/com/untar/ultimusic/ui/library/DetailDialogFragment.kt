@@ -1,5 +1,7 @@
 package com.untar.ultimusic.ui.library
 
+import android.app.Dialog
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.text.TextUtils
@@ -7,16 +9,20 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.activity.ComponentDialog
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.updatePadding
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentActivity
@@ -33,11 +39,13 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.playlist.PlaylistRepository
+import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.SongsViewModel
 import com.untar.ultimusic.ui.editor.AlbumEditorDialogFragment
@@ -89,6 +97,17 @@ class DetailDialogFragment : DialogFragment() {
         viewModel.bindSongsSort { songsViewModel.sort }
     }
 
+    /** El botón atrás del sistema, con una selección múltiple activa (ver [DetailViewModel.selectedIds]),
+     *  la limpia en vez de cerrar la ficha entera — igual que [MainActivity.selectionBackCallback]
+     *  con la pestaña Canciones. */
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog =
+        object : ComponentDialog(requireContext(), theme) {
+            @Suppress("DEPRECATION")
+            override fun onBackPressed() {
+                if (viewModel.selectedIds.value.isNotEmpty()) viewModel.clearSelection() else super.onBackPressed()
+            }
+        }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -132,8 +151,20 @@ class DetailDialogFragment : DialogFragment() {
             // Se fija en onCreate (ver setTarget), antes de que este método se ejecute.
             currentKind = viewModel.currentKind!!,
             albumId = viewModel.currentAlbumId,
+            // Con selección activa, tocar una fila la marca/desmarca en vez de reproducir; igual
+            // que SongsFragment (ver el comentario de DetailSongsAdapter sobre selección múltiple).
             onSongClick = { position ->
-                playerViewModel.playCollection(viewModel.songs, position, collectionKind = collectionKind())
+                if (viewModel.selectedIds.value.isEmpty()) {
+                    playerViewModel.playCollection(viewModel.songs, position, collectionKind = collectionKind())
+                } else {
+                    viewModel.tracks.value.getOrNull(position)?.let { viewModel.toggleSelection(it.id) }
+                }
+            },
+            onSongLongClick = { position ->
+                viewModel.tracks.value.getOrNull(position)?.let { song ->
+                    if (viewModel.selectedIds.value.isEmpty()) viewModel.startSelection(song.id)
+                    else viewModel.toggleSelection(song.id)
+                }
             },
             onAddToQueue = { song -> playerViewModel.addToQueue(song) },
             onAddToPlaylist = { song -> showAddToPlaylist(song) },
@@ -163,6 +194,12 @@ class DetailDialogFragment : DialogFragment() {
             sectionLetter(viewModel.tracks.value.getOrNull(position)?.title)
         }
 
+        // Arrastrar una fila hacia la derecha la añade a la cola, como el propio "Añadir a cola" del
+        // menú de 3 puntos (ver SwipeToQueue.kt); aquí todas las filas son canciones, sin cabecera.
+        attachSwipeToQueue(recycler, accentColor = { playerViewModel.accentColor.value }) { position ->
+            viewModel.tracks.value.getOrNull(position)?.let { playerViewModel.addToQueue(it) }
+        }
+
         // Carrusel de álbumes: solo sale en la ficha de un artista (ver DetailViewModel.albums, que
         // en un álbum va siempre vacío).
         val albumsAdapter = DetailAlbumsAdapter(
@@ -172,22 +209,64 @@ class DetailDialogFragment : DialogFragment() {
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
         recyclerAlbums.adapter = albumsAdapter
 
-        toolbar.setNavigationOnClickListener { dismiss() }
+        toolbar.setNavigationOnClickListener {
+            if (viewModel.selectedIds.value.isEmpty()) dismiss() else viewModel.clearSelection()
+        }
         toolbar.inflateMenu(R.menu.menu_library_detail)
-        // El menú de 3 puntos solo tiene sentido en un álbum: sus acciones son "de álbum" (todas
-        // las canciones a la vez, en orden de pista; editar SUS metadatos, que son distintos de los
-        // de una canción). En la de un artista, ni pista ni un editor de álbum pintarían nada.
-        toolbar.menu.findItem(R.id.action_album_menu)?.isVisible = viewModel.currentKind == DetailKind.ALBUM
-        // El ojo de ordenar, al revés: solo en la de un artista (ver menu_library_detail.xml).
+        // El menú de 3 puntos sale en los dos casos, con contenido distinto (ver
+        // showAlbumMenu/showArtistMenu más abajo).
+        toolbar.menu.findItem(R.id.action_more_menu)?.isVisible = true
+        // El ojo de ordenar y el de discografía, al revés: solo en la de un artista (ver
+        // menu_library_detail.xml).
         toolbar.menu.findItem(R.id.action_sort_artist_songs)?.isVisible = viewModel.currentKind == DetailKind.ARTIST
+        // La discografía (MusicBrainz) necesita UN artista real: "Otros" agrupa a varios a la vez,
+        // así que no tiene una que pedir (ver DetailViewModel.currentArtistId).
+        toolbar.menu.findItem(R.id.action_discography)?.isVisible =
+            viewModel.currentKind == DetailKind.ARTIST && viewModel.currentArtistId != PersonSummary.OTHERS_ARTIST_ID
+        toolbar.menu.findItem(R.id.action_discography_album)?.isVisible = viewModel.currentKind == DetailKind.ALBUM
+        toolbar.menu.findItem(R.id.action_play_album)?.isVisible = viewModel.currentKind == DetailKind.ALBUM
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
+                R.id.action_discography -> {
+                    val artistId = viewModel.currentArtistId
+                    val artistName = viewModel.header.value?.title
+                    if (artistId != null && artistName != null) {
+                        DiscographyDialogFragment.show(this, artistId, artistName)
+                    }
+                    true
+                }
+                R.id.action_discography_album -> {
+                    showAlbumDiscography()
+                    true
+                }
+                R.id.action_play_album -> {
+                    if (viewModel.songs.isNotEmpty()) {
+                        playerViewModel.playCollection(viewModel.songs, 0, collectionKind = collectionKind())
+                    }
+                    true
+                }
                 R.id.action_shuffle -> {
                     playerViewModel.shuffleCollection(viewModel.songs, collectionKind = collectionKind())
                     true
                 }
-                R.id.action_album_menu -> {
-                    showAlbumMenu(toolbar)
+                R.id.action_more_menu -> {
+                    // Con selección activa este mismo botón (icono de 3 puntos, ver
+                    // menu_library_detail.xml) pasa a abrir el menú de la selección múltiple en vez
+                    // del de álbum/artista (ver el `launch` de selectedIds más abajo, que oculta el
+                    // resto de items mientras tanto).
+                    if (viewModel.selectedIds.value.isEmpty()) {
+                        when (viewModel.currentKind) {
+                            DetailKind.ALBUM -> showAlbumMenu(toolbar)
+                            // "Otros" no es un artista de verdad -no hay nada que renombrar, la
+                            // única acción de este menú- así que ni se abre (ver
+                            // DetailViewModel.currentArtistId).
+                            DetailKind.ARTIST ->
+                                if (viewModel.currentArtistId != PersonSummary.OTHERS_ARTIST_ID) showArtistMenu(toolbar)
+                            null -> Unit
+                        }
+                    } else {
+                        showSelectionMenu(toolbar.findViewById<View>(R.id.action_more_menu) ?: toolbar)
+                    }
                     true
                 }
                 R.id.action_sort_artist_songs -> {
@@ -209,6 +288,16 @@ class DetailDialogFragment : DialogFragment() {
                     // que sin esto la cabecera no se enteraría.
                     combine(viewModel.header, CoverArt.revision) { header, _ -> header }.collect { header ->
                         if (header != null) bindHeader(header, toolbar, cover, infoLines)
+                        // Con selección activa el título se lo pisa el `launch` de selectedIds de
+                        // más abajo (cuenta de seleccionadas); si esto llega DESPUÉS mientras se
+                        // sigue seleccionando (p. ej. cambia la carátula, ver CoverArt.revision),
+                        // hay que devolvérselo o se perdería la cuenta a medio seleccionar.
+                        if (header != null && viewModel.selectedIds.value.isNotEmpty()) {
+                            toolbar.title = resources.getQuantityString(
+                                R.plurals.song_selection_count,
+                                viewModel.selectedIds.value.size, viewModel.selectedIds.value.size
+                            )
+                        }
                     }
                 }
                 launch {
@@ -234,6 +323,33 @@ class DetailDialogFragment : DialogFragment() {
                         // cabecera; la barra de scroll lo usa a plena intensidad.
                         applyAccent(accent, headerBox, toolbar, infoLines)
                         scrollbar.setAccentColor(accent)
+                        adapter.setAccentColor(accent)
+                    }
+                }
+                // Selección múltiple por pulsación larga (ver DetailSongsAdapter/DetailViewModel):
+                // el botón de 3 puntos pasa a abrir su menú (ver R.id.action_more_menu de más arriba)
+                // y el resto de items de la barra se ocultan mientras dure, igual que la barra
+                // principal cambia el ojo de ordenar por el mismo menú (ver
+                // MainActivity.setupToolbar).
+                launch {
+                    viewModel.selectedIds.collect { ids ->
+                        adapter.setSelection(ids)
+                        val selecting = ids.isNotEmpty()
+                        toolbar.menu.findItem(R.id.action_shuffle)?.isVisible = !selecting
+                        toolbar.menu.findItem(R.id.action_sort_artist_songs)?.isVisible =
+                            !selecting && viewModel.currentKind == DetailKind.ARTIST
+                        toolbar.menu.findItem(R.id.action_discography)?.isVisible =
+                            !selecting && viewModel.currentKind == DetailKind.ARTIST &&
+                            viewModel.currentArtistId != PersonSummary.OTHERS_ARTIST_ID
+                        toolbar.menu.findItem(R.id.action_discography_album)?.isVisible =
+                            !selecting && viewModel.currentKind == DetailKind.ALBUM
+                        toolbar.menu.findItem(R.id.action_play_album)?.isVisible =
+                            !selecting && viewModel.currentKind == DetailKind.ALBUM
+                        toolbar.title = if (selecting) {
+                            resources.getQuantityString(R.plurals.song_selection_count, ids.size, ids.size)
+                        } else {
+                            viewModel.header.value?.title
+                        }
                     }
                 }
             }
@@ -291,8 +407,11 @@ class DetailDialogFragment : DialogFragment() {
         toolbar.setTitleTextColor(onBackground)
         toolbar.setNavigationIconTint(onBackground)
         toolbar.menu.findItem(R.id.action_shuffle)?.icon?.setTint(onBackground)
-        toolbar.menu.findItem(R.id.action_album_menu)?.icon?.setTint(onBackground)
+        toolbar.menu.findItem(R.id.action_more_menu)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_sort_artist_songs)?.icon?.setTint(onBackground)
+        toolbar.menu.findItem(R.id.action_discography)?.icon?.setTint(onBackground)
+        toolbar.menu.findItem(R.id.action_discography_album)?.icon?.setTint(onBackground)
+        toolbar.menu.findItem(R.id.action_play_album)?.icon?.setTint(onBackground)
         applyTextColor(infoLines, onBackground)
     }
 
@@ -348,6 +467,86 @@ class DetailDialogFragment : DialogFragment() {
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
+    /** Menú de 3 puntos de la selección múltiple (ver menu_song_selection.xml, el mismo que usa
+     *  [com.untar.ultimusic.ui.MainActivity.showSelectionMenu] para la pestaña Canciones): sin "Ir
+     *  al...", que no tiene sentido para varias canciones a la vez. */
+    private fun showSelectionMenu(anchor: View) {
+        val ids = viewModel.selectedIds.value
+        val selected = viewModel.tracks.value.filter { it.id in ids }
+        if (selected.isEmpty()) return
+        PopupMenu(requireContext(), anchor).apply {
+            menuInflater.inflate(R.menu.menu_song_selection, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_add_to_queue -> {
+                        viewModel.clearSelection()
+                        playerViewModel.addToQueue(selected)
+                        true
+                    }
+                    R.id.action_add_to_playlist -> { showAddToPlaylistForSelection(selected); true }
+                    R.id.action_edit_metadata -> { showMetadataEditorForSelection(selected); true }
+                    R.id.action_edit_tags -> { showEditTagsForSelection(selected); true }
+                    R.id.action_delete_song -> { showDeleteDialogForSelection(selected); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    /** Igual que [showAddToPlaylist] pero para varias canciones a la vez (ver
+     *  `MainActivity.showAddToPlaylistForSelection`). */
+    private fun showAddToPlaylistForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        if (parentFragmentManager.findFragmentByTag(AddToPlaylistDialogFragment.TAG) != null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val filenames = selected.map { File(it.filePath).name }
+            val repo = PlaylistRepository.get()
+            val names = repo.listPlaylistNames()
+            val contained = repo.playlistsContainingAll(filenames)
+            val checked = BooleanArray(names.size) { names[it] in contained }
+            AddToPlaylistDialogFragment.newInstance(filenames, names, checked)
+                .show(parentFragmentManager, AddToPlaylistDialogFragment.TAG)
+        }
+    }
+
+    private fun showMetadataEditorForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        if (parentFragmentManager.findFragmentByTag(EDITOR_TAG) == null) {
+            MetadataEditorDialogFragment.newInstance(selected.map { it.id })
+                .show(parentFragmentManager, EDITOR_TAG)
+        }
+    }
+
+    private fun showEditTagsForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        if (parentFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+            SongTagsDialogFragment.newInstance(selected.map { it.id })
+                .show(parentFragmentManager, SongTagsDialogFragment.TAG)
+        }
+    }
+
+    /** Igual que [showDeleteDialog] pero para varias canciones a la vez (ver
+     *  `MainActivity.showDeleteDialogForSelection`). */
+    private fun showDeleteDialogForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.delete_song)
+            .setMessage(resources.getQuantityString(R.plurals.delete_songs_confirm, selected.size, selected.size))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.delete_song) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val playlists = PlaylistRepository.get()
+                    for (song in selected) {
+                        viewModel.deleteSong(song)
+                        playlists.removeSongFromAll(File(song.filePath).name)
+                    }
+                }
+            }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
     /**
      * "Ir al artista" desde una ficha de álbum: el álbum en sí no guarda un artista con id (solo
      * el nombre ya resuelto para pintar, ver [DetailViewModel.toHeader]), así que se coge el primer
@@ -360,12 +559,26 @@ class DetailDialogFragment : DialogFragment() {
     }
 
     /**
+     * Discografía de la ficha de ÁLBUM (botón de disco+lupa de la toolbar, ver
+     * `menu_library_detail.xml`): mismo diálogo que el de la ficha de artista
+     * ([DiscographyDialogFragment]), pero acotado a este único álbum en vez de a todo el catálogo
+     * del artista (ver [DiscographyDialogFragment.showForAlbum]). El artista sale igual que en
+     * [goToAlbumArtist]: el álbum en sí no guarda uno con id, así que se coge el primero que traiga
+     * alguna de sus canciones.
+     */
+    private fun showAlbumDiscography() {
+        val artist = viewModel.songs.firstNotNullOfOrNull { it.artists.firstOrNull() } ?: return
+        val albumTitle = viewModel.header.value?.title ?: return
+        DiscographyDialogFragment.showForAlbum(this, artist.id, artist.name, albumTitle)
+    }
+
+    /**
      * Menú de 3 puntos de la ficha de álbum. Se ancla al propio icono de la toolbar aprovechando que
      * AppCompat le da a cada acción visible ("showAsAction=always") una vista con el id de su
      * MenuItem, así el PopupMenu sale justo debajo del botón que se ha tocado.
      */
     private fun showAlbumMenu(toolbar: MaterialToolbar) {
-        val anchor = toolbar.findViewById<View>(R.id.action_album_menu) ?: toolbar
+        val anchor = toolbar.findViewById<View>(R.id.action_more_menu) ?: toolbar
         PopupMenu(requireContext(), anchor).apply {
             menuInflater.inflate(R.menu.menu_album_actions, menu)
             // Solo tiene sentido si alguna canción del álbum trae un artista enlazado (ver el mismo
@@ -394,6 +607,66 @@ class DetailDialogFragment : DialogFragment() {
             }
             show()
         }
+    }
+
+    /** Menú de 3 puntos de la ficha de artista: de momento solo "Renombrar" (ver
+     *  menu_artist_actions.xml/showRenameArtistDialog). */
+    private fun showArtistMenu(toolbar: MaterialToolbar) {
+        val anchor = toolbar.findViewById<View>(R.id.action_more_menu) ?: toolbar
+        PopupMenu(requireContext(), anchor).apply {
+            menuInflater.inflate(R.menu.menu_artist_actions, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_rename_artist -> { showRenameArtistDialog(); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    /**
+     * Diálogo con un campo de texto para renombrar el artista de esta ficha, precargado con su
+     * nombre actual (ver [viewModel.header]). Cambia [ArtistEntity.name][com.untar.ultimusic.data.db.entities.ArtistEntity.name]
+     * -una fila propia de Room, no texto suelto por canción- así que se refleja solo en TODA la app
+     * (esta ficha incluida, que sigue el mismo id) en cuanto se guarda, sin más que hacer aquí. Mismo
+     * patrón de campo de texto que `PlaylistsFragment.showNameDialog`, sin su validación de nombre de
+     * archivo (un artista no es un nombre de fichero).
+     */
+    private fun showRenameArtistDialog() {
+        val currentName = viewModel.header.value?.title ?: return
+        val accent = playerViewModel.accentColor.value
+        val input = EditText(requireContext()).apply {
+            setText(currentName)
+            setSelection(text.length)
+            hint = getString(R.string.artist_name_hint)
+            setSingleLine()
+            backgroundTintList = AccentTint.underline(requireContext(), accent)
+        }
+        val padding = (resources.displayMetrics.density * 20).toInt()
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.action_rename)
+            .setView(input, padding, padding / 2, padding, 0)
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                val name = input.text.toString().trim()
+                if (name.isNotEmpty() && name != currentName) viewModel.renameArtist(name)
+            }
+            .create()
+        dialog.setOnShowListener {
+            val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            ok.isEnabled = input.text.isNotBlank()
+            input.doAfterTextChanged { ok.isEnabled = !it.isNullOrBlank() }
+            val muted = ContextCompat.getColor(requireContext(), R.color.um_on_surface_muted)
+            ok.setTextColor(
+                ColorStateList(
+                    arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+                    intArrayOf(muted, accent)
+                )
+            )
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ColorStateList.valueOf(accent))
+        }
+        dialog.show()
     }
 
     /**

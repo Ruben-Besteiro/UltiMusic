@@ -1,0 +1,14 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="?attr/colorControlNormal">
+    <!-- Icono de "añadir a la cola": 3 rayas horizontales (la tercera más corta, para dejar hueco
+         abajo a la izquierda) más un "+" en esa esquina. Lo revela SwipeToQueue.kt al arrastrar una
+         fila de canción hacia la derecha, con el mismo significado que "Añadir a cola" del menú de
+         3 puntos. -->
+    <path
+        android:fillColor="@android:color/white"
+        android:pathData="M2,3H22V5H2Z M2,9H22V11H2Z M9,15H22V17H9Z M5,14H7V24H5Z M1,18H11V20H1Z" />
+</vector>

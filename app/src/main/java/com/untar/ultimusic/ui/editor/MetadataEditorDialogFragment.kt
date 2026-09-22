@@ -485,8 +485,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
                         AccentTint.contentOnAccent(btnPickCover, accent)
                         fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
                         AccentTint.contentOnAccent(fabAutofill, accent)
-                        linkVideoUrl.setTextColor(accent)
-                        linkVideoUrl.compoundDrawableTintList = ColorStateList.valueOf(accent)
+                        // linkVideoUrl (texto e icono) no lleva el acento: ver su comentario en el
+                        // XML, tinte fijo puesto ya en el propio layout.
                         linkAddAlbum.setTextColor(accent)
                         textFields.forEach { styleTextField(it, accent) }
                         editTexts.forEach { styleEditTextHandles(it, accent) }

@@ -214,6 +214,36 @@ object DynamicColor {
     }
 
     /**
+     * Una paleta de [count] colores distinguibles entre sí, construida A PARTIR del acento: se parte
+     * de su tono y se va girando la rueda de color en pasos iguales. Es lo que pinta los sectores de
+     * la tarta de géneros de UltiMusic Recount (ver
+     * [com.untar.ultimusic.ui.recount.PieChartView]).
+     *
+     * Se genera en vez de sacarla de `colors.xml` para cumplir la regla de la app: nada de colores
+     * fijos donde debería haber color dinámico. Girar el TONO y dejar quietas saturación y
+     * luminosidad es lo que hace que los sectores se distingan bien entre ellos sin que ninguno se
+     * vaya a un gris apagado o a un blanco que deslumbre; son los mismos límites que aplica
+     * [readable] al acento, así que la tarta entera pertenece visualmente a la misma familia que el
+     * resto de la pantalla.
+     *
+     * El primer color es SIEMPRE el acento normalizado, así que el sector mayoritario —el primero,
+     * porque los sectores llegan ya ordenados— se ve del color de la canción que suena.
+     */
+    fun palette(accent: Int, count: Int): List<Int> {
+        if (count <= 0) return emptyList()
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(accent, hsl)
+        val saturation = hsl[1].coerceAtLeast(MIN_SATURATION)
+        val lightness = hsl[2].coerceIn(MIN_LIGHTNESS, MAX_LIGHTNESS)
+        val step = 360f / count
+        return List(count) { index ->
+            ColorUtils.HSLToColor(
+                floatArrayOf((hsl[0] + step * index) % 360f, saturation, lightness)
+            )
+        }
+    }
+
+    /**
      * Color de texto que se lee sobre [background]: blanco sobre fondos oscuros, negro sobre claros.
      * La "luminancia" no es la media de los canales, sino una media ponderada que imita cómo de
      * brillante percibe el ojo cada color (el verde pesa mucho más que el azul).

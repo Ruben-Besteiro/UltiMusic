@@ -4,7 +4,6 @@ import android.content.res.ColorStateList
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.View
-import android.widget.TextView
 import androidx.appcompat.app.AlertDialog
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
@@ -41,9 +40,7 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerLibrary)
-        val emptyView = view.findViewById<TextView>(R.id.emptyView)
         val createButton = view.findViewById<FloatingActionButton>(R.id.btnCreateTag)
-        emptyView.setText(R.string.no_tags)
 
         val adapter = TagsAdapter(
             onTagClick = { tag -> CollectionDetailDialogFragment.showTag(this, tag.id) },
@@ -63,10 +60,9 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    tagsViewModel.visibleTags.collect { list ->
-                        adapter.submit(list)
-                        emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
-                    }
+                    // El aviso de "sin etiquetas personalizadas" ya no es un emptyView aparte: es la
+                    // última fila del propio adapter (ver TagsAdapter.submit/HintViewHolder).
+                    tagsViewModel.visibleTags.collect { list -> adapter.submit(list) }
                 }
                 // El amarillo dinámico del botón "+" y de la barra de scroll sigue el color de lo
                 // que suena (ver PlaylistsFragment, mismo patrón): a diferencia del color propio de

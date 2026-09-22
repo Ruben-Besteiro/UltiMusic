@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icono de bandera de España para el selector de idioma (ver settings_language_* en
+     dialog_settings.xml). Proporción real 1:2:1 de las franjas roja-amarilla-roja. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="56dp"
+    android:height="36dp"
+    android:viewportWidth="30"
+    android:viewportHeight="20">
+    <path
+        android:fillColor="#C60B1E"
+        android:pathData="M0,0h30v20h-30z" />
+    <path
+        android:fillColor="#FFC400"
+        android:pathData="M0,5h30v10h-30z" />
+</vector>

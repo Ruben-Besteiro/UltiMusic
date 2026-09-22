@@ -68,20 +68,19 @@ class TagsViewModel(app: Application) : AndroidViewModel(app) {
     )
 
     /**
-     * True si [tag] se ve en la pestaña Etiquetas aunque tenga 0 canciones. Solo dos casos:
-     * - Una personalizada del usuario (`systemKey == null && !isAutoAssigned`): si se ocultara vacía,
-     *   una etiqueta recién creada desaparecería de la lista antes de poder añadirle la primera
-     *   canción, justo lo contrario de lo que se busca al crearla.
-     * - Favoritos: la única predefinida que se deja ver vacía a propósito, como recordatorio
-     *   permanente de que existe aunque el usuario todavía no haya marcado ninguna.
+     * True si [tag] se ve en la pestaña Etiquetas aunque tenga 0 canciones: solo una personalizada
+     * del usuario (`systemKey == null && !isAutoAssigned`). Si se ocultara vacía, una etiqueta recién
+     * creada desaparecería de la lista antes de poder añadirle la primera canción, justo lo contrario
+     * de lo que se busca al crearla.
      *
-     * El resto -las 3 calculadas ([computedKeys]), Vídeo sincronizado, Remix / Cover y las de idioma
-     * ([TagSummary.isAutoAssigned])- se ocultan en cuanto se quedan sin ninguna canción: no aportan
-     * nada mientras estén vacías y el usuario no puede "prepararlas" de antemano como sí puede con una
-     * personalizada (confirmado con el usuario: solo Favoritos debe verse con 0 elementos).
+     * El resto -las 5 predefinidas ([SystemTagKey]) y las de idioma ([TagSummary.isAutoAssigned])- se
+     * ocultan en cuanto se quedan sin ninguna canción: no aportan nada mientras estén vacías y el
+     * usuario no puede "prepararlas" de antemano como sí puede con una personalizada. Mientras no haya
+     * ninguna personalizada visible, [TagsAdapter] añade su propio aviso al final de la lista (ver
+     * `TagsAdapter.submit`), así que aquí no hace falta dejar ver ninguna predefinida vacía como
+     * recordatorio.
      */
-    private fun TagSummary.showsWhenEmpty(): Boolean =
-        (systemKey == null && !isAutoAssigned) || systemKey == SystemTagKey.FAVORITES.name
+    private fun TagSummary.showsWhenEmpty(): Boolean = systemKey == null && !isAutoAssigned
 
     /** Ver [showsWhenEmpty]: SIN filtrar por 0 canciones. Se deja tal cual, sin recortar, porque
      *  [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment] la usa para resolver por id

@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Fila de un resultado del buscador de fragmentos (ver PreviewTrackAdapter). Calco de
+  item_metadata_suggestion.xml sin la insignia de tipo y con el botón de reproducir/pausar a la
+  derecha. El icono y el spinner se tiñen desde el adaptador con el acento dinámico.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical"
+    android:orientation="horizontal"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="10dp">
+
+    <com.google.android.material.imageview.ShapeableImageView
+        android:id="@+id/previewCover"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:background="@drawable/cover_placeholder"
+        android:contentDescription="@string/suggestion_cover_desc"
+        android:scaleType="centerCrop" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="12dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/previewTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_background"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            tools:text="Bohemian Rhapsody" />
+
+        <TextView
+            android:id="@+id/previewSubtitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/um_on_surface_muted"
+            android:textSize="14sp"
+            tools:text="Queen | A Night at the Opera" />
+
+    </LinearLayout>
+
+    <!-- Abre el diálogo de tiendas donde conseguir el archivo (ver StoreLinksDialogFragment). Gris
+         apagado, no amarillo: solo el estado activo de la fila usa el acento dinámico. -->
+    <ImageButton
+        android:id="@+id/previewStores"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/preview_stores_desc"
+        android:padding="8dp"
+        android:src="@drawable/ic_arrow_down"
+        android:tint="@color/um_on_surface_muted" />
+
+    <FrameLayout
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="4dp">
+
+        <ImageView
+            android:id="@+id/previewAction"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:padding="8dp"
+            android:src="@drawable/ic_play"
+            tools:ignore="ContentDescription" />
+
+        <ProgressBar
+            android:id="@+id/previewBuffering"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:layout_gravity="center"
+            android:visibility="gone" />
+
+    </FrameLayout>
+
+</LinearLayout>

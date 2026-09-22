@@ -2,7 +2,9 @@ package com.untar.ultimusic.util
 
 import com.google.mlkit.nl.languageid.LanguageIdentification
 import com.google.mlkit.nl.languageid.LanguageIdentifier
+import kotlinx.coroutines.suspendCancellableCoroutine
 import java.util.Locale
+import kotlin.coroutines.resume
 
 /**
  * Deduce el idioma de un texto (la letra de una canción) con el identificador de ML Kit: un
@@ -30,11 +32,24 @@ object LanguageDetector {
     }
 
     /**
+     * Como [detect], pero suspendida en vez de por callback: la usa
+     * [com.untar.ultimusic.data.LibraryRepository.setLyrics] (y su equivalente de arranque
+     * [com.untar.ultimusic.data.LibraryRepository.backfillMissingLanguageTags]) para poder deducir
+     * el idioma justo después de guardar una letra sin depender de que haya un formulario en pantalla
+     * con el que sincronizarse, a diferencia de [detect].
+     */
+    suspend fun detectSuspend(text: String): String? = suspendCancellableCoroutine { cont ->
+        detect(text) { cont.resume(it) }
+    }
+
+    /**
      * Como [detect], pero devuelve la etiqueta BCP-47 en crudo ("es", "en", "ja"...) en vez de su
      * nombre en español; `null` en los mismos casos. NO se calcula a partir de
      * [Song.language][com.untar.ultimusic.model.Song.language] (que solo guarda el nombre en
-     * español, ver [detect], y solo si se ha editado la letra a mano en el editor de metadatos —
-     * puede estar vacío aunque la canción sí tenga letra): lo usa
+     * español, ver [detect]; puede estar vacío para una canción con letra muy reciente hasta que
+     * [com.untar.ultimusic.data.LibraryRepository.setLyrics] o su backfill de arranque
+     * [com.untar.ultimusic.data.LibraryRepository.backfillMissingLanguageTags] terminen de deducirlo):
+     * lo usa
      * [com.untar.ultimusic.ui.player.IPodDialogFragment] para decidir si el idioma de la letra en
      * pantalla difiere del idioma del sistema (botón "あ") y, con el mismo resultado, como idioma de
      * origen al pedirle la traducción a [com.untar.ultimusic.util.LyricsTranslator].

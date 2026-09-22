@@ -20,17 +20,6 @@
         android:scrollbars="none"
         tools:listitem="@layout/item_tag" />
 
-    <TextView
-        android:id="@+id/emptyView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_margin="24dp"
-        android:gravity="center"
-        android:textColor="@color/um_on_surface_muted"
-        android:textSize="16sp"
-        android:visibility="gone" />
-
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnCreateTag"
         android:layout_width="wrap_content"

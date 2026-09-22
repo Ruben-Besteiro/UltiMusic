@@ -45,6 +45,16 @@ data class PersonSummary(
     override val sortYear: Int? get() = null
     override val sortPopularity: Long? get() = popularity
     override val sortSongCount: Int get() = songCount
+
+    companion object {
+        /**
+         * Id del perfil "Otros" (ver [com.untar.ultimusic.data.ArtistGroupingPreferences] y
+         * [com.untar.ultimusic.data.LibraryRepository.artists]): no es la fila de ningún artista
+         * real -Room nunca genera un id negativo con `INTEGER PRIMARY KEY AUTOINCREMENT`-, así que
+         * no puede chocar con uno de verdad.
+         */
+        const val OTHERS_ARTIST_ID = -1L
+    }
 }
 
 /**
@@ -72,12 +82,12 @@ data class GenreSummary(
  * duran entre todas. A diferencia de [GenreSummary], una etiqueta SÍ es una entidad propia de la
  * base de datos ([com.untar.ultimusic.data.db.entities.TagEntity]) — de ahí el [id] —, pero su
  * recuento de canciones se sigue calculando aquí en Kotlin (ver
- * [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]) porque 3 de las 6 predefinidas no
+ * [com.untar.ultimusic.data.LibraryRepository.resolveSongsOfTag]) porque 3 de las 5 predefinidas no
  * tienen membresía guardada en ninguna tabla, se derivan al vuelo de la biblioteca.
  *
  * [systemKey] (ver [com.untar.ultimusic.model.SystemTagKey]) va aquí, no solo en [Tag]/[TagEntity],
  * porque la UI necesita saberlo sin resolver nada aparte: para decidir si la X de "quitar etiqueta"
- * se muestra (solo si tiene membresía real: `null`, `FAVORITES`, `SYNCED_VIDEO` o `REMIX_COVER`) y
+ * se muestra (solo si tiene membresía real: `null`, `SYNCED_VIDEO` o `REMIX_COVER`) y
  * para filtrarlas del buscador de "+ Añadir" (las 3 calculadas nunca aparecen ahí, ver
  * `TagsViewModel.assignableTags`).
  *

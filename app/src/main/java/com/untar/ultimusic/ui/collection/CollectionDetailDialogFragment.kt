@@ -1,22 +1,28 @@
 package com.untar.ultimusic.ui.collection
 
+import android.app.Dialog
 import android.content.res.ColorStateList
+import android.graphics.Canvas
 import android.os.Bundle
 import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
+import android.widget.EditText
 import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.SeekBar
 import android.widget.TextView
+import androidx.activity.ComponentDialog
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.isVisible
 import androidx.core.view.updatePadding
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.FragmentManager
@@ -38,7 +44,10 @@ import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.MiniPlayerController
+import com.untar.ultimusic.ui.common.ShuffleToggleIcon
+import com.untar.ultimusic.ui.common.SwipeToQueueGesture
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.AddSongsToTagDialogFragment
@@ -53,6 +62,7 @@ import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.PlaylistResumeStore
+import com.untar.ultimusic.util.PlaylistShuffleStore
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.joinNonBlank
 import kotlinx.coroutines.flow.combine
@@ -106,6 +116,17 @@ class CollectionDetailDialogFragment : DialogFragment() {
         viewModel.bindTagName { id -> tagsViewModel.tags.map { list -> list.firstOrNull { it.id == id }?.name } }
     }
 
+    /** El botón atrás del sistema, con una selección múltiple activa (ver
+     *  [CollectionDetailViewModel.selectedIds]), la limpia en vez de cerrar la ficha entera —
+     *  igual que en [com.untar.ultimusic.ui.library.DetailDialogFragment]. */
+    override fun onCreateDialog(savedInstanceState: Bundle?): Dialog =
+        object : ComponentDialog(requireContext(), theme) {
+            @Suppress("DEPRECATION")
+            override fun onBackPressed() {
+                if (viewModel.selectedIds.value.isNotEmpty()) viewModel.clearSelection() else super.onBackPressed()
+            }
+        }
+
     override fun onCreateView(
         inflater: LayoutInflater,
         container: ViewGroup?,
@@ -156,10 +177,28 @@ class CollectionDetailDialogFragment : DialogFragment() {
         lateinit var adapter: CollectionSongsAdapter
         adapter = CollectionSongsAdapter(
             reorderable = viewModel.reorderable,
+            // Con selección activa, tocar una fila la marca/desmarca en vez de reproducir; igual
+            // que SongsFragment (ver el comentario de CollectionSongsAdapter sobre selección
+            // múltiple).
             onSongClick = { position ->
-                playerViewModel.playCollection(
-                    adapter.currentSongs(), position, viewModel.currentKey, viewModel.currentKind
-                )
+                val songs = adapter.currentSongs()
+                if (viewModel.selectedIds.value.isNotEmpty()) {
+                    songs.getOrNull(position)?.let { viewModel.toggleSelection(it.id) }
+                } else if (viewModel.currentKind == CollectionKind.GENRE) {
+                    // Un género no fija la cola de golpe: empieza con solo la canción tocada y se va
+                    // alargando sola con canciones del mismo género (ver
+                    // PlaybackService.playFromGenre), igual que tocar una canción en la pestaña
+                    // Canciones pero sin salirse del género.
+                    playerViewModel.playFromGenre(songs[position], viewModel.currentKey!!)
+                } else {
+                    playerViewModel.playCollection(songs, position, viewModel.currentKey, viewModel.currentKind)
+                }
+            },
+            onSongLongClick = { position ->
+                adapter.currentSongs().getOrNull(position)?.let { song ->
+                    if (viewModel.selectedIds.value.isEmpty()) viewModel.startSelection(song.id)
+                    else viewModel.toggleSelection(song.id)
+                }
             },
             onStartDrag = { holder -> itemTouchHelper?.startDrag(holder) },
             // Vía el PlaylistsViewModel compartido, no un método propio de esta ficha: así el
@@ -192,15 +231,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
             // Solo llega a pulsarse con la X visible, es decir con currentKind ya resuelto a LISTA o
             // a una etiqueta editable (ver el `when` de más abajo); el `!!`/currentTagId() son
             // seguros por lo mismo.
-            onRemove = { song ->
-                when (viewModel.currentKind) {
-                    CollectionKind.LISTA -> playlistsViewModel.removeSongs(
-                        viewModel.currentKey!!, listOf(File(song.filePath).name)
-                    )
-                    CollectionKind.TAG -> tagsViewModel.removeSongFromTag(song.id, currentTagId())
-                    else -> Unit
-                }
-            }
+            onRemove = { song -> showRemoveSongDialog(song) }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
@@ -208,11 +239,20 @@ class CollectionDetailDialogFragment : DialogFragment() {
             sectionLetter(viewModel.songs.value.getOrNull(position)?.title)
         }
 
+        // Arrastrar una fila hacia la derecha la añade a la cola, igual que en el resto de listas de
+        // canciones (ver SwipeToQueue.kt). Aquí solo puede haber UN ItemTouchHelper por RecyclerView,
+        // así que si además reordena (ver más abajo) el gesto va combinado en su mismo callback; si
+        // no reordena (género), va suelto.
+        val queueGesture = SwipeToQueueGesture(requireContext()) { playerViewModel.accentColor.value }
+        val onAddToQueue: (Int) -> Unit = { position ->
+            adapter.currentSongs().getOrNull(position)?.let { playerViewModel.addToQueue(it) }
+        }
+
         // Arrastre solo vertical desde el manejador de cada fila; un género no lo engancha, ver
         // CollectionSongsAdapter.reorderable (su manejador ya viene oculto).
         if (viewModel.reorderable) {
             val callback = object : ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP or ItemTouchHelper.DOWN, 0
+                ItemTouchHelper.UP or ItemTouchHelper.DOWN, ItemTouchHelper.RIGHT
             ) {
                 override fun isLongPressDragEnabled() = false
                 override fun onMove(
@@ -223,16 +263,37 @@ class CollectionDetailDialogFragment : DialogFragment() {
                     adapter.moveItem(vh.bindingAdapterPosition, target.bindingAdapterPosition)
                     return true
                 }
+                override fun getSwipeThreshold(vh: RecyclerView.ViewHolder): Float = queueGesture.swipeThreshold
                 override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
                 override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
                     super.clearView(rv, vh)
                     adapter.commitReorder()
+                    queueGesture.reset()
+                }
+                override fun onChildDraw(
+                    c: Canvas,
+                    rv: RecyclerView,
+                    vh: RecyclerView.ViewHolder,
+                    dX: Float,
+                    dY: Float,
+                    actionState: Int,
+                    isCurrentlyActive: Boolean
+                ) {
+                    if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
+                        queueGesture.onChildDraw(c, vh, dX, onAddToQueue)
+                    } else {
+                        super.onChildDraw(c, rv, vh, dX, dY, actionState, isCurrentlyActive)
+                    }
                 }
             }
             itemTouchHelper = ItemTouchHelper(callback).also { it.attachToRecyclerView(recycler) }
+        } else {
+            attachSwipeToQueue(recycler, accentColor = { playerViewModel.accentColor.value }, onAddToQueue = onAddToQueue)
         }
 
-        toolbar.setNavigationOnClickListener { dismiss() }
+        toolbar.setNavigationOnClickListener {
+            if (viewModel.selectedIds.value.isEmpty()) dismiss() else viewModel.clearSelection()
+        }
         btnAddSongs.setOnClickListener { showAddSongs() }
         toolbar.inflateMenu(R.menu.menu_collection_detail)
         // El menú de 3 puntos tiene contenido distinto según de qué ficha se trate: para un Género
@@ -247,11 +308,28 @@ class CollectionDetailDialogFragment : DialogFragment() {
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_shuffle -> {
-                    playerViewModel.shuffleCollection(adapter.currentSongs(), viewModel.currentKey, viewModel.currentKind)
+                    // Para una Lista este icono ya no es un disparo único: es un toggle persistido
+                    // (ver ShuffleToggleIcon/PlaylistShuffleStore). Género/Etiqueta conservan el
+                    // "barajar y ya" de siempre.
+                    val key = viewModel.currentKey
+                    if (viewModel.currentKind == CollectionKind.LISTA && key != null) {
+                        val newState = !PlaylistShuffleStore.isShuffleOn(key)
+                        playerViewModel.setListaShuffle(key, adapter.currentSongs(), newState)
+                        // Repintado inmediato: no hay ningún StateFlow que avise de este cambio, así
+                        // que se hace aquí mismo para que se vea al instante (regla del CLAUDE.md).
+                        refreshShuffleIcon(toolbar, playerViewModel.accentColor.value)
+                    } else {
+                        playerViewModel.shuffleCollection(adapter.currentSongs(), viewModel.currentKey, viewModel.currentKind)
+                    }
                     true
                 }
                 R.id.action_collection_menu -> {
-                    if (viewModel.currentKind == CollectionKind.TAG) {
+                    // Con selección activa este mismo botón (icono de 3 puntos) pasa a abrir el menú
+                    // de la selección múltiple en vez del suyo normal (ver el `launch` de
+                    // selectedIds más abajo, que además lo fuerza visible mientras dure).
+                    if (viewModel.selectedIds.value.isNotEmpty()) {
+                        showSelectionMenu(toolbar.findViewById<View>(R.id.action_collection_menu) ?: toolbar)
+                    } else if (viewModel.currentKind == CollectionKind.TAG) {
                         currentEditableTag?.let { showTagMenu(toolbar, it) }
                     } else {
                         showCollectionMenu(toolbar, adapter)
@@ -268,11 +346,16 @@ class CollectionDetailDialogFragment : DialogFragment() {
                 // buscando su id en TagsViewModel.tags, así que se colecta en vez de asignarse una
                 // sola vez (ver CollectionDetailViewModel.displayTitle sobre el porqué).
                 launch {
-                    viewModel.displayTitle.collect { title -> toolbar.title = title }
+                    // Con selección activa el título se lo pisa el `launch` de selectedIds de más
+                    // abajo (cuenta de seleccionadas): aquí solo se aplica si no se está
+                    // seleccionando, igual que el título de DetailDialogFragment.
+                    viewModel.displayTitle.collect { title ->
+                        if (viewModel.selectedIds.value.isEmpty()) toolbar.title = title
+                    }
                 }
                 // Botón "+" y X de cada fila: en una LISTA los dos se enseñan siempre (a cualquiera
                 // se le puede añadir/quitar una canción). En una ETIQUETA solo con membresía real
-                // (ver TagsViewModel.isEditable) -Favoritos, Vídeo sincronizado, Remix / Cover o una
+                // (ver TagsViewModel.isEditable) -Vídeo sincronizado, Remix / Cover o una
                 // personalizada-, nunca en las 3 calculadas. En un GÉNERO ninguno de los dos llega a mostrarse
                 // (deriva solo de los metadatos, no se puede tocar a mano).
                 when (viewModel.currentKind) {
@@ -287,15 +370,21 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         tagsViewModel.tags.collect { tags ->
                             val tag = tags.firstOrNull { it.id == viewModel.currentKey?.toLongOrNull() }
                             val editable = tag != null && tagsViewModel.isEditable(tag)
-                            btnAddSongs.isVisible = editable
+                            // Con selección activa el "+" se queda oculto y el menú de 3 puntos
+                            // forzado visible (ver el `launch` de selectedIds más abajo): no se
+                            // pisan aquí, solo se aplica la regla normal si NO se está seleccionando.
+                            if (viewModel.selectedIds.value.isEmpty()) {
+                                btnAddSongs.isVisible = editable
+                            }
                             adapter.setRemovable(editable, R.string.remove_song_from_tag_desc)
                             // Editar/eliminar (menú de 3 puntos de la cabecera) solo para una
                             // PERSONALIZADA, mismo criterio que TagsAdapter.isCustom: las predefinidas
-                            // (incluida Favoritos, que sí es `editable`) no se pueden renombrar ni
-                            // borrar.
+                            // no se pueden renombrar ni borrar.
                             val isCustom = tag != null && tag.systemKey == null && !tag.isAutoAssigned
                             currentEditableTag = if (isCustom) tag else null
-                            toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible = isCustom
+                            if (viewModel.selectedIds.value.isEmpty()) {
+                                toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible = isCustom
+                            }
                         }
                     }
                     else -> Unit
@@ -335,7 +424,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                                 return@collect
                             }
                             resumeBlock.visibility = View.VISIBLE
-                            resumeText.text = getString(R.string.playlist_current_position, savedSong.title)
+                            resumeText.text = getString(R.string.playlist_current_song, savedSong.title)
                             val playingThisPlaylist = kind == CollectionKind.LISTA && playingName == playlistName
                             btnResume.visibility = if (playingThisPlaylist) View.GONE else View.VISIBLE
                             btnResume.setOnClickListener {
@@ -357,6 +446,34 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         // el color propio de la etiqueta: sí le aplica la regla de amarillo dinámico.
                         btnAddSongs.backgroundTintList = ColorStateList.valueOf(accent)
                         AccentTint.contentOnAccent(btnAddSongs, accent)
+                        adapter.setAccentColor(accent)
+                    }
+                }
+                // Selección múltiple por pulsación larga (ver CollectionSongsAdapter/
+                // CollectionDetailViewModel): mientras dure, el "+" se oculta y el menú de 3 puntos
+                // (repurpuesto para abrir showSelectionMenu, ver el listener de arriba) se fuerza
+                // visible pase lo que pase el tipo de ficha; al terminar, los dos vuelven a la regla
+                // normal de cada tipo (ver el `when` de más arriba).
+                launch {
+                    viewModel.selectedIds.collect { ids ->
+                        adapter.setSelection(ids)
+                        val selecting = ids.isNotEmpty()
+                        toolbar.menu.findItem(R.id.action_shuffle)?.isVisible = !selecting
+                        toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible = selecting || when (viewModel.currentKind) {
+                            CollectionKind.GENRE -> true
+                            CollectionKind.TAG -> currentEditableTag != null
+                            else -> false
+                        }
+                        btnAddSongs.isVisible = !selecting && when (viewModel.currentKind) {
+                            CollectionKind.LISTA -> true
+                            CollectionKind.TAG -> currentEditableTag != null
+                            else -> false
+                        }
+                        toolbar.title = if (selecting) {
+                            resources.getQuantityString(R.plurals.song_selection_count, ids.size, ids.size)
+                        } else {
+                            viewModel.displayTitle.value
+                        }
                     }
                 }
             }
@@ -379,7 +496,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
         headerBox.setBackgroundColor(background)
         toolbar.setTitleTextColor(onBackground)
         toolbar.setNavigationIconTint(onBackground)
-        toolbar.menu.findItem(R.id.action_shuffle)?.icon?.setTint(onBackground)
+        refreshShuffleIcon(toolbar, accent, onBackground)
         toolbar.menu.findItem(R.id.action_collection_menu)?.icon?.setTint(onBackground)
         summaryIcon.setColorFilter(onBackground)
         summaryText.setTextColor(onBackground)
@@ -389,6 +506,29 @@ class CollectionDetailDialogFragment : DialogFragment() {
         resumeText.setTextColor(onBackground)
         btnResume.setTextColor(onBackground)
         btnResume.iconTint = ColorStateList.valueOf(onBackground)
+    }
+
+    /**
+     * Repinta `R.id.action_shuffle`: para una Lista, el icono de [ShuffleToggleIcon] según el
+     * estado persistido en [PlaylistShuffleStore] (toggle); para Género/Etiqueta, el icono de
+     * siempre teñido de [onBackground] (disparo único, sin estado propio que reflejar).
+     *
+     * [onBackground] se puede omitir -se recalcula a partir de [accent], igual que hace
+     * [applyAccent]- para los sitios que no lo tienen ya calculado a mano (el `setOnMenuItemClickListener`
+     * de más arriba, que repinta al instante tras tocar el toggle).
+     */
+    private fun refreshShuffleIcon(
+        toolbar: MaterialToolbar,
+        accent: Int,
+        onBackground: Int = DynamicColor.onColor(DynamicColor.asBackground(accent))
+    ) {
+        val item = toolbar.menu.findItem(R.id.action_shuffle) ?: return
+        val key = viewModel.currentKey
+        if (viewModel.currentKind == CollectionKind.LISTA && key != null) {
+            item.icon = ShuffleToggleIcon.build(requireContext(), PlaylistShuffleStore.isShuffleOn(key), accent, onBackground)
+        } else {
+            item.icon?.setTint(onBackground)
+        }
     }
 
     /** Menú de 3 puntos: añadir la colección entera a la cola o a otra lista (ver
@@ -405,11 +545,55 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         true
                     }
                     R.id.action_add_collection_to_playlist -> { showAddCollectionToPlaylist(adapter); true }
+                    R.id.action_rename_genre -> { showRenameGenreDialog(); true }
                     else -> false
                 }
             }
             show()
         }
+    }
+
+    /**
+     * Diálogo con un campo de texto para renombrar el género de esta ficha, precargado con su
+     * nombre actual. A diferencia de renombrar una etiqueta ([showTagMenu]/[TagEditorDialogFragment],
+     * una fila de Room con su propio id), un género es solo texto repetido en cada canción que lo
+     * lleva: [CollectionDetailViewModel.renameGenre] hace el trabajo de fondo (reescribe la lista de
+     * géneros de cada canción afectada) Y reapunta la ficha al nombre nuevo, así que aquí solo hace
+     * falta pedirlo. Mismo patrón de campo de texto que `PlaylistsFragment.showNameDialog`.
+     */
+    private fun showRenameGenreDialog() {
+        val currentName = viewModel.currentKey ?: return
+        val accent = playerViewModel.accentColor.value
+        val input = EditText(requireContext()).apply {
+            setText(currentName)
+            setSelection(text.length)
+            hint = getString(R.string.genre_name_hint)
+            setSingleLine()
+            backgroundTintList = AccentTint.underline(requireContext(), accent)
+        }
+        val padding = (resources.displayMetrics.density * 20).toInt()
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.action_rename)
+            .setView(input, padding, padding / 2, padding, 0)
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.dialog_ok) { _, _ ->
+                viewModel.renameGenre(input.text.toString())
+            }
+            .create()
+        dialog.setOnShowListener {
+            val ok = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+            ok.isEnabled = input.text.isNotBlank()
+            input.doAfterTextChanged { ok.isEnabled = !it.isNullOrBlank() }
+            val muted = ContextCompat.getColor(requireContext(), R.color.um_on_surface_muted)
+            ok.setTextColor(
+                ColorStateList(
+                    arrayOf(intArrayOf(-android.R.attr.state_enabled), intArrayOf()),
+                    intArrayOf(muted, accent)
+                )
+            )
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ColorStateList.valueOf(accent))
+        }
+        dialog.show()
     }
 
     /** Menú de 3 puntos de la cabecera cuando la ficha es de una etiqueta PERSONALIZADA (ver el
@@ -511,12 +695,109 @@ class CollectionDetailDialogFragment : DialogFragment() {
 
     /** Confirmación antes de borrar de verdad el archivo del dispositivo (igual que en
      * DetailDialogFragment/SongsFragment). */
+    // Igual que showDeleteSongDialog pero para la X de cada fila (ver el onRemove del adapter más
+    // arriba): solo se llama con currentKind ya resuelto a LISTA o a una etiqueta editable, así que
+    // el `else` es inalcanzable en la práctica.
+    private fun showRemoveSongDialog(song: Song) {
+        val (titleRes, messageRes) = when (viewModel.currentKind) {
+            CollectionKind.TAG -> R.string.remove_song_from_tag_desc to R.string.remove_song_from_tag_confirm
+            else -> R.string.remove_song_from_playlist_desc to R.string.remove_song_from_playlist_confirm
+        }
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(titleRes)
+            .setMessage(TextUtils.expandTemplate(resources.getText(messageRes), song.title))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(titleRes) { _, _ ->
+                when (viewModel.currentKind) {
+                    CollectionKind.LISTA -> playlistsViewModel.removeSongs(
+                        viewModel.currentKey!!, listOf(File(song.filePath).name)
+                    )
+                    CollectionKind.TAG -> tagsViewModel.removeSongFromTag(song.id, currentTagId())
+                    else -> Unit
+                }
+            }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
     private fun showDeleteSongDialog(song: Song) {
         val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.delete_song)
             .setMessage(TextUtils.expandTemplate(resources.getText(R.string.delete_song_confirm), song.title))
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.delete_song) { _, _ -> viewModel.deleteSong(song) }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
+    /** Menú de 3 puntos de la selección múltiple (ver menu_song_selection.xml, el mismo que usa
+     *  [com.untar.ultimusic.ui.MainActivity.showSelectionMenu] para la pestaña Canciones): sin "Ir
+     *  al...", que no tiene sentido para varias canciones a la vez. */
+    private fun showSelectionMenu(anchor: View) {
+        val ids = viewModel.selectedIds.value
+        val selected = viewModel.songs.value.filter { it.id in ids }
+        if (selected.isEmpty()) return
+        PopupMenu(requireContext(), anchor).apply {
+            menuInflater.inflate(R.menu.menu_song_selection, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_add_to_queue -> {
+                        viewModel.clearSelection()
+                        playerViewModel.addToQueue(selected)
+                        true
+                    }
+                    R.id.action_add_to_playlist -> { showAddToPlaylistForSelection(selected); true }
+                    R.id.action_edit_metadata -> { showMetadataEditorForSelection(selected); true }
+                    R.id.action_edit_tags -> { showEditTagsForSelection(selected); true }
+                    R.id.action_delete_song -> { showDeleteDialogForSelection(selected); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    /** Igual que [showAddToPlaylist] pero para varias canciones a la vez (ver
+     *  `MainActivity.showAddToPlaylistForSelection`). */
+    private fun showAddToPlaylistForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        if (parentFragmentManager.findFragmentByTag(AddToPlaylistDialogFragment.TAG) != null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val filenames = selected.map { File(it.filePath).name }
+            val repo = PlaylistRepository.get()
+            val names = repo.listPlaylistNames()
+            val contained = repo.playlistsContainingAll(filenames)
+            val checked = BooleanArray(names.size) { names[it] in contained }
+            AddToPlaylistDialogFragment.newInstance(filenames, names, checked)
+                .show(parentFragmentManager, AddToPlaylistDialogFragment.TAG)
+        }
+    }
+
+    private fun showMetadataEditorForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        if (parentFragmentManager.findFragmentByTag(EDITOR_TAG) == null) {
+            MetadataEditorDialogFragment.newInstance(selected.map { it.id })
+                .show(parentFragmentManager, EDITOR_TAG)
+        }
+    }
+
+    private fun showEditTagsForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        if (parentFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+            SongTagsDialogFragment.newInstance(selected.map { it.id })
+                .show(parentFragmentManager, SongTagsDialogFragment.TAG)
+        }
+    }
+
+    /** Igual que [showDeleteSongDialog] pero para varias canciones a la vez (ver
+     *  `MainActivity.showDeleteDialogForSelection`). */
+    private fun showDeleteDialogForSelection(selected: List<Song>) {
+        viewModel.clearSelection()
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.delete_song)
+            .setMessage(resources.getQuantityString(R.plurals.delete_songs_confirm, selected.size, selected.size))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.delete_song) { _, _ -> viewModel.deleteSongs(selected) }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }

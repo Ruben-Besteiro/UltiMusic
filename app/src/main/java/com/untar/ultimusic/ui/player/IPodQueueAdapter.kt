@@ -16,6 +16,7 @@ import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
@@ -32,14 +33,23 @@ import java.util.Collections
  * Se puede reordenar arrastrando: [moveItem] mueve en memoria mientras se arrastra y
  * [commitReorder] persiste el orden final al soltar, con [onStartDrag] enganchado al
  * [androidx.recyclerview.widget.ItemTouchHelper] de [IPodDialogFragment].
+ *
+ * Selección múltiple: mantener pulsada una fila la marca (ver [onItemLongClick] y
+ * [com.untar.ultimusic.ui.PlayerViewModel.queueSelectedIds]), igual que en la pestaña Canciones
+ * (ver [com.untar.ultimusic.ui.songs.SongsAdapter]). Mientras dure, el manejador de arrastre se
+ * oculta ([setSelection]): no tiene sentido reordenar con varias filas marcadas a la vez.
  */
 class IPodQueueAdapter(
     private val onItemClick: (Int) -> Unit,
+    private val onItemLongClick: (Int) -> Unit,
     private val onStartDrag: (RecyclerView.ViewHolder) -> Unit,
     private val onReordered: (List<Song>) -> Unit
 ) : RecyclerView.Adapter<IPodQueueAdapter.QueueViewHolder>() {
 
     private val songs: MutableList<Song> = mutableListOf()
+
+    /** Ids de las canciones marcadas; no vacío = selección múltiple activa. */
+    private var selectedIds: Set<Long> = emptySet()
 
     /** Ruta de archivo de la canción actual; de ahí se recalcula [currentIndex] tras cada arrastre
      * (la posición absoluta que llega en [submit] deja de valer en cuanto se reordena en memoria). */
@@ -96,36 +106,62 @@ class IPodQueueAdapter(
         notifyDataSetChanged()
     }
 
+    @SuppressLint("NotifyDataSetChanged")
+    fun setSelection(ids: Set<Long>) {
+        if (selectedIds == ids) return
+        selectedIds = ids
+        notifyDataSetChanged()
+    }
+
     override fun getItemCount(): Int = songs.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): QueueViewHolder {
         val view = LayoutInflater.from(parent.context)
             .inflate(R.layout.item_queue_song, parent, false)
-        return QueueViewHolder(view, onItemClick, onStartDrag)
+        return QueueViewHolder(view, onItemClick, onItemLongClick, onStartDrag)
     }
 
     override fun onBindViewHolder(holder: QueueViewHolder, position: Int) {
         val showDivider = showEndDivider && position == songs.lastIndex
-        holder.bind(songs[position], position - currentIndex, showDivider, accent)
+        val song = songs[position]
+        holder.bind(
+            song, position - currentIndex, showDivider, accent,
+            selected = song.id in selectedIds,
+            selectionActive = selectedIds.isNotEmpty()
+        )
     }
 
     class QueueViewHolder(
         itemView: View,
         private val onItemClick: (Int) -> Unit,
+        private val onItemLongClick: (Int) -> Unit,
         private val onStartDrag: (RecyclerView.ViewHolder) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
         private val speaker: ImageView = itemView.findViewById(R.id.queueSpeaker)
         private val number: TextView = itemView.findViewById(R.id.queueNumber)
         private val cover: ShapeableImageView = itemView.findViewById(R.id.queueCover)
+        private val selectionScrim: View = itemView.findViewById(R.id.selectionScrim)
+        private val selectionCheck: ImageView = itemView.findViewById(R.id.selectionCheck)
         private val subtitle: TextView = itemView.findViewById(R.id.queueSubtitle)
         private val handle: ImageView = itemView.findViewById(R.id.dragHandle)
         private val divider: View = itemView.findViewById(R.id.queueDivider)
 
         /** [offset] = posición relativa a la actual: 0 = suena ahora, <0 = ya sonó, >0 = próxima. */
         @SuppressLint("ClickableViewAccessibility")
-        fun bind(song: Song, offset: Int, showDivider: Boolean, accent: Int) {
+        fun bind(
+            song: Song,
+            offset: Int,
+            showDivider: Boolean,
+            accent: Int,
+            selected: Boolean,
+            selectionActive: Boolean
+        ) {
             subtitle.text = joinNonBlank(song.title, song.artistDisplay())
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
+
+            selectionScrim.visibility = if (selected) View.VISIBLE else View.GONE
+            selectionCheck.visibility = if (selected) View.VISIBLE else View.GONE
+            if (selected) AccentTint.fill(itemView, R.id.selectionCheck, accent)
 
             val isCurrent = offset == 0
             speaker.isVisible = isCurrent
@@ -143,9 +179,14 @@ class IPodQueueAdapter(
 
             divider.isVisible = showDivider
 
+            // Con selección activa, tocar una fila la marca/desmarca en vez de saltar a ella (ver
+            // IPodDialogFragment); el manejador de arrastre se oculta mientras tanto (ver la
+            // cabecera de la clase).
             itemView.setOnClickListener { onItemClick(bindingAdapterPosition) }
+            itemView.setOnLongClickListener { onItemLongClick(bindingAdapterPosition); true }
+            handle.isVisible = !selectionActive
             handle.setOnTouchListener { _, event ->
-                if (event.actionMasked == MotionEvent.ACTION_DOWN) onStartDrag(this)
+                if (!selectionActive && event.actionMasked == MotionEvent.ACTION_DOWN) onStartDrag(this)
                 false
             }
         }

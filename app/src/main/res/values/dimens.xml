@@ -33,4 +33,8 @@
     <dimen name="color_picker_sv_size">180dp</dimen>
     <dimen name="color_picker_hue_width">28dp</dimen>
     <dimen name="color_picker_preview_size">56dp</dimen>
+
+    <!-- Contorno que marca la bandera elegida en el selector de idioma (ver
+         bg_flag_selected.xml/AccentTint.stroke), mismo motivo que tag_chip_stroke_width. -->
+    <dimen name="flag_selected_stroke_width">3dp</dimen>
 </resources>

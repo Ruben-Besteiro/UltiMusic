@@ -25,6 +25,7 @@ import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.library.SongTagsDialogFragment
@@ -133,6 +134,15 @@ class SearchBarController(
         // Misma barra de scroll arrastrable que las pestañas, sin la burbuja de la letra: los
         // resultados no van en orden alfabético sino agrupados por secciones (ver ScrollbarDrag).
         val scrollbar = recycler.attachScrollbarDrag()
+
+        // Arrastrar una fila de canción hacia la derecha la añade a la cola, como en la pestaña
+        // Canciones (ver SwipeToQueue.kt); las filas de cabecera/álbum/persona no responden (ver
+        // SearchAdapter.songAt).
+        attachSwipeToQueue(
+            recycler,
+            accentColor = { playerViewModel.accentColor.value },
+            canSwipe = { position -> adapter.songAt(position) != null }
+        ) { position -> adapter.songAt(position)?.let { playerViewModel.addToQueue(it) } }
 
         // Tocar cualquier punto de la píldora (o la propia caja) expande el buscador y le da el
         // foco; la flecha/lupa de la izquierda, en cambio, colapsa cuando ya está expandido.

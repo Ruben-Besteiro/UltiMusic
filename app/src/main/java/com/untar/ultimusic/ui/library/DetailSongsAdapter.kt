@@ -1,5 +1,6 @@
 package com.untar.ultimusic.ui.library
 
+import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +13,7 @@ import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.TimeFormat
@@ -36,11 +38,16 @@ import com.untar.ultimusic.util.joinNonBlank
  * una posición distinta en cada álbum al que pertenece — no basta con
  * [com.untar.ultimusic.model.Song.trackNumber] (el del álbum PRINCIPAL), que podría ser el de un
  * álbum distinto de este si la canción está en más de uno.
+ *
+ * Selección múltiple: mantener pulsada una fila la marca (ver [onSongLongClick] y
+ * [DetailViewModel.selectedIds]/[DetailDialogFragment]), igual que en la pestaña Canciones (ver
+ * [com.untar.ultimusic.ui.songs.SongsAdapter]).
  */
 class DetailSongsAdapter(
     private val currentKind: DetailKind,
     private val albumId: Long?,
     private val onSongClick: (Int) -> Unit,
+    private val onSongLongClick: (Int) -> Unit,
     private val onAddToQueue: (Song) -> Unit,
     private val onAddToPlaylist: (Song) -> Unit,
     private val onEditMetadata: (Song) -> Unit,
@@ -52,9 +59,28 @@ class DetailSongsAdapter(
 
     private var tracks: List<Song> = emptyList()
 
+    /** Ids de las canciones marcadas; no vacío = selección múltiple activa. */
+    private var selectedIds: Set<Long> = emptySet()
+
+    private var accentColor: Int = 0xFFFFD000.toInt()
+
     fun submit(list: List<Song>) {
         tracks = list
         notifyDataSetChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun setSelection(ids: Set<Long>) {
+        if (selectedIds == ids) return
+        selectedIds = ids
+        notifyDataSetChanged()
+    }
+
+    @SuppressLint("NotifyDataSetChanged")
+    fun setAccentColor(color: Int) {
+        if (accentColor == color) return
+        accentColor = color
+        if (selectedIds.isNotEmpty()) notifyDataSetChanged()
     }
 
     override fun getItemCount(): Int = tracks.size
@@ -65,16 +91,28 @@ class DetailSongsAdapter(
     }
 
     override fun onBindViewHolder(holder: TrackViewHolder, position: Int) {
+        val song = tracks[position]
         holder.bind(
-            tracks[position], position, currentKind, albumId,
-            onSongClick, onAddToQueue, onAddToPlaylist, onEditMetadata, onEditTags, onDeleteSong,
-            onGoToAlbum, onGoToArtist
+            song, position, currentKind, albumId,
+            selected = song.id in selectedIds,
+            accentColor = accentColor,
+            onSongClick = onSongClick,
+            onSongLongClick = onSongLongClick,
+            onAddToQueue = onAddToQueue,
+            onAddToPlaylist = onAddToPlaylist,
+            onEditMetadata = onEditMetadata,
+            onEditTags = onEditTags,
+            onDeleteSong = onDeleteSong,
+            onGoToAlbum = onGoToAlbum,
+            onGoToArtist = onGoToArtist
         )
     }
 
     class TrackViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val number: TextView = itemView.findViewById(R.id.trackNumber)
         private val cover: ShapeableImageView = itemView.findViewById(R.id.trackCover)
+        private val selectionScrim: View = itemView.findViewById(R.id.selectionScrim)
+        private val selectionCheck: ImageView = itemView.findViewById(R.id.selectionCheck)
         private val title: TextView = itemView.findViewById(R.id.trackTitle)
         private val duration: TextView = itemView.findViewById(R.id.trackDuration)
         private val youtubeIcon: ImageView = itemView.findViewById(R.id.trackYoutubeIcon)
@@ -86,7 +124,10 @@ class DetailSongsAdapter(
             position: Int,
             currentKind: DetailKind,
             albumId: Long?,
+            selected: Boolean,
+            accentColor: Int,
             onSongClick: (Int) -> Unit,
+            onSongLongClick: (Int) -> Unit,
             onAddToQueue: (Song) -> Unit,
             onAddToPlaylist: (Song) -> Unit,
             onEditMetadata: (Song) -> Unit,
@@ -104,6 +145,10 @@ class DetailSongsAdapter(
                 joinNonBlank(song.albumDisplay(), TimeFormat.mmss(song.duration))
             }
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
+
+            selectionScrim.visibility = if (selected) View.VISIBLE else View.GONE
+            selectionCheck.visibility = if (selected) View.VISIBLE else View.GONE
+            if (selected) AccentTint.fill(itemView, R.id.selectionCheck, accentColor)
 
             // Solo se enseñan visitas de una canción CON vídeo: youtubeViewCount podría quedar como un
             // valor viejo si el usuario quita el enlace sin que haya pasado por medio otro refresco diario.
@@ -131,6 +176,7 @@ class DetailSongsAdapter(
             // La posición en la lista, no el id: el reproductor necesita saber por dónde empezar
             // dentro de la colección para poder seguir con las siguientes.
             itemView.setOnClickListener { onSongClick(position) }
+            itemView.setOnLongClickListener { onSongLongClick(position); true }
 
             more.setOnClickListener { anchor ->
                 PopupMenu(anchor.context, anchor).apply {

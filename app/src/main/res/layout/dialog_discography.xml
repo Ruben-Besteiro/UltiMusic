@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Discografía oficial de un artista (ver DiscographyDialogFragment): toolbar + una superposición
+  dentro de un FrameLayout, porque la lista, el indicador de carga y el mensaje de vacío/error nunca
+  se ven a la vez (el fragmento cambia su visibilidad según el estado de la carga). Mismo patrón que
+  dialog_lyrics_suggestions.xml, sin la barra de búsqueda: aquí no hay nada que buscar a mano, es una
+  única carga automática al abrir.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/discographyRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/discographyToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_background"
+        app:navigationContentDescription="@string/discography_close"
+        app:navigationIcon="@drawable/ic_close"
+        app:titleTextColor="@color/um_on_background"
+        tools:title="@string/discography_title" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="@color/um_divider" />
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/discographyList"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            tools:listitem="@layout/item_discography_track" />
+
+        <!-- Su color se tiñe con el acento dinámico al arrancar (ver el fragmento): la regla del
+             proyecto es que todo lo amarillo use el color dinámico. -->
+        <ProgressBar
+            android:id="@+id/discographyLoading"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center" />
+
+        <LinearLayout
+            android:id="@+id/discographyMessageGroup"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="32dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/discographyMessage"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="15sp"
+                tools:text="@string/discography_empty" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/discographyRetry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:text="@string/suggestions_retry"
+                android:visibility="gone" />
+
+        </LinearLayout>
+
+    </FrameLayout>
+
+</LinearLayout>

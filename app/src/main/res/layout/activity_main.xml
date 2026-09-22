@@ -11,7 +11,7 @@
 
     <!--
       Toolbar hecha a mano (en vez de MaterialToolbar + menú) porque el buscador necesita animar
-      cada icono por separado: al pinchar la barra, el engranaje, la ayuda y el ojo de ordenar se
+      cada icono por separado: al pinchar la barra, el engranaje, el "+" y el ojo de ordenar se
       echan a un lado (visibility GONE) y, como searchBar es el único hijo con layout_weight, se
       estira sola para ocupar todo el ancho que dejan libres. Con un Toolbar de menú nativo no hay
       forma de coger cada icono por separado para animarlo así.
@@ -93,14 +93,30 @@
                 android:visibility="gone" />
         </LinearLayout>
 
+        <!-- Sustituye a searchBar (mismo hueco, mismo layout_weight) mientras hay canciones
+             seleccionadas (pulsación larga en Canciones, ver MainActivity.setupToolbar): "N
+             seleccionadas" en vez del buscador. Empieza oculto. -->
+        <TextView
+            android:id="@+id/tvSelectionCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:textColor="@color/um_on_background"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+
         <ImageButton
             android:id="@+id/btnHelp"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:contentDescription="@string/action_help"
+            android:contentDescription="@string/preview_search_title"
             android:padding="12dp"
-            android:src="@drawable/ic_help"
+            android:src="@drawable/ic_add"
             android:tint="@color/um_on_background" />
 
         <!-- Antes "más opciones" (tres puntos) sin hacer nada; ahora abre el diálogo de ordenar de

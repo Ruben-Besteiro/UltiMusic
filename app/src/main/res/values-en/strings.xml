@@ -1,0 +1,532 @@
+<resources>
+    <string name="app_name">UltiMusic</string>
+
+    <!-- Tabs -->
+    <string name="tab_songs">Songs</string>
+    <string name="tab_albums">Albums</string>
+    <string name="tab_artists">Artists</string>
+    <string name="tab_genres">Genres</string>
+    <string name="tab_tags">Tags</string>
+    <string name="tab_playlists">Playlists</string>
+
+    <!-- Top bar -->
+    <string name="action_menu">Menu</string>
+    <string name="action_search">Search</string>
+    <string name="action_more">More options</string>
+    <string name="action_sort">Sort</string>
+
+    <!-- Search -->
+    <string name="search_hint">Search</string>
+    <string name="search_back">Close search</string>
+    <string name="search_clear">Clear text</string>
+    <string name="search_prompt">Type to search songs, albums and artists.</string>
+    <string name="search_no_results">Nothing found for «%1$s».</string>
+
+    <!-- Songs -->
+    <string name="shuffle_title">Shuffle</string>
+    <string name="song_subtitle_format">%1$s | %2$s</string>
+    <string name="song_more">More song options</string>
+    <string name="add_to_queue">Add to queue</string>
+    <string name="add_to_playlist">Add to playlist</string>
+    <string name="go_to_album">Go to album</string>
+    <string name="go_to_artist">Go to artist</string>
+    <string name="delete_song">Delete</string>
+    <string name="delete_song_confirm">Delete <b>^1</b> from the device?</string>
+    <string name="delete_album_confirm">Delete the album <b>^1</b> and all its songs from the device?</string>
+    <string name="album_cover_desc">Album cover</string>
+    <string name="song_cover_desc">Song cover</string>
+    <string name="no_songs">To use UltiMusic you need audio files. Untar Technologies recommends obtaining them from stores such as iTunes Store, Amazon Music, etc.</string>
+    <string name="song_file_missing">Can\'t find the file for %1$s</string>
+    <string name="cannot_open_file">Couldn\'t open the file</string>
+    <string name="cannot_add_current_song_to_queue">You can\'t add the current song to the queue</string>
+    <string name="cannot_add_to_empty_queue">There\'s no playback queue</string>
+    <string name="playback_error_file_not_found">file not found</string>
+    <string name="playback_error_no_permission">no permission to read the file</string>
+    <string name="playback_error_decoding">failed to decode the audio</string>
+    <string name="playback_error_io">failed to read the file</string>
+    <string name="playback_error_skip_known">Couldn\'t play %1$s (%2$s), skipping to the next one</string>
+    <string name="playback_error_skip_unknown">Couldn\'t play %1$s, skipping to the next one</string>
+
+    <!-- Multiple song selection -->
+    <string name="song_selected_desc">Song selected</string>
+    <string name="song_selection_more">More options for the selected songs</string>
+    <plurals name="song_selection_count">
+        <item quantity="one">%d selected</item>
+        <item quantity="other">%d selected</item>
+    </plurals>
+    <plurals name="delete_songs_confirm">
+        <item quantity="one">Delete %d song from the device?</item>
+        <item quantity="other">Delete %d songs from the device?</item>
+    </plurals>
+
+    <!-- Albums and artists -->
+    <string name="person_image_desc">Artist image</string>
+    <string name="shuffle_collection">Play in random order</string>
+    <string name="no_albums">There are no albums yet</string>
+    <string name="no_artists">There are no artists yet</string>
+    <!-- Profile that groups artists with few songs (see ArtistGroupingPreferences) -->
+    <string name="artist_others">Other</string>
+    <string name="no_genres">There are no genres yet</string>
+    <string name="tags_no_custom_hint">There are no custom tags yet. Tags let you group songs by anything they have in common</string>
+    <string name="no_songs_here">There are no songs here</string>
+
+    <plurals name="song_count">
+        <item quantity="one">%d song</item>
+        <item quantity="other">%d songs</item>
+    </plurals>
+    <plurals name="album_count">
+        <item quantity="one">%d album</item>
+        <item quantity="other">%d albums</item>
+    </plurals>
+    <plurals name="toast_added_to_queue">
+        <item quantity="one">Added %d song to the queue</item>
+        <item quantity="other">Added %d songs to the queue</item>
+    </plurals>
+    <plurals name="toast_added_to_playlist">
+        <item quantity="one">Added %1$d song to «%2$s»</item>
+        <item quantity="other">Added %1$d songs to «%2$s»</item>
+    </plurals>
+
+    <!-- Metadata editor -->
+    <string name="edit_metadata">Edit metadata</string>
+    <string name="edit_tags">Edit tags</string>
+    <string name="metadata_editor_title">Metadata editor</string>
+    <string name="metadata_editor_title_multi">Edit %1$d songs</string>
+    <string name="editor_multiple_values">Multiple values</string>
+    <string name="editor_close">Close the editor</string>
+    <string name="editor_save">Save</string>
+    <string name="editor_pick_cover">Choose cover</string>
+    <string name="editor_saved">Changes saved</string>
+    <string name="editor_title_required">The title can\'t be empty</string>
+    <string name="editor_unsaved_changes_title">Unsaved changes</string>
+    <string name="editor_unsaved_changes_message">You have unsaved edits. Are you sure you want to leave?</string>
+    <string name="editor_leave">Leave</string>
+    <string name="editor_saving_wait">One moment…</string>
+    <string name="editor_clear_lyrics">Clear lyrics</string>
+    <string name="editor_clear_video_url">Remove video</string>
+    <string name="editor_add_another_album">+ Add another album</string>
+    <string name="editor_remove_album">Remove this album</string>
+
+    <!-- Metadata autofill (iTunes) -->
+    <string name="editor_autofill">Metadata autofill</string>
+    <string name="autofill_missing_query_song">Type at least the title or the artist to search</string>
+    <string name="autofill_missing_query_album">Type at least the album title or the artist to search</string>
+    <string name="suggestions_title">Metadata suggestions</string>
+    <string name="suggestions_empty">No results found</string>
+    <string name="suggestions_error">Couldn\'t search. Check your connection and try again</string>
+    <string name="suggestions_rate_limited">Too many searches in a row. Try again in %1$d seconds</string>
+    <string name="suggestions_genius_rate_limited">Genius has rate-limited requests (%1$d s): the iTunes data was filled in, but without producers or remix info</string>
+    <string name="suggestions_retry">Retry</string>
+    <string name="preview_search_title">Discover music</string>
+    <string name="preview_search_hint">Title or artist</string>
+    <string name="preview_search_idle">Search for a song you don\'t have</string>
+    <string name="preview_play_desc">Play preview</string>
+    <string name="preview_pause_desc">Pause preview</string>
+    <string name="preview_playback_error">The preview couldn\'t be played</string>
+    <string name="preview_stores_desc">Where to get the file</string>
+    <string name="store_links_title">Get the file</string>
+    <string name="store_links_empty">This song wasn\'t found in any download store</string>
+    <string name="store_link_free">Free</string>
+    <string name="store_download_started">Downloading %1$s…</string>
+    <string name="store_download_done">Downloaded: %1$s</string>
+    <string name="store_download_failed">Couldn\'t download %1$s</string>
+
+    <!-- "Choose what to overwrite" dialog -->
+    <string name="overwrite_picker_title">Choose what to overwrite</string>
+    <string name="overwrite_check_all">Check all</string>
+    <string name="overwrite_uncheck_all">Uncheck all</string>
+    <string name="overwrite_field_cover">Cover</string>
+    <string name="overwrite_missing_fields">Couldn\'t get these fields: %1$s</string>
+
+    <!-- Genius setup ("Action required" dialog) -->
+    <string name="genius_setup_title">Action required</string>
+    <string name="genius_setup_intro">The metadata autofill system uses the Genius API. For reasons beyond UltiMusic\'s control, you need to follow a short process to use this feature:</string>
+    <string name="genius_setup_step1">1 - Open this link and sign in:</string>
+    <string name="genius_setup_step2">2 - Tap New API Client and enter the following:</string>
+    <string name="genius_setup_field_name">App Name: UltiMusic</string>
+    <string name="genius_setup_field_url">App Website URL: https://github.com/Ruben-Besteiro/UltiMusic</string>
+    <string name="genius_setup_step3">3 - Once that\'s done, scroll all the way down, tap Generate Access Token and copy what you get. It will be checked automatically when you tap <b>Continue</b>.</string>
+    <string name="genius_setup_value_name">UltiMusic</string>
+    <string name="genius_setup_url">https://github.com/Ruben-Besteiro/UltiMusic</string>
+    <string name="genius_setup_login_url">https://genius.com/api-clients</string>
+    <string name="genius_setup_copy">Copy</string>
+    <string name="genius_setup_copied">Copied</string>
+    <string name="genius_setup_exit">Exit</string>
+    <string name="genius_setup_continue">Continue</string>
+    <string name="genius_setup_checking">Checking the token…</string>
+    <string name="genius_setup_ok">Token saved</string>
+    <string name="genius_setup_invalid">That token isn\'t valid. Make sure you copied the Client Access Token, not the Client ID or the Client Secret</string>
+    <string name="genius_setup_no_token">No token has been copied. Copy the Client Access Token and tap Continue again</string>
+    <string name="genius_setup_no_browser">No browser was found to open the link</string>
+    <string name="genius_setup_optional">This process is optional, but if you skip it, you won\'t get the most out of this feature.</string>
+
+    <string name="genius_error_title">Genius API error</string>
+    <string name="genius_error_message">There was an error with your Genius API Client. To keep getting the most out of metadata autofill, you need to create another one. Sorry for the inconvenience.</string>
+
+    <!-- YouTube Data API setup ("Action required" dialog) -->
+    <string name="youtube_setup_title">Action required</string>
+    <string name="youtube_setup_intro">Sorting by popularity uses the YouTube Data API. For reasons beyond UltiMusic\'s control, you need to follow a short process to use this feature:</string>
+    <string name="youtube_setup_step1">1 - Open this link and create a project (or choose one you already have):</string>
+    <string name="youtube_setup_step2">2 - In the API Library, search for YouTube Data API v3 and enable it for that project (if it wasn\'t already). Step 3 will only let you choose it if you enable it first.</string>
+    <string name="youtube_setup_step3">3 - Go back to the project, tap Create credentials and select YouTube Data API v3 when asked.</string>
+    <string name="youtube_setup_step4">4 - Copy the key that step 3 gave you. It will be checked automatically when you tap <b>Continue</b>.</string>
+    <string name="youtube_setup_login_url">https://console.cloud.google.com/apis/credentials</string>
+    <string name="youtube_setup_exit">Exit</string>
+    <string name="youtube_setup_continue">Continue</string>
+    <string name="youtube_setup_checking">Checking the key…</string>
+    <string name="youtube_setup_ok">Key saved</string>
+    <string name="youtube_setup_invalid">That key isn\'t valid. Make sure you copied the API Key and that YouTube Data API v3 is enabled for its project</string>
+    <string name="youtube_setup_no_key">No key has been copied. Copy it and tap Continue again</string>
+    <string name="youtube_setup_optional">This process is optional, but if you skip it, you won\'t be able to sort songs or artists by popularity.</string>
+    <string name="youtube_setup_declined_hint">You won\'t be able to sort by popularity without the YouTube Data API key. You can set it up from Settings &gt; External services</string>
+
+    <string name="songs_popularity_no_video_url">Fill in the \'YouTube URL\' field for some song</string>
+
+    <!-- Sort dialog -->
+    <string name="sort_title">Sort %1$s</string>
+    <string name="sort_field_name">Name</string>
+    <string name="sort_field_song_count">Number of songs</string>
+    <string name="sort_field_duration">Duration</string>
+    <string name="sort_field_year">Year</string>
+    <string name="sort_field_popularity">Popularity</string>
+    <string name="youtube_subscribers_format">%1$s subscribers</string>
+    <string name="sort_invert_order">Reverse order</string>
+    <string name="suggestion_cover_desc">Suggestion cover</string>
+    <string name="subtitle_separator">" | "</string>
+    <string name="suggestion_type_album">Album</string>
+    <string name="suggestion_type_single">Single</string>
+    <string name="suggestion_type_ep">EP</string>
+
+    <!-- Synced lyrics search (lrclib.net) -->
+    <string name="lyrics_suggestions_title">Lyrics suggestions</string>
+    <string name="lyrics_suggestions_empty">No lyrics found. Try entering the title and the artist again (the artist is optional)</string>
+    <string name="lyrics_suggestions_error">Couldn\'t search. Check your connection and try again</string>
+    <string name="lyrics_suggestions_search_hint">Title and artist</string>
+    <string name="lyrics_suggestions_badge_synced">Synced</string>
+    <string name="lyrics_suggestions_badge_duration_match">Duration matches</string>
+
+    <!-- Album metadata editor -->
+    <string name="album_editor_title">Album editor</string>
+    <string name="album_editor_title_required">The album title can\'t be empty</string>
+    <string name="field_album_title">Album title</string>
+
+    <string name="field_title">Title</string>
+    <string name="field_albums">Album</string>
+    <string name="field_artists">Artist(s)</string>
+    <string name="field_producers">Producer(s)</string>
+    <string name="field_year">Year</string>
+    <string name="field_genres">Genre(s)</string>
+    <string name="field_lyrics">Lyrics</string>
+    <string name="field_lyrics_hint">Tap to search for it on lrclib.net</string>
+    <string name="field_language">Language</string>
+    <string name="field_comment">Comment</string>
+    <string name="field_video_url">Video URL</string>
+    <string name="field_video_url_hint">Tap to choose the music video on YouTube. If you leave it empty, the iPod will let you choose it the first time you turn on video mode</string>
+    <string name="field_video_url_open">Open</string>
+    <string name="field_track_number">Track No.</string>
+    <string name="field_disc_number">Disc No.</string>
+    <string name="field_og_title">Original title</string>
+    <string name="field_og_artist">Original artist</string>
+    <string name="field_og_year">Original year</string>
+
+    <string name="section_details">Details</string>
+    <string name="section_original">Original recording (remix)</string>
+    <string name="multi_value_hint">Separate multiple values with commas</string>
+
+    <!-- Mini-player -->
+    <string name="expand_player">Expand player</string>
+    <string name="play_pause">Play or pause</string>
+    <string name="nothing_playing">Tap anywhere or tap here →</string>
+    <string name="updating_database">Updating local database…</string>
+    <string name="updating_database_percent">Updating local database… %d%%</string>
+
+    <!-- iPod window -->
+    <string name="ipod_title">UltiMusicPod</string>
+    <string name="ipod_close">Close</string>
+    <string name="ipod_toggle_view">Toggle cover and queue</string>
+    <string name="ipod_prev">Previous</string>
+    <string name="ipod_next">Next</string>
+    <string name="ipod_now_playing">Now playing</string>
+    <string name="ipod_toggle_video">Toggle audio and video</string>
+    <string name="ipod_no_lyrics">No lyrics detected for this song. Add them by tapping here</string>
+    <string name="ipod_lyrics_expand">See more</string>
+    <string name="ipod_lyrics_collapse">See less</string>
+    <string name="ipod_translate_lyrics_glyph">あ</string>
+    <string name="ipod_translate_lyrics_desc">Translate the lyrics to the system language</string>
+    <string name="ipod_translate_lyrics_failed">Couldn\'t translate the lyrics</string>
+    <string name="ipod_translate_lyrics_working">Translating lyrics…</string>
+    <plurals name="queue_remaining">
+        <item quantity="one">%d song left</item>
+        <item quantity="other">%d songs left</item>
+    </plurals>
+    <string name="queue_hint_loose">You can add more music to the queue with the three dots and \"Add to queue\"</string>
+    <string name="queue_expand_hint">The playback queue will expand automatically. To add songs to the queue, you can swipe right or use the three dots and \"Add to queue\"</string>
+    <string name="queue_expand_hint_genre">The playback queue will expand automatically with songs from the genre you picked. To add songs to the queue, you can swipe right or use the three dots and \"Add to queue\"</string>
+    <string name="queue_hint_playlist">You can add more music to the playlist with the three dots and \"Add to playlist\"</string>
+    <string name="queue_end">You\'ve reached the end</string>
+    <string name="queue_empty">There\'s no playback queue</string>
+    <string name="ipod_nothing_playing">Nothing playing</string>
+
+    <!-- iPod video mode -->
+    <string name="video_picker_title">Choose the video</string>
+    <string name="video_picker_saved">Video saved for <b>^1</b></string>
+    <string name="video_no_song">There\'s no song playing</string>
+    <string name="video_bad_url">The video link isn\'t valid</string>
+    <string name="video_loading_desc">Loading video</string>
+    <string name="video_settings_offset_title">Video offset</string>
+    <string name="video_settings_offset_subtitle">Set it positive to bring the video forward and negative to delay it</string>
+    <string name="video_settings_offset_unit">ms</string>
+    <string name="lyrics_offset_title">Lyrics offset</string>
+    <string name="lyrics_offset_subtitle">Set it positive to bring the lyrics forward and negative to delay them</string>
+    <string name="queue_subtitle_format">%1$s | %2$s</string>
+
+    <!-- Playlists -->
+    <string name="no_playlists">There are no playlists yet. Playlists are designed to keep growing indefinitely and play in sequence without repeats</string>
+    <string name="playlist_subtitle_format">%1$s | %2$s</string>
+    <string name="playlist_more">More playlist options</string>
+    <string name="playlist_create">New playlist</string>
+    <string name="playlist_name_hint">Playlist name</string>
+    <string name="playlist_name_invalid">That name contains invalid characters</string>
+    <string name="playlist_rename">Rename</string>
+    <string name="action_rename">Rename</string>
+    <string name="artist_name_hint">Artist name</string>
+    <string name="genre_name_hint">Genre name</string>
+    <string name="discography_action_desc">View discography</string>
+    <string name="discography_action_desc_album">View album discography</string>
+    <string name="discography_title">%1$s\'s discography</string>
+    <string name="discography_close">Close</string>
+    <string name="discography_empty">No discography was found for this artist on MusicBrainz</string>
+    <string name="discography_empty_album">This album wasn\'t found in the official MusicBrainz catalog</string>
+    <string name="discography_error">Couldn\'t load the discography. Check your connection and try again</string>
+    <string name="play_album_action_desc">Play album</string>
+    <string name="playlist_delete">Delete</string>
+    <string name="playlist_delete_confirm">Delete the playlist <b>^1</b>? The audio files won\'t be touched</string>
+    <string name="playlist_add_button">Create playlist</string>
+    <string name="playlist_reorder_desc">Drag to reorder</string>
+    <string name="playlist_name_taken">A playlist with that name already exists</string>
+    <string name="playlist_empty">This playlist is empty</string>
+    <string name="add_to_playlist_title">Add to playlist</string>
+    <string name="playlist_current_song">Current song: %1$s</string>
+    <string name="playlist_resume">RESUME</string>
+    <plurals name="playlist_played_count">
+        <item quantity="one">%d played</item>
+        <item quantity="other">%d played</item>
+    </plurals>
+    <string name="playlist_reset_history_desc">Reset already-played songs</string>
+
+    <!-- Tags: names of the built-in system tags -->
+    <string name="tag_recently_added_name">Recently downloaded</string>
+    <string name="tag_not_in_playlist_name">Not in any playlist</string>
+    <string name="tag_no_custom_tags_name">No custom tags</string>
+    <string name="tag_synced_video_name">Synced video</string>
+    <string name="tag_remix_cover_name">Remix / Cover</string>
+
+    <!-- Song tags dialog -->
+    <string name="song_tags_title">Song tags</string>
+    <string name="song_tags_title_multi">Tags for %1$d songs</string>
+    <string name="song_tags_empty">This song doesn\'t have any tags yet</string>
+    <string name="song_tags_empty_multi">These songs don\'t have any tags in common</string>
+    <string name="add_tag_button">+ Add</string>
+    <string name="remove_tag">Remove tag</string>
+    <string name="tag_picker_title">Add tag</string>
+    <string name="tag_picker_search_hint">Search tags</string>
+
+    <!-- Playlist/tag detail screen -->
+    <string name="add_songs_desc">Add songs</string>
+    <string name="remove_song_from_tag_desc">Remove from tag</string>
+    <string name="remove_song_from_playlist_desc">Remove from playlist</string>
+    <string name="remove_song_from_tag_confirm">Remove <b>^1</b> from this tag?</string>
+    <string name="remove_song_from_playlist_confirm">Remove <b>^1</b> from this playlist?</string>
+
+    <!-- menu_queue_selection.xml: multi-select action for the iPod queue (see
+         IPodDialogFragment.showQueueSelectionMenu) that replaces "Add to queue". -->
+    <string name="remove_from_queue">Remove from queue</string>
+
+    <!-- Add songs dialog, shared by tag and playlist destinations -->
+    <string name="add_songs_to_tag_title">Add tag «%1$s» to songs</string>
+    <string name="add_songs_to_playlist_title">Add songs to «%1$s»</string>
+    <string name="add_songs_close_desc">Close without adding songs</string>
+    <string name="add_songs_confirm_desc">Add the checked songs</string>
+    <string name="add_songs_search_hint">Search songs</string>
+    <string name="add_songs_empty">There are no songs to add</string>
+
+    <!-- Create/edit/delete a custom tag -->
+    <string name="tag_create">New tag</string>
+    <string name="tag_edit">Edit tag</string>
+    <string name="tag_name_hint">Tag name</string>
+    <string name="tag_delete_confirm">Delete the tag <b>^1</b>? The songs won\'t be touched</string>
+    <string name="tag_more">More tag options</string>
+
+    <!-- Tag color picker -->
+    <string name="color_picker_r_label">R</string>
+    <string name="color_picker_g_label">G</string>
+    <string name="color_picker_b_label">B</string>
+
+    <string name="ipod_shuffle_random">Play a random song</string>
+    <string name="dialog_cancel">Cancel</string>
+    <string name="dialog_ok">OK</string>
+    <string name="dialog_yes">Yes</string>
+    <string name="dialog_no">No</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_back">Close settings</string>
+    <string name="settings_audio_section_title">Audio settings</string>
+    <string name="settings_visual_section_title">Visual settings</string>
+    <string name="settings_boost_title">Volume booster</string>
+    <string name="settings_boost_subtitle">Untar Technologies isn\'t legally liable for any hearing loss caused by its use</string>
+    <string name="settings_boost_no_limit">Disable limit</string>
+    <string name="settings_boost_no_limit_headphones">Disconnect the headphones to be able to disable the limit</string>
+    <string name="settings_boost_device_unknown">Can\'t tell whether the connected device is a speaker or headphones, so the limit stays on</string>
+    <string name="settings_boost_bluetooth_denied">Without that permission, UltiMusic can\'t tell a Bluetooth speaker apart from headphones, so it keeps the limit on</string>
+
+    <!-- Language (first setting in the "Visual settings" group) -->
+    <string name="settings_language_title">Language</string>
+    <string name="settings_language_subtitle">Choose the app\'s language</string>
+    <string name="settings_language_spanish">Spanish</string>
+    <string name="settings_language_english">English</string>
+
+    <!-- Library folders -->
+    <string name="settings_library_roots_title">Library folders</string>
+    <string name="settings_library_roots_subtitle">By default, the folders are UltiMusic, Download and Music. You can add more here</string>
+    <string name="settings_library_roots_add">Add folder</string>
+    <string name="settings_library_root_delete_desc">Remove folder from the library</string>
+    <string name="settings_library_roots_remove_confirm">Remove <b>^1</b> from the library? Songs that only exist there will be removed from the library (edits and playlists included), unless they also exist in another included folder with the same file name</string>
+    <string name="settings_library_root_error_nested">That folder is already part of the library</string>
+
+    <!-- Greylist -->
+    <string name="settings_greylist_title">Greylist</string>
+    <string name="settings_greylist_subtitle">This option lets you show and hide folders</string>
+    <string name="settings_greylist_add">Add subfolder</string>
+    <string name="settings_greylist_switch_desc">Turn this subfolder on or off</string>
+    <string name="settings_greylist_delete_desc">Remove from the greylist</string>
+    <string name="settings_greylist_remove_confirm">Remove <b>^1</b> from the greylist?</string>
+    <string name="settings_greylist_empty">You haven\'t added any subfolder yet</string>
+
+    <string name="settings_add_all_lyrics_title">Add all settings</string>
+
+    <!-- Add all lyrics -->
+    <string name="settings_bulk_lyrics_add">Add all lyrics</string>
+    <string name="settings_bulk_lyrics_confirm_title">Are you sure you want to add all lyrics?</string>
+    <string name="settings_bulk_lyrics_confirm_message">Since this is an automatic operation, there may be mistakes. If there are any, they can be fixed from the UltiMusicPod and from the metadata editor.</string>
+    <string name="settings_bulk_lyrics_progress_title">Adding lyrics…</string>
+    <string name="settings_bulk_lyrics_counter">%1$d/%2$d</string>
+    <string name="settings_bulk_lyrics_background">Background</string>
+    <string name="settings_bulk_lyrics_empty">All songs already have lyrics</string>
+    <string name="settings_bulk_lyrics_finished">Lyrics added: %1$d of %2$d</string>
+    <string name="settings_bulk_lyrics_notification_text">%1$s (%2$d/%3$d)</string>
+    <string name="notification_channel_bulk_lyrics">Add lyrics</string>
+
+    <!-- Group small artists into "Other" (see ArtistGroupingPreferences) -->
+    <string name="settings_artist_grouping_title">Group artists with fewer than N songs</string>
+
+    <!-- Equalizer -->
+    <string name="settings_eq_title">Equalizer</string>
+    <string name="settings_eq_subtitle">Lets you boost or weaken frequency ranges (for example if you have low-quality headphones)</string>
+    <string name="settings_eq_switch_desc">Turn the equalizer on or off</string>
+    <string name="settings_eq_reset">Reset</string>
+    <string name="settings_eq_bass_boost">Bass boost</string>
+    <string name="settings_eq_virtualizer">Surround sound</string>
+    <string name="settings_eq_unavailable">This device doesn\'t have an equalizer</string>
+    <string name="settings_eq_bass_unsupported">Not supported on this device</string>
+    <string name="settings_eq_virtualizer_unsupported">Not supported on this device</string>
+    <string name="settings_eq_presets">Presets</string>
+    <string name="settings_eq_pre_gain">Master gain</string>
+    <string name="settings_eq_save_preset">Save as preset</string>
+    <string name="settings_eq_save_preset_name">Preset name</string>
+    <string name="settings_eq_delete_preset">Delete</string>
+    <string name="settings_eq_preset_deleted">Preset deleted</string>
+    <string name="settings_eq_preset_saved">Preset saved</string>
+    <string name="settings_eq_preset_name_invalid">That name isn\'t available</string>
+    <string name="settings_eq_delete_preset_confirm">Delete the preset <b>^1</b>?</string>
+
+    <!-- Equalizer: additional options -->
+    <string name="settings_eq_additional_options">Additional options</string>
+    <string name="settings_eq_bass_boost_help_desc">What bass boost is</string>
+    <string name="settings_eq_bass_boost_help_title">Bass boost</string>
+    <string name="settings_eq_bass_boost_help_body">Unlike raising the equalizer\'s lowest band, this effect acts on the whole bass range, including frequencies lower than any band this device covers. On many phones it also adds harmonics so the bass can be felt even on small speakers that can\'t reproduce those low frequencies.</string>
+    <string name="settings_eq_virtualizer_help_desc">What surround sound is</string>
+    <string name="settings_eq_virtualizer_help_title">Surround sound</string>
+    <string name="settings_eq_virtualizer_help_body">Widens the stereo image by simulating speakers placed off to the sides. It\'s not a volume adjustment by frequency: it mixes the left and right channels differently so the sound seems to come from outside your head. No equalizer slider can achieve this effect, since those only raise or lower frequency bands equally on both channels.</string>
+    <string name="settings_eq_reverb_title">Reverb</string>
+    <string name="settings_eq_reverb_help_desc">What reverb is</string>
+    <string name="settings_eq_reverb_help_title">Reverb</string>
+    <string name="settings_eq_reverb_help_body">Simulates the echo of a space (a room, a hall, an auditorium…) by adding delayed repetitions of the sound. It\'s an effect in time, not in frequency or stereo: neither the equalizer nor surround sound can create this sense of space. The dropdown picks the room size; \"None\" turns it off.</string>
+    <string name="settings_eq_reverb_unsupported">Not supported on this device</string>
+    <string name="settings_eq_dynamics_title">Dynamic range compressor</string>
+    <string name="settings_eq_dynamics_help_desc">What the dynamic range compressor is</string>
+    <string name="settings_eq_dynamics_help_title">Dynamic range compressor</string>
+    <string name="settings_eq_dynamics_help_body">Unlike the volume booster, which raises the sound by a fixed amount, this effect reacts at every instant: it raises what sounds quiet and lowers what sounds loud, so the difference between them is smaller. It\'s useful for listening at low volume without losing the vocals, or for leveling songs mastered very differently. The higher the value, the more aggressive the compression.</string>
+    <string name="settings_eq_dynamics_unsupported">Not supported on this device</string>
+
+    <!-- External services (Genius and YouTube Data API) -->
+    <string name="settings_services_section_title">External services</string>
+    <string name="settings_service_status_configured">Configured</string>
+    <string name="settings_service_status_not_configured">Not configured</string>
+    <string name="settings_genius_title">Genius</string>
+    <string name="settings_genius_subtitle">Used when autofilling songs: producers, original song (if it\'s a remix) and music video</string>
+    <string name="settings_genius_configure">Configure token</string>
+    <string name="settings_genius_reconfigure">Change token</string>
+    <string name="settings_youtube_title">YouTube Data API</string>
+    <string name="settings_youtube_subtitle">Used to sort songs and artists by popularity</string>
+    <string name="settings_youtube_configure">Configure key</string>
+    <string name="settings_youtube_reconfigure">Change key</string>
+
+    <!-- Subfolder picker -->
+    <string name="folder_picker_root_title">UltiMusic</string>
+    <string name="folder_picker_storage_root_title">Storage</string>
+    <string name="folder_picker_back">Go up a folder</string>
+    <string name="folder_picker_choose">Choose this folder</string>
+    <string name="folder_picker_empty">This folder has no subfolders</string>
+
+    <!-- Permissions -->
+    <string name="permission_needed_title">Permission needed</string>
+    <string name="permission_needed_message">UltiMusic needs access to all files to read your songs from Downloads and the UltiMusic folder.</string>
+    <string name="permission_grant">Grant</string>
+    <string name="permission_cancel">Not now</string>
+    <string name="permission_denied">Songs can\'t be shown without permission</string>
+
+    <!-- Playback notification -->
+    <string name="notification_channel_playback">Playback</string>
+    <string name="notif_play">Play</string>
+    <string name="notif_pause">Pause</string>
+    <string name="notif_previous">Previous song</string>
+    <string name="notif_next">Next song</string>
+
+    <!-- UltiMusic Recount -->
+    <string name="recount_title">UltiMusic Recount</string>
+    <string name="recount_back">Close</string>
+    <string name="recount_histogram_title">Breakdown of your library</string>
+    <string name="recount_histogram_subtitle">How many songs you have from each year, across your whole library</string>
+    <string name="recount_histogram_empty">There are no songs with a year in your library yet</string>
+    <string name="recount_top_songs_title">Most played songs</string>
+    <string name="recount_top_artists_title">Most played artists</string>
+    <string name="recount_top_genres_title">Most played genres</string>
+    <string name="recount_pie_empty">None of the songs you listened to have a genre</string>
+    <string name="recount_deleted_songs">Deleted songs</string>
+    <string name="recount_other_genres">Other</string>
+    <string name="recount_entry_stats">%1$s | %2$s | %3$d%%</string>
+    <string name="recount_legend_entry">%1$s %2$d%%</string>
+    <string name="recount_year_empty">You didn\'t listen to anything in %d</string>
+    <plurals name="recount_play_count">
+        <item quantity="one">%d play</item>
+        <item quantity="other">%d plays</item>
+    </plurals>
+    <plurals name="recount_unknown_year">
+        <item quantity="one">%d song with no year</item>
+        <item quantity="other">%d songs with no year</item>
+    </plurals>
+
+    <!-- Recount entry in Settings -->
+    <string name="settings_recount_title">UltiMusic Recount</string>
+    <string name="settings_recount_subtitle">What you listened to the most this year</string>
+    <string name="settings_recount_open">View UltiMusic Recount</string>
+
+    <!-- Last-week-of-December reminder -->
+    <string name="notification_channel_recount">UltiMusic Recount</string>
+    <string name="recount_reminder_title">Why not check out your %d UltiMusic Recount?</string>
+    <string name="recount_reminder_text">See what you listened to the most this year</string>
+    <string name="recount_reminder_see">View</string>
+    <string name="recount_reminder_later">Not now</string>
+
+</resources>

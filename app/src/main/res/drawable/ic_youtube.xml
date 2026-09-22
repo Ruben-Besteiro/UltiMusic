@@ -1,7 +1,13 @@
 <!-- Insignia de YouTube: rectángulo redondeado con un triángulo hueco dentro. El triángulo no es
      un segundo trazo encima, es un recorte: los dos subcaminos comparten el mismo "d" y
-     fillType="evenOdd" hace transparente la zona donde se pisan. Así un solo tinte (el color
-     dinámico, ver AccentTint) colorea toda la insignia de una vez. -->
+     fillType="evenOdd" hace transparente la zona donde se pisan. Así un solo tinte colorea toda la
+     insignia de una vez.
+
+     OJO: ese tinte NUNCA puede ser el acento dinámico de la aplicación. Es la insignia de marca de
+     YouTube, y sus directrices prohíben recolorearla ("You cannot modify the colors of the YouTube
+     logos or YouTube Icons"); quien la use debe teñirla con un color fijo en escala de grises (ver
+     @color/um_on_surface_muted, o negro/blanco puro con contraste garantizado como
+     DynamicColor.onColor) -nunca con el color de lo que suena. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"

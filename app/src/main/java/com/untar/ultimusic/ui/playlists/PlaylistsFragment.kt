@@ -26,6 +26,8 @@ import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
@@ -47,7 +49,13 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
         val adapter = PlaylistsAdapter(
             onPlaylistClick = { playlist -> CollectionDetailDialogFragment.showPlaylist(this, playlist.name) },
             onRename = { playlist -> showRenameDialog(playlist) },
-            onDelete = { playlist -> showDeleteDialog(playlist) }
+            onDelete = { playlist -> showDeleteDialog(playlist) },
+            onResetHistory = { playlist ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val songs = viewModel.songsOf(playlist.name).first()
+                    playerViewModel.resetListaHistory(playlist.name, songs)
+                }
+            }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
@@ -59,11 +67,17 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Se combina con la canción actual porque el "N reproducidas" de cada fila (ver
+                // PlaylistsAdapter/PlaylistHistoryStore) no es un StateFlow -lo escribe
+                // PlaybackService.loadCurrent sin avisar a nadie-, así que hay que forzar un
+                // re-bind cada vez que cambia lo que suena para que ese número no se quede
+                // atrasado mientras esta pestaña está abierta.
                 launch {
-                    viewModel.playlists.collect { list ->
-                        adapter.submit(list)
-                        emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
-                    }
+                    combine(viewModel.playlists, playerViewModel.currentSong) { list, _ -> list }
+                        .collect { list ->
+                            adapter.submit(list)
+                            emptyView.visibility = if (list.isEmpty()) View.VISIBLE else View.GONE
+                        }
                 }
                 // El amarillo dinámico del botón "+" y de la barra de scroll sigue el color de lo
                 // que suena.

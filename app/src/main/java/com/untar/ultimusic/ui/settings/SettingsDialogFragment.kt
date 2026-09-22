@@ -41,6 +41,7 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.BulkLyricsAdder
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
@@ -50,10 +51,13 @@ import com.untar.ultimusic.ui.BOOST_MAX_PERCENT
 import com.untar.ultimusic.ui.BOOST_MIN_PERCENT
 import com.untar.ultimusic.ui.EqPreset
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.recount.RecountReminder
+import com.untar.ultimusic.ui.recount.RecountDialogFragment
 import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.editor.GeniusTokenDialogFragment
 import com.untar.ultimusic.ui.sort.YouTubeApiKeyDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.AppLocale
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
 import kotlinx.coroutines.launch
@@ -130,6 +134,11 @@ class SettingsDialogFragment : DialogFragment() {
 
     private lateinit var audioSectionTitle: TextView
     private lateinit var visualSectionTitle: TextView
+    private lateinit var languageTitle: TextView
+    private lateinit var languageSpainButton: View
+    private lateinit var languageEnglishButton: View
+    private lateinit var languageSpainBorder: View
+    private lateinit var languageEnglishBorder: View
     private lateinit var boostTitle: TextView
     private lateinit var slider: Slider
     private lateinit var ruler: ValueRuler
@@ -139,6 +148,10 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var libraryRootAdapter: LibraryRootAdapter
     private lateinit var greylistTitle: TextView
     private lateinit var greylistAdapter: GreylistAdapter
+    private lateinit var artistGroupingTitle: TextView
+    private lateinit var artistGroupingValue: EditText
+    private lateinit var addAllLyricsTitle: TextView
+    private lateinit var btnAddAllLyrics: TextView
 
     private lateinit var eqTitle: TextView
     private lateinit var eqUnavailable: View
@@ -169,6 +182,7 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var geniusStatus: TextView
     private lateinit var btnConfigureGenius: TextView
     private lateinit var youtubeTitle: TextView
+    private lateinit var recountSectionTitle: TextView
     private lateinit var youtubeStatus: TextView
     private lateinit var btnConfigureYoutube: TextView
 
@@ -198,6 +212,9 @@ class SettingsDialogFragment : DialogFragment() {
     /** Misma bandera que [updatingUi] pero para los controles del ecualizador, independiente de ella. */
     private var updatingEqUi = false
 
+    /** Misma bandera que [updatingUi] pero para [artistGroupingValue], independiente de ella. */
+    private var updatingArtistGroupingUi = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
@@ -221,6 +238,11 @@ class SettingsDialogFragment : DialogFragment() {
         val toolbar = view.findViewById<MaterialToolbar>(R.id.settingsToolbar)
         audioSectionTitle = view.findViewById(R.id.audioSectionTitle)
         visualSectionTitle = view.findViewById(R.id.visualSectionTitle)
+        languageTitle = view.findViewById(R.id.languageTitle)
+        languageSpainButton = view.findViewById(R.id.languageSpainButton)
+        languageEnglishButton = view.findViewById(R.id.languageEnglishButton)
+        languageSpainBorder = view.findViewById(R.id.languageSpainSelectedBorder)
+        languageEnglishBorder = view.findViewById(R.id.languageEnglishSelectedBorder)
         boostTitle = view.findViewById(R.id.boostTitle)
         slider = view.findViewById(R.id.boostSlider)
         ruler = view.findViewById(R.id.boostRuler)
@@ -232,6 +254,10 @@ class SettingsDialogFragment : DialogFragment() {
         greylistTitle = view.findViewById(R.id.greylistTitle)
         val greylistRecycler = view.findViewById<RecyclerView>(R.id.greylistRecycler)
         val addGreylistFolderButton = view.findViewById<View>(R.id.btnAddGreylistFolder)
+        artistGroupingTitle = view.findViewById(R.id.artistGroupingTitle)
+        artistGroupingValue = view.findViewById(R.id.artistGroupingValue)
+        addAllLyricsTitle = view.findViewById(R.id.addAllLyricsTitle)
+        btnAddAllLyrics = view.findViewById(R.id.btnAddAllLyrics)
         eqTitle = view.findViewById(R.id.eqTitle)
         eqUnavailable = view.findViewById(R.id.eqUnavailable)
         eqSwitch = view.findViewById(R.id.eqSwitch)
@@ -260,6 +286,8 @@ class SettingsDialogFragment : DialogFragment() {
         youtubeTitle = view.findViewById(R.id.youtubeTitle)
         youtubeStatus = view.findViewById(R.id.youtubeStatus)
         btnConfigureYoutube = view.findViewById(R.id.btnConfigureYoutube)
+        recountSectionTitle = view.findViewById(R.id.recountSectionTitle)
+        val openRecountButton = view.findViewById<TextView>(R.id.btnOpenRecount)
 
         // La barra de estado es transparente en este tema, así que la toolbar se aparta ella sola
         // de la hora y la batería con un padding del tamaño de ese hueco.
@@ -279,11 +307,38 @@ class SettingsDialogFragment : DialogFragment() {
         ruler.maxValue = BOOST_MAX_PERCENT
 
         setupBoostControls()
+        setupLanguage()
         setupLibraryRoots(libraryRootsRecycler, addLibraryRootButton)
         setupGreylist(greylistRecycler, addGreylistFolderButton)
+        setupArtistGrouping()
+        setupBulkLyrics()
         setupEqualizer(eqBandsContainer)
         setupServices()
+        setupRecount(openRecountButton)
         observeState()
+    }
+
+    /**
+     * Las dos banderas del selector de idioma (ver [AppLocale]): tocar una cambia el idioma de toda
+     * la aplicación al instante -[AppLocale.select] recrea sola cualquier Activity viva- y mueve el
+     * borde marcado a la bandera recién elegida. Tocar la que ya está seleccionada no hace nada.
+     */
+    private fun setupLanguage() {
+        updateLanguageSelection()
+        languageSpainButton.setOnClickListener {
+            AppLocale.select(spanish = true)
+            updateLanguageSelection()
+        }
+        languageEnglishButton.setOnClickListener {
+            AppLocale.select(spanish = false)
+            updateLanguageSelection()
+        }
+    }
+
+    private fun updateLanguageSelection() {
+        val spanish = AppLocale.isSpanishSelected()
+        languageSpainBorder.isVisible = spanish
+        languageEnglishBorder.isVisible = !spanish
     }
 
     /**
@@ -370,6 +425,38 @@ class SettingsDialogFragment : DialogFragment() {
             .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeGreylistFolder(folder.path) }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
+    /**
+     * "Añadir todas las letras", al final de "ajustes visuales" (ver [BulkLyricsAdder]): pide
+     * confirmación y, si se acepta, lanza el pase y abre su diálogo de progreso.
+     *
+     * Si ya hay un pase en marcha —el usuario lo mandó a segundo plano y ha vuelto a Ajustes, o
+     * simplemente lo dejó corriendo y reabrió esta pantalla— se reabre directamente el diálogo de
+     * progreso, sin volver a pedir confirmación: ya se dio una vez para ESTE pase.
+     */
+    private fun setupBulkLyrics() {
+        btnAddAllLyrics.setOnClickListener {
+            if (BulkLyricsAdder.isRunning) showBulkLyricsProgress() else showBulkLyricsConfirm()
+        }
+    }
+
+    private fun showBulkLyricsConfirm() {
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.settings_bulk_lyrics_confirm_title)
+            .setMessage(R.string.settings_bulk_lyrics_confirm_message)
+            .setNegativeButton(R.string.dialog_no, null)
+            .setPositiveButton(R.string.dialog_yes) { _, _ ->
+                BulkLyricsAdder.start(requireContext())
+                showBulkLyricsProgress()
+            }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
+    private fun showBulkLyricsProgress() {
+        if (childFragmentManager.findFragmentByTag(BulkLyricsProgressDialogFragment.TAG) != null) return
+        BulkLyricsProgressDialogFragment().show(childFragmentManager, BulkLyricsProgressDialogFragment.TAG)
     }
 
     /**
@@ -769,11 +856,69 @@ class SettingsDialogFragment : DialogFragment() {
     }
 
     /**
+     * Caja de texto del umbral de "Otros" (ver [ArtistGroupingPreferences][com.untar.ultimusic.data.ArtistGroupingPreferences]).
+     * Mismo patrón que [valueInput]/[normalizeInput] pero sin slider ni regla que sincronizar: se
+     * aplica en caliente mientras lo escrito ya es un número válido, y al terminar (tecla "hecho" o
+     * perder el foco) se cuadra con lo que de verdad quedó guardado, por si se quedó vacío o a medio
+     * escribir.
+     */
+    private fun setupArtistGrouping() {
+        artistGroupingValue.doAfterTextChanged { text ->
+            if (updatingArtistGroupingUi) return@doAfterTextChanged
+            val typed = text?.toString()?.toIntOrNull() ?: return@doAfterTextChanged
+            settingsViewModel.setArtistGroupingThreshold(typed)
+        }
+        artistGroupingValue.setOnEditorActionListener { _, _, _ ->
+            normalizeArtistGroupingInput()
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(artistGroupingValue.windowToken, 0)
+            artistGroupingValue.clearFocus()
+            true
+        }
+        artistGroupingValue.setOnFocusChangeListener { _, hasFocus ->
+            if (!hasFocus) normalizeArtistGroupingInput()
+        }
+    }
+
+    private fun showArtistGroupingValue(value: Int) {
+        updatingArtistGroupingUi = true
+        if (artistGroupingValue.text.toString() != value.toString()) {
+            artistGroupingValue.setText(value.toString())
+        }
+        updatingArtistGroupingUi = false
+    }
+
+    private fun normalizeArtistGroupingInput() {
+        showArtistGroupingValue(settingsViewModel.artistGroupingThreshold.value)
+    }
+
+    /**
      * Sigue el estado del [PlayerViewModel] y repinta los controles.
      *
      * `repeatOnLifecycle(STARTED)` hace que la escucha se pare al irse la pantalla a segundo plano y
      * se reanude al volver, en vez de quedarse recibiendo cambios para una vista que no se ve.
      */
+    /**
+     * El acceso a UltiMusic Recount, el último de la pantalla. No tiene estado que refrescar (a
+     * diferencia de Genius/YouTube, que enseñan si están configurados): es solo una puerta.
+     *
+     * Se abre sobre el `childFragmentManager` y no sobre el de la actividad porque este diálogo ya
+     * está a pantalla completa y el Recount se muestra ENCIMA, dentro de él: el mismo criterio que
+     * sigue [FolderPickerDialogFragment] aquí mismo. Al cerrarlo se vuelve a Ajustes, no a la
+     * biblioteca.
+     */
+    private fun setupRecount(openButton: TextView) {
+        // Solo existe la última semana de diciembre, la misma en que se ofrece con la notificación y
+        // el aviso de arranque (ver RecountReminder.isInReminderWeek). Se decide al abrir Ajustes.
+        val recountGroup = requireView().findViewById<View>(R.id.recountGroup)
+        recountGroup.visibility = if (RecountReminder.isInReminderWeek()) View.VISIBLE else View.GONE
+        openButton.setOnClickListener {
+            // Entrar desde aquí también apaga el aviso de este año (ver RecountReminder.markSeen).
+            RecountReminder.markSeen(requireContext())
+            RecountDialogFragment.show(childFragmentManager)
+        }
+    }
+
     private fun observeState() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -785,6 +930,9 @@ class SettingsDialogFragment : DialogFragment() {
                 }
                 launch {
                     settingsViewModel.greylistFolders.collect { folders -> greylistAdapter.submit(folders) }
+                }
+                launch {
+                    settingsViewModel.artistGroupingThreshold.collect { value -> showArtistGroupingValue(value) }
                 }
                 launch {
                     playerViewModel.limitDisabled.collect { disabled ->
@@ -875,6 +1023,9 @@ class SettingsDialogFragment : DialogFragment() {
                         val tint = ColorStateList.valueOf(accent)
                         audioSectionTitle.setTextColor(accent)
                         visualSectionTitle.setTextColor(accent)
+                        languageTitle.setTextColor(accent)
+                        AccentTint.stroke(languageSpainBorder, R.id.languageSpainSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
+                        AccentTint.stroke(languageEnglishBorder, R.id.languageEnglishSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
                         boostTitle.setTextColor(accent)
                         slider.trackActiveTintList = tint
                         slider.thumbTintList = tint
@@ -884,6 +1035,7 @@ class SettingsDialogFragment : DialogFragment() {
                         libraryRootsTitle.setTextColor(accent)
                         greylistTitle.setTextColor(accent)
                         greylistAdapter.setAccent(accent)
+                        addAllLyricsTitle.setTextColor(accent)
                         eqTitle.setTextColor(accent)
                         // Solo se tiñe la pista (parte exterior) y solo en el estado encendido; el
                         // pomo se deja con el tinte por defecto del tema y el estado apagado
@@ -904,6 +1056,7 @@ class SettingsDialogFragment : DialogFragment() {
                         servicesSectionTitle.setTextColor(accent)
                         geniusTitle.setTextColor(accent)
                         youtubeTitle.setTextColor(accent)
+                        recountSectionTitle.setTextColor(accent)
                     }
                 }
                 // Si se conectan auriculares con el límite quitado, el ViewModel lo repone solo; aquí

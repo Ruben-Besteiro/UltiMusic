@@ -34,12 +34,16 @@ import com.untar.ultimusic.model.SystemTagKey
 import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.CoverRef
+import com.untar.ultimusic.util.LanguageDetector
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -97,8 +101,64 @@ class LibraryRepository private constructor(
     val albums: Flow<List<AlbumSummary>> =
         dao.observeAlbumSummaries(null).map { rows -> rows.map { it.toDomain() } }
 
-    val artists: Flow<List<PersonSummary>> =
+    /** Sin agrupar por "Otros" (ver [artistGrouping]): la lista cruda tal cual la guarda Room, una
+     *  fila por artista real. */
+    private val rawArtists: Flow<List<PersonSummary>> =
         dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain() } }
+
+    /**
+     * Agrupa bajo un perfil "Otros" (ver [ArtistGroupingPreferences]) los artistas con menos
+     * canciones que el umbral guardado: sus canciones se cuentan juntas y dejan de listarse sueltos
+     * en la pestaña Artistas. Es puramente una vista calculada aquí, en Kotlin -no hay ninguna fila
+     * "Otros" en Room, ni se reasigna el artista de ninguna canción-, así que no hace falta ninguna
+     * migración de base de datos para esto.
+     *
+     * Reacciona tanto a cambios en la fonoteca ([rawArtists]) como al propio umbral
+     * ([ArtistGroupingPreferences.threshold]), que es un `StateFlow` justo para que cambiarlo en
+     * Ajustes se note al instante en la pestaña, sin tener que volver a entrar en ella.
+     *
+     * Guarda las tres cosas que salen de esta cuenta -la lista ya agrupada para la pestaña, el
+     * conjunto de ids "pequeños" (para redirigir a quien navegue directo a uno de ellos, ver
+     * [DetailViewModel][com.untar.ultimusic.ui.library.DetailViewModel]) y el propio perfil "Otros"
+     * (para su ficha de detalle)- en un solo cálculo, para que las tres sean siempre consistentes
+     * entre sí.
+     */
+    private data class ArtistGrouping(
+        val visible: List<PersonSummary>,
+        val others: PersonSummary?,
+        val smallIds: Set<Long>
+    )
+
+    private val artistGrouping: Flow<ArtistGrouping> =
+        combine(rawArtists, ArtistGroupingPreferences.threshold) { list, threshold ->
+            val small = if (threshold > 0) list.filter { it.songCount < threshold } else emptyList()
+            if (small.isEmpty()) return@combine ArtistGrouping(list, null, emptySet())
+            val smallIds = small.mapTo(mutableSetOf()) { it.id }
+            val others = PersonSummary(
+                id = PersonSummary.OTHERS_ARTIST_ID,
+                name = appContext.getString(R.string.artist_others),
+                songCount = small.sumOf { it.songCount },
+                albumCount = small.sumOf { it.albumCount },
+                totalDuration = small.sumOf { it.totalDuration },
+                // Sin imagen propia: agrupa a varios artistas reales a la vez, así que no hay un
+                // collage único que resolver (ver CoverRef.group, pensado para UN solo artista).
+                // Cae en el recuadro de reserva de cada ImageView, igual que un artista sin ninguna
+                // canción con carátula.
+                cover = CoverRef(ownImage = null),
+                popularity = null
+            )
+            ArtistGrouping(list.filterNot { it.id in smallIds } + others, others, smallIds)
+        }
+
+    val artists: Flow<List<PersonSummary>> = artistGrouping.map { it.visible }
+
+    /** Ids de los artistas agrupados dentro de "Otros" ahora mismo. La usa
+     *  [DetailViewModel][com.untar.ultimusic.ui.library.DetailViewModel] para redirigir a "Otros"
+     *  cualquier navegación directa a uno de ellos (menú de una canción, cabecera de un álbum,
+     *  búsqueda...), no solo la propia pestaña Artistas. */
+    val smallArtistIds: Flow<Set<Long>> = artistGrouping.map { it.smallIds }
+
+    private val othersArtist: Flow<PersonSummary?> = artistGrouping.map { it.others }
 
     /**
      * Pestaña de Géneros. A diferencia de las tres de arriba, no sale de una consulta SQL: el
@@ -131,10 +191,10 @@ class LibraryRepository private constructor(
 
     // --- Pestaña de Etiquetas ---
     //
-    // Las 6 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags) están sembradas en la tabla
+    // Las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags) están sembradas en la tabla
     // `tags` desde la instalación/migración, así que [tagEntities] siempre las trae; lo único que se
-    // calcula aquí es CUÁNTAS canciones tiene cada una y CUÁLES. Favoritos, Vídeo sincronizado y
-    // Remix / Cover usan membresía real ([tagCrossRefs], escrita desde
+    // calcula aquí es CUÁNTAS canciones tiene cada una y CUÁLES. Vídeo sincronizado y Remix / Cover
+    // usan membresía real ([tagCrossRefs], escrita desde
     // SongTagsDialogFragment/TagPickerDialogFragment, o sincronizada sola por syncSyncedVideoTag/
     // syncRemixCoverTag); las otras 3 se derivan al vuelo de [songs] en [resolveSongsOfTag]. "En
     // ninguna lista" necesita saber qué
@@ -182,8 +242,8 @@ class LibraryRepository private constructor(
         return crossRefs.filter { it.tagId in customTagIds }.mapTo(mutableSetOf()) { it.songId }
     }
 
-    /** Resúmenes de las 6 etiquetas (más las personalizadas que haya en el futuro), para la pestaña
-     *  de Etiquetas. [filenamesInAnyPlaylist] es el "bind" externo descrito arriba. */
+    /** Resúmenes de las 5 etiquetas predefinidas (más las personalizadas que haya en el futuro), para
+     *  la pestaña de Etiquetas. [filenamesInAnyPlaylist] es el "bind" externo descrito arriba. */
     fun tagSummaries(filenamesInAnyPlaylist: Flow<Set<String>>): Flow<List<TagSummary>> =
         combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
             resolveAllTags(tags, crossRefs, allSongs, inPlaylist).map { it.summary }
@@ -285,17 +345,17 @@ class LibraryRepository private constructor(
 
     /**
      * Resuelve qué canciones tiene [tag], según su tipo (ver [SystemTagKey]):
-     * - Favoritos: membresía real, [memberIds].
      * - Descargadas recientemente: las 20 con [Song.dateAdded] más reciente. 100% calculada, nunca
      *   más de 20.
      * - En ninguna lista: cuyo archivo no está en [inPlaylist] (unión de todas las Listas).
      * - Sin etiquetas personalizadas: todas las canciones EXCEPTO las que ya tengan alguna etiqueta
      *   personalizada ([songsWithCustomTag]).
-     * - Vídeo sincronizado: membresía real, igual que Favoritos -aquí solo se LEE [memberIds]; quien
-     *   la mantiene sincronizada con [Song.videoOffsetMs] es [syncSyncedVideoTag]-.
+     * - Vídeo sincronizado: membresía real, [memberIds] -aquí solo se LEE; quien la mantiene
+     *   sincronizada con [Song.videoOffsetMs] es [syncSyncedVideoTag]-.
      * - Remix / Cover: membresía real, igual que Vídeo sincronizado -aquí solo se LEE [memberIds];
      *   quien la mantiene sincronizada con [Song.ogTitle] es [syncRemixCoverTag]-.
-     * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que Favoritos.
+     * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que las dos
+     *   anteriores.
      */
     private fun resolveSongsOfTag(
         tag: TagEntity,
@@ -305,7 +365,6 @@ class LibraryRepository private constructor(
         songsWithCustomTag: Set<Long>
     ): List<Song> =
         when (tag.systemKey?.let { runCatching { SystemTagKey.valueOf(it) }.getOrNull() }) {
-            SystemTagKey.FAVORITES -> allSongs.filter { it.id in memberIds }
             SystemTagKey.RECENTLY_ADDED -> allSongs.sortedByDescending { it.dateAdded }.take(20)
             SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { File(it.filePath).name !in inPlaylist }
             SystemTagKey.NO_CUSTOM_TAGS -> allSongs.filter { it.id !in songsWithCustomTag }
@@ -340,19 +399,38 @@ class LibraryRepository private constructor(
         }
 
     fun artist(id: Long): Flow<PersonSummary?> =
-        dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
+        if (id == PersonSummary.OTHERS_ARTIST_ID) othersArtist
+        else dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
 
     /** Canciones de un álbum, ya ordenadas por número de pista (y de disco) DENTRO de ese álbum: ver
      * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]. */
     fun albumTracks(albumId: Long): Flow<List<Song>> =
         dao.observeSongsOfAlbum(albumId).map { list -> list.map { it.toDomain() } }
 
+    /**
+     * Canciones de un artista. Para "Otros" ([PersonSummary.OTHERS_ARTIST_ID]) no hay ninguna
+     * consulta propia en Room -esa fila no existe ahí-: se filtran directamente [songs] (que ya
+     * excluye la lista gris) por si alguno de sus artistas está en [smallArtistIds], igual que
+     * [Song.artistDisplay][com.untar.ultimusic.util.artistDisplay] mira esa misma lista para pintar
+     * el subtítulo. Una canción con dos artistas pequeños a la vez (colaboración) sale una sola vez,
+     * no se cuentan `any` como si fueran dos.
+     */
     fun artistSongs(id: Long): Flow<List<Song>> =
-        dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
+        if (id == PersonSummary.OTHERS_ARTIST_ID) {
+            combine(songs, smallArtistIds) { all, smallIds ->
+                if (smallIds.isEmpty()) emptyList()
+                else all.filter { song -> song.artists.any { it.id in smallIds } }
+                    .sortedBy { it.title.lowercase() }
+            }
+        } else {
+            dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
+        }
 
-    /** Álbumes de un artista, para el carrusel horizontal de su ficha. */
+    /** Álbumes de un artista, para el carrusel horizontal de su ficha. Vacío para "Otros": agrupa
+     *  varios artistas reales a la vez, y ese carrusel es el de la discografía de uno solo. */
     fun artistAlbums(id: Long): Flow<List<AlbumSummary>> =
-        dao.observeAlbumsOfArtist(id).map { rows -> rows.map { it.toDomain() } }
+        if (id == PersonSummary.OTHERS_ARTIST_ID) flowOf(emptyList())
+        else dao.observeAlbumsOfArtist(id).map { rows -> rows.map { it.toDomain() } }
 
     /**
      * Canciones sueltas por id, en el mismo orden que [ids] (la consulta no lo garantiza). Las
@@ -651,6 +729,13 @@ class LibraryRepository private constructor(
     suspend fun updateArtist(artist: ArtistEntity) = dao.updateArtist(artist)
     suspend fun updateAlbum(album: AlbumEntity) = dao.updateAlbum(album)
 
+    /** Renombra el artista [id] para TODA la app de golpe; devuelve el id que sobrevive (ver
+     *  [LibraryDao.renameArtist] sobre la fusión si el nombre nuevo ya lo tenía otro artista). */
+    suspend fun renameArtist(id: Long, newName: String): Long = dao.renameArtist(id, newName)
+
+    /** Renombra el género [oldName] para TODA la app de golpe (ver [LibraryDao.renameGenre]). */
+    suspend fun renameGenre(oldName: String, newName: String) = dao.renameGenre(oldName, newName)
+
     /** Guardado completo desde el editor de metadatos de ÁLBUM (fila + reenlazado de artistas). */
     suspend fun saveAlbumEdits(album: AlbumEntity, artistNames: List<String>) =
         dao.saveAlbumEdits(album, artistNames)
@@ -684,13 +769,26 @@ class LibraryRepository private constructor(
 
     /**
      * Guarda la letra elegida en el buscador de lrclib.net que abre el iPod al tocar el recuadro
-     * de letra estando vacío (ver [IPodDialogFragment][com.untar.ultimusic.ui.player.IPodDialogFragment]).
+     * de letra estando vacío (ver [IPodDialogFragment][com.untar.ultimusic.ui.player.IPodDialogFragment])
+     * y la que mete de golpe [com.untar.ultimusic.data.BulkLyricsAdder] con "Añadir todas las letras".
      * Al escribir en Room, el flujo [songs] reemite solo y la canción que suena vuelve a llegar al
      * reproductor ya con su `lyrics`, igual que [setVideoUrl] con el enlace del videoclip.
+     *
+     * A diferencia del editor de metadatos -donde el idioma se deduce en pantalla mientras se escribe
+     * la letra y solo se guarda al pulsar "Guardar", ver
+     * [com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment.updateLanguageFromLyrics]-, aquí no
+     * hay ningún formulario de por medio: sin esto, una letra añadida desde el iPod o desde "Añadir
+     * todas las letras" se quedaría sin su etiqueta de idioma hasta que alguien abriera el editor y
+     * volviera a guardar esa canción a mano. [LanguageDetector.detectSuspend] deduce el idioma de la
+     * letra nueva (o lo deja en null si se ha vaciado, igual que `updateLanguageFromLyrics`) y
+     * [syncLanguageTag] se encarga de mover la etiqueta como en [saveSongEdits].
      */
     suspend fun setLyrics(song: Song, lyrics: String?) = withContext(Dispatchers.IO) {
         if (lyrics == song.lyrics) return@withContext
         dao.setLyrics(songId = song.id, lyrics = lyrics)
+        val newLanguage = lyrics?.trim()?.takeIf { it.isNotEmpty() }?.let { LanguageDetector.detectSuspend(it) }
+        dao.setLanguage(songId = song.id, language = newLanguage)
+        syncLanguageTag(song.id, song.language, newLanguage)
     }
 
     /**
@@ -811,6 +909,29 @@ class LibraryRepository private constructor(
                 dao.findTagByName(current) ?: TagEntity(id, current, colorArgb, null, sortOrder, true)
             }
             dao.insertSongTag(SongTagCrossRef(songId, tag.id))
+        }
+    }
+
+    /**
+     * Arreglo de arranque, llamado una vez desde [com.untar.ultimusic.UltiMusicApp.onCreate]: hasta
+     * que [setLyrics] empezó a deducir el idioma solo (ver su doc), una letra añadida desde el iPod o
+     * desde "Añadir todas las letras" se quedaba con `language` vacío para siempre, sin etiqueta de
+     * idioma ninguna. Recorre las canciones con letra pero sin idioma guardado y, para cada una,
+     * intenta deducirlo y sincronizar su etiqueta -mismo camino que [setLyrics], `previousLanguage`
+     * siempre vacío aquí porque es justo lo que estamos comprobando-, dejándola tal cual si ML Kit no
+     * consigue decidirse (se reintentará en el próximo arranque, es barato).
+     *
+     * Igual que [migration22To23][com.untar.ultimusic.data.db.migration22To23] con el backfill por
+     * `language` ya guardado, pero disparado en cada arranque en vez de una sola vez en una migración:
+     * hace falta porque esto no es un cambio de esquema, así que no hay ningún momento fijo de
+     * instalación/actualización al que enganchar un backfill único.
+     */
+    suspend fun backfillMissingLanguageTags() = withContext(Dispatchers.IO) {
+        val candidates = songs.first().filter { !it.lyrics.isNullOrBlank() && it.language.isNullOrBlank() }
+        for (song in candidates) {
+            val detected = LanguageDetector.detectSuspend(song.lyrics!!.trim()) ?: continue
+            dao.setLanguage(songId = song.id, language = detected)
+            syncLanguageTag(song.id, song.language, detected)
         }
     }
 

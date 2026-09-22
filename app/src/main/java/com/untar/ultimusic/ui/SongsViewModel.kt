@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.SortPreferences
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.ui.common.SongSelection
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SortOption
 import com.untar.ultimusic.util.sortedByOption
@@ -58,24 +59,16 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
      * de ámbito de actividad), que es justo lo que hace falta para que la toolbar (de la actividad)
      * se entere de lo que pasa en la lista (del fragmento).
      */
-    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
-    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+    private val selection = SongSelection()
+    val selectedIds: StateFlow<Set<Long>> = selection.selectedIds
 
     /** Empieza una selección con una sola canción marcada (pulsación larga sobre ella). */
-    fun startSelection(songId: Long) {
-        _selectedIds.value = setOf(songId)
-    }
+    fun startSelection(songId: Long) = selection.start(songId)
 
     /** Marca o desmarca una canción; si se queda sin ninguna, la selección múltiple termina sola. */
-    fun toggleSelection(songId: Long) {
-        _selectedIds.value = _selectedIds.value.toMutableSet().apply {
-            if (!add(songId)) remove(songId)
-        }
-    }
+    fun toggleSelection(songId: Long) = selection.toggle(songId)
 
-    fun clearSelection() {
-        _selectedIds.value = emptySet()
-    }
+    fun clearSelection() = selection.clear()
 
     private var reconciled = false
 

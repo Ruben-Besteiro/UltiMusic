@@ -244,27 +244,7 @@
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
                 <TextView
-                    android:id="@+id/btnDeletePreset"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:background="?attr/selectableItemBackground"
-                    android:gravity="center"
-                    android:paddingVertical="8dp"
-                    android:text="@string/settings_eq_delete_preset"
-                    android:textColor="@color/um_on_background"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
-            </LinearLayout>
-
-            <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -272,18 +252,18 @@
                 android:textColor="@color/um_on_background"
                 android:textSize="15sp" />
 
-            <com.google.android.material.slider.Slider
-                android:id="@+id/preGainSlider"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:contentDescription="@string/settings_eq_pre_gain"
-                android:stepSize="1"
-                android:valueFrom="0"
-                android:valueTo="100"
-                app:labelBehavior="gone" />
+                <com.google.android.material.slider.Slider
+                    android:id="@+id/preGainSlider"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:contentDescription="@string/settings_eq_pre_gain"
+                    android:stepSize="1"
+                    android:valueFrom="0"
+                    android:valueTo="100"
+                    app:labelBehavior="gone" />
 
-            <!--
+                <!--
               Vacío a propósito: SettingsDialogFragment infla aquí un item_eq_band.xml por cada
               banda que reporte el ecualizador del dispositivo (el número y su rango no son fijos).
             -->
@@ -535,6 +515,87 @@
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
+            <!-- ===== Ajuste: idioma ===== -->
+
+            <TextView
+                android:id="@+id/languageTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_language_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_language_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal">
+
+                <FrameLayout
+                    android:id="@+id/languageSpainButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="?attr/selectableItemBackground"
+                    android:contentDescription="@string/settings_language_spanish"
+                    android:padding="4dp">
+
+                    <ImageView
+                        android:layout_width="56dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/bg_flag_clip"
+                        android:clipToOutline="true"
+                        android:importantForAccessibility="no"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/flag_spain" />
+
+                    <View
+                        android:id="@+id/languageSpainSelectedBorder"
+                        android:layout_width="56dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/bg_flag_selected"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+                <FrameLayout
+                    android:id="@+id/languageEnglishButton"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="16dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:contentDescription="@string/settings_language_english"
+                    android:padding="4dp">
+
+                    <ImageView
+                        android:layout_width="56dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/bg_flag_clip"
+                        android:clipToOutline="true"
+                        android:importantForAccessibility="no"
+                        android:scaleType="centerCrop"
+                        android:src="@drawable/flag_uk" />
+
+                    <View
+                        android:id="@+id/languageEnglishSelectedBorder"
+                        android:layout_width="56dp"
+                        android:layout_height="36dp"
+                        android:background="@drawable/bg_flag_selected"
+                        android:visibility="gone" />
+
+                </FrameLayout>
+
+            </LinearLayout>
+
             <!-- ===== Ajuste: carpetas de la fonoteca ===== -->
 
             <TextView
@@ -613,6 +674,85 @@
                 android:text="@string/settings_greylist_add"
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold" />
+
+            <!--
+              ===== Ajuste: Añadir todas las letras =====
+              Al final de "ajustes visuales" porque toca las canciones directamente (ver
+              BulkLyricsAdder), no es un ajuste de la aplicación en sí como el resto del grupo. Sin
+              título ni subtítulo propios, como pidió el usuario: es solo el texto de la acción.
+            -->
+
+            <TextView
+                android:id="@+id/addAllLyricsTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_add_all_lyrics_title"
+                android:textColor="@color/um_yellow"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btnAddAllLyrics"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackground"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_bulk_lyrics_add"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold" />
+
+            <!--
+              ===== Ajuste: agrupar artistas pequeños en "Otros" =====
+              Etiqueta a la izquierda + caja numérica a la derecha, como pidió el usuario. La caja
+              empieza en "0" (agrupado desactivado, ver ArtistGroupingPreferences); el fragmento la
+              sobrescribe con el valor guardado en cuanto arranca la colecta de estado, así que este
+              "0" del XML solo se ve, como mucho, en el primer fotograma.
+            -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/artistGroupingTitle"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_artist_grouping_title"
+                    android:textColor="@color/um_on_background"
+                    android:textSize="15sp" />
+
+                <!--
+                  inputType="number" saca el teclado numérico. imeOptions="actionDone" cambia la
+                  tecla de salto de línea por un "hecho", que el fragmento usa para guardar y cerrar
+                  el teclado. Sin signo -no tiene sentido un umbral negativo.
+
+                  background=edittext_underline_muted: una barra gris clara fija debajo, para que se
+                  note que es editable sin depender del subrayado de Material (que solo se ve claro
+                  al tener el foco).
+                -->
+                <EditText
+                    android:id="@+id/artistGroupingValue"
+                    android:layout_width="56dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
+                    android:background="@drawable/edittext_underline_muted"
+                    android:gravity="end"
+                    android:imeOptions="actionDone"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="4"
+                    android:maxLines="1"
+                    android:paddingBottom="4dp"
+                    android:text="0"
+                    android:textColor="@color/um_on_background"
+                    android:textSize="18sp" />
+
+            </LinearLayout>
 
             <!-- ===== Grupo: servicios externos ===== -->
             <!--
@@ -719,6 +859,79 @@
             <!-- Sin fila para la traducción de letras (botón "あ" del iPod): usa Lingva Translate,
                  que no pide clave ni cuenta, así que no tiene nada que configurar aquí (ver
                  LyricsTranslator). -->
+
+            <!-- ===== Grupo: UltiMusic Recount ===== -->
+            <!--
+              El resumen anual de lo que se ha escuchado (ver RecountDialogFragment). Va el último de
+              todos y en grupo propio porque no configura nada: es una pantalla, no un ajuste. El
+              grupo entero solo es visible la última semana de diciembre, la misma en que se ofrece
+              solo con una notificación y un aviso al arrancar (ver RecountReminder); fuera de ella
+              lo oculta SettingsDialogFragment.setupRecount.
+            -->
+            <LinearLayout
+                android:id="@+id/recountGroup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <View
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:layout_marginTop="28dp"
+                    android:background="@color/um_divider" />
+
+                <TextView
+                    android:id="@+id/recountSectionTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="20dp"
+                    android:text="@string/settings_recount_title"
+                    android:textColor="@color/um_yellow"
+                    android:textSize="20sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="@string/settings_recount_subtitle"
+                    android:textColor="@color/um_on_surface_muted"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/btnOpenRecount"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:background="?attr/selectableItemBackground"
+                    android:paddingVertical="8dp"
+                    android:text="@string/settings_recount_open"
+                    android:textColor="@color/um_on_background"
+                    android:textStyle="bold" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btnDeletePreset"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:background="?attr/selectableItemBackground"
+                    android:gravity="center"
+                    android:paddingVertical="8dp"
+                    android:text="@string/settings_eq_delete_preset"
+                    android:textColor="@color/um_on_background"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
 
         </LinearLayout>
 

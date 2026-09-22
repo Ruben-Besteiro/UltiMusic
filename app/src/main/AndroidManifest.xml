@@ -105,6 +105,19 @@
              - exported="false": solo la propia aplicación puede arrancarlo; el intent-filter de
                abajo es el que exige Media3 para que MediaSessionService sepa a qué Service
                conectarse (Android Auto, asistente de voz, etc.), no hace falta exportarlo para eso. -->
+        <!-- Habilita el guardado automático del idioma elegido a mano en Ajustes (ver AppLocale):
+             en API 33+ delega en el LocaleManager del sistema, y por debajo lo guarda sola en
+             SharedPreferences. Sin esto, AppCompatDelegate.setApplicationLocales seguiría
+             cambiando el idioma en caliente, pero no lo recordaría entre arranques. -->
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:enabled="false"
+            android:exported="false">
+            <meta-data
+                android:name="autoStoreLocales"
+                android:value="true" />
+        </service>
+
         <service
             android:name=".playback.PlaybackService"
             android:exported="false"

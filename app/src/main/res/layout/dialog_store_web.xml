@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Web de una tienda de descarga dentro de la app (ver StoreWebDialogFragment). Calco de
+     dialog_video_picker.xml con una barra de progreso de carga bajo la toolbar. -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/storeWebRoot"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/um_background"
+    android:orientation="vertical">
+
+    <com.google.android.material.appbar.MaterialToolbar
+        android:id="@+id/storeWebToolbar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@color/um_background"
+        app:navigationContentDescription="@string/editor_close"
+        app:navigationIcon="@drawable/ic_close"
+        app:titleTextColor="@color/um_on_background" />
+
+    <!-- El color del indicador se pone con el acento dinámico desde el fragmento. -->
+    <com.google.android.material.progressindicator.LinearProgressIndicator
+        android:id="@+id/storeWebProgress"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:max="100"
+        android:visibility="invisible"
+        app:trackColor="@android:color/transparent" />
+
+    <!-- La página de la tienda se carga aquí dentro; nunca se sale de la aplicación. -->
+    <WebView
+        android:id="@+id/storeWebView"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+</LinearLayout>

@@ -444,9 +444,12 @@
                     </FrameLayout>
 
                     <!-- Enlace para abrir en YouTube el vídeo del campo de arriba. Solo aparece con
-                         una URL reconocible dentro (ver YouTubeUrl.videoId); el color del texto y
-                         del icono es el dinámico, igual que el resto de amarillos de esta pantalla
-                         (ver el collect de accentColor). -->
+                         una URL reconocible dentro (ver YouTubeUrl.videoId). Ni el texto ni el
+                         icono llevan el acento dinámico: van del mismo color fijo
+                         (@color/um_on_surface_muted) que el resto de iconos de YouTube de la
+                         aplicación, para que el enlace entero se lea como una sola insignia -el
+                         icono, además, no PUEDE llevar otro color: es la insignia de marca de
+                         YouTube, y sus directrices prohíben recolorearla. -->
                     <TextView
                         android:id="@+id/linkVideoUrl"
                         android:layout_width="wrap_content"
@@ -456,11 +459,13 @@
                         android:clickable="true"
                         android:drawablePadding="6dp"
                         android:drawableStart="@drawable/ic_youtube"
+                        android:drawableTint="@color/um_on_surface_muted"
                         android:focusable="true"
                         android:gravity="center_vertical"
                         android:paddingHorizontal="4dp"
                         android:paddingVertical="4dp"
                         android:text="@string/field_video_url_open"
+                        android:textColor="@color/um_on_surface_muted"
                         android:textSize="14sp"
                         android:textStyle="bold"
                         android:visibility="gone" />

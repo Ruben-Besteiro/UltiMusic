@@ -15,6 +15,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewOutlineProvider
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
+import android.widget.FrameLayout
 import android.widget.ImageButton
 import android.widget.PopupMenu
 import android.widget.SeekBar
@@ -47,7 +48,6 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.SquareFrameLayout
-import com.untar.ultimusic.ui.common.TouchBlockerFrameLayout
 import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.common.attachVerticalDrag
 import com.untar.ultimusic.ui.editor.LyricsSuggestionsDialogFragment
@@ -119,17 +119,22 @@ class IPodDialogFragment : DialogFragment() {
     // Con el botón de la cabecera, la pantalla del iPod cambia la carátula (o la cola) por el
     // videoclip de la canción. Pulsándolo otra vez se vuelve exactamente a como estaba.
     //
-    // El sonido SIEMPRE lo pone el archivo local (el ExoPlayer de [PlayerViewModel]): el modo vídeo
-    // no lo pausa nunca. El videoclip de YouTube es una capa puramente visual y muda que se limita a
-    // seguir la posición y el play/pausa del audio local (ver [VideoScreenController.sync]), así no
-    // hay hueco de silencio al entrar ni nada que reconciliar al volver de segundo plano.
+    // Solo suena una cosa a la vez: los términos de servicio de la API de YouTube prohíben aplicar
+    // una pista de audio distinta a su vídeo (sección III.I.7 de sus políticas de desarrollador), así
+    // que el vídeo NO es una capa muda sobre el audio local. Al entrar en modo vídeo se congela el
+    // audio local (ver [startVideo]: si sonaba, se pausa justo antes de cargar el vídeo) y el
+    // videoclip pasa a sonar de verdad, con sus propios mandos (play/pausa, barra, subtítulos...)
+    // visibles y funcionando -ver [VideoScreenController.playerOptions]-, sin nada que le tape los
+    // toques. Al salir (a mano, porque cambia la canción, porque el vídeo falla o porque la ventana
+    // deja de estar en primer plano, ver [onPause]) pasa lo contrario: el vídeo se enmudece y se
+    // pausa, y el audio local se reanuda justo donde se haya quedado el vídeo (ver [exitVideo]).
     //
     // El enlace del vídeo sale de `Song.videoUrl`, que rellena SIEMPRE el usuario: a mano en el
     // editor de metadatos, o eligiéndolo en el buscador ([VideoPickerDialogFragment]) que se abre
     // solo la primera vez, cuando el campo está vacío.
     // ===================================================================================
 
-    /** True mientras la pantalla muestra el videoclip (mudo) en vez de la carátula/cola. */
+    /** True mientras la pantalla muestra el videoclip (sonando de verdad) en vez de la carátula/cola. */
     private var videoMode = false
 
     /**
@@ -147,6 +152,13 @@ class IPodDialogFragment : DialogFragment() {
 
     /** Dueño del [YouTubePlayerView]. Se libera en [onDestroyView]. */
     private var videoController: VideoScreenController? = null
+
+    /**
+     * Referencia a la función `exitVideo` local de [onViewCreated] (que necesita las vistas de ahí),
+     * para poder llamarla desde [onPause] cuando la ventana deja de estar en primer plano. Se limpia
+     * en [onDestroyView] igual que [videoController].
+     */
+    private var exitVideoAction: (() -> Unit)? = null
 
     /**
      * Vídeos elegidos en el buscador durante esta sesión, por id de canción.
@@ -203,6 +215,18 @@ class IPodDialogFragment : DialogFragment() {
     }
 
     /**
+     * Se llama tanto si otra ventana tapa esta (incluido apagarse la pantalla) como al mandar la
+     * aplicación a segundo plano. En modo vídeo hay que salir de él aquí y no esperar a [onStop]: los
+     * términos de servicio de la API de YouTube prohíben un "background player" (sección III.I.9 de
+     * sus políticas de desarrollador), es decir, que siga sonando sin estar a la vista, y [onPause]
+     * es lo primero que dispara Android en cuanto deja de estarlo.
+     */
+    override fun onPause() {
+        super.onPause()
+        if (videoMode) exitVideoAction?.invoke()
+    }
+
+    /**
      * Traslada la ventana en vivo mientras el usuario mantiene el dedo arrastrando el
      * mini-reproductor hacia arriba: [fraction] 0f la deja escondida del todo bajo la pantalla y 1f
      * la deja en su sitio. La llama [MainActivity.setupMiniPlayerDrag] en cada MOVE del gesto. No
@@ -235,6 +259,13 @@ class IPodDialogFragment : DialogFragment() {
      * continuo. La usan la "X", el botón atrás y el arrastre hacia abajo (ver [onViewCreated]).
      */
     private fun animateClose(root: View) {
+        // Con una selección múltiple activa en la cola (ver PlayerViewModel.queueSelectedIds), la
+        // "X", el botón atrás y el arrastre hacia abajo la limpian en vez de cerrar la ventana —
+        // igual que DetailDialogFragment/CollectionDetailDialogFragment con la suya.
+        if (playerViewModel.queueSelectedIds.value.isNotEmpty()) {
+            playerViewModel.clearQueueSelection()
+            return
+        }
         if (closing) return
         closing = true
         val screenHeight = resources.displayMetrics.heightPixels.toFloat()
@@ -285,6 +316,7 @@ class IPodDialogFragment : DialogFragment() {
         }
         val cover = view.findViewById<ShapeableImageView>(R.id.cover)
         val queueList = view.findViewById<RecyclerView>(R.id.queueList)
+        val queueExpandHint = view.findViewById<TextView>(R.id.queueExpandHint)
         // El recorte de topBox de arriba no basta para redondearlo a él: `cover` se ve bien porque
         // se redondea SOLA con su propio `shapeAppearanceOverlay` (una ShapeableImageView recorta su
         // propio contenido, no depende del padre), pero un RecyclerView no tiene ese mecanismo — y
@@ -304,21 +336,26 @@ class IPodDialogFragment : DialogFragment() {
         val lyricsBox = view.findViewById<RecyclerView>(R.id.lyricsBox)
         val btnExpandLyrics = view.findViewById<TextView>(R.id.btnExpandLyrics)
         val btnTranslateLyrics = view.findViewById<TextView>(R.id.btnTranslateLyrics)
+        // Fila entera de tvPosition/ipodProgress/tvDuration: en modo vídeo se oculta junta (ver
+        // [startVideo]/[exitVideo] y el comentario de positionRow en el XML).
+        val positionRow = view.findViewById<View>(R.id.positionRow)
         val progressBar = view.findViewById<SeekBar>(R.id.ipodProgress)
         val btnClose = view.findViewById<ImageButton>(R.id.btnClose)
         val btnMenu = view.findViewById<ImageButton>(R.id.btnMenu)
         val btnPrev = view.findViewById<ImageButton>(R.id.btnPrev)
         val btnNext = view.findViewById<ImageButton>(R.id.btnNext)
+        // La celda entera (no solo el botón) se oculta en modo vídeo, para que buttonRow reparta su
+        // ancho entre las 4 celdas restantes: los otros cuatro botones no cambian de tamaño, solo la
+        // separación entre ellos (ver [startVideo]).
+        val btnPlayPauseCell = view.findViewById<View>(R.id.btnPlayPauseCell)
         val btnPlayPause = view.findViewById<ImageButton>(R.id.btnPlayPauseBig)
         val btnSongMenu = view.findViewById<ImageButton>(R.id.btnSongMenu)
         val btnVideo = view.findViewById<ImageButton>(R.id.btnVideo)
         val youtubePlayer = view.findViewById<YouTubePlayerView>(R.id.youtubePlayer)
-        // Envuelve a youtubePlayer y le traga los toques (ver TouchBlockerFrameLayout); por eso
-        // tiene que estar tan oculto como él fuera de modo vídeo, o se queda tapando a `cover` y
-        // `queueList` (que están debajo en topBox) y sus filas dejan de responder al tacto. El
-        // toque simple sobre el vídeo se reconoce igualmente (ver onTap más abajo, junto a
-        // btnPlayPause): así el vídeo es interactuable sin dejar pasar el toque al reproductor.
-        val videoContainer = view.findViewById<TouchBlockerFrameLayout>(R.id.videoContainer)
+        // Envuelve a youtubePlayer (FrameLayout normal, sin tragarse el toque): tiene que estar tan
+        // oculto como él fuera de modo vídeo, o se queda tapando a `cover` y `queueList` (que están
+        // debajo en topBox) y sus filas dejan de responder al tacto.
+        val videoContainer = view.findViewById<FrameLayout>(R.id.videoContainer)
         val videoLoadingSpinner = view.findViewById<CircularProgressIndicator>(R.id.videoLoadingSpinner)
         val videoOffsetBox = view.findViewById<View>(R.id.videoOffsetBox)
         val videoOffsetRuler = view.findViewById<ValueRuler>(R.id.ipodOffsetRuler)
@@ -329,7 +366,26 @@ class IPodDialogFragment : DialogFragment() {
         // Adaptador de la cola en reproducción. Se puede reordenar arrastrando (ver
         // [attachReorderTouchHelper]).
         val queueAdapter = IPodQueueAdapter(
-            onItemClick = { position -> playerViewModel.jumpTo(position) },
+            // Con selección activa, tocar una fila la marca/desmarca en vez de saltar a ella; igual
+            // que SongsFragment (ver el comentario de IPodQueueAdapter sobre selección múltiple).
+            onItemClick = { position ->
+                if (playerViewModel.queueSelectedIds.value.isEmpty()) {
+                    playerViewModel.selectFromQueue(position)
+                } else {
+                    playerViewModel.queue.value.getOrNull(position)?.let {
+                        playerViewModel.toggleQueueSelection(it.id)
+                    }
+                }
+            },
+            onItemLongClick = { position ->
+                playerViewModel.queue.value.getOrNull(position)?.let { song ->
+                    if (playerViewModel.queueSelectedIds.value.isEmpty()) {
+                        playerViewModel.startQueueSelection(song.id)
+                    } else {
+                        playerViewModel.toggleQueueSelection(song.id)
+                    }
+                }
+            },
             onStartDrag = { holder -> itemTouchHelper?.startDrag(holder) },
             onReordered = { newQueue -> playerViewModel.reorderQueue(newQueue) }
         )
@@ -493,11 +549,34 @@ class IPodDialogFragment : DialogFragment() {
         // [videoController] en vez de la variable local `controller`, que todavía no existe aquí.
         // ---------------------------------------------------------------------------------------
 
-        /** Oculta el videoclip y vuelve a la carátula/cola. El audio local no se ha tocado nunca. */
+        /**
+         * Oculta el videoclip y vuelve a la carátula/cola, devolviendo el sonido al archivo local.
+         *
+         * Solo se traspasa la posición/estado si la canción que suena de verdad sigue siendo la
+         * misma cuyo vídeo se veía ([videoSongId]): si ya cambió (la cola avanzó sola, o el vídeo
+         * falló y esto se llama junto con la siguiente canción ya sonando), no hay nada que traspasar
+         * -PlaybackService ya está reproduciendo lo que toque, tocar su posición aquí lo descuadraría.
+         */
         val exitVideo = {
+            val controller = videoController
+            val song = playerViewModel.currentSong.value
+            if (controller != null && song != null && song.id == videoSongId) {
+                val resumeMs = controller.localPositionMs()
+                val wasVideoPlaying = controller.wasPlaying()
+                controller.setAudible(false)
+                if (song.duration > 0) {
+                    playerViewModel.seekToFraction((resumeMs.toFloat() / song.duration).coerceIn(0f, 1f))
+                }
+                // El audio local se congeló al entrar en modo vídeo (ver [startVideo]): se reanuda
+                // solo si el vídeo se quedó sonando, para dejarlo en el mismo estado en que estaba.
+                if (wasVideoPlaying && !playerViewModel.isPlaying.value) {
+                    playerViewModel.togglePlayPause()
+                }
+            }
+            videoController?.pause()
+
             videoMode = false
             videoSongId = null
-            videoController?.pause()
 
             youtubePlayer.isVisible = false
             videoContainer.isVisible = false
@@ -508,17 +587,24 @@ class IPodDialogFragment : DialogFragment() {
             // es queueWasVisible.
             cover.isVisible = true
             queueList.isVisible = queueWasVisible
+            // Los mandos del iPod recuperan el play/pausa y la barra: en modo vídeo los llevaba el
+            // propio reproductor de YouTube (ver [startVideo]). Al volver a contar btnPlayPauseCell
+            // en el reparto de buttonRow, los otros cuatro recuperan solos su espacio original -sin
+            // tocar su tamaño, solo cambia lo que los separa (ver el comentario de [startVideo]).
+            btnPlayPauseCell.isVisible = true
+            positionRow.isVisible = true
             refreshEndDivider()
-            updateInfoBox(queueList, tvTitle, tvMeta)
+            updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint)
             btnVideo.setImageResource(R.drawable.ic_video)
             // Vuelve a ser cuadrada, como fuera del modo vídeo.
             topBox.animateAspectRatio(1f)
         }
+        exitVideoAction = exitVideo
 
-        // Dueño del reproductor de YouTube. Es mudo: la barra de progreso y el botón de play/pausa
-        // los llevan siempre los colectores del audio local (más abajo), que además lo mantienen
-        // sincronizado con [VideoScreenController.sync]. Si el vídeo falla, se sale del modo vídeo
-        // solo: el audio local sigue sonando sin problema.
+        // Dueño del reproductor de YouTube: mientras dura el modo vídeo, sus propios mandos llevan
+        // play/pausa/barra/subtítulos (ver [VideoScreenController.playerOptions]), no los del iPod
+        // (escondidos, ver [startVideo]). Si el vídeo falla, se sale del modo vídeo solo y el audio
+        // local se reanuda donde se congeló (ver [exitVideo]).
         val controller = VideoScreenController(
             view = youtubePlayer,
             onPlaybackError = { if (videoMode) exitVideo() },
@@ -625,8 +711,10 @@ class IPodDialogFragment : DialogFragment() {
         }
 
         /**
-         * Muestra el videoclip (mudo) arrancando justo donde va el audio local, sin tocarlo. Por eso
-         * no hay hueco de silencio: el audio nunca se pausa para esperar al vídeo.
+         * Muestra el videoclip arrancando justo donde va el audio local, y le pasa el sonido: el
+         * audio local se congela AQUÍ (se pausa si estaba sonando) antes de cargar el vídeo, y no se
+         * reanuda hasta salir del modo vídeo (ver [exitVideo]) -nunca suenan los dos a la vez, ver el
+         * comentario de cabecera de la sección "Modo vídeo".
          */
         val startVideo = { videoId: String, song: Song ->
             videoMode = true
@@ -635,7 +723,7 @@ class IPodDialogFragment : DialogFragment() {
             queueWasVisible = queueList.isVisible
             cover.isVisible = false
             queueList.isVisible = false
-            updateInfoBox(queueList, tvTitle, tvMeta)
+            updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint)
 
             youtubePlayer.isVisible = true
             videoContainer.isVisible = true
@@ -646,14 +734,25 @@ class IPodDialogFragment : DialogFragment() {
             // La pantalla del iPod pasa de cuadrada a 16:9 para no dejar bandas vacías arriba y
             // abajo del videoclip.
             topBox.animateAspectRatio(VIDEO_ASPECT_RATIO)
-            // Se pasan como funciones, no como valores ya leídos: si el reproductor de YouTube aún
-            // no está inicializado (la primera vez puede tardar segundos), el vídeo no arranca hasta
-            // que esté listo, y para entonces el audio ya habrá avanzado. Leer la posición y el
-            // estado en ese momento, no ahora, es lo que evita que el vídeo nazca atrasado.
+
+            // Se congela el audio local ANTES de leer su posición/estado para el vídeo: así ambos
+            // arrancan del mismo punto exacto, y no hay ni un instante con los dos sonando a la vez.
+            val wasPlaying = playerViewModel.isPlaying.value
+            if (wasPlaying) playerViewModel.togglePlayPause()
+            // Los mandos propios del iPod se esconden: mientras dure el modo vídeo, play/pausa y la
+            // barra los lleva el reproductor de YouTube (controles reales, ver
+            // VideoScreenController.playerOptions). btnPlayPauseCell se oculta entero (no solo el
+            // botón), y no solo el botón, para que buttonRow reparta su ancho entre las 4 celdas
+            // restantes: los otros cuatro botones mantienen su tamaño (52dp) y lo que cambia es la
+            // separación entre ellos, que crece igual que la propia celda.
+            btnPlayPauseCell.isVisible = false
+            positionRow.isVisible = false
+
+            controller.setAudible(true)
             controller.load(
                 videoId,
                 { playerViewModel.currentPositionMs() },
-                { playerViewModel.isPlaying.value },
+                { wasPlaying },
                 song.videoOffsetMs
             )
             appliedVideoOffsetMs = song.videoOffsetMs
@@ -667,9 +766,16 @@ class IPodDialogFragment : DialogFragment() {
             // ahora por encima del videoclip (ver el orden de queueList y videoContainer en el XML).
             btnMenu.setImageResource(R.drawable.ic_menu)
             btnMenu.setOnClickListener {
-                queueList.isVisible = !queueList.isVisible
-                refreshEndDivider()
-                updateInfoBox(queueList, tvTitle, tvMeta)
+                // Con selección activa este mismo botón abre el menú de la selección en vez de
+                // mostrar/ocultar la cola (ver el `launch` de queueSelectedIds más abajo, que le
+                // cambia el icono a los 3 puntos mientras dure).
+                if (playerViewModel.queueSelectedIds.value.isNotEmpty()) {
+                    showQueueSelectionMenu(it)
+                } else {
+                    queueList.isVisible = !queueList.isVisible
+                    refreshEndDivider()
+                    updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint)
+                }
             }
             btnPrev.setOnClickListener { playerViewModel.skipToPrevious() }
             btnNext.setOnClickListener { playerViewModel.skipToNext() }
@@ -900,7 +1006,7 @@ class IPodDialogFragment : DialogFragment() {
                         } else {
                             cover.setImageResource(R.drawable.cover_placeholder)
                         }
-                        updateInfoBox(queueList, tvTitle, tvMeta)
+                        updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint)
                         // La letra es la que el usuario haya escrito o elegido en el editor de
                         // metadatos. Si tiene marcas de tiempo LRC (una sugerencia sincronizada de
                         // lrclib.net, ver LrcParser) se pinta línea a línea, resaltando la que toca
@@ -934,11 +1040,6 @@ class IPodDialogFragment : DialogFragment() {
                                 else -> R.drawable.ic_play
                             }
                         )
-                        // El vídeo (mudo) se pone en el mismo estado, al instante, sin esperar al
-                        // siguiente tick de progreso.
-                        if (videoMode) {
-                            videoController?.sync(playerViewModel.currentPositionMs(), isPlaying)
-                        }
                     }
                 }
                 launch {
@@ -952,11 +1053,6 @@ class IPodDialogFragment : DialogFragment() {
                             progressBar.progress =
                                 if (p.durationMs > 0) ((p.positionMs * 1000) / p.durationMs).toInt()
                                 else 0
-                        }
-                        // Tick periódico (~500ms) que mantiene el vídeo mudo pegado al audio local;
-                        // es lo que autocorrige cualquier deriva al volver de segundo plano.
-                        if (videoMode) {
-                            videoController?.sync(p.positionMs, playerViewModel.isPlaying.value)
                         }
                         // Letra sincronizada: qué línea toca cantar ahora. Con letra sin sincronizar
                         // lyricLines está vacía y aquí no se hace nada (la única fila que hay se
@@ -998,7 +1094,7 @@ class IPodDialogFragment : DialogFragment() {
                             // lo que hay en la cola, así que hay que rehacerlo también cuando cambia
                             // la cola sin cambiar la canción: encolar algo a mano con la cola a la
                             // vista, por ejemplo.
-                            updateInfoBox(queueList, tvTitle, tvMeta)
+                            updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint)
                             // Centrar la fila actual (la altura ya está disponible en post{}).
                             queueList.post {
                                 queueLayoutManager.scrollToPositionWithOffset(
@@ -1007,6 +1103,17 @@ class IPodDialogFragment : DialogFragment() {
                                 refreshEndDivider()
                             }
                         }
+                }
+                // Selección múltiple por pulsación larga en la cola (ver IPodQueueAdapter/
+                // PlayerViewModel.queueSelectedIds): mientras dure, btnMenu cambia del icono de las 3
+                // rayas al de los 3 puntos (ver su listener más arriba, que abre showQueueSelectionMenu
+                // en vez de mostrar/ocultar la cola) e infoBox enseña la cuenta (ver updateInfoBox).
+                launch {
+                    playerViewModel.queueSelectedIds.collect { ids ->
+                        queueAdapter.setSelection(ids)
+                        btnMenu.setImageResource(if (ids.isNotEmpty()) R.drawable.ic_more_vert else R.drawable.ic_menu)
+                        updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint)
+                    }
                 }
             }
         }
@@ -1127,12 +1234,33 @@ class IPodDialogFragment : DialogFragment() {
      * papel normal de subtítulo. Sin canción (app recién abierta en frío, antes de elegir nada) no
      * hay título ni subtítulo que mostrar, así que se trata igual que la cola vacía: [tvTitle] se
      * oculta y [tvMeta] lleva el aviso, ocupando toda la caja.
+     *
+     * De paso actualiza [queueExpandHint], el aviso DENTRO del propio contenedor de la cola (debajo
+     * de la fila que suena, ver dialog_ipod.xml): solo cuando la canción actual es la ÚNICA que hay
+     * en la cola (recién tocada desde Canciones o desde un género, antes de que
+     * [continueWithRandomSong][com.untar.ultimusic.playback.PlaybackService.continueWithRandomSong]
+     * la haya alargado con la primera canción de más). Es un aviso aparte de [queueEndText]: ese vive
+     * siempre en infoBox (incluida una cola suelta ya alargada, sin nada manual por delante);
+     * este solo aparece una vez, al principio.
      */
     private fun updateInfoBox(
         queueList: RecyclerView,
         tvTitle: TextView,
-        tvMeta: TextView
+        tvMeta: TextView,
+        queueExpandHint: TextView
     ) {
+        // Selección múltiple activa en la cola (ver PlayerViewModel.queueSelectedIds y el `launch`
+        // que la colecta más abajo): infoBox se pisa con la cuenta de seleccionadas, igual que la
+        // barra principal cambia su texto por "N seleccionadas" (ver MainActivity.setupToolbar).
+        val selectedIds = playerViewModel.queueSelectedIds.value
+        if (queueList.isVisible && selectedIds.isNotEmpty()) {
+            tvTitle.isVisible = false
+            tvMeta.text = resources.getQuantityString(
+                R.plurals.song_selection_count, selectedIds.size, selectedIds.size
+            )
+            queueExpandHint.isVisible = false
+            return
+        }
         val song = playerViewModel.currentSong.value
         if (queueList.isVisible) {
             // drop() ya devuelve vacío si la actual es la última (o si no hay cola).
@@ -1155,6 +1283,18 @@ class IPodDialogFragment : DialogFragment() {
         } else {
             tvTitle.isVisible = false
             tvMeta.text = getString(R.string.ipod_nothing_playing)
+        }
+
+        val showExpandHint = queueList.isVisible &&
+            playerViewModel.isLooseQueue.value &&
+            playerViewModel.queue.value.size <= 1
+        queueExpandHint.isVisible = showExpandHint
+        if (showExpandHint) {
+            queueExpandHint.text = if (playerViewModel.currentCollectionKind.value == CollectionKind.GENRE) {
+                getString(R.string.queue_expand_hint_genre)
+            } else {
+                getString(R.string.queue_expand_hint)
+            }
         }
     }
 
@@ -1253,12 +1393,98 @@ class IPodDialogFragment : DialogFragment() {
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
 
+    /** Menú de 3 puntos de la selección múltiple de la cola (ver menu_queue_selection.xml y
+     *  [R.id.btnMenu] mientras dura, más arriba): mismas acciones que [R.menu.menu_song_selection]
+     *  (el de la pestaña Canciones, ver `MainActivity.showSelectionMenu`) salvo "Añadir a la cola",
+     *  que aquí no pinta nada -ya están en ella-, sustituida por "Quitar de la cola". */
+    private fun showQueueSelectionMenu(anchor: View) {
+        val ids = playerViewModel.queueSelectedIds.value
+        val selected = playerViewModel.queue.value.filter { it.id in ids }
+        if (selected.isEmpty()) return
+        PopupMenu(requireContext(), anchor).apply {
+            menuInflater.inflate(R.menu.menu_queue_selection, menu)
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_remove_from_queue -> {
+                        playerViewModel.clearQueueSelection()
+                        playerViewModel.removeFromQueue(ids)
+                        true
+                    }
+                    R.id.action_add_to_playlist -> { showAddToPlaylistForQueueSelection(selected); true }
+                    R.id.action_edit_metadata -> { showMetadataEditorForQueueSelection(selected); true }
+                    R.id.action_edit_tags -> { showEditTagsForQueueSelection(selected); true }
+                    R.id.action_delete_song -> { showDeleteDialogForQueueSelection(selected); true }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
+    /** Igual que [showAddToPlaylist] pero para varias canciones a la vez (ver
+     *  `MainActivity.showAddToPlaylistForSelection`). */
+    private fun showAddToPlaylistForQueueSelection(selected: List<Song>) {
+        playerViewModel.clearQueueSelection()
+        if (childFragmentManager.findFragmentByTag(AddToPlaylistDialogFragment.TAG) != null) return
+        viewLifecycleOwner.lifecycleScope.launch {
+            val filenames = selected.map { File(it.filePath).name }
+            val repo = PlaylistRepository.get()
+            val names = repo.listPlaylistNames()
+            val contained = repo.playlistsContainingAll(filenames)
+            val checked = BooleanArray(names.size) { names[it] in contained }
+            AddToPlaylistDialogFragment.newInstance(filenames, names, checked)
+                .show(childFragmentManager, AddToPlaylistDialogFragment.TAG)
+        }
+    }
+
+    private fun showMetadataEditorForQueueSelection(selected: List<Song>) {
+        playerViewModel.clearQueueSelection()
+        if (childFragmentManager.findFragmentByTag(TAG_METADATA_EDITOR) == null) {
+            MetadataEditorDialogFragment.newInstance(selected.map { it.id })
+                .show(childFragmentManager, TAG_METADATA_EDITOR)
+        }
+    }
+
+    private fun showEditTagsForQueueSelection(selected: List<Song>) {
+        playerViewModel.clearQueueSelection()
+        if (childFragmentManager.findFragmentByTag(SongTagsDialogFragment.TAG) == null) {
+            SongTagsDialogFragment.newInstance(selected.map { it.id })
+                .show(childFragmentManager, SongTagsDialogFragment.TAG)
+        }
+    }
+
+    /** Igual que [showDeleteSongDialog] pero para varias canciones a la vez (ver
+     *  `MainActivity.showDeleteDialogForSelection`). */
+    private fun showDeleteDialogForQueueSelection(selected: List<Song>) {
+        playerViewModel.clearQueueSelection()
+        val dialog = AlertDialog.Builder(requireContext())
+            .setTitle(R.string.delete_song)
+            .setMessage(resources.getQuantityString(R.plurals.delete_songs_confirm, selected.size, selected.size))
+            .setNegativeButton(R.string.dialog_cancel, null)
+            .setPositiveButton(R.string.delete_song) { _, _ ->
+                viewLifecycleOwner.lifecycleScope.launch {
+                    val repository = LibraryRepository.get(requireContext())
+                    val playlists = PlaylistRepository.get()
+                    for (song in selected) {
+                        repository.deleteSong(song)
+                        playlists.removeSongFromAll(File(song.filePath).name)
+                    }
+                }
+            }
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
     override fun onDestroyView() {
         // El audio local nunca se pausó por el modo vídeo, así que aquí no hay nada que devolver.
         // El reproductor de YouTube lleva un WebView dentro: hay que liberarlo a mano o seguiría
         // vivo en segundo plano gastando batería y datos (ver [VideoScreenController.release]).
         videoController?.release()
         videoController = null
+        exitVideoAction = null
+        // La selección de la cola vive en PlayerViewModel, no aquí (ver su comentario): por eso hay
+        // que limpiarla a mano al cerrar la ventana, o seguiría marcada la próxima vez que se abra.
+        playerViewModel.clearQueueSelection()
         super.onDestroyView()
     }
 

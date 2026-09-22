@@ -11,7 +11,6 @@
 
     <!-- Barra superior -->
     <string name="action_menu">Menú</string>
-    <string name="action_help">Ayuda</string>
     <string name="action_search">Buscar</string>
     <string name="action_more">Más opciones</string>
     <!-- Botón de ordenar de la barra superior (antes "Más opciones", que no hacía nada): abre
@@ -38,7 +37,7 @@
     <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
-    <string name="no_songs">Guarda tus archivos de audio en la carpeta UltiMusic</string>
+    <string name="no_songs">Para utilizar UltiMusic necesitas archivos de audio. Untar Technologies recomienda obtenerlos de tiendas como iTunes Store, Amazon Music, etc.</string>
     <string name="song_file_missing">No se encuentra el archivo de %1$s</string>
     <string name="cannot_open_file">No se ha podido abrir el archivo</string>
     <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
@@ -55,6 +54,12 @@
          mientras hay algo seleccionado (MainActivity.setupToolbar). -->
     <string name="song_selected_desc">Canción seleccionada</string>
     <string name="song_selection_more">Más opciones de las canciones seleccionadas</string>
+    <!-- Sustituye a la barra de búsqueda en la toolbar mientras hay canciones seleccionadas (ver
+         MainActivity.setupToolbar). -->
+    <plurals name="song_selection_count">
+        <item quantity="one">%d seleccionada</item>
+        <item quantity="other">%d seleccionadas</item>
+    </plurals>
     <plurals name="delete_songs_confirm">
         <item quantity="one">¿Eliminar %d canción del dispositivo?</item>
         <item quantity="other">¿Eliminar %d canciones del dispositivo?</item>
@@ -65,8 +70,10 @@
     <string name="shuffle_collection">Reproducir en orden aleatorio</string>
     <string name="no_albums">Todavía no hay ningún álbum</string>
     <string name="no_artists">Todavía no hay ningún artista</string>
+    <!-- Perfil que agrupa a los artistas con pocas canciones (ver ArtistGroupingPreferences) -->
+    <string name="artist_others">Otros</string>
     <string name="no_genres">Todavía no hay ningún género</string>
-    <string name="no_tags">Todavía no hay ninguna etiqueta</string>
+    <string name="tags_no_custom_hint">Todavía no hay ninguna etiqueta personalizada. Las etiquetas sirven para agrupar canciones en base a algo que tengan en común</string>
     <string name="no_songs_here">Aquí no hay ninguna canción</string>
 
     <!--
@@ -133,6 +140,19 @@
          adelante con los datos de iTunes, solo se queda sin los extras (productores, remix, vídeo). -->
     <string name="suggestions_genius_rate_limited">Genius ha limitado las peticiones (%1$d s): se han rellenado los datos de iTunes, pero sin productores ni datos del remix</string>
     <string name="suggestions_retry">Reintentar</string>
+    <string name="preview_search_title">Descubrir música</string>
+    <string name="preview_search_hint">Título o artista</string>
+    <string name="preview_search_idle">Busca una canción que no tengas</string>
+    <string name="preview_play_desc">Reproducir fragmento</string>
+    <string name="preview_pause_desc">Pausar fragmento</string>
+    <string name="preview_playback_error">No se ha podido reproducir el fragmento</string>
+    <string name="preview_stores_desc">Dónde conseguir el archivo</string>
+    <string name="store_links_title">Conseguir el archivo</string>
+    <string name="store_links_empty">No se ha encontrado esta canción en ninguna tienda de descargas</string>
+    <string name="store_link_free">Gratis</string>
+    <string name="store_download_started">Descargando %1$s…</string>
+    <string name="store_download_done">Descargado: %1$s</string>
+    <string name="store_download_failed">No se ha podido descargar %1$s</string>
 
     <!-- Diálogo "Elige qué quieres sobrescribir" que sale al elegir una sugerencia (de canción o de
          álbum), antes de aplicarla de verdad. Ver
@@ -329,6 +349,15 @@
          álbum/artista/género son colecciones fijas, así que solo avisan de que se han
          acabado. -->
     <string name="queue_hint_loose">Puedes añadir más música a la cola dándole a los tres puntos y a \"Añadir a cola\"</string>
+    <!-- Aviso DENTRO del propio contenedor de la cola (@+id/queueExpandHint, debajo de la fila que
+         suena, ver dialog_ipod.xml/IPodDialogFragment.updateInfoBox), solo mientras la canción
+         actual es la ÚNICA que hay en una cola suelta (recién tocada desde Canciones): explica que
+         se irá alargando ella sola. Distinto de queue_hint_loose (ese vive siempre en infoBox,
+         incluso con la cola ya alargada). -->
+    <string name="queue_expand_hint">La cola de reproducción se expandirá automáticamente. Para añadir canciones a la cola, puedes arrastrar hacia la derecha o darle a los tres puntos y a \"Añadir a cola\"</string>
+    <!-- Igual que queue_expand_hint, pero cuando la cola suelta está anclada a un género (ver
+         PlaybackService.playFromGenre): se alarga sola, pero solo con canciones de ese género. -->
+    <string name="queue_expand_hint_genre">La cola de reproducción se expandirá automáticamente con canciones del género que escogiste. Para añadir canciones a la cola, puedes arrastrar hacia la derecha o darle a los tres puntos y a \"Añadir a cola\"</string>
     <string name="queue_hint_playlist">Puedes añadir más música a la lista dándole a los tres puntos y a \"Añadir a lista\"</string>
     <string name="queue_end">Has llegado al final</string>
     <!-- Igual que queue_end, pero para cuando no es que se haya acabado la cola/lista: es que
@@ -359,13 +388,24 @@
     <string name="queue_subtitle_format">%1$s | %2$s</string>
 
     <!-- Listas -->
-    <string name="no_playlists">Todavía no hay ninguna lista. Usa el botón + o añade una canción a una lista nueva</string>
+    <string name="no_playlists">Todavía no hay ninguna lista. Las listas están diseñadas para crecer indefinidamente y reproducirse en secuencia sin repeticiones</string>
     <string name="playlist_subtitle_format">%1$s | %2$s</string>
     <string name="playlist_more">Más opciones de la lista</string>
     <string name="playlist_create">Nueva lista</string>
     <string name="playlist_name_hint">Nombre de la lista</string>
     <string name="playlist_name_invalid">Ese nombre contiene caracteres no válidos</string>
     <string name="playlist_rename">Renombrar</string>
+    <string name="action_rename">Renombrar</string>
+    <string name="artist_name_hint">Nombre del artista</string>
+    <string name="genre_name_hint">Nombre del género</string>
+    <string name="discography_action_desc">Ver discografía</string>
+    <string name="discography_action_desc_album">Ver discografía del álbum</string>
+    <string name="discography_title">Discografía de %1$s</string>
+    <string name="discography_close">Cerrar</string>
+    <string name="discography_empty">No se ha encontrado discografía para este artista en MusicBrainz</string>
+    <string name="discography_empty_album">No se ha encontrado este álbum en el catálogo oficial de MusicBrainz</string>
+    <string name="discography_error">No se ha podido cargar la discografía. Comprueba tu conexión e inténtalo de nuevo</string>
+    <string name="play_album_action_desc">Reproducir álbum</string>
     <string name="playlist_delete">Eliminar</string>
     <string name="playlist_delete_confirm">¿Eliminar la lista <b>^1</b>? Los archivos de audio no se tocarán</string>
     <string name="playlist_add_button">Crear lista</string>
@@ -375,19 +415,27 @@
     <string name="add_to_playlist_title">Añadir a lista</string>
     <!-- Ficha de una lista: última canción reproducida dentro de ELLA (no cuenta si esa misma
          canción se reprodujo desde cualquier otro sitio, ver PlaylistResumeStore). -->
-    <string name="playlist_current_position">Posición actual: %1$s</string>
+    <string name="playlist_current_song">Canción actual: %1$s</string>
     <string name="playlist_resume">REANUDAR</string>
+    <!-- Fila de la pestaña Listas (ver PlaylistsAdapter): debajo de "N canciones | duración", cuántas
+         de sus canciones ya han sonado esta vuelta del ciclo "sin repeticiones" (ver
+         PlaylistHistoryStore), con un botón justo al lado para vaciar ese historial a mano. -->
+    <plurals name="playlist_played_count">
+        <item quantity="one">%d reproducida</item>
+        <item quantity="other">%d reproducidas</item>
+    </plurals>
+    <string name="playlist_reset_history_desc">Reiniciar canciones ya reproducidas</string>
 
     <!-- Etiquetas: nombre de las predefinidas del sistema (ver Migrations.kt.seedDefaultTags).
          Fuente de verdad de estos textos: se leen en la migración/onCreate vía context.getString y
-         se guardan tal cual en TagEntity.name, no se recalculan en tiempo de ejecución. Hubo una,
-         "Debug", retirada en MIGRATION_19_20 en cuanto dejó de hacer falta. -->
-    <string name="tag_favorites_name">Favoritos</string>
+         se guardan tal cual en TagEntity.name, no se recalculan en tiempo de ejecución. Hubo dos,
+         "Debug" (retirada en MIGRATION_19_20) y "Favoritos" (retirada en MIGRATION_27_28), en cuanto
+         dejaron de hacer falta. -->
     <string name="tag_recently_added_name">Descargada recientemente</string>
     <string name="tag_not_in_playlist_name">En ninguna lista</string>
     <string name="tag_no_custom_tags_name">Sin etiquetas personalizadas</string>
-    <!-- Membresía real como Favoritos, pero LibraryRepository.syncSyncedVideoTag la mantiene sola en
-         cuanto Song.videoOffsetMs deja de ser 0 (ver SystemTagKey.SYNCED_VIDEO). -->
+    <!-- Membresía real, pero LibraryRepository.syncSyncedVideoTag la mantiene sola en cuanto
+         Song.videoOffsetMs deja de ser 0 (ver SystemTagKey.SYNCED_VIDEO). -->
     <string name="tag_synced_video_name">Vídeo sincronizado</string>
     <!-- Membresía real como Vídeo sincronizado, pero LibraryRepository.syncRemixCoverTag la mantiene
          sola en cuanto "Título original" deja de estar vacío en el editor de metadatos (ver
@@ -416,6 +464,12 @@
     <string name="add_songs_desc">Añadir canciones</string>
     <string name="remove_song_from_tag_desc">Quitar de la etiqueta</string>
     <string name="remove_song_from_playlist_desc">Quitar de la lista</string>
+    <string name="remove_song_from_tag_confirm">¿Quitar <b>^1</b> de esta etiqueta?</string>
+    <string name="remove_song_from_playlist_confirm">¿Quitar <b>^1</b> de esta lista?</string>
+
+    <!-- menu_queue_selection.xml: acción de la selección múltiple de la cola del iPod (ver
+         IPodDialogFragment.showQueueSelectionMenu) que reemplaza a "Añadir a la cola". -->
+    <string name="remove_from_queue">Quitar de la cola</string>
 
     <!-- dialog_add_songs.xml, compartido por AddSongsToTagDialogFragment y
          AddSongsToPlaylistDialogFragment (ver el comentario del layout): buscador de canciones que
@@ -447,6 +501,11 @@
     <string name="ipod_shuffle_random">Reproducir una canción al azar</string>
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>
+    <!-- Sí/No, distintos de dialog_ok/dialog_cancel: para confirmaciones que se formulan como
+         pregunta directa (p. ej. "Añadir todas las letras" en ajustes visuales) en vez de como
+         "Cancelar"/"Aceptar". -->
+    <string name="dialog_yes">Sí</string>
+    <string name="dialog_no">No</string>
 
     <!-- Ajustes -->
     <string name="settings_title">Ajustes</string>
@@ -459,6 +518,15 @@
     <string name="settings_boost_no_limit_headphones">Desconecta los auriculares para poder desactivar el límite</string>
     <string name="settings_boost_device_unknown">No se puede saber si el dispositivo conectado es un altavoz o unos auriculares, así que el límite se mantiene</string>
     <string name="settings_boost_bluetooth_denied">Sin ese permiso, UltiMusic no puede distinguir un altavoz Bluetooth de unos auriculares, así que mantiene el límite</string>
+
+    <!-- Idioma (primer ajuste del grupo "Ajustes visuales"): dos banderas, España e Inglaterra, que
+         cambian el idioma de toda la aplicación al instante (ver AppLocale y
+         SettingsDialogFragment.setupLanguage). Por defecto se elige según el idioma del sistema: si
+         es español, España; si es cualquier otro, Inglaterra. -->
+    <string name="settings_language_title">Idioma</string>
+    <string name="settings_language_subtitle">Elige el idioma de la aplicación</string>
+    <string name="settings_language_spanish">Español</string>
+    <string name="settings_language_english">Inglés</string>
 
     <!-- Carpetas de la fonoteca -->
     <string name="settings_library_roots_title">Carpetas de la fonoteca</string>
@@ -476,6 +544,25 @@
     <string name="settings_greylist_delete_desc">Quitar de la lista gris</string>
     <string name="settings_greylist_remove_confirm">¿Quitar <b>^1</b> de la lista gris?</string>
     <string name="settings_greylist_empty">Todavía no has añadido ninguna subcarpeta</string>
+
+    <string name="settings_add_all_lyrics_title">Ajustes adicionales</string>
+
+    <!-- Añadir todas las letras (BulkLyricsAdder/BulkLyricsProgressDialogFragment) -->
+    <string name="settings_bulk_lyrics_add">Añadir todas las letras</string>
+    <string name="settings_bulk_lyrics_confirm_title">¿Seguro que quieres añadir todas las letras?</string>
+    <string name="settings_bulk_lyrics_confirm_message">Al ser una operación automática, puede haber equivocaciones. En caso de haberlas, se pueden corregir desde el UltiMusicPod y desde el editor de metadatos.</string>
+    <string name="settings_bulk_lyrics_progress_title">Añadiendo letras…</string>
+    <!-- "5/1282" -->
+    <string name="settings_bulk_lyrics_counter">%1$d/%2$d</string>
+    <string name="settings_bulk_lyrics_background">Segundo plano</string>
+    <string name="settings_bulk_lyrics_empty">Todas las canciones ya tienen letra</string>
+    <string name="settings_bulk_lyrics_finished">Letras añadidas: %1$d de %2$d</string>
+    <!-- Notificación de la barra de progreso al mandar el pase a segundo plano: "Nombre (5/1282)" -->
+    <string name="settings_bulk_lyrics_notification_text">%1$s (%2$d/%3$d)</string>
+    <string name="notification_channel_bulk_lyrics">Añadir letras</string>
+
+    <!-- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) -->
+    <string name="settings_artist_grouping_title">Agrupar artistas con menos de N canciones</string>
 
     <!-- Ecualizador -->
     <string name="settings_eq_title">Ecualizador</string>
@@ -555,4 +642,50 @@
     <string name="notif_pause">Pausar</string>
     <string name="notif_previous">Canción anterior</string>
     <string name="notif_next">Canción siguiente</string>
+
+    <!--
+      UltiMusic Recount (ver RecountDialogFragment y RecountReminder). Se llama "Recount" y no
+      "Wrapped" a propósito: "Wrapped" es de Spotify.
+    -->
+    <string name="recount_title">UltiMusic Recount</string>
+    <string name="recount_back">Cerrar</string>
+    <string name="recount_histogram_title">Desglose de tu fonoteca</string>
+    <string name="recount_histogram_subtitle">Cuántas canciones tienes de cada año, en toda tu fonoteca</string>
+    <string name="recount_histogram_empty">Todavía no hay canciones con año en tu fonoteca</string>
+    <string name="recount_top_songs_title">Canciones más reproducidas</string>
+    <string name="recount_top_artists_title">Artistas más reproducidos</string>
+    <string name="recount_top_genres_title">Géneros más reproducidos</string>
+    <string name="recount_pie_empty">Ninguna de las canciones que escuchaste tiene género</string>
+    <!-- La fila del top de canciones que agrupa las escuchas cuya canción ya no está en la fonoteca. -->
+    <string name="recount_deleted_songs">Canciones borradas</string>
+    <!-- El sector de la tarta que agrupa los géneros demasiado pequeños para dibujarse aparte. -->
+    <string name="recount_other_genres">Otros</string>
+    <!-- Subtítulo de una fila de cualquiera de los tres tops:
+         "42 reproducciones | 2:51:20 | 18%". El porcentaje es sobre las REPRODUCCIONES del año, no
+         sobre el tiempo (ver RecountEntry.share); el %% es un porcentaje literal. -->
+    <string name="recount_entry_stats">%1$s | %2$s | %3$d%%</string>
+    <!-- Una entrada de la leyenda de la tarta: "Rock 38%". El %% es un porcentaje literal. -->
+    <string name="recount_legend_entry">%1$s %2$d%%</string>
+    <string name="recount_year_empty">No escuchaste nada en %d</string>
+    <plurals name="recount_play_count">
+        <item quantity="one">%d reproducción</item>
+        <item quantity="other">%d reproducciones</item>
+    </plurals>
+    <plurals name="recount_unknown_year">
+        <item quantity="one">%d canción sin año</item>
+        <item quantity="other">%d canciones sin año</item>
+    </plurals>
+
+    <!-- Entrada de Recount en la pantalla de Ajustes, la última de todas. -->
+    <string name="settings_recount_title">UltiMusic Recount</string>
+    <string name="settings_recount_subtitle">Lo que más has escuchado este año</string>
+    <string name="settings_recount_open">Ver UltiMusic Recount</string>
+
+    <!-- Aviso de la última semana de diciembre (RecountReminder/RecountReminderWorker). -->
+    <string name="notification_channel_recount">UltiMusic Recount</string>
+    <string name="recount_reminder_title">¿Por qué no miras tu UltiMusic Recount de %d?</string>
+    <string name="recount_reminder_text">Mira lo que más has escuchado este año</string>
+    <string name="recount_reminder_see">Ver</string>
+    <string name="recount_reminder_later">Ahora no</string>
+
 </resources>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cuadradito de color de una entrada de la leyenda de la tarta de géneros (item_recount_legend.xml).
+     El color de aquí es solo un PLACEHOLDER: RecountDialogFragment lo muta en runtime con
+     AccentTint.fill, uno por sector, a partir de la paleta que DynamicColor.palette deriva del
+     acento. Mismo patrón que bg_tag_chip.xml. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="2dp" />
+    <solid android:color="@color/um_divider" />
+</shape>

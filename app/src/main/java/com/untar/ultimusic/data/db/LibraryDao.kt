@@ -11,6 +11,7 @@ import com.untar.ultimusic.data.db.entities.AlbumEntity
 import com.untar.ultimusic.data.db.entities.ArtistEntity
 import com.untar.ultimusic.data.db.entities.GreylistFolderEntity
 import com.untar.ultimusic.data.db.entities.LibraryRootEntity
+import com.untar.ultimusic.data.db.entities.PlayEventEntity
 import com.untar.ultimusic.data.db.entities.ProducerEntity
 import com.untar.ultimusic.data.db.entities.SongAlbumCrossRef
 import com.untar.ultimusic.data.db.entities.SongArtistCrossRef
@@ -24,6 +25,7 @@ import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
 import com.untar.ultimusic.data.db.relations.CollageCandidateRow
 import com.untar.ultimusic.data.db.relations.PersonSummaryRow
 import com.untar.ultimusic.data.db.relations.SongPathDurationRow
+import com.untar.ultimusic.data.db.relations.SongPlayTotalsRow
 import com.untar.ultimusic.data.db.relations.SongVideoRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
 import com.untar.ultimusic.data.scan.ScannedSong
@@ -346,6 +348,11 @@ abstract class LibraryDao {
     @Query("SELECT filePath, duration FROM songs")
     abstract suspend fun allSongPathsAndDurations(): List<SongPathDurationRow>
 
+    /** Filas crudas (sin relaciones), para [renameGenre]: los géneros no tienen su propia consulta
+     *  filtrada porque viven serializados dentro de la propia fila (ver [SongEntity.genres]). */
+    @Query("SELECT * FROM songs")
+    abstract suspend fun allSongEntities(): List<SongEntity>
+
     @Query("SELECT * FROM artists WHERE tagName = :tagName LIMIT 1")
     abstract suspend fun findArtistByTag(tagName: String): ArtistEntity?
 
@@ -362,6 +369,9 @@ abstract class LibraryDao {
      */
     @Query("SELECT * FROM artists WHERE name = :name LIMIT 1")
     abstract suspend fun findArtistByName(name: String): ArtistEntity?
+
+    @Query("SELECT * FROM artists WHERE id = :id LIMIT 1")
+    abstract suspend fun findArtistById(id: Long): ArtistEntity?
 
     @Query("SELECT * FROM albums WHERE title = :title LIMIT 1")
     abstract suspend fun findAlbumByTitle(title: String): AlbumEntity?
@@ -486,9 +496,9 @@ abstract class LibraryDao {
     abstract suspend fun insertTag(tag: TagEntity): Long
 
     /** `WHERE systemKey IS NULL AND isAutoAssigned = 0` como cinturón de seguridad: la UI ya no deja
-     *  llegar hasta aquí para una etiqueta predefinida (Favoritos, Debug...) ni para una de idioma
-     *  (ver [com.untar.ultimusic.data.db.entities.TagEntity.isAutoAssigned]), pero así un bug de la UI
-     *  tampoco podría renombrarlas/recolorearlas por accidente. */
+     *  llegar hasta aquí para una etiqueta predefinida (Vídeo sincronizado, Debug...) ni para una de
+     *  idioma (ver [com.untar.ultimusic.data.db.entities.TagEntity.isAutoAssigned]), pero así un bug
+     *  de la UI tampoco podría renombrarlas/recolorearlas por accidente. */
     @Query("UPDATE tags SET name = :name, colorArgb = :colorArgb WHERE id = :id AND systemKey IS NULL AND isAutoAssigned = 0")
     abstract suspend fun updateTag(id: Long, name: String, colorArgb: Int)
 
@@ -513,6 +523,41 @@ abstract class LibraryDao {
      *  X, no se rehace la lista entera de golpe como en el editor de metadatos. */
     @Query("DELETE FROM song_tag WHERE songId = :songId AND tagId = :tagId")
     abstract suspend fun deleteSongTag(songId: Long, tagId: Long)
+
+    // --- UltiMusic Recount (ver PlayEventEntity y RecountRepository) ---
+    //
+    // Aquí solo hay lo que SQLite hace mejor que Kotlin: agrupar por canción. El resto del Recount
+    // (artistas, géneros, tarta) se deriva de estas filas en Kotlin, cruzándolas con la fonoteca del
+    // momento, porque los géneros viven serializados dentro de `songs.genres` (ver Converters) y los
+    // artistas cuelgan de una tabla de cruce con multiplicidad: en SQL saldría un engendro, y
+    // encima habría que rehacerlo cada vez que cambiara la forma de guardar cualquiera de los dos.
+
+    @Insert
+    abstract suspend fun insertPlayEvent(event: PlayEventEntity)
+
+    /** Lo que sumó cada canción en [year]. Devuelve TODOS los ids, también los de canciones que ya
+     *  no existen o están ocultas: separarlos es cosa de `RecountRepository`, que es quien sabe qué
+     *  significa cada caso. */
+    @Query(
+        """
+        SELECT songId AS songId, COUNT(*) AS plays, SUM(playedMs) AS playedMs
+        FROM play_events
+        WHERE year = :year
+        GROUP BY songId
+        """
+    )
+    abstract fun observePlayTotals(year: Int): Flow<List<SongPlayTotalsRow>>
+
+    /**
+     * Los ids de las canciones ocultas por la lista gris. Hace falta EXACTAMENTE para una cosa:
+     * distinguir "oculta" de "borrada" en el Recount. Como [observeSongs] ya filtra las ocultas, sin
+     * esta consulta las dos situaciones se verían igual desde fuera (un id que no está en la lista de
+     * canciones), y una canción oculta acabaría contando como "Canción borrada" cuando la regla es
+     * justo la contraria: lo que tapa la lista gris es como si no existiera, no suma ni aparece en
+     * ningún sitio, pero sigue ahí para cuando el usuario saque su carpeta de la lista.
+     */
+    @Query("SELECT id FROM songs WHERE hiddenByGreylist = 1")
+    abstract fun observeHiddenSongIds(): Flow<List<Long>>
 
     // --- Inserciones ---
 
@@ -613,6 +658,11 @@ abstract class LibraryDao {
      */
     @Query("UPDATE songs SET lyrics = :lyrics WHERE id = :songId")
     abstract suspend fun setLyrics(songId: Long, lyrics: String?)
+
+    /** Guarda el idioma deducido de una letra guardada fuera del editor de metadatos, ver
+     *  [com.untar.ultimusic.data.LibraryRepository.setLyrics]. */
+    @Query("UPDATE songs SET language = :language WHERE id = :songId")
+    abstract suspend fun setLanguage(songId: Long, language: String?)
 
     /**
      * Guarda el desplazamiento vídeo/audio, mismo motivo que [setVideoUrl]: lo llama el iPod al
@@ -755,6 +805,23 @@ abstract class LibraryDao {
 
     @Query("DELETE FROM album_artist WHERE albumId = :dupId")
     abstract suspend fun deleteAlbumArtistLinksOf(dupId: Long)
+
+    /** Gemelas de las dos de arriba pero reapuntando por el lado del ARTISTA en vez del álbum -las
+     *  usa [renameArtist] al fundir dos artistas en uno: aquí `keepId`/`dupId` son ids de ARTISTA, la
+     *  columna que cambia es `artistId`, no `albumId`/`songId`. `OR IGNORE` + limpieza por el mismo
+     *  motivo que las de álbum: ni una canción ni un álbum pueden llevar el mismo artista enlazado
+     *  dos veces (claves primarias compuestas `(songId, artistId)`/`(albumId, artistId)`). */
+    @Query("UPDATE OR IGNORE song_artist SET artistId = :keepId WHERE artistId = :dupId")
+    abstract suspend fun moveSongArtistLinksTo(keepId: Long, dupId: Long)
+
+    @Query("DELETE FROM song_artist WHERE artistId = :dupId")
+    abstract suspend fun deleteSongArtistLinksOf(dupId: Long)
+
+    @Query("UPDATE OR IGNORE album_artist SET artistId = :keepId WHERE artistId = :dupId")
+    abstract suspend fun moveArtistAlbumLinksTo(keepId: Long, dupId: Long)
+
+    @Query("DELETE FROM album_artist WHERE artistId = :dupId")
+    abstract suspend fun deleteArtistAlbumLinksOf(dupId: Long)
 
     @Query("DELETE FROM albums WHERE id = :id")
     abstract suspend fun deleteAlbumById(id: Long)
@@ -1057,6 +1124,61 @@ abstract class LibraryDao {
         // esto rara vez borra nada, pero es la misma red de seguridad que usa saveSongEdits.
         pruneOrphanArtists()
         mergeDuplicateAlbums()
+    }
+
+    /**
+     * Renombra el artista [id] de golpe para TODA la app (ver
+     * [com.untar.ultimusic.ui.library.DetailViewModel.renameArtist]): cambia
+     * [ArtistEntity.name] directamente, no el de cada canción suelta, porque ya es una fila propia
+     * de Room de la que cuelgan todas sus canciones/álbumes (a diferencia de un género, que no tiene
+     * tabla propia, ver [renameGenre]).
+     *
+     * Si YA existía otro artista con ese nombre visible (mismo criterio que [resolveArtist]), en vez
+     * de dejar dos filas duplicadas se funden en una: sobrevive el que ya tenía el nombre, sus
+     * canciones/álbumes se repuntan (mismo patrón `UPDATE OR IGNORE` + limpieza que
+     * [mergeDuplicateAlbums]) y el renombrado desaparece solo vía [pruneOrphanArtists].
+     *
+     * Devuelve el id del artista que sobrevive (el mismo [id] en un renombrado normal, el del
+     * existente si ha fundido dos en uno): [com.untar.ultimusic.ui.library.DetailViewModel.renameArtist]
+     * lo necesita para poder seguir mirando al artista correcto si `id` ha dejado de existir.
+     */
+    @Transaction
+    open suspend fun renameArtist(id: Long, newName: String): Long {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty()) return id
+        val current = findArtistById(id) ?: return id
+        if (trimmed == current.name) return id
+        val existing = findArtistByName(trimmed)
+        if (existing != null && existing.id != id) {
+            moveSongArtistLinksTo(existing.id, id)
+            deleteSongArtistLinksOf(id)
+            moveArtistAlbumLinksTo(existing.id, id)
+            deleteArtistAlbumLinksOf(id)
+            pruneOrphanArtists()
+            return existing.id
+        }
+        updateArtist(current.copy(name = trimmed))
+        return id
+    }
+
+    /**
+     * Renombra el género [oldName] de golpe para TODA la app (ver
+     * [com.untar.ultimusic.ui.collection.CollectionDetailViewModel.renameGenre]). A diferencia de un
+     * artista ([renameArtist]), un género no es una fila propia de Room: vive serializado dentro de
+     * [SongEntity.genres] (ver [Converters]), así que aquí no hay una sola fila que actualizar, sino
+     * que hay que recorrer cada canción que lo lleve y reescribir su lista. `distinct()` evita dejar
+     * el nombre nuevo duplicado si una canción ya llevaba los dos géneros a la vez (p. ej. renombrar
+     * "Rock" a un "Pop" que esa canción ya tenía).
+     */
+    @Transaction
+    open suspend fun renameGenre(oldName: String, newName: String) {
+        val trimmed = newName.trim()
+        if (trimmed.isEmpty() || trimmed == oldName) return
+        for (song in allSongEntities()) {
+            if (oldName !in song.genres) continue
+            val genres = song.genres.map { if (it == oldName) trimmed else it }.distinct()
+            updateSong(song.copy(genres = genres))
+        }
     }
 
     /** Busca el artista por su nombre visible, luego por el de etiqueta; si no existe, lo crea. */

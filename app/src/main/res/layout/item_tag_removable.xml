@@ -37,7 +37,7 @@
         android:textColor="@color/um_on_background"
         android:textSize="14sp"
         android:textStyle="bold"
-        tools:text="Favoritos" />
+        tools:text="Vídeo sincronizado" />
 
     <ImageButton
         android:id="@+id/btnRemoveTag"

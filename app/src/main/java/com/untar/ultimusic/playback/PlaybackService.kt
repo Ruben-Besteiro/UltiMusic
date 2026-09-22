@@ -42,7 +42,9 @@ import com.untar.ultimusic.ui.BOOST_MIN_PERCENT
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
+import com.untar.ultimusic.util.PlaylistHistoryStore
 import com.untar.ultimusic.util.PlaylistResumeStore
+import com.untar.ultimusic.util.PlaylistShuffleStore
 import com.untar.ultimusic.util.artistDisplay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -116,6 +118,9 @@ class PlaybackService : MediaSessionService() {
      * llamada al reproductor desde dentro de un `launch` reventaría.
      */
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    /** Cuenta lo que suena de verdad cada canción para UltiMusic Recount (ver [PlayTracker]). */
+    private val playTracker by lazy { PlayTracker(this) }
 
     private lateinit var mediaSession: MediaSession
 
@@ -253,12 +258,40 @@ class PlaybackService : MediaSessionService() {
                 addListener(object : Player.Listener {
                     override fun onIsPlayingChanged(isPlaying: Boolean) {
                         _isPlaying.value = isPlaying
+                        // Al contador de escuchas se le pasa `player.isPlaying`, NO el `isPlaying`
+                        // que trae el aviso, y la diferencia importa: cuando una canción termina,
+                        // onPlaybackStateChanged(STATE_ENDED) llama a next() ahí mismo, y el aviso
+                        // de "ya no suena" de la canción VIEJA se entrega DESPUÉS de que la nueva ya
+                        // haya abierto su sesión (Media3 encola los avisos que se generan mientras
+                        // los está repartiendo). Con el valor del parámetro, ese aviso rezagado
+                        // pausaría una sesión recién nacida; leyendo el estado real del reproductor
+                        // en este instante, se responde a lo que pasa ahora y no a lo que pasó.
+                        playTracker.setPlaying(player.isPlaying)
                     }
 
                     override fun onPlaybackStateChanged(state: Int) {
                         // Al terminar una canción, avanzamos solos a la siguiente. (Cualificado: sin
                         // el this@, next() se resolvería al next() deprecado del propio ExoPlayer.)
                         if (state == Player.STATE_ENDED) this@PlaybackService.next()
+                    }
+
+                    /**
+                     * Un salto explícito dentro de la canción (arrastrar la barra de progreso,
+                     * `seekToFraction`...), para [PlayTracker]: solo interesa `SEEK`, que es el
+                     * motivo que Media3 da para "el propio código ha pedido esta posición", a
+                     * diferencia de un cambio de posición por avanzar sonando normal (que ni
+                     * siquiera dispara este aviso) o por pasar a la siguiente canción
+                     * (`AUTO_TRANSITION`/`REMOVE`, que además llegan con la canción vieja ya
+                     * cerrada por `playTracker.start` de la nueva).
+                     */
+                    override fun onPositionDiscontinuity(
+                        oldPosition: Player.PositionInfo,
+                        newPosition: Player.PositionInfo,
+                        reason: Int
+                    ) {
+                        if (reason == Player.DISCONTINUITY_REASON_SEEK) {
+                            playTracker.onSeek(oldPosition.positionMs, newPosition.positionMs)
+                        }
                     }
 
                     /**
@@ -432,6 +465,10 @@ class PlaybackService : MediaSessionService() {
 
     override fun onDestroy() {
         savePlaybackState()
+        // Antes de soltar el reproductor y de cancelar serviceScope: cierra la escucha en curso, que
+        // si ya pasaba del 50% se anota aquí mismo. [PlayTracker] escribe desde un scope propio justo
+        // para que la cancelación de más abajo no se la lleve por delante a mitad.
+        playTracker.flush()
         library.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
@@ -577,6 +614,26 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
+     * Igual que [play] (cola suelta de una sola canción), pero anclada a un género: al agotarse la
+     * cola, [continueWithRandomSong] la alarga con una canción al azar de [genreName], no de toda la
+     * biblioteca. La usa [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment] al tocar
+     * una canción con la ficha abierta en un género, igual que [play] con la pestaña Canciones.
+     *
+     * Reutiliza [_currentCollectionKind]/[_currentPlaylistName] (mismos campos que [playCollection])
+     * para guardar a qué género está anclada: [continueWithRandomSong] y [queueEndText] en
+     * [com.untar.ultimusic.ui.player.IPodDialogFragment] los leen para saber de dónde sacar la
+     * siguiente canción y qué aviso mostrar.
+     */
+    fun playFromGenre(song: Song, genreName: String) {
+        _queue.value = listOf(song)
+        _currentIndex.value = 0
+        _isLooseQueue.value = true
+        _currentPlaylistName.value = genreName
+        _currentCollectionKind.value = CollectionKind.GENRE
+        playCurrent()
+    }
+
+    /**
      * Reproduce una canción al azar de toda la biblioteca (nunca una de la lista gris, ver
      * [librarySongsPool]), como si el usuario la hubiera tocado directamente en Canciones: cola
      * suelta de una sola canción. La usan el botón de play del mini-reproductor y el del iPod
@@ -662,11 +719,36 @@ class PlaybackService : MediaSessionService() {
         if (newIndex >= 0) _currentIndex.value = newIndex
     }
 
+    /**
+     * Quita de la cola las canciones marcadas (selección múltiple por pulsación larga en
+     * [com.untar.ultimusic.ui.player.IPodQueueAdapter]): nunca la que suena AHORA, aunque esté
+     * marcada -no tiene sentido "quitar de la cola" lo que se está reproduciendo en este mismo
+     * instante, y hacerlo obligaría además a decidir qué pasa con la reproducción en curso-, así que
+     * si [ids] solo contenía esa, la llamada no hace nada. El resto del reindexado es igual que
+     * [reorderQueue]: la canción actual siempre se vuelve a encontrar (nunca se quita), solo cambia
+     * de posición si alguna de las quitadas iba antes que ella.
+     */
+    fun removeFromQueue(ids: Set<Long>) {
+        val currentId = _queue.value.getOrNull(_currentIndex.value)?.id
+        val newQueue = _queue.value.filter { it.id !in ids || it.id == currentId }
+        if (newQueue.size == _queue.value.size) return
+        _queue.value = newQueue
+        val newIndex = newQueue.indexOfFirst { it.id == currentId }
+        if (newIndex >= 0) _currentIndex.value = newIndex
+    }
+
     // ---------------------------------------------------------------------------------------------
     // COLECCIONES: fichas de álbum/artista, modo navegación del iPod para listas y géneros — ver
     // cabecera original.
     // ---------------------------------------------------------------------------------------------
 
+    /**
+     * Para una Lista ([CollectionKind.LISTA] con [playlistName]), tocar una canción de su ficha
+     * construye la cola con el sistema "sin repeticiones" (ver [buildListaQueue]) en vez de empezar
+     * sin más en [startIndex]. Para cualquier otro tipo de colección (álbum, artista, género,
+     * etiqueta) el comportamiento es el de siempre: la cola pasa a ser [collection] tal cual,
+     * empezando en [startIndex].
+     */
     fun playCollection(
         collection: List<Song>,
         startIndex: Int,
@@ -674,12 +756,89 @@ class PlaybackService : MediaSessionService() {
         collectionKind: CollectionKind? = null
     ) {
         if (collection.isEmpty() || startIndex !in collection.indices) return
-        _queue.value = collection
-        _currentIndex.value = startIndex
+        if (collectionKind == CollectionKind.LISTA && playlistName != null) {
+            val (queue, index) = buildListaQueue(collection, playlistName, collection[startIndex])
+            _queue.value = queue
+            _currentIndex.value = index
+        } else {
+            _queue.value = collection
+            _currentIndex.value = startIndex
+        }
         _isLooseQueue.value = false
         _currentPlaylistName.value = playlistName
         _currentCollectionKind.value = collectionKind
         playCurrent()
+    }
+
+    /**
+     * Construye la cola de una Lista con su sistema "sin repeticiones" (ver el botón de barajar de
+     * `CollectionDetailDialogFragment`): las canciones de [songs] que ya sonaron esta vuelta -según
+     * el historial persistido de [playlistName] ([PlaylistHistoryStore])- se colocan ANTES de
+     * [current], en el mismo orden en que sonaron -así la última en sonar queda pegada justo delante,
+     * en la posición -1, tanto si [current] nunca había sonado como si el usuario está reeligiendo a
+     * mano una que ya sonó (ver [jumpTo])-; las que faltan por sonar van detrás, en el orden base de
+     * la lista: el orden normal de [songs] (el propio de la lista, manual/de archivo) si
+     * [PlaylistShuffleStore] tiene el barajado desactivado para [playlistName], recién barajado si lo
+     * tiene activado.
+     *
+     * No graba nada en el historial -eso lo hace únicamente [loadCurrent], el único punto por el que
+     * pasa cualquier cambio de canción actual-, así que es segura de llamar tanto para arrancar una
+     * vuelta nueva como para solo reordenar lo que queda por sonar sin interrumpir lo que ya suena
+     * (ver [setListaShuffle]).
+     *
+     * Devuelve la cola construida junto con el índice de [current] dentro de ella.
+     */
+    private fun buildListaQueue(songs: List<Song>, playlistName: String, current: Song): Pair<List<Song>, Int> {
+        // [songs] ya llega en el orden normal de la lista (manual/de archivo, ver PlaylistRepository)
+        // -no hay que ordenarlo aparte-, así que el único caso que toca tocarlo es el barajado.
+        val base = if (PlaylistShuffleStore.isShuffleOn(playlistName)) songs.shuffled() else songs
+        val byId = base.associateBy { it.id }
+        val historyIds = PlaylistHistoryStore.getHistory(playlistName)
+        val already = historyIds.mapNotNull { id -> if (id != current.id) byId[id] else null }
+        val historySet = historyIds.toSet()
+        val upcoming = base.filter { it.id != current.id && it.id !in historySet }
+        return (already + current + upcoming) to already.size
+    }
+
+    /**
+     * Activa/desactiva el modo aleatorio de [playlistName] (botón nuevo de la barra de
+     * `CollectionDetailDialogFragment`), persistiéndolo en [PlaylistShuffleStore]. Si esa Lista es la
+     * que está sonando ahora mismo, reordena de inmediato lo que queda por sonar -sin cortar la
+     * canción actual, mismo criterio que [shuffleCollection]-; si no, el cambio se aplicará solo la
+     * próxima vez que se toque una canción de [playlistName] (ver [playCollection]).
+     */
+    fun setListaShuffle(playlistName: String, songs: List<Song>, enabled: Boolean) {
+        PlaylistShuffleStore.setShuffleOn(playlistName, enabled)
+        reorderActiveListaQueue(playlistName, songs)
+    }
+
+    /**
+     * Vacía del todo el historial "sin repeticiones" de [playlistName] (botón de reinicio de la
+     * ficha, ver [PlaylistHistoryStore.clear]). Si esa Lista es la que está sonando ahora mismo, las
+     * canciones que acaban de dejar de estar "ya sonadas" vuelven a estar disponibles de inmediato
+     * -se reordena lo que queda por sonar sin cortar la canción actual, mismo criterio que
+     * [setListaShuffle]-, en vez de esperar a que se toque una canción nueva para que se note.
+     */
+    fun resetListaHistory(playlistName: String, songs: List<Song>) {
+        PlaylistHistoryStore.clear(playlistName)
+        reorderActiveListaQueue(playlistName, songs)
+    }
+
+    /**
+     * Si [playlistName] es la Lista que está sonando ahora mismo, reconstruye la cola con
+     * [buildListaQueue] sin interrumpir la canción actual -la usan [setListaShuffle] y
+     * [resetListaHistory], que tocan justo lo que [buildListaQueue] lee (el modo de barajado y el
+     * historial) y necesitan que se note al instante si esa Lista ya está sonando-. Si no es la que
+     * suena, no hace nada: el cambio se aplicará solo por su cuenta la próxima vez que se toque una
+     * canción de [playlistName] (ver [playCollection]).
+     */
+    private fun reorderActiveListaQueue(playlistName: String, songs: List<Song>) {
+        if (_currentCollectionKind.value != CollectionKind.LISTA || _currentPlaylistName.value != playlistName) return
+        val current = _currentSong.value ?: return
+        if (songs.none { it.id == current.id }) return
+        val (queue, index) = buildListaQueue(songs, playlistName, current)
+        _queue.value = queue
+        _currentIndex.value = index
     }
 
     /**
@@ -718,15 +877,23 @@ class PlaybackService : MediaSessionService() {
     }
 
     /**
-     * Alarga la cola suelta con una canción al azar de la biblioteca y la reproduce.
+     * Alarga la cola suelta con una canción al azar y la reproduce: de [genreSongsPoolName] si la
+     * cola suelta está anclada a un género (ver [playFromGenre]), o de toda la biblioteca si no.
      *
      * [librarySongsPool] lo rellena un `Flow` de Room que se empieza a recoger en [onCreate], así
      * que en un Service **recién creado** —el que revive `MainActivity.onResume` al volver de
      * segundo plano— puede estar todavía vacío. Antes eso era un `return` a secas: la cola se
      * acababa, el "siguiente" no hacía nada y no había forma de enterarse. Ahora se espera a la
-     * primera lista de verdad y se sigue donde se había quedado.
+     * primera lista de verdad y se sigue donde se había quedado. Anclada a un género no hace falta
+     * ese mismo cuidado: se pide directo a Room (ver [continueWithRandomGenreSong]), sin pool propio
+     * que precargar.
      */
     private fun continueWithRandomSong(shouldPlay: Boolean) {
+        val genreName = genreSongsPoolName()
+        if (genreName != null) {
+            continueWithRandomGenreSong(genreName, shouldPlay)
+            return
+        }
         val pool = librarySongsPool.value
         if (pool.isNotEmpty()) {
             appendRandomSong(pool, shouldPlay)
@@ -735,6 +902,21 @@ class PlaybackService : MediaSessionService() {
         randomContinuationJob?.cancel()
         randomContinuationJob = serviceScope.launch {
             appendRandomSong(librarySongsPool.first { it.isNotEmpty() }, shouldPlay)
+        }
+    }
+
+    /** Nombre del género si [continueWithRandomSong] debe alargar la cola solo con canciones de ESE
+     *  género (ver [playFromGenre]); null en cola suelta normal, de toda la biblioteca. */
+    private fun genreSongsPoolName(): String? =
+        _currentPlaylistName.value?.takeIf { _currentCollectionKind.value == CollectionKind.GENRE }
+
+    private fun continueWithRandomGenreSong(genreName: String, shouldPlay: Boolean) {
+        randomContinuationJob?.cancel()
+        randomContinuationJob = serviceScope.launch {
+            val pool = library.songsOfGenre(genreName).first()
+            // Si el género se ha quedado sin canciones (todas borradas/reeditadas mientras sonaba),
+            // la cola simplemente deja de alargarse en vez de reventar contra una lista vacía.
+            if (pool.isNotEmpty()) appendRandomSong(pool, shouldPlay)
         }
     }
 
@@ -769,7 +951,19 @@ class PlaybackService : MediaSessionService() {
         }
     }
 
-    fun skipToPrevious() = withQueue { jumpTo(_currentIndex.value - 1, forcePlay = false) }
+    /**
+     * "Anterior": si la canción actual lleva sonando más de [SKIP_PREVIOUS_RESTART_THRESHOLD_MS], la
+     * reinicia desde el principio en vez de saltar a la de antes — igual que el resto de
+     * reproductores (Spotify, YouTube Music…): pasados los primeros segundos, lo más probable es que
+     * el usuario quiera repetir esta, no la anterior. Por debajo del umbral se comporta como siempre.
+     */
+    fun skipToPrevious() = withQueue {
+        if (player.currentPosition > SKIP_PREVIOUS_RESTART_THRESHOLD_MS) {
+            player.seekTo(0)
+        } else {
+            jumpTo(_currentIndex.value - 1, forcePlay = false)
+        }
+    }
 
     fun skipToNext() = withQueue {
         val idx = _currentIndex.value
@@ -788,6 +982,38 @@ class PlaybackService : MediaSessionService() {
         if (d != oldIndex) {
             loadCurrent(shouldPlay = if (forcePlay) true else player.playWhenReady)
         }
+    }
+
+    /**
+     * Tocar directamente una fila de [com.untar.ultimusic.ui.player.IPodQueueAdapter] (a diferencia
+     * de [jumpTo], que también usan [skipToPrevious]/[skipToNext] para moverse una posición cada vez
+     * -esas nunca deben reordenar nada, solo seguir la cola tal cual está-, aquí el usuario puede
+     * elegir CUALQUIER fila a mano).
+     *
+     * Para una Lista, si la fila tocada en [position] ya sonó esta vuelta (está en el historial de
+     * [PlaylistHistoryStore]), se respeta la elección reconstruyendo la cola con [buildListaQueue] en
+     * vez de solo mover el índice: la canción elegida pasa a sonar y la que sonaba justo antes queda
+     * pegada detrás (posición -1), sin duplicarse en el historial al volver a sonar (ver
+     * [PlaylistHistoryStore.recordPlayed], que se dispara desde [loadCurrent]). Si la fila tocada NO
+     * había sonado (próxima normal, incluida una que el usuario haya arrastrado a mano dentro de la
+     * cola) o el contexto no es una Lista, se comporta exactamente como [jumpTo]: no se toca el orden
+     * del resto de la cola, para no destruir un reordenado manual.
+     */
+    fun selectFromQueue(position: Int) {
+        val queue = _queue.value
+        if (position !in queue.indices) return
+        val playlistName = _currentPlaylistName.value
+        if (_currentCollectionKind.value == CollectionKind.LISTA && playlistName != null) {
+            val tapped = queue[position]
+            if (tapped.id in PlaylistHistoryStore.getHistory(playlistName)) {
+                val (newQueue, newIndex) = buildListaQueue(queue, playlistName, tapped)
+                _queue.value = newQueue
+                _currentIndex.value = newIndex
+                loadCurrent(shouldPlay = true)
+                return
+            }
+        }
+        jumpTo(position)
     }
 
     private fun playCurrent() {
@@ -827,14 +1053,26 @@ class PlaybackService : MediaSessionService() {
         val song = _queue.value.getOrNull(index) ?: return
         _currentSong.value = song
         updateAccent(song)
-        // "Posición actual"/REANUDAR de una Lista (ver PlaylistResumeStore/CollectionDetailDialogFragment):
-        // se graba SOLO mientras la cola suena en el contexto de una lista, nunca para géneros,
-        // etiquetas ni una cola suelta. loadCurrent() es el único punto por el que pasa CUALQUIER
-        // cambio de canción actual (playCollection, next/prev, jumpTo, continuación aleatoria,
-        // restorePlaybackState), así que basta este único hook.
+        // "Posición actual"/REANUDAR de una Lista (ver PlaylistResumeStore/CollectionDetailDialogFragment)
+        // y el historial "sin repeticiones" (ver PlaylistHistoryStore/buildListaQueue): se graban SOLO
+        // mientras la cola suena en el contexto de una lista, nunca para géneros, etiquetas ni una cola
+        // suelta. loadCurrent() es el único punto por el que pasa CUALQUIER cambio de canción actual
+        // (playCollection, next/prev, jumpTo/selectFromQueue, continuación aleatoria,
+        // restorePlaybackState), así que basta este único hook para que CUALQUIER forma de que una
+        // canción pase a sonar -tocarla, avance automático, saltar en la cola del iPod, arrastrar y que
+        // le llegue el turno- quede registrada en el historial exactamente una vez.
         if (_currentCollectionKind.value == CollectionKind.LISTA) {
-            _currentPlaylistName.value?.let { PlaylistResumeStore.setLastSong(it, song.id) }
+            _currentPlaylistName.value?.let { name ->
+                PlaylistResumeStore.setLastSong(name, song.id)
+                PlaylistHistoryStore.recordPlayed(name, song.id, _queue.value.size)
+            }
         }
+        // Y por el mismo motivo (este es el único punto por el que pasa cualquier cambio de canción
+        // actual), aquí se cierra la sesión de escucha de la canción anterior -que es cuando se
+        // decide si llegó al 50% y se anota para UltiMusic Recount- y se abre la de esta. A
+        // diferencia del historial de listas, el contador NO mira de qué colección venga la cola:
+        // todo lo que suene cuenta, salga de una lista, de un género o de la cola suelta.
+        playTracker.start(song)
         // Cualquier carga por el camino normal es un intento nuevo y limpio, aunque sea la misma
         // canción que acaba de fallar (p. ej. repetir la cola): el reintento de onPlayerError no
         // pasa por aquí (llama a player.prepare() directamente), así que esto no le pisa nada.
@@ -1444,6 +1682,9 @@ class PlaybackService : MediaSessionService() {
 
         private const val FLAT_PRESET_NAME = "Plano"
         private const val USER_MODIFIED_PRESET_NAME = "Usuario"
+        /** Ver [skipToPrevious]. */
+        private const val SKIP_PREVIOUS_RESTART_THRESHOLD_MS = 5_000L
+
         private const val KEY_QUEUE = "queue_ids"
         private const val KEY_CURRENT_SONG_ID = "current_song_id"
         private const val KEY_POSITION_MS = "position_ms"
