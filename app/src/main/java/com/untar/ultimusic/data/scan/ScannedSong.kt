@@ -19,5 +19,12 @@ data class ScannedSong(
     val duration: Long,
     val producer: String?,
     val trackNumber: Int?,
-    val discNumber: Int?
+    val discNumber: Int?,
+    /** Fecha de modificación del documento (epoch ms), para [com.untar.ultimusic.data.db.entities.SongEntity.dateAdded].
+     *  Viene ya resuelta por [com.untar.ultimusic.data.scan.MusicScanner] (que la lee del proveedor
+     *  SAF al listar la carpeta, ver `SafStorage.SafEntry.lastModified`) en vez de calcularse aquí:
+     *  desde la migración a Storage Access Framework, `filePath` ya no es una ruta de archivo real
+     *  sobre la que se pueda llamar `File.lastModified()`. `0` para una canción "suelta" leída fuera
+     *  del escaneo (ver [MusicScanner.readTagsFromUri]), que nunca se persiste. */
+    val dateAdded: Long = 0L
 )

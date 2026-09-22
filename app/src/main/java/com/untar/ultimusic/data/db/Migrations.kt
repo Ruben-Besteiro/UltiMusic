@@ -670,6 +670,33 @@ val MIGRATION_28_29 = object : Migration(28, 29) {
 }
 
 /**
+ * v29 → v30: sin cambio de esquema (ninguna tabla/columna nueva) — migración de
+ * `MANAGE_EXTERNAL_STORAGE` a Storage Access Framework (ver [com.untar.ultimusic.util.SafStorage]):
+ * Google Play revisa ese permiso caso por caso y no suele aprobarlo para un reproductor, así que la
+ * app pasa a pedir cada carpeta con el selector del sistema en vez del acceso a todo el dispositivo.
+ *
+ * `library_roots.path` y `greylist_folders.path` guardaban rutas absolutas de verdad
+ * (`/storage/emulated/0/...`); con SAF esos valores ya no sirven para nada (una ruta absoluta no se
+ * puede convertir en un permiso de árbol sin que el usuario concurra), así que se vacían las dos
+ * tablas de un plumazo. No es pérdida de datos real: son preferencias de configuración baratas de
+ * rehacer (conceder de nuevo Download/Music/una raíz propia, volver a marcar una subcarpeta como
+ * excluida), a diferencia de `songs`, que si se tocara aquí sí perdería ediciones irrecuperables.
+ *
+ * `songs.filePath` NO se toca en esta migración: sus rutas absolutas viejas se arreglan en caliente,
+ * canción por canción, en cuanto el usuario re-concede sus carpetas tras actualizar (ver el paso de
+ * re-enlace en `LibraryRepository.relinkAfterGrant`) — no es algo que SQL pueda resolver a ciegas, y
+ * hasta que eso pase esas filas simplemente se comportan como si su carpeta no fuera legible, igual
+ * que ya pasaba antes con cualquier carpeta no montada (ver `MusicScanner.libraryFolderReadable`):
+ * nunca se borran solas.
+ */
+val MIGRATION_29_30 = object : Migration(29, 30) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DELETE FROM library_roots")
+        db.execSQL("DELETE FROM greylist_folders")
+    }
+}
+
+/**
  * v25 → v26: sin cambio de esquema — recolorea 4 de las etiquetas predefinidas y siembra la 6ª,
  * "Remix / Cover" (ver [SystemTagKey.REMIX_COVER]):
  *

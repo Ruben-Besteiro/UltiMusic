@@ -45,6 +45,7 @@ import com.untar.ultimusic.util.Headphones
 import com.untar.ultimusic.util.PlaylistHistoryStore
 import com.untar.ultimusic.util.PlaylistResumeStore
 import com.untar.ultimusic.util.PlaylistShuffleStore
+import com.untar.ultimusic.util.SafStorage
 import com.untar.ultimusic.util.artistDisplay
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,7 +60,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import java.io.File
 import kotlin.math.roundToInt
 
 /**
@@ -1080,7 +1080,12 @@ class PlaybackService : MediaSessionService() {
 
         loadJob?.cancel()
 
-        if (File(song.filePath).exists()) {
+        // Una canción "suelta" (Abrir con UltiMusic, ver MainActivity.handleViewIntent) trae su
+        // propio URI ya completo (`content://`/`file://`, nunca catalogada, `resolvePlayablePath` no
+        // sabría qué hacer con ella): se reproduce tal cual, sin comprobar nada más. Una catalogada
+        // usa su docPath (ver SongEntity.filePath), que sí se puede comprobar con SafStorage.
+        val isAdHoc = "://" in song.filePath
+        if (isAdHoc || (!song.filePath.startsWith("/") && SafStorage.exists(applicationContext, song.filePath))) {
             startPlayback(song, song.filePath, shouldPlay, seekToMs)
             return
         }
@@ -1152,7 +1157,7 @@ class PlaybackService : MediaSessionService() {
             .build()
         return MediaItem.Builder()
             .setMediaId(song.id.toString())
-            .setUri(Uri.fromFile(File(path)))
+            .setUri(SafStorage.uriForDomainPath(path) ?: Uri.EMPTY)
             .setMediaMetadata(metadata)
             .build()
     }

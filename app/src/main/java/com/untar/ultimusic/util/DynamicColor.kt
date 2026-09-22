@@ -5,11 +5,11 @@ import android.content.res.ColorStateList
 import android.graphics.Bitmap
 import android.graphics.Color
 import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
 import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import coil.request.ImageRequest
 import coil.request.SuccessResult
-import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -50,7 +50,7 @@ object DynamicColor {
     const val DEFAULT = 0xFFFFD000.toInt()
 
     /**
-     * Carga la imagen indicada (cualquier dato que entienda Coil: un [File], un
+     * Carga la imagen indicada (cualquier dato que entienda Coil: un [Uri], un
      * `AudioCover`...) y devuelve su color de acento, o [DEFAULT] si no hay imagen o no se puede
      * analizar.
      *
@@ -58,7 +58,7 @@ object DynamicColor {
      * puede ir en el hilo principal; se llama desde el `viewModelScope`.
      */
     suspend fun fromCover(context: Context, data: Any): Int = withContext(Dispatchers.IO) {
-        val key = cacheKey(data)
+        val key = cacheKey(context, data)
         key?.let { cache[it] }?.let { return@withContext it }
 
         val bitmap = loadBitmap(context, data) ?: return@withContext DEFAULT
@@ -134,12 +134,13 @@ object DynamicColor {
      * `null` para cualquier tipo de dato que no reconozcamos: en ese caso simplemente no se cachea,
      * en vez de arriesgarse a una clave incorrecta.
      */
-    private fun cacheKey(data: Any): String? = when (data) {
-        is File -> "${data.absolutePath}:${data.lastModified()}"
+    private fun cacheKey(context: Context, data: Any): String? = when (data) {
+        is Uri -> "$data:${SafStorage.lastModifiedOfUri(context, data)}"
         is AudioCover -> {
+            val file = data.file
             val thumbnail = data.fallbackThumbnail
-            "${data.file.absolutePath}:${data.file.lastModified()}:" +
-                "${thumbnail?.absolutePath}:${thumbnail?.lastModified() ?: 0}"
+            "$file:${file?.let { SafStorage.lastModifiedOfUri(context, it) } ?: 0}:" +
+                "$thumbnail:${thumbnail?.let { SafStorage.lastModifiedOfUri(context, it) } ?: 0}"
         }
         is GroupCoverSource -> "${data.kind}:${data.id}:${CoverArt.revision.value}"
         else -> null

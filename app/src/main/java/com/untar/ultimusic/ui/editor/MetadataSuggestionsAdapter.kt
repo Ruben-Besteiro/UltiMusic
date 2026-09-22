@@ -104,7 +104,6 @@ class MetadataSuggestionsAdapter(
         private val cover: ImageView = itemView.findViewById(R.id.suggestionCover)
         private val title: TextView = itemView.findViewById(R.id.suggestionTitle)
         private val subtitle: TextView = itemView.findViewById(R.id.suggestionSubtitle)
-        private val badge: TextView = itemView.findViewById(R.id.suggestionBadge)
 
         /** El item que está pintando esta vista AHORA MISMO, para que la sustitución asíncrona de
          * [bind] (ver más abajo) no le ponga la carátula de una fila a otra: el `RecyclerView` puede
@@ -120,9 +119,13 @@ class MetadataSuggestionsAdapter(
             val context = itemView.context
             boundItem = item
 
-            title.text = item.title
+            // El tipo de publicación (ver releaseSuffix) solo se suma al texto que YA es el nombre
+            // de la publicación: el título en una sugerencia de álbum, el álbum dentro del
+            // subtítulo en una de canción (ver buildSubtitle). item.title/item.albumTitle no se
+            // tocan: son los que rellenan el editor al elegir la sugerencia (ver
+            // MetadataSuggestionsDialogFragment.onSuggestionPicked), y ahí el sufijo no pinta nada.
+            title.text = if (item.albumTitle == null) item.title + releaseSuffix(item.releaseType) else item.title
             subtitle.text = buildSubtitle(item)
-            badge.text = context.getString(describeType(item.releaseType))
             itemView.setOnClickListener { onPicked(item) }
 
             // Sin Genius de por medio, la miniatura de iTunes es la única candidata: se pinta ya.
@@ -151,17 +154,21 @@ class MetadataSuggestionsAdapter(
          * "Artista | Año" solo, sin necesidad de distinguir el caso: ahí
          * [MetadataSuggestion.albumTitle] es null porque [MetadataSuggestion.title] YA es el álbum
          * y repetirlo sería redundante. */
-        private fun buildSubtitle(item: MetadataSuggestion): String =
-            listOfNotNull(item.artist.takeIf { it.isNotBlank() }, item.albumTitle, item.year?.toString())
+        private fun buildSubtitle(item: MetadataSuggestion): String {
+            val albumWithType = item.albumTitle?.let { it + releaseSuffix(item.releaseType) }
+            return listOfNotNull(item.artist.takeIf { it.isNotBlank() }, albumWithType, item.year?.toString())
                 .joinToString(itemView.context.getString(R.string.subtitle_separator))
+        }
 
-        /** Etiqueta de la fila. A diferencia de MusicBrainz, iTunes siempre deja clasificar la
-         * publicación en uno de los tres tipos (ver [ReleaseType]), así que la etiqueta nunca se
-         * queda vacía y no hay tipos secundarios ("en directo", "recopilatorio"…) que añadir. */
-        private fun describeType(type: ReleaseType): Int = when (type) {
-            ReleaseType.ALBUM -> R.string.suggestion_type_album
-            ReleaseType.SINGLE -> R.string.suggestion_type_single
-            ReleaseType.EP -> R.string.suggestion_type_ep
+        /** Sufijo de tipo de publicación, calcado del que trae iTunes en el propio
+         * `collectionName` y que [com.untar.ultimusic.data.remote.ItunesApi] le quita al nombre
+         * antes de guardarlo en [MetadataSuggestion] (ver `cleanCollectionName`): se vuelve a poner
+         * aquí, solo para mostrar, igual que hace Apple Music. Nunca se traduce (tampoco lo hace
+         * Apple en ninguna tienda), así que no hace falta ningún string por idioma. */
+        private fun releaseSuffix(type: ReleaseType): String = when (type) {
+            ReleaseType.ALBUM -> ""
+            ReleaseType.SINGLE -> " - Single"
+            ReleaseType.EP -> " - EP"
         }
     }
 }

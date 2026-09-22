@@ -4,6 +4,7 @@ import android.app.Application
 import com.untar.ultimusic.data.ArtistGroupingPreferences
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.SortPreferences
+import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.data.remote.ApiCache
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
@@ -23,8 +24,8 @@ import kotlinx.coroutines.launch
 /**
  * Existe solo para darles un `Context` a [ApiCache], [GeniusTokenStore], [YouTubeApiKeyStore],
  * [YouTubeStatsRefresh], [SortPreferences], [ArtistGroupingPreferences], [PlaylistResumeStore],
- * [PlaylistHistoryStore], [PlaylistShuffleStore] y [RecountReminder] antes de que exista ninguna
- * pantalla, y para dejar
+ * [PlaylistHistoryStore], [PlaylistShuffleStore], [PlaylistRepository] y [RecountReminder] antes de
+ * que exista ninguna pantalla, y para dejar
  * encolado el aviso anual de UltiMusic Recount ([RecountReminderWorker]).
  *
  * Podría hacerse desde `MainActivity.onCreate`, pero entonces dependerían de acordarse de llamarlas
@@ -53,6 +54,7 @@ class UltiMusicApp : Application() {
         PlaylistResumeStore.init(this)
         PlaylistHistoryStore.init(this)
         PlaylistShuffleStore.init(this)
+        PlaylistRepository.init(this)
         RecountReminder.init(this)
         // Deja encolado el trabajo diario que ofrece el Recount la última semana de diciembre. Es
         // idempotente (ExistingPeriodicWorkPolicy.KEEP), así que llamarlo en cada arranque no

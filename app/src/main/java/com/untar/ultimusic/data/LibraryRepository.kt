@@ -22,7 +22,6 @@ import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
 import com.untar.ultimusic.data.db.toDomain
 import com.untar.ultimusic.data.remote.YouTubeStatsApi
 import com.untar.ultimusic.data.remote.YouTubeStatsRefresh
-import com.untar.ultimusic.data.scan.MusicLibraryObserver
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.GenreSummary
@@ -36,10 +35,13 @@ import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.LanguageDetector
+import com.untar.ultimusic.util.SafStorage
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
@@ -59,7 +61,13 @@ class LibraryRepository private constructor(
     private val appContext: Context
 ) {
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private var libraryObserver: MusicLibraryObserver? = null
+
+    /** Job del reescaneo periódico (ver [startWatchingLibraryChanges]); reemplaza al viejo
+     *  `MusicLibraryObserver` basado en `FileObserver`, que no tiene equivalente sobre un árbol SAF
+     *  (ver [com.untar.ultimusic.util.SafStorage]): SAF no ofrece vigilancia recursiva de cambios, así
+     *  que en vez de enterarse al instante de una canción nueva, se reconcilia sola cada
+     *  [WATCH_INTERVAL_MS] mientras alguien la quiera vigilada. */
+    private var watchJob: Job? = null
 
     /** Quién puede pedir que el vigilante de la fonoteca esté vivo (ver [startWatchingLibraryChanges]). */
     enum class LibraryWatchRequester { ACTIVITY, PLAYBACK_SERVICE }
@@ -448,13 +456,20 @@ class LibraryRepository private constructor(
         dao.findSongByPath(path)?.toDomain()
     }
 
-    /** Rutas guardadas de carpetas raíz adicionales, como [File], para pasárselas a [MusicScanner]. */
-    private suspend fun libraryRootFiles(): List<File> = dao.libraryRootPaths().map { File(it) }
+    /**
+     * Refresca el registro en memoria de [SafStorage] (URI de árbol de `UltiMusic` + raíces
+     * adicionales de `library_roots`) con lo que haya en la base de datos ahora mismo. Hace falta
+     * llamarlo tras cualquier cambio en `library_roots` (añadir/quitar una raíz) y al arrancar: sin
+     * esto [MusicScanner] no sabría qué carpetas recorrer.
+     */
+    private suspend fun refreshSafRegistry() {
+        SafStorage.refreshRegistry(appContext, dao.libraryRootPaths())
+    }
 
     /**
-     * Reconcilia lo que hay en disco con lo guardado: escanea (fuera de transacción) y delega en el
-     * DAO la inserción de novedades y el borrado de lo que ya no existe. Las ediciones del usuario
-     * nunca se pisan.
+     * Reconcilia lo que hay en las carpetas concedidas con lo guardado: escanea (fuera de
+     * transacción) y delega en el DAO la inserción de novedades y el borrado de lo que ya no existe.
+     * Las ediciones del usuario nunca se pisan.
      *
      * Antes de escanear se piden las rutas ya catalogadas ([LibraryDao.allSongPaths]) para
      * pasárselas a [MusicScanner.scan] como `knownPaths`: así el escaneo solo abre y lee las
@@ -462,8 +477,9 @@ class LibraryRepository private constructor(
      * [MusicScanner.scan] y [LibraryDao.reconcile]).
      */
     suspend fun reconcile(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) = withContext(Dispatchers.IO) {
+        refreshSafRegistry()
         val knownPaths = dao.allSongPaths().toHashSet()
-        val result = MusicScanner.scan(libraryRootFiles(), knownPaths, onProgress)
+        val result = MusicScanner.scan(appContext, knownPaths, onProgress)
         dao.reconcile(result.newSongs, result.currentPaths)
     }
 
@@ -613,35 +629,35 @@ class LibraryRepository private constructor(
     }
 
     /**
-     * Arranca el vigilante si aún no lo estaba para [requester]. `MainActivity` (mientras está en
-     * primer plano) y [com.untar.ultimusic.playback.PlaybackService] (mientras hay sesión de
+     * Arranca el reescaneo periódico si aún no lo estaba para [requester]. `MainActivity` (mientras
+     * está en primer plano) y [com.untar.ultimusic.playback.PlaybackService] (mientras hay sesión de
      * reproducción activa) lo piden cada uno por su lado, y ninguno sabe si el otro también lo quiere
-     * vivo. Cada [requester] que llame aquí debe soltar luego con [stopWatchingLibraryChanges]: el
-     * vigilante solo se para de verdad cuando el último interesado se da de baja, para no perder
-     * cambios de la fonoteca mientras a alguien todavía le importan (p. ej. la Activity pasa a segundo
-     * plano pero sigue sonando música).
+     * vivo. Cada [requester] que llame aquí debe soltar luego con [stopWatchingLibraryChanges]: solo
+     * se para de verdad cuando el último interesado se da de baja, para no perder cambios de la
+     * fonoteca mientras a alguien todavía le importan (p. ej. la Activity pasa a segundo plano pero
+     * sigue sonando música).
+     *
+     * A diferencia del viejo `MusicLibraryObserver` (`FileObserver`, instantáneo), esto reconcilia
+     * cada [WATCH_INTERVAL_MS] sin más: SAF no tiene forma de avisar de cambios en un árbol concedido,
+     * así que una canción nueva puede tardar hasta ese intervalo en aparecer en vez de al instante
+     * (decisión ya aceptada al migrar a Storage Access Framework).
+     *
+     * La primera vuelta NO reconcilia al momento: quien llama a esto (`MainActivity.loadIfPermitted`)
+     * también llama a `SongsViewModel.loadIfNeeded` casi a la vez, que ya hace su propia
+     * reconciliación de arranque con progreso visible en la pantalla de Canciones (ver
+     * `SongsFragment`/`updating_database_percent`). Si esta reconciliación en segundo plano
+     * arrancara YA, correría en paralelo con esa -duplicando el escaneo completo de la fonoteca, y
+     * de paso dejando la pantalla sin el aviso de progreso mientras la de aquí seguía trabajando sin
+     * que nadie la viera-, así que espera a [WATCH_INTERVAL_MS] antes de su primera pasada.
      */
     fun startWatchingLibraryChanges(requester: LibraryWatchRequester) {
         if (!activeWatchRequesters.add(requester)) return // este interesado ya lo tenía pedido
         if (activeWatchRequesters.size > 1) return // ya lo tenía pedido algún otro interesado
 
-        observerScope.launch {
-            val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
-            if (!ultiMusic.exists() || !ultiMusic.isDirectory) {
-                activeWatchRequesters.clear()
-                return@launch
-            }
-
-            // Solo se vigilan las carpetas raíz que existan de verdad ahora mismo: una guardada que
-            // ya no está montada (tarjeta SD retirada, carpeta borrada a mano) no debe hacer fallar
-            // la vigilancia de las demás.
-            val roots = listOf(ultiMusic) + libraryRootFiles().filter { it.exists() && it.isDirectory }
-            libraryObserver = MusicLibraryObserver(roots, observerScope) {
-                observerScope.launch {
-                    reconcile()
-                }
-            }.apply {
-                startWatching()
+        watchJob = observerScope.launch {
+            while (true) {
+                delay(WATCH_INTERVAL_MS)
+                reconcile()
             }
         }
     }
@@ -650,8 +666,8 @@ class LibraryRepository private constructor(
     fun stopWatchingLibraryChanges(requester: LibraryWatchRequester) {
         if (!activeWatchRequesters.remove(requester)) return
         if (activeWatchRequesters.isNotEmpty()) return
-        libraryObserver?.stopWatching()
-        libraryObserver = null
+        watchJob?.cancel()
+        watchJob = null
     }
 
     // --- Lista gris ---
@@ -680,20 +696,25 @@ class LibraryRepository private constructor(
     // rápido (salvo que reaparezcan con el mismo nombre en otra carpeta vigilada, ver
     // LibraryDao.reconcile).
 
-    suspend fun addLibraryRoot(path: String) = withContext(Dispatchers.IO) {
-        dao.insertLibraryRoot(LibraryRootEntity(path = path))
-        libraryObserver?.watchNewRoot(File(path))
+    /** [treeUri] ya concedido con el selector del sistema (`ACTION_OPEN_DOCUMENT_TREE`), ver
+     *  [SettingsViewModel][com.untar.ultimusic.ui.settings.SettingsViewModel]. */
+    suspend fun addLibraryRoot(treeUri: Uri) = withContext(Dispatchers.IO) {
+        SafStorage.takePersistablePermission(appContext, treeUri)
+        dao.insertLibraryRoot(LibraryRootEntity(path = treeUri.toString()))
+        refreshSafRegistry()
+        relinkAfterGrant(treeUri)
         reconcile()
     }
 
-    suspend fun removeLibraryRoot(path: String) = withContext(Dispatchers.IO) {
-        dao.deleteLibraryRoot(path)
-        libraryObserver?.unwatchRoot(File(path))
+    suspend fun removeLibraryRoot(treeUri: Uri) = withContext(Dispatchers.IO) {
+        dao.deleteLibraryRoot(treeUri.toString())
+        SafStorage.releasePersistablePermission(appContext, treeUri)
+        refreshSafRegistry()
         reconcile()
     }
 
     /**
-     * Devuelve una ruta que se puede reproducir para [song], o null si el archivo ya no está en
+     * Devuelve un docPath que se puede reproducir para [song], o null si el archivo ya no está en
      * ninguna parte de la fonoteca.
      *
      * Existe porque la ruta guardada puede quedarse obsoleta: [reconcile] escanea leyendo las
@@ -707,21 +728,73 @@ class LibraryRepository private constructor(
      * aparece, se corrige la fila de paso para no tener que volver a buscarlo nunca más.
      */
     suspend fun resolvePlayablePath(song: Song): String? = withContext(Dispatchers.IO) {
-        val stored = File(song.filePath)
-        if (stored.exists()) return@withContext song.filePath
+        refreshSafRegistry()
+        // Una ruta absoluta (empieza por "/") es una fila TODAVÍA sin re-enlazar tras la migración a
+        // SAF (ver MIGRATION_29_30): nunca se puede comprobar con SafStorage.exists, así que se trata
+        // directamente como "no está donde decía" y se intenta relocalizar por nombre más abajo.
+        if (!song.filePath.startsWith("/") && SafStorage.exists(appContext, song.filePath)) {
+            return@withContext song.filePath
+        }
 
-        val relocated = MusicScanner.findByFilename(stored.name, libraryRootFiles()) ?: return@withContext null
+        val filename = song.filePath.substringAfterLast('/')
+        val relocated = MusicScanner.findByFilename(appContext, filename) ?: return@withContext null
         // Best-effort: si la reconciliación se nos ha adelantado, la fila antigua ya no existe y el
         // UPDATE no afecta a nadie. La ruta encontrada sigue siendo válida para reproducir.
-        runCatching { dao.updateSongPath(song.filePath, relocated.absolutePath) }
-        relocated.absolutePath
+        runCatching { dao.updateSongPath(song.filePath, relocated) }
+        relocated
     }
 
     /**
-     * ¿Se puede leer la carpeta de la fonoteca? Lo consulta quien vaya a dar una canción por
-     * perdida (ver [MusicScanner.libraryFolderReadable]).
+     * ¿Se pueden leer las carpetas concedidas de la fonoteca? Lo consulta quien vaya a dar una
+     * canción por perdida (ver [MusicScanner.libraryFolderReadable]).
      */
-    suspend fun libraryFolderReadable(): Boolean = MusicScanner.libraryFolderReadable(libraryRootFiles())
+    suspend fun libraryFolderReadable(): Boolean {
+        refreshSafRegistry()
+        return MusicScanner.libraryFolderReadable(appContext)
+    }
+
+    // --- Migración a Storage Access Framework (ver com.untar.ultimusic.util.SafStorage) ---
+
+    /** ¿Falta alguna canción por re-enlazar tras la migración? (fila con ruta absoluta de antes de
+     *  v30, ver `MIGRATION_29_30`). Lo consulta `MainActivity` para decidir si ofrecer el paso
+     *  opcional de re-conceder Download/Music/raíces propias, además de la obligatoria `UltiMusic`. */
+    suspend fun hasUnlinkedLegacySongs(): Boolean = withContext(Dispatchers.IO) {
+        dao.allSongPaths().any { it.startsWith("/") }
+    }
+
+    /**
+     * Concede la carpeta `UltiMusic` (obligatoria: sin ella no hay fonoteca) y re-enlaza lo que
+     * pueda de lo ya catalogado antes de la migración a SAF.
+     */
+    suspend fun grantUltiMusicRoot(treeUri: Uri) = withContext(Dispatchers.IO) {
+        SafStorage.setUltiMusicTreeUri(appContext, treeUri)
+        refreshSafRegistry()
+        relinkAfterGrant(treeUri)
+    }
+
+    /**
+     * Re-enlaza las canciones catalogadas ANTES de la migración a SAF (`filePath` con ruta absoluta
+     * de verdad, p. ej. `/storage/emulated/0/UltiMusic/Bootlegs/track.mp3`) con su docPath nuevo, en
+     * cuanto el usuario concede de nuevo la carpeta que las contenía.
+     *
+     * Recorre TODO el árbol recién concedido [treeUri] (con [MusicScanner], el mismo camino rápido
+     * que usa el escaneo normal, sin leer etiquetas) y, para cada archivo encontrado, compone la
+     * ruta absoluta que habría tenido ANTES de esta migración (`/storage/emulated/0/` + su docPath:
+     * el mismo volumen de siempre, ver la cabecera de [SafStorage]) y reapunta la fila que tuviera
+     * exactamente esa ruta. Una fila sin ninguna coincidencia sencillamente no se toca -sigue
+     * "perdida" hasta que su carpeta se conceda, igual que ya pasaba con cualquier carpeta no
+     * montada- y nunca se borra por esto.
+     */
+    private suspend fun relinkAfterGrant(treeUri: Uri) {
+        val rootDocPath = SafStorage.grantedRoots().firstOrNull { it.second == treeUri }?.first ?: return
+        val entries = MusicScanner.collectAudioEntries(appContext, treeUri, rootDocPath)
+        if (entries.isEmpty()) return
+        val storageRoot = Environment.getExternalStorageDirectory().absolutePath
+        for (entry in entries) {
+            val oldAbsolutePath = "$storageRoot/${entry.docPath}"
+            dao.updateSongPath(oldAbsolutePath, entry.docPath)
+        }
+    }
 
     // --- Ediciones (se reflejan al instante en el Flow [songs]) ---
 
@@ -936,8 +1009,9 @@ class LibraryRepository private constructor(
     }
 
     /**
-     * Copia la imagen elegida por el usuario a `~/UltiMusic/images` y devuelve el nombre de
-     * archivo resultante (lo que se guarda en `imageName`), nombrado como [title].
+     * Copia la imagen elegida por el usuario a `UltiMusic/images` (ver [CoverArt.imagesDocPath]) y
+     * devuelve el nombre de archivo resultante (lo que se guarda en `imageName`), nombrado como
+     * [title].
      *
      * Se copia en vez de guardar la URI del sistema porque una URI del selector de fotos es un
      * permiso temporal: en cuanto el usuario borra o mueve la foto —o simplemente al reiniciar—
@@ -948,10 +1022,14 @@ class LibraryRepository private constructor(
      * libre y esta imagen ocupa el mismo hueco en vez de acabar en "Título (2).img".
      */
     suspend fun importCoverImage(uri: Uri, title: String): String = withContext(Dispatchers.IO) {
-        val dir = CoverArt.imagesDir(appContext)
-        val name = CoverArt.reserveFileName(dir, CoverArt.sanitizeFileName(title), "img", null)
+        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: error("La carpeta UltiMusic no está concedida")
+        val dir = CoverArt.imagesDocPath(appContext, createIfMissing = true) ?: error("La carpeta UltiMusic no está concedida")
+        val name = CoverArt.reserveFileName(appContext, CoverArt.sanitizeFileName(title), "img", null)
+        val docPath = SafStorage.createFile(appContext, treeUri, dir, name, "image/*")
+            ?: error("No se ha podido crear la carátula")
         appContext.contentResolver.openInputStream(uri)?.use { input ->
-            File(dir, name).outputStream().use { output -> input.copyTo(output) }
+            SafStorage.openOutputStream(appContext, docPath)?.use { output -> input.copyTo(output) }
+                ?: error("No se ha podido escribir la carátula")
         } ?: error("No se ha podido leer la imagen seleccionada")
         name
     }
@@ -966,17 +1044,18 @@ class LibraryRepository private constructor(
      */
     suspend fun renameImage(oldName: String, newTitle: String, suffix: String, ext: String): String =
         withContext(Dispatchers.IO) {
-            val dir = CoverArt.imagesDir(appContext)
-            val old = File(dir, oldName)
-            if (!old.exists()) return@withContext oldName
+            val dir = CoverArt.imagesDocPath(appContext) ?: return@withContext oldName
+            if (!SafStorage.exists(appContext, "$dir/$oldName")) return@withContext oldName
             val baseName = CoverArt.sanitizeFileName(newTitle) + suffix
-            val newName = CoverArt.reserveFileName(dir, baseName, ext, null)
-            if (newName == oldName || old.renameTo(File(dir, newName))) newName else oldName
+            val newName = CoverArt.reserveFileName(appContext, baseName, ext, null)
+            if (newName == oldName) return@withContext oldName
+            SafStorage.renameTo(appContext, "$dir/$oldName", newName)?.let { return@withContext newName }
+            oldName
         }
 
     /**
      * Descarga la miniatura del vídeo [videoId], la recorta al cuadrado central y la guarda en
-     * `~/UltiMusic/images` nombrada como [title]. Best-effort: si algo falla (sin red, vídeo
+     * `UltiMusic/images` nombrada como [title]. Best-effort: si algo falla (sin red, vídeo
      * borrado...) devuelve null y la canción se queda sin miniatura, cayendo al recuadro negro.
      */
     suspend fun downloadVideoThumbnail(videoId: String, title: String): String? =
@@ -994,12 +1073,14 @@ class LibraryRepository private constructor(
                     bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side
                 )
 
-                val dir = CoverArt.imagesDir(appContext)
+                val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@runCatching null
+                val dir = CoverArt.imagesDocPath(appContext, createIfMissing = true) ?: return@runCatching null
                 val baseName = "${CoverArt.sanitizeFileName(title)} (video)"
-                val name = CoverArt.reserveFileName(dir, baseName, "jpg", null)
-                File(dir, name).outputStream().use { out ->
+                val name = CoverArt.reserveFileName(appContext, baseName, "jpg", null)
+                val docPath = SafStorage.createFile(appContext, treeUri, dir, name, "image/jpeg") ?: return@runCatching null
+                SafStorage.openOutputStream(appContext, docPath)?.use { out ->
                     cropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
-                }
+                } ?: return@runCatching null
                 name
             }.getOrNull()
         }
@@ -1011,7 +1092,7 @@ class LibraryRepository private constructor(
      * ahí con `PlaylistRepository.removeSongFromAll`, igual que cuando un archivo desaparece solo.
      */
     suspend fun deleteSong(song: Song) = withContext(Dispatchers.IO) {
-        File(song.filePath).delete()
+        runCatching { SafStorage.deleteRecursively(appContext, song.filePath) }
         song.imageName?.let { deleteCoverImage(it) }
         song.videoThumbnailName?.let { deleteVideoThumbnail(it) }
         dao.deleteSong(song.id)
@@ -1019,35 +1100,47 @@ class LibraryRepository private constructor(
 
     /** Borra una carátula importada que ya no usa nadie (best-effort). */
     suspend fun deleteCoverImage(imageName: String) = withContext(Dispatchers.IO) {
-        runCatching { File(CoverArt.imagesDir(appContext), imageName).delete() }
+        val dir = CoverArt.imagesDocPath(appContext)
+        if (dir != null) runCatching { SafStorage.deleteRecursively(appContext, "$dir/$imageName") }
         Unit
     }
 
     /** Gemela de [deleteCoverImage], para la miniatura de YouTube cacheada. */
     suspend fun deleteVideoThumbnail(name: String) = withContext(Dispatchers.IO) {
-        runCatching { File(CoverArt.imagesDir(appContext), name).delete() }
+        val dir = CoverArt.imagesDocPath(appContext)
+        if (dir != null) runCatching { SafStorage.deleteRecursively(appContext, "$dir/$name") }
         Unit
     }
 
     /**
      * Copia (unidireccional, solo para inspección) la base de datos interna a
-     * `~/UltiMusic/databases/`, porque en algunos móviles no se puede entrar en /data/data.
-     * Best-effort: cualquier fallo se ignora. Antes hace checkpoint del WAL para que la copia
-     * sea consistente.
+     * `UltiMusic/databases/`, porque en algunos móviles no se puede entrar en /data/data.
+     * Best-effort: cualquier fallo se ignora (incluido que `UltiMusic` no esté concedida todavía).
+     * Antes hace checkpoint del WAL para que la copia sea consistente.
      */
     suspend fun exportDatabaseCopy() = withContext(Dispatchers.IO) {
         runCatching {
             val db = UltiMusicDatabase.get(appContext)
             db.query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
 
-            val dbFile = appContext.getDatabasePath(UltiMusicDatabase.DB_NAME)
-            val destDir = File(Environment.getExternalStorageDirectory(), "UltiMusic/databases")
-            destDir.mkdirs()
+            SafStorage.ensureUltiMusicRegistered(appContext)
+            val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@runCatching
+            val root = SafStorage.ultiMusicDocPath(appContext) ?: return@runCatching
+            val destDir = SafStorage.getOrCreateSubfolder(appContext, treeUri, root, "databases") ?: return@runCatching
 
+            val dbFile = appContext.getDatabasePath(UltiMusicDatabase.DB_NAME)
             for (suffix in listOf("", "-wal", "-shm")) {
                 val src = File(dbFile.path + suffix)
-                if (src.exists()) {
-                    src.copyTo(File(destDir, dbFile.name + suffix), overwrite = true)
+                if (!src.exists()) continue
+                val destName = dbFile.name + suffix
+                val destDocPath = "$destDir/$destName"
+                val docPath = if (SafStorage.exists(appContext, destDocPath)) {
+                    destDocPath
+                } else {
+                    SafStorage.createFile(appContext, treeUri, destDir, destName, "application/octet-stream")
+                } ?: continue
+                SafStorage.openOutputStream(appContext, docPath)?.use { output ->
+                    src.inputStream().use { input -> input.copyTo(output) }
                 }
             }
         }
@@ -1055,6 +1148,10 @@ class LibraryRepository private constructor(
     }
 
     companion object {
+        /** Cada cuánto reconcilia [startWatchingLibraryChanges] mientras la app está en primer plano
+         *  (ver su doc: sustituye al `FileObserver` instantáneo de antes de la migración a SAF). */
+        private const val WATCH_INTERVAL_MS = 3 * 60 * 1000L
+
         @Volatile
         private var instance: LibraryRepository? = null
 

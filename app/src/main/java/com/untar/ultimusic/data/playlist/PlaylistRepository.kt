@@ -1,14 +1,15 @@
 package com.untar.ultimusic.data.playlist
 
-import android.os.Environment
+import android.content.Context
 import com.untar.ultimusic.model.Song
+import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
  * Almacén de listas de reproducción. A diferencia del resto de la biblioteca —que vive en una base
- * de datos Room— las listas son **archivos de texto** en `~/UltiMusic/Playlists`, uno por lista:
+ * de datos Room— las listas son **archivos de texto** en `UltiMusic/Playlists` (carpeta concedida
+ * por Storage Access Framework, ver [SafStorage]), uno por lista:
  *
  *   - El **nombre del archivo** (sin la extensión `.txt`) es el nombre de la lista.
  *   - El **contenido** es un nombre de archivo de canción por línea, en orden de reproducción. Se
@@ -17,36 +18,50 @@ import java.io.File
  *
  * Se eligió texto plano en disco (y no Room) porque una lista es, conceptualmente, un documento
  * del usuario que debe poder verse y editarse desde fuera de la app; además así sobrevive a
- * reinstalaciones sin tocar la base de datos.
+ * reinstalaciones sin tocar la base de datos (siempre que el usuario vuelva a conceder `UltiMusic`,
+ * ver la cabecera de [SafStorage]).
  *
- * Como los archivos NO son reactivos (Room reemite solo; un `File`, no), quien observe estas listas
- * debe volver a leer tras cada cambio. De eso se encarga `PlaylistsViewModel`.
+ * Como los archivos NO son reactivos (Room reemite solo; un documento SAF, no), quien observe estas
+ * listas debe volver a leer tras cada cambio. De eso se encarga `PlaylistsViewModel`.
  *
  * Todas las operaciones van en el hilo de E/S ([Dispatchers.IO]) porque tocan disco.
  */
-class PlaylistRepository private constructor() {
+class PlaylistRepository private constructor(private val appContext: Context) {
 
-    /** Carpeta `~/UltiMusic/Playlists`. Se crea la primera vez que se necesita. */
-    private fun dir(): File =
-        File(Environment.getExternalStorageDirectory(), "UltiMusic/Playlists").apply { mkdirs() }
-
-    /** El archivo que respalda una lista. El nombre visible es el del archivo sin `.txt`. */
-    private fun fileOf(name: String): File = File(dir(), "$name$EXT")
+    /**
+     * docPath de `UltiMusic/Playlists`. Con [createIfMissing] la crea si hace falta (para escribir);
+     * si es `false` (para leer) y todavía no existe, devuelve null en vez de crearla solo para
+     * comprobar que está vacía. Null también si `UltiMusic` no se ha concedido todavía.
+     */
+    private fun dir(createIfMissing: Boolean): String? {
+        SafStorage.ensureUltiMusicRegistered(appContext)
+        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return null
+        val root = SafStorage.ultiMusicDocPath(appContext) ?: return null
+        return if (createIfMissing) {
+            SafStorage.getOrCreateSubfolder(appContext, treeUri, root, "Playlists")
+        } else {
+            "$root/Playlists".takeIf { SafStorage.exists(appContext, it) }
+        }
+    }
 
     /** Nombres de todas las listas (archivos `.txt`), en orden alfabético e ignorando mayúsculas. */
     suspend fun listPlaylistNames(): List<String> = withContext(Dispatchers.IO) {
-        dir().listFiles { f -> f.isFile && f.name.endsWith(EXT) }
-            ?.map { it.name.removeSuffix(EXT) }
-            ?.sortedBy { it.lowercase() }
-            ?: emptyList()
+        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@withContext emptyList()
+        val dir = dir(createIfMissing = false) ?: return@withContext emptyList()
+        SafStorage.listChildren(appContext, treeUri, dir)
+            .filter { !it.isDirectory && it.name.endsWith(EXT) }
+            .map { it.name.removeSuffix(EXT) }
+            .sortedBy { it.lowercase() }
     }
 
     /** Los nombres de archivo (basenames) que contiene una lista, en orden. */
     suspend fun readFilenames(name: String): List<String> = withContext(Dispatchers.IO) {
-        val file = fileOf(name)
-        if (!file.exists()) return@withContext emptyList()
-        runCatching { file.readLines().map { it.trim() }.filter { it.isNotEmpty() } }
-            .getOrDefault(emptyList())
+        val dir = dir(createIfMissing = false) ?: return@withContext emptyList()
+        val docPath = "$dir/$name$EXT"
+        if (!SafStorage.exists(appContext, docPath)) return@withContext emptyList()
+        runCatching {
+            SafStorage.openInputStream(appContext, docPath)?.bufferedReader()?.use { it.readLines() }
+        }.getOrNull()?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
     }
 
     /**
@@ -54,7 +69,14 @@ class PlaylistRepository private constructor() {
      * pertenencia). Una escritura completa es más simple y segura que parchear líneas sueltas.
      */
     suspend fun setFilenames(name: String, filenames: List<String>) = withContext(Dispatchers.IO) {
-        runCatching { fileOf(name).writeText(filenames.joinToString("\n")) }
+        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@withContext
+        val dir = dir(createIfMissing = true) ?: return@withContext
+        val docPath = SafStorage.getOrCreateFile(appContext, treeUri, dir, "$name$EXT", "text/plain")
+            ?: return@withContext
+        runCatching {
+            SafStorage.openOutputStream(appContext, docPath)?.bufferedWriter()
+                ?.use { it.write(filenames.joinToString("\n")) }
+        }
         Unit
     }
 
@@ -62,14 +84,16 @@ class PlaylistRepository private constructor() {
     suspend fun createPlaylist(name: String): Boolean = withContext(Dispatchers.IO) {
         val clean = name.trim()
         if (clean.isEmpty() || !isValidName(clean)) return@withContext false
-        val file = fileOf(clean)
-        if (file.exists()) return@withContext false
-        runCatching { file.createNewFile() }.getOrDefault(false)
+        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@withContext false
+        val dir = dir(createIfMissing = true) ?: return@withContext false
+        if (SafStorage.exists(appContext, "$dir/$clean$EXT")) return@withContext false
+        SafStorage.createFile(appContext, treeUri, dir, "$clean$EXT", "text/plain") != null
     }
 
     /** Borra el archivo de la lista (best-effort). */
     suspend fun deletePlaylist(name: String) = withContext(Dispatchers.IO) {
-        runCatching { fileOf(name).delete() }
+        val dir = dir(createIfMissing = false) ?: return@withContext
+        runCatching { SafStorage.deleteRecursively(appContext, "$dir/$name$EXT") }
         Unit
     }
 
@@ -77,9 +101,9 @@ class PlaylistRepository private constructor() {
     suspend fun renamePlaylist(oldName: String, newName: String): Boolean = withContext(Dispatchers.IO) {
         val clean = newName.trim()
         if (clean.isEmpty() || !isValidName(clean)) return@withContext false
-        val dest = fileOf(clean)
-        if (dest.exists()) return@withContext false
-        runCatching { fileOf(oldName).renameTo(dest) }.getOrDefault(false)
+        val dir = dir(createIfMissing = false) ?: return@withContext false
+        if (SafStorage.exists(appContext, "$dir/$clean$EXT")) return@withContext false
+        SafStorage.renameTo(appContext, "$dir/$oldName$EXT", "$clean$EXT") != null
     }
 
     /**
@@ -156,13 +180,13 @@ class PlaylistRepository private constructor() {
         readFilenames(name).mapNotNull { byFilename[it] }
 
     /**
-     * Rechaza nombres con caracteres que el sistema de archivos no admite: separadores de ruta y el
+     * Rechaza nombres con caracteres que ningún sistema de archivos admite: separadores de ruta y el
      * resto de los que rechaza FAT32/exFAT, el sistema típico de la tarjeta donde vive
-     * `~/UltiMusic/Playlists`. Si se dejaran pasar, `File.createNewFile()`/`renameTo()` fallarían en
+     * `UltiMusic/Playlists`. Si se dejaran pasar, la creación del documento SAF fallaría en
      * silencio más abajo (ver [createPlaylist]/[renamePlaylist]).
      *
-     * Público (no `private`, a diferencia de antes) para que la UI valide ANTES de tocar disco y
-     * pueda avisar con un toast en vez de que la creación falle sin más (ver
+     * Público (no `private`) para que la UI valide ANTES de tocar disco y pueda avisar con un toast
+     * en vez de que la creación falle sin más (ver
      * `PlaylistsFragment.showNameDialog`/`AddToPlaylistDialogFragment.showCreateAndAdd`).
      */
     fun isValidName(name: String): Boolean = INVALID_NAME_CHARS.none { it in name }
@@ -174,9 +198,17 @@ class PlaylistRepository private constructor() {
         @Volatile
         private var instance: PlaylistRepository? = null
 
-        fun get(): PlaylistRepository =
-            instance ?: synchronized(this) {
-                instance ?: PlaylistRepository().also { instance = it }
+        /** La llama [com.untar.ultimusic.UltiMusicApp], igual que al resto de *Store: hace falta un
+         *  [Context] para leer la carpeta `UltiMusic` concedida (ver [SafStorage]), y así el resto de
+         *  la app puede seguir pidiendo la instancia con [get] sin tener que pasarlo cada vez. */
+        fun init(context: Context) {
+            if (instance != null) return
+            synchronized(this) {
+                if (instance == null) instance = PlaylistRepository(context.applicationContext)
             }
+        }
+
+        fun get(): PlaylistRepository =
+            instance ?: error("PlaylistRepository.init no se ha llamado todavía")
     }
 }

@@ -77,7 +77,7 @@ object NetworkImage {
     /**
      * Poda por tiempo de los temporales de [download] que nadie reclamó: si el usuario previsualiza
      * una portada y cierra el editor sin guardar (o guarda, que también deja huérfano el temporal
-     * una vez importado a su ubicación final en [CoverArt.imagesDir]), el archivo se queda en
+     * una vez importado a su ubicación final en [CoverArt.imagesDocPath]), el archivo se queda en
      * [Context.cacheDir] para siempre, porque nada más lo borra. Mismo patrón que
      * [com.untar.ultimusic.data.remote.ApiCache.pruneExpired]: la llama
      * [com.untar.ultimusic.UltiMusicApp] una vez por arranque, en segundo plano.

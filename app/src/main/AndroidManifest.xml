@@ -2,13 +2,6 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
-    <!-- Lectura directa del almacenamiento (libre de MediaStore). En API 30+ hace falta
-         "Acceso a todos los archivos" para leer Descargas y /storage/emulated/0/UltiMusic. -->
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
-    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
-
     <!-- Solo para: el modo vídeo del iPod (reproductor de YouTube y buscador del videoclip), el
          autorrelleno de metadatos (iTunes Search API, y Genius si hay token) y el buscador de letras
          sincronizadas (lrclib.net) del editor. El audio de la biblioteca NUNCA sale a la red: sigue

@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.res.ColorStateList
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
+import android.net.Uri
 import android.text.TextUtils
 import android.view.LayoutInflater
 import android.view.View
@@ -60,6 +60,7 @@ import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.AppLocale
 import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
+import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.launch
 
 /**
@@ -342,36 +343,28 @@ class SettingsDialogFragment : DialogFragment() {
     }
 
     /**
-     * Monta la lista de carpetas raíz adicionales, el botón que abre el explorador (arrancando en el
-     * almacenamiento externo entero, no en `UltiMusic`: ver [FolderPickerDialogFragment.newInstance])
-     * y la papelera de cada fila. Usa una `requestKey` propia ([LIBRARY_ROOT_PICKER_REQUEST_KEY]) para
-     * no colisionar con la del mismo explorador reutilizado por [setupGreylist].
+     * Monta la lista de carpetas raíz adicionales, el botón que pide una carpeta NUEVA con el
+     * selector del propio sistema (`ActivityResultContracts.OpenDocumentTree`: a diferencia de la
+     * lista gris, aquí sí hace falta un permiso nuevo, ver [com.untar.ultimusic.util.SafStorage]) y la
+     * papelera de cada fila.
      */
     private fun setupLibraryRoots(recycler: RecyclerView, addFolderButton: View) {
         libraryRootAdapter = LibraryRootAdapter(onDelete = { root -> showRemoveLibraryRootDialog(root) })
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = libraryRootAdapter
 
-        addFolderButton.setOnClickListener {
-            FolderPickerDialogFragment.newInstance(
-                initialDir = Environment.getExternalStorageDirectory(),
-                rootTitle = getString(R.string.folder_picker_storage_root_title),
-                requestKey = LIBRARY_ROOT_PICKER_REQUEST_KEY
-            ).show(childFragmentManager, FolderPickerDialogFragment.TAG)
-        }
+        addFolderButton.setOnClickListener { addLibraryRootLauncher.launch(null) }
+    }
 
-        childFragmentManager.setFragmentResultListener(
-            LIBRARY_ROOT_PICKER_REQUEST_KEY,
-            viewLifecycleOwner
-        ) { _, bundle ->
-            val path = bundle.getString(FolderPickerDialogFragment.RESULT_PATH) ?: return@setFragmentResultListener
-            when (settingsViewModel.tryAddLibraryRoot(path)) {
+    private val addLibraryRootLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            when (settingsViewModel.tryAddLibraryRoot(uri)) {
                 SettingsViewModel.AddLibraryRootResult.SUCCESS -> Unit
                 SettingsViewModel.AddLibraryRootResult.ALREADY_COVERED ->
                     toast(R.string.settings_library_root_error_nested)
             }
         }
-    }
 
     /**
      * Confirmación antes de quitar una carpeta raíz: a diferencia de la lista gris, aquí sí hay
@@ -380,12 +373,13 @@ class SettingsDialogFragment : DialogFragment() {
      * [com.untar.ultimusic.data.LibraryRepository.removeLibraryRoot]).
      */
     private fun showRemoveLibraryRootDialog(root: LibraryRoot) {
-        val name = root.path.substringAfterLast('/')
+        val treeUri = Uri.parse(root.path)
+        val name = SafStorage.docPathOfTree(treeUri)?.substringAfterLast('/') ?: root.path
         val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.settings_library_root_delete_desc)
             .setMessage(TextUtils.expandTemplate(resources.getText(R.string.settings_library_roots_remove_confirm), name))
             .setNegativeButton(R.string.dialog_cancel, null)
-            .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeLibraryRoot(root.path) }
+            .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeLibraryRoot(treeUri) }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
@@ -1107,9 +1101,5 @@ class SettingsDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "settings"
-
-        // Clave propia para no colisionar con FolderPickerDialogFragment.RESULT_KEY, que sigue
-        // usando setupGreylist para el mismo explorador reutilizado con otro punto de partida.
-        private const val LIBRARY_ROOT_PICKER_REQUEST_KEY = "library_root_picker_result"
     }
 }

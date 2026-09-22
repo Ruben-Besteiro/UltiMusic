@@ -1,5 +1,6 @@
 package com.untar.ultimusic.ui.settings
 
+import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -8,15 +9,17 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.LibraryRoot
+import com.untar.ultimusic.util.SafStorage
 
 /**
  * Lista de carpetas raíz adicionales de la fonoteca (ajustes > Carpetas de la fonoteca). Cada fila
- * muestra la ruta absoluta completa (a diferencia de [GreylistAdapter], aquí no hay un prefijo común
- * como `UltiMusic/` que recortar: cada carpeta puede vivir en cualquier parte del dispositivo) y una
- * papelera que la quita. Sin switch: una carpeta raíz está dentro de la biblioteca o no lo está, no
- * tiene el estado intermedio de "excluida pero sin quitar" que sí tiene la lista gris. Al no llevar
- * switch tampoco lleva acento propio (la papelera no se tiñe en [GreylistAdapter] tampoco). Mismo
- * patrón plano que [GreylistAdapter]: sin DiffUtil, `submit()` repinta entera.
+ * muestra el docPath de la carpeta concedida (ver [SafStorage.docPathOfTree]; a diferencia de
+ * [GreylistAdapter], aquí no hay un prefijo común como `UltiMusic/` que recortar: cada carpeta puede
+ * vivir en cualquier parte del volumen) y una papelera que la quita. Sin switch: una carpeta raíz
+ * está dentro de la biblioteca o no lo está, no tiene el estado intermedio de "excluida pero sin
+ * quitar" que sí tiene la lista gris. Al no llevar switch tampoco lleva acento propio (la papelera no
+ * se tiñe en [GreylistAdapter] tampoco). Mismo patrón plano que [GreylistAdapter]: sin DiffUtil,
+ * `submit()` repinta entera.
  */
 class LibraryRootAdapter(
     private val onDelete: (LibraryRoot) -> Unit
@@ -45,7 +48,8 @@ class LibraryRootAdapter(
         private val delete: ImageButton = itemView.findViewById(R.id.btnLibraryRootDelete)
 
         fun bind(root: LibraryRoot, onDelete: (LibraryRoot) -> Unit) {
-            path.text = root.path
+            path.text = runCatching { Uri.parse(root.path) }.getOrNull()
+                ?.let { SafStorage.docPathOfTree(it) } ?: root.path
             delete.setOnClickListener { onDelete(root) }
         }
     }

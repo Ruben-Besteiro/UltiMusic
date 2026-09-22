@@ -9,6 +9,16 @@ import androidx.room.PrimaryKey
  * Fila de la tabla de canciones. El [filePath] es la clave estable que ancla la canción entre
  * escaneos (aunque el [id] autogenerado cambie de instalación a instalación).
  *
+ * Desde la migración a Storage Access Framework (ver [com.untar.ultimusic.util.SafStorage]),
+ * [filePath] YA NO es una ruta de archivo real: es la ruta RELATIVA AL VOLUMEN del documento (p. ej.
+ * `"UltiMusic/Bootlegs/track.mp3"`, sin barra inicial ni esquema), la misma que
+ * [com.untar.ultimusic.data.db.entities.GreylistFolderEntity.path]. Se guarda así, y no el
+ * `content://` de verdad, para que `LibraryDao.reconcile`/`setSongsHiddenUnderFolder` sigan pudiendo
+ * comparar con `substringAfterLast('/')`/`startsWith(prefijo + "/")` como siempre: un `content://` en
+ * crudo no sirve para eso (su id de documento va codificado como un único segmento opaco). El URI
+ * abrible de verdad se reconstruye al vuelo con `SafStorage.resolveUri` cuando hace falta reproducir
+ * o leer el archivo, buscando qué carpeta concedida cubre esta ruta.
+ *
  * El álbum (o álbumes: N:M, ver [SongAlbumCrossRef]) al que pertenece esta canción NO vive aquí,
  * a diferencia de los artistas y productores tampoco viven aquí: se enlaza en su propia tabla de
  * cruce ([SongAlbumCrossRef]), con el número de pista/disco de cada enlace como columnas suyas

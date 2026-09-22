@@ -7,7 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Rect
 import android.graphics.drawable.BitmapDrawable
 import android.media.MediaMetadataRetriever
-import android.os.Environment
+import android.net.Uri
 import coil.ImageLoader
 import coil.decode.DataSource
 import coil.decode.ImageSource
@@ -25,7 +25,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import okio.Buffer
-import java.io.File
 import java.security.MessageDigest
 import kotlin.math.min
 import kotlin.math.sqrt
@@ -37,7 +36,7 @@ import kotlin.math.sqrt
  *   YouTube cacheada (Song.videoThumbnailName) → recuadro negro.
  *
  * El primer eslabón lo rellena el editor de metadatos: cuando el usuario elige una portada, el
- * archivo se copia a [CoverArt.imagesDir] con un nombre derivado del título/nombre de la
+ * archivo se copia a [CoverArt.imagesDocPath] con un nombre derivado del título/nombre de la
  * canción/álbum/artista al que pertenece, y ese nombre queda en `imageName`. El tercer
  * eslabón lo rellena el mismo editor al guardar un enlace de YouTube: se descarga y recorta la
  * miniatura del vídeo (ver `LibraryRepository.downloadVideoThumbnail`) y su nombre queda en
@@ -85,14 +84,36 @@ object CoverArt {
     }
 
     /**
-     * Carpeta `~/UltiMusic/images`, donde viven TODAS las imágenes de la app: las portadas
-     * importadas por el usuario y las miniaturas de YouTube cacheadas. Mismo patrón que
-     * `~/UltiMusic/Playlists` o `~/UltiMusic/databases` (ver [PlaylistRepository][com.untar.ultimusic.data.playlist.PlaylistRepository]):
-     * una carpeta visible del almacenamiento del propio dispositivo, no privada de la app, así que
-     * sobrevive a un desinstalar/reinstalar.
+     * docPath de `UltiMusic/images` (ver [com.untar.ultimusic.util.SafStorage]), donde viven TODAS
+     * las imágenes de la app: las portadas importadas por el usuario y las miniaturas de YouTube
+     * cacheadas. Es una subcarpeta VISIBLE de la carpeta `UltiMusic` que el usuario concedió (mismo
+     * patrón que `Playlists` o `databases`, ver
+     * [PlaylistRepository][com.untar.ultimusic.data.playlist.PlaylistRepository]), no privada de la
+     * app, así que sobrevive a un desinstalar/reinstalar siempre que la carpeta siga en el
+     * dispositivo Y el usuario la vuelva a conceder.
+     *
+     * @param createIfMissing la crea si hace falta (para escribir); si es `false` (para leer) y
+     * todavía no existe, devuelve null en vez de crearla solo para comprobar que está vacía.
+     * Null también si `UltiMusic` no se ha concedido todavía.
      */
-    fun imagesDir(context: Context): File =
-        File(Environment.getExternalStorageDirectory(), "UltiMusic/images").apply { mkdirs() }
+    fun imagesDocPath(context: Context, createIfMissing: Boolean = false): String? {
+        SafStorage.ensureUltiMusicRegistered(context)
+        val treeUri = SafStorage.ultiMusicTreeUri(context) ?: return null
+        val root = SafStorage.ultiMusicDocPath(context) ?: return null
+        return if (createIfMissing) {
+            SafStorage.getOrCreateSubfolder(context, treeUri, root, "images")
+        } else {
+            "$root/images".takeIf { SafStorage.exists(context, it) }
+        }
+    }
+
+    /** URI abrible de una imagen ya guardada en `UltiMusic/images` por su nombre, o null si no existe
+     *  (imagen sin poner, o `UltiMusic` sin conceder todavía). */
+    fun imageUri(context: Context, name: String?): Uri? {
+        if (name.isNullOrEmpty()) return null
+        val dir = imagesDocPath(context) ?: return null
+        return SafStorage.resolveUri("$dir/$name")
+    }
 
     /** Quita del nombre los caracteres que ningún sistema de archivos admite, para poder nombrar
      * una imagen igual que el título/nombre al que pertenece. */
@@ -100,7 +121,7 @@ object CoverArt {
         name.replace(Regex("[\\\\/:*?\"<>|]"), "").trim()
 
     /**
-     * Busca un nombre de archivo libre en [dir] para `baseName.ext`.
+     * Busca un nombre de archivo libre en `UltiMusic/images` para `baseName.ext`.
      *
      * Si ese nombre ya lo tiene ESTA MISMA imagen ([currentName], la que ya tenía la
      * canción/álbum/persona antes de guardar), se reutiliza tal cual: así renombrar no dispara una
@@ -110,13 +131,14 @@ object CoverArt {
      * Es una comprobación de disco, no de la base de datos: para una librería personal (sin
      * escrituras concurrentes) es suficiente y no hace falta ir a consultar quién es cada dueño.
      */
-    fun reserveFileName(dir: File, baseName: String, ext: String, currentName: String?): String {
+    fun reserveFileName(context: Context, baseName: String, ext: String, currentName: String?): String {
+        fun taken(name: String) = imagesDocPath(context)?.let { dir -> SafStorage.exists(context, "$dir/$name") } == true
         var candidate = "$baseName.$ext"
-        if (candidate == currentName || !File(dir, candidate).exists()) return candidate
+        if (candidate == currentName || !taken(candidate)) return candidate
         var suffix = 2
         while (true) {
             candidate = "$baseName ($suffix).$ext"
-            if (candidate == currentName || !File(dir, candidate).exists()) return candidate
+            if (candidate == currentName || !taken(candidate)) return candidate
             suffix++
         }
     }
@@ -137,18 +159,12 @@ object CoverArt {
      * decide, ya de forma asíncrona, si hay collage o toca caer a la carátula de una sola canción.
      */
     fun cover(context: Context, ref: CoverRef): Any {
-        val dir = imagesDir(context)
-        ref.ownImage?.let { name ->
-            val file = File(dir, name)
-            if (file.exists()) return file
-        }
+        imageUri(context, ref.ownImage)?.let { return it }
         ref.group?.let { return it }
-        ref.songImage?.let { name ->
-            val file = File(dir, name)
-            if (file.exists()) return file
-        }
-        val thumbnail = ref.videoThumbnail?.let { File(dir, it) }
-        return AudioCover(File(ref.songPath.orEmpty()), thumbnail)
+        imageUri(context, ref.songImage)?.let { return it }
+        val thumbnailUri = imageUri(context, ref.videoThumbnail)
+        val songUri = ref.songPath?.let { SafStorage.uriForDomainPath(it) }
+        return AudioCover(songUri, thumbnailUri)
     }
 }
 
@@ -183,20 +199,22 @@ data class GroupCoverSource(val kind: GroupKind, val id: Long)
 enum class GroupKind { ALBUM, ARTIST }
 
 /** Envoltorio para indicarle a Coil que debe extraer el arte embebido de un archivo de audio, con
- * la miniatura de YouTube como reserva si ese archivo no tiene arte embebido. */
-data class AudioCover(val file: File, val fallbackThumbnail: File?)
+ * la miniatura de YouTube como reserva si ese archivo no tiene arte embebido. [file] es null si su
+ * docPath no se ha podido resolver a un URI abrible (carpeta pendiente de re-conceder): cae
+ * directo a la miniatura, igual que si el archivo no tuviera arte embebido. */
+data class AudioCover(val file: Uri?, val fallbackThumbnail: Uri?)
 
 /** Fetcher de Coil que extrae la imagen embebida de un archivo de audio en segundo plano, y si no
  * hay, cae en la miniatura de YouTube cacheada (cuando existe). */
 class AudioCoverFetcher(
-    private val file: File,
-    private val fallbackThumbnail: File?,
+    private val file: Uri?,
+    private val fallbackThumbnail: Uri?,
     private val options: Options
 ) : Fetcher {
 
     override suspend fun fetch(): FetchResult? {
-        val bytes = extractEmbeddedArt(file.absolutePath)
-            ?: fallbackThumbnail?.takeIf { it.exists() }?.readBytes()
+        val bytes = file?.let { extractEmbeddedArt(options.context, it) }
+            ?: fallbackThumbnail?.let { readBytesFromUri(options.context, it) }
             ?: return null
         return SourceResult(
             source = ImageSource(
@@ -217,14 +235,20 @@ class AudioCoverFetcher(
 /** Arte embebido de un archivo de audio, o null si no tiene (o no se ha podido leer). Lo usan
  * tanto [AudioCoverFetcher] (una sola canción) como [GroupCoverFetcher] (varias, para el
  * collage), así que vive aparte en vez de duplicarse en los dos. */
-private fun extractEmbeddedArt(path: String): ByteArray? = runCatching {
+private fun extractEmbeddedArt(context: Context, uri: Uri): ByteArray? = runCatching {
     val retriever = MediaMetadataRetriever()
     try {
-        retriever.setDataSource(path)
+        retriever.setDataSource(context, uri)
         retriever.embeddedPicture
     } finally {
         runCatching { retriever.release() }
     }
+}.getOrNull()
+
+/** Bytes crudos de un [uri] abrible (una imagen ya guardada en `UltiMusic/images`, o una miniatura
+ *  de YouTube cacheada). Usado en vez de `File.readBytes()` porque ya no hay un `File` real. */
+private fun readBytesFromUri(context: Context, uri: Uri): ByteArray? = runCatching {
+    context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 }.getOrNull()
 
 /**
@@ -256,11 +280,10 @@ class GroupCoverFetcher(
             GroupKind.ARTIST -> dao.collageCandidatesForArtist(source.id)
         }
 
-        val dir = CoverArt.imagesDir(context)
         val seenHashes = HashSet<String>()
         val distinctCovers = ArrayList<ByteArray>()
         for (candidate in candidates) {
-            val bytes = resolveCandidateBytes(dir, candidate) ?: continue
+            val bytes = resolveCandidateBytes(context, candidate) ?: continue
             if (seenHashes.add(md5(bytes))) distinctCovers.add(bytes)
         }
 
@@ -283,15 +306,15 @@ class GroupCoverFetcher(
      * suelta (imagen propia de la canción → arte embebido de su archivo → su miniatura de
      * YouTube), pero devolviendo los BYTES en vez de un dato para Coil, porque aquí hace falta
      * decidir duplicados y componer el collage a mano. */
-    private fun resolveCandidateBytes(dir: File, candidate: CollageCandidateRow): ByteArray? {
-        candidate.imageName?.let { name ->
-            val file = File(dir, name)
-            if (file.exists()) runCatching { file.readBytes() }.getOrNull()?.let { return it }
+    private fun resolveCandidateBytes(context: Context, candidate: CollageCandidateRow): ByteArray? {
+        CoverArt.imageUri(context, candidate.imageName)?.let { uri ->
+            readBytesFromUri(context, uri)?.let { return it }
         }
-        extractEmbeddedArt(candidate.filePath)?.let { return it }
-        candidate.videoThumbnailName?.let { name ->
-            val file = File(dir, name)
-            if (file.exists()) runCatching { file.readBytes() }.getOrNull()?.let { return it }
+        SafStorage.uriForDomainPath(candidate.filePath)?.let { uri ->
+            extractEmbeddedArt(context, uri)?.let { return it }
+        }
+        CoverArt.imageUri(context, candidate.videoThumbnailName)?.let { uri ->
+            readBytesFromUri(context, uri)?.let { return it }
         }
         return null
     }
@@ -372,23 +395,25 @@ private const val MIN_COLLAGE_SIDE_PX = 64
  * así que la caché en memoria seguiría devolviendo el bitmap viejo en todos los sitios menos en la
  * vista previa del propio editor (que carga el URI recién elegido directamente, sin pasar por Coil).
  */
-class CoverFileKeyer : Keyer<File> {
-    override fun key(data: File, options: Options): String = "${data.absolutePath}:${data.lastModified()}"
+class CoverFileKeyer : Keyer<Uri> {
+    override fun key(data: Uri, options: Options): String =
+        "$data:${SafStorage.lastModifiedOfUri(options.context, data)}"
 }
 
 /** Ídem que [CoverFileKeyer] pero para [AudioCover]: incluye la fecha de modificación tanto del
  * archivo de audio (de donde sale el arte embebido) como de la miniatura de reserva. */
 class AudioCoverKeyer : Keyer<AudioCover> {
     override fun key(data: AudioCover, options: Options): String {
+        val file = data.file
         val thumbnail = data.fallbackThumbnail
-        return "${data.file.absolutePath}:${data.file.lastModified()}:" +
-            "${thumbnail?.absolutePath}:${thumbnail?.lastModified() ?: 0}"
+        return "$file:${file?.let { SafStorage.lastModifiedOfUri(options.context, it) } ?: 0}:" +
+            "$thumbnail:${thumbnail?.let { SafStorage.lastModifiedOfUri(options.context, it) } ?: 0}"
     }
 }
 
 /**
  * Clave de caché para [GroupCoverSource]. Sin ella, Coil no le pone ninguna clave a este tipo de
- * dato (solo sabe derivarla de un [File]/[AudioCover]: ver [CoverFileKeyer]/[AudioCoverKeyer]) y
+ * dato (solo sabe derivarla de un [Uri]/[AudioCover]: ver [CoverFileKeyer]/[AudioCoverKeyer]) y
  * por tanto NO cachea el collage en memoria: [GroupCoverFetcher] se ejecutaría entero (consulta a
  * la base de datos, lectura de archivos, hash y composición del bitmap) en cada bind de la vista,
  * aunque nada haya cambiado -por ejemplo, al hacer scroll arriba y abajo por la rejilla de álbumes.

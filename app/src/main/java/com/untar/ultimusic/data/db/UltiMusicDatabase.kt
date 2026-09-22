@@ -1,7 +1,6 @@
 package com.untar.ultimusic.data.db
 
 import android.content.Context
-import android.os.Environment
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
@@ -20,6 +19,7 @@ import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 import com.untar.ultimusic.data.db.entities.SongTagCrossRef
 import com.untar.ultimusic.data.db.entities.TagEntity
+import com.untar.ultimusic.util.SafStorage
 import java.io.File
 
 /**
@@ -130,7 +130,13 @@ import java.io.File
     // tabla, explicadas en PlayEventEntity: no tiene clave foránea a `songs` (una cascada borraría
     // justo lo que hace falta conservar) y guarda el año desnormalizado (calcularlo con `'localtime'`
     // al consultar reasignaría escuchas de fin de año si el usuario cambia de zona horaria).
-    version = 29,
+    // v30: sin cambio de esquema — migración de MANAGE_EXTERNAL_STORAGE a Storage Access Framework
+    // (MIGRATION_29_30 en Migrations.kt, ver SafStorage): vacía `library_roots`/`greylist_folders`
+    // (sus rutas absolutas ya no sirven de nada) sin tocar `songs`, cuyos `filePath` viejos se
+    // arreglan en caliente al re-conceder carpetas, no en la migración. El `Callback.onCreate` de más
+    // abajo deja de sembrar `library_roots` para una instalación nueva por el mismo motivo: con SAF no
+    // hay forma de "sembrar" un permiso de árbol sin que el usuario pase por el selector del sistema.
+    version = 30,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -156,20 +162,21 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                         // MIGRATION_12_13, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17,
                         // migration17To18, migration18To19, MIGRATION_19_20, migration20To21,
                         // MIGRATION_21_22, migration22To23, migration23To24, MIGRATION_24_25,
-                        // migration25To26, MIGRATION_26_27 y MIGRATION_27_28 conservan la biblioteca
-                        // (ver Migrations.kt sobre por qué cada una se escribió a mano). Las que no son
-                        // `val` necesitan el `context` -para sembrar las etiquetas predefinidas
-                        // (nombres/colores salen de strings.xml/colors.xml, ver seedDefaultTags), en
-                        // migration22To23 solo el color blanco de las etiquetas de idioma
-                        // (R.color.um_tag_language), en migration23To24 el texto vigente de
+                        // migration25To26, MIGRATION_26_27, MIGRATION_27_28 y MIGRATION_29_30 conservan
+                        // la biblioteca (ver Migrations.kt sobre por qué cada una se escribió a mano).
+                        // Las que no son `val` necesitan el `context` -para sembrar las etiquetas
+                        // predefinidas (nombres/colores salen de strings.xml/colors.xml, ver
+                        // seedDefaultTags), en migration22To23 solo el color blanco de las etiquetas de
+                        // idioma (R.color.um_tag_language), en migration23To24 el texto vigente de
                         // R.string.tag_recently_added_name, o en migration25To26 los colores vigentes
                         // de 4 etiquetas más el sembrado de "Remix / Cover"-, así que se construyen
                         // aquí, donde sí hay uno a mano; MIGRATION_19_20, MIGRATION_21_22,
-                        // MIGRATION_24_25, MIGRATION_26_27, MIGRATION_27_28 y MIGRATION_28_29 son
-                        // `val` porque ninguna lee ningún recurso. El resto de saltos de versión anteriores nunca tuvieron
-                        // migración, así que para esos (y para cualquier salto futuro sin migración)
-                        // sigue habiendo fallbackToDestructiveMigration: el esquema se recrea vacío en
-                        // vez de fallar al abrir la base de datos.
+                        // MIGRATION_24_25, MIGRATION_26_27, MIGRATION_27_28, MIGRATION_28_29 y
+                        // MIGRATION_29_30 son `val` porque ninguna lee ningún recurso. El resto de
+                        // saltos de versión anteriores nunca tuvieron migración, así que para esos (y
+                        // para cualquier salto futuro sin migración) sigue habiendo
+                        // fallbackToDestructiveMigration: el esquema se recrea vacío en vez de fallar
+                        // al abrir la base de datos.
                         .addMigrations(
                             MIGRATION_12_13,
                             MIGRATION_14_15,
@@ -186,21 +193,22 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             migration25To26(context.applicationContext),
                             MIGRATION_26_27,
                             MIGRATION_27_28,
-                            MIGRATION_28_29
+                            MIGRATION_28_29,
+                            MIGRATION_29_30
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true)
-                        // Instalación nueva: la tabla `library_roots` se crea ya en v16 (con el
-                        // esquema completo de golpe) y `onCreate` es el único momento en el que se
-                        // sabe que es de verdad nueva, sin pasar nunca por MIGRATION_15_16 -que es
-                        // quien siembra Download/Music en quien SÍ actualiza desde v15-. Lo mismo
-                        // aplica a `tags` (creada ya en v18) y seedDefaultTags/migration17To18 —
-                        // instalación nueva siembra directamente las 5 etiquetas predefinidas
-                        // vigentes (sin "Debug" ni "Favoritos"), sin pasar por migration18To19,
-                        // MIGRATION_19_20, migration20To21, migration25To26 ni MIGRATION_27_28.
+                        // Instalación nueva: `onCreate` es el único momento en el que se sabe que es
+                        // de verdad nueva. `tags` (creada ya en v18) se siembra directamente con las 5
+                        // etiquetas predefinidas vigentes (sin "Debug" ni "Favoritos"), sin pasar por
+                        // migration18To19, MIGRATION_19_20, migration20To21, migration25To26 ni
+                        // MIGRATION_27_28. `library_roots` YA NO se siembra aquí (a diferencia de antes
+                        // de v30): con SAF no hay forma de conceder un permiso de árbol sin que el
+                        // usuario pase por el selector del sistema, así que una instalación nueva
+                        // arranca con esa tabla vacía y el usuario añade Download/Music/lo que quiera
+                        // desde ajustes si le interesa (ver SettingsDialogFragment).
                         .addCallback(object : RoomDatabase.Callback() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
-                                seedDefaultLibraryRoots(db)
                                 seedDefaultTags(db, context.applicationContext)
                             }
                         })
@@ -210,11 +218,20 @@ abstract class UltiMusicDatabase : RoomDatabase() {
 
         /**
          * Si la base de datos interna no existe todavía (instalación nueva, o reinstalación tras
-         * desinstalar) y hay una copia en `~/UltiMusic/databases/` -la que deja
+         * desinstalar) y hay una copia en `UltiMusic/databases/` -la que deja
          * [com.untar.ultimusic.data.LibraryRepository.exportDatabaseCopy] cada vez que la app pasa a
          * segundo plano-, la restaura ahí antes de que Room llegue a abrirla. Así las ediciones del
-         * usuario (que solo viven en Room, nunca en MediaStore) sobreviven a un
-         * desinstalar/reinstalar siempre que esa carpeta siga en el almacenamiento del dispositivo.
+         * usuario (que solo viven en Room, nunca en MediaStore) sobreviven a un desinstalar/reinstalar
+         * SIEMPRE QUE el usuario ya haya vuelto a conceder la carpeta `UltiMusic` con el selector del
+         * sistema en este arranque (ver [SafStorage]): a diferencia de antes de la migración a SAF, un
+         * permiso de árbol normalmente NO sobrevive a un desinstalar/reinstalar (Android lo revoca con
+         * la app), así que en ese caso concreto esta restauración automática no puede dispararse hasta
+         * que el usuario haya concedido de nuevo `UltiMusic` -es un cambio de comportamiento esperado
+         * de la migración, no un fallo-.
+         *
+         * Solo necesita la URI de `UltiMusic` (persistida en `SharedPreferences`, ver
+         * [SafStorage.ultiMusicTreeUri]), no ninguna carpeta raíz adicional: es lo único que hace falta
+         * ANTES de que exista Room.
          *
          * Si la base de datos interna ya existe no se toca nada: esta copia es solo para el arranque
          * en frío de una instalación sin datos propios todavía.
@@ -223,16 +240,18 @@ abstract class UltiMusicDatabase : RoomDatabase() {
             val dbFile = context.getDatabasePath(DB_NAME)
             if (dbFile.exists()) return
 
-            val backupDir = File(Environment.getExternalStorageDirectory(), "UltiMusic/databases")
-            val backupFile = File(backupDir, DB_NAME)
-            if (!backupFile.exists()) return
+            SafStorage.refreshRegistry(context)
+            val ultiMusicRoot = SafStorage.ultiMusicDocPath(context) ?: return
+            val backupDocPath = "$ultiMusicRoot/databases"
+            if (!SafStorage.exists(context, "$backupDocPath/$DB_NAME")) return
 
             runCatching {
                 dbFile.parentFile?.mkdirs()
                 for (suffix in listOf("", "-wal", "-shm")) {
-                    val src = File(backupDir, DB_NAME + suffix)
-                    if (src.exists()) {
-                        src.copyTo(File(dbFile.path + suffix), overwrite = true)
+                    val srcDocPath = "$backupDocPath/$DB_NAME$suffix"
+                    if (!SafStorage.exists(context, srcDocPath)) continue
+                    SafStorage.openInputStream(context, srcDocPath)?.use { input ->
+                        File(dbFile.path + suffix).outputStream().use { output -> input.copyTo(output) }
                     }
                 }
             }

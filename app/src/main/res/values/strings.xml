@@ -260,11 +260,6 @@
     <!-- Separador de las partes del subtítulo de una sugerencia ("Artista | Álbum | Año"), el
          mismo que ya usa song_subtitle_format en las listas de canciones/álbumes. -->
     <string name="subtitle_separator">" | "</string>
-    <!-- Etiqueta de cada fila de sugerencia. iTunes clasifica toda publicación en uno de estos
-         tres tipos, así que no hace falta ninguna etiqueta de reserva. -->
-    <string name="suggestion_type_album">Álbum</string>
-    <string name="suggestion_type_single">Single</string>
-    <string name="suggestion_type_ep">EP</string>
 
     <!-- Buscador de letras sincronizadas de lrclib.net (ver LyricsSuggestionsDialogFragment), abierto
          desde el icono de lupa del campo "Letra" del editor. -->
@@ -530,7 +525,7 @@
 
     <!-- Carpetas de la fonoteca -->
     <string name="settings_library_roots_title">Carpetas de la fonoteca</string>
-    <string name="settings_library_roots_subtitle">Por defecto, las carpetas son UltiMusic, Download y Music. Aquí puedes añadir más</string>
+    <string name="settings_library_roots_subtitle">UltiMusic es tu carpeta principal. Añade más carpetas (como Download o Music) si quieres que también formen parte de tu fonoteca</string>
     <string name="settings_library_roots_add">Añadir carpeta</string>
     <string name="settings_library_root_delete_desc">Quitar carpeta de la fonoteca</string>
     <string name="settings_library_roots_remove_confirm">¿Quitar <b>^1</b> de la fonoteca? Las canciones que solo estén ahí se borrarán de la biblioteca (ediciones y listas incluidas), salvo que también estén en otra carpeta incluida con el mismo nombre de archivo</string>
@@ -624,17 +619,24 @@
 
     <!-- Selector de subcarpetas -->
     <string name="folder_picker_root_title">UltiMusic</string>
-    <string name="folder_picker_storage_root_title">Almacenamiento</string>
     <string name="folder_picker_back">Subir una carpeta</string>
     <string name="folder_picker_choose">Elegir esta carpeta</string>
     <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>
 
     <!-- Permisos -->
-    <string name="permission_needed_title">Permiso necesario</string>
-    <string name="permission_needed_message">UltiMusic necesita acceso a todos los archivos para leer tus canciones de Descargas y de la carpeta UltiMusic.</string>
-    <string name="permission_grant">Conceder</string>
+    <string name="permission_needed_title">Elige tu carpeta de música</string>
+    <string name="permission_needed_message">UltiMusic necesita acceso a tu carpeta de música</string>
+    <string name="permission_grant">Elegir carpeta</string>
     <string name="permission_cancel">Ahora no</string>
-    <string name="permission_denied">Sin permiso no se pueden mostrar las canciones</string>
+    <string name="permission_denied">Sin la carpeta UltiMusic no se pueden mostrar las canciones</string>
+
+    <!-- Re-concesión de Download/Music/raíces propias tras la migración a Storage Access Framework
+         (ver SafStorage): se ofrece una sola vez, después de conceder UltiMusic, si queda alguna
+         canción catalogada antes de la migración sin re-enlazar. -->
+    <string name="relink_legacy_roots_title">¿Añadir más carpetas?</string>
+    <string name="relink_legacy_roots_message">Algunas canciones de tu fonoteca estaban en otras carpetas (como Descargas o Música). Elige una para recuperarlas; siempre puedes añadir más luego desde Ajustes.</string>
+    <string name="relink_legacy_roots_action">Elegir carpeta</string>
+    <string name="relink_legacy_roots_skip">Ahora no</string>
 
     <!-- Notificación de reproducción (PlaybackService/UltiMusicNotificationProvider) -->
     <string name="notification_channel_playback">Reproducción</string>

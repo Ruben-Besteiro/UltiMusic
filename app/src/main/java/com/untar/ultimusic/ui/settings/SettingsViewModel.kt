@@ -1,18 +1,18 @@
 package com.untar.ultimusic.ui.settings
 
 import android.app.Application
-import android.os.Environment
+import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.ArtistGroupingPreferences
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.model.GreylistFolder
 import com.untar.ultimusic.model.LibraryRoot
+import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
  * Estado de los "ajustes visuales" para [SettingsDialogFragment]: las carpetas raíz de la fonoteca y
@@ -49,30 +49,36 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     enum class AddLibraryRootResult { SUCCESS, ALREADY_COVERED }
 
     /**
-     * Valida y añade una carpeta raíz nueva. Rechaza:
+     * Valida y añade una carpeta raíz nueva, ya concedida con el selector del sistema
+     * (`ActivityResultContracts.OpenDocumentTree`, ver [SettingsDialogFragment]). Rechaza:
      * - una carpeta ya cubierta por una raíz existente (la propia `UltiMusic`, o cualquiera de las
-     *   guardadas en BD —Download y Music vienen incluidas de fábrica, ver
-     *   [com.untar.ultimusic.data.db.seedDefaultLibraryRoots]—, o una subcarpeta suya): añadirla
-     *   duplicaría escaneo/vigilancia sin ningún beneficio;
+     *   guardadas en BD), o una subcarpeta suya: añadirla duplicaría escaneo/vigilancia sin ningún
+     *   beneficio;
      * - una carpeta que ya CONTENGA una raíz existente: el anidamiento en el otro sentido tiene el
      *   mismo problema.
+     *
+     * La comparación es por docPath (ver [SafStorage.docPathOfTree]), no por el `Uri` en sí: dos
+     * `Uri` de árbol distintos pueden apuntar a la misma carpeta real si el usuario la concede dos
+     * veces desde el selector.
      */
-    fun tryAddLibraryRoot(path: String): AddLibraryRootResult {
-        val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic").absolutePath
-        val candidate = File(path).absolutePath
-
-        val existing = libraryRoots.value.map { it.path } + ultiMusic
-        fun isSameOrNested(a: String, b: String) = a == b || a.startsWith("$b/")
-        if (existing.any { isSameOrNested(candidate, it) || isSameOrNested(it, candidate) }) {
-            return AddLibraryRootResult.ALREADY_COVERED
+    fun tryAddLibraryRoot(uri: Uri): AddLibraryRootResult {
+        val app = getApplication<Application>()
+        val candidate = SafStorage.docPathOfTree(uri)
+        if (candidate != null) {
+            val existing = libraryRoots.value.mapNotNull { SafStorage.docPathOfTree(Uri.parse(it.path)) } +
+                listOfNotNull(SafStorage.ultiMusicDocPath(app))
+            fun isSameOrNested(a: String, b: String) = a == b || a.startsWith("$b/")
+            if (existing.any { isSameOrNested(candidate, it) || isSameOrNested(it, candidate) }) {
+                return AddLibraryRootResult.ALREADY_COVERED
+            }
         }
 
-        viewModelScope.launch { repository.addLibraryRoot(candidate) }
+        viewModelScope.launch { repository.addLibraryRoot(uri) }
         return AddLibraryRootResult.SUCCESS
     }
 
-    fun removeLibraryRoot(path: String) {
-        viewModelScope.launch { repository.removeLibraryRoot(path) }
+    fun removeLibraryRoot(uri: Uri) {
+        viewModelScope.launch { repository.removeLibraryRoot(uri) }
     }
 
     // --- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) ---

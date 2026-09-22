@@ -30,7 +30,6 @@ import com.untar.ultimusic.data.db.relations.SongVideoRow
 import com.untar.ultimusic.data.db.relations.SongWithRelations
 import com.untar.ultimusic.data.scan.ScannedSong
 import kotlinx.coroutines.flow.Flow
-import java.io.File
 
 /**
  * Único DAO de la biblioteca. Además de las operaciones sueltas, expone [reconcile], que en una
@@ -1294,5 +1293,5 @@ private fun ScannedSong.toEntity(hidden: Boolean): SongEntity = SongEntity(
     ogTitle = null,
     ogArtist = null,
     ogYear = null,
-    dateAdded = File(filePath).lastModified()
+    dateAdded = dateAdded
 )

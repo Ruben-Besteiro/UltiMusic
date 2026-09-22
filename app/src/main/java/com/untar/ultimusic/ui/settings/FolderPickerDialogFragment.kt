@@ -2,7 +2,6 @@ package com.untar.ultimusic.ui.settings
 
 import android.content.res.ColorStateList
 import android.os.Bundle
-import android.os.Environment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -27,24 +26,25 @@ import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.button.MaterialButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.launch
-import java.io.File
 
 /**
- * Explorador de carpetas propio de la app (no el selector de documentos del sistema): UltiMusic ya
- * lee el almacenamiento directamente con `File` gracias a `MANAGE_EXTERNAL_STORAGE`, así que no hace
- * falta pasar por Storage Access Framework ni traducir después una URI a una ruta real.
+ * Explorador de carpetas propio de la app, para elegir una SUBCARPETA dentro de la carpeta
+ * `UltiMusic` ya concedida por Storage Access Framework (ver [SafStorage]): no hace falta pasar por
+ * el selector del sistema, porque no se pide ningún permiso nuevo, solo se navega dentro de un árbol
+ * que la app ya puede leer.
  *
- * Sirve a dos pantallas de ajustes con el mismo explorador, cada una con su propio punto de partida
- * y su propia clave de resultado (ver [newInstance]): la lista gris arranca en `UltiMusic` (para
- * elegir una subcarpeta que ocultar), y las carpetas raíz de la fonoteca arrancan en el
- * almacenamiento externo entero (para poder elegir una carpeta en cualquier parte del dispositivo).
+ * Sirve a la lista gris de ajustes (elegir una subcarpeta que ocultar, ver [SettingsDialogFragment]).
+ * Para AÑADIR una raíz nueva de biblioteca (que sí necesita un permiso nuevo) se usa directamente
+ * `ActivityResultContracts.OpenDocumentTree()` desde `SettingsDialogFragment`, no este diálogo.
  *
- * Empieza en [root] y deja navegar hacia dentro tocando una fila; el botón "Elegir esta carpeta"
- * confirma la que se esté viendo en ese momento (no hace falta llegar a una carpeta sin
+ * Empieza en la raíz de `UltiMusic` y deja navegar hacia dentro tocando una fila; el botón "Elegir
+ * esta carpeta" confirma la que se esté viendo en ese momento (no hace falta llegar a una carpeta sin
  * subcarpetas). El resultado se devuelve con la API de resultados entre fragmentos
  * ([setFragmentResult]/`setFragmentResultListener`), igual que [VideoPickerDialogFragment
- * ][com.untar.ultimusic.ui.player.VideoPickerDialogFragment] hace con el iPod.
+ * ][com.untar.ultimusic.ui.player.VideoPickerDialogFragment] hace con el iPod, y es el docPath de la
+ * carpeta elegida (mismo formato que [com.untar.ultimusic.data.db.entities.GreylistFolderEntity.path]).
  */
 class FolderPickerDialogFragment : DialogFragment() {
 
@@ -52,12 +52,11 @@ class FolderPickerDialogFragment : DialogFragment() {
     // btnChooseFolder (ver onViewCreated).
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
-    private val root: File by lazy {
-        File(requireArguments().getString(ARG_INITIAL_DIR)!!)
-    }
+    private val treeUri by lazy { SafStorage.ultiMusicTreeUri(requireContext()) }
+    private val root: String by lazy { SafStorage.ultiMusicDocPath(requireContext()).orEmpty() }
     private val rootTitle: String? by lazy { requireArguments().getString(ARG_ROOT_TITLE) }
     private val requestKey: String by lazy { requireArguments().getString(ARG_REQUEST_KEY) ?: RESULT_KEY }
-    private lateinit var currentDir: File
+    private lateinit var currentDocPath: String
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var recycler: RecyclerView
@@ -67,7 +66,7 @@ class FolderPickerDialogFragment : DialogFragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
-        currentDir = root
+        currentDocPath = root
     }
 
     override fun onCreateView(
@@ -97,13 +96,13 @@ class FolderPickerDialogFragment : DialogFragment() {
             insets
         }
 
-        adapter = FolderPickerAdapter { folder -> navigateTo(folder) }
+        adapter = FolderPickerAdapter { folder -> navigateTo(folder.docPath) }
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
         toolbar.setNavigationOnClickListener { navigateUpOrDismiss() }
         chooseButton.setOnClickListener {
-            setFragmentResult(requestKey, bundleOf(RESULT_PATH to currentDir.absolutePath))
+            setFragmentResult(requestKey, bundleOf(RESULT_PATH to currentDocPath))
             dismiss()
         }
 
@@ -126,34 +125,38 @@ class FolderPickerDialogFragment : DialogFragment() {
             }
         )
 
-        showFolder(currentDir)
+        showFolder(currentDocPath)
     }
 
-    private fun navigateTo(folder: File) {
-        currentDir = folder
-        showFolder(folder)
+    private fun navigateTo(docPath: String) {
+        currentDocPath = docPath
+        showFolder(docPath)
     }
 
     private fun navigateUpOrDismiss() {
-        val parent = currentDir.parentFile
-        if (currentDir == root || parent == null) {
+        if (currentDocPath == root) {
             dismiss()
         } else {
-            currentDir = parent
-            showFolder(currentDir)
+            currentDocPath = currentDocPath.substringBeforeLast('/', root)
+            showFolder(currentDocPath)
         }
     }
 
-    private fun showFolder(folder: File) {
-        toolbar.title = if (folder == root) {
+    private fun showFolder(docPath: String) {
+        toolbar.title = if (docPath == root) {
             rootTitle ?: getString(R.string.folder_picker_root_title)
         } else {
-            folder.absolutePath.removePrefix(root.absolutePath + "/")
+            docPath.removePrefix("$root/")
         }
 
-        val subfolders = folder.listFiles { file -> file.isDirectory }
-            ?.sortedBy { it.name.lowercase() }
-            ?: emptyList()
+        val tree = treeUri
+        val subfolders = if (tree != null) {
+            SafStorage.listChildren(requireContext(), tree, docPath)
+                .filter { it.isDirectory }
+                .sortedBy { it.name.lowercase() }
+        } else {
+            emptyList()
+        }
         adapter.submit(subfolders)
         emptyView.isVisible = subfolders.isEmpty()
     }
@@ -165,25 +168,20 @@ class FolderPickerDialogFragment : DialogFragment() {
         const val RESULT_KEY = "folder_picker_result"
         const val RESULT_PATH = "path"
 
-        private const val ARG_INITIAL_DIR = "initial_dir"
         private const val ARG_ROOT_TITLE = "root_title"
         private const val ARG_REQUEST_KEY = "request_key"
 
         /**
-         * @param initialDir carpeta en la que arranca el explorador (por defecto, `UltiMusic`, para
-         * no cambiar el comportamiento de la lista gris).
-         * @param rootTitle título de la toolbar mientras se ve [initialDir]; si es null se usa
-         * [R.string.folder_picker_root_title] ("UltiMusic").
+         * @param rootTitle título de la toolbar mientras se ve la raíz de `UltiMusic`; si es null se
+         * usa [R.string.folder_picker_root_title] ("UltiMusic").
          * @param requestKey clave de [setFragmentResult] con la que escuchar el resultado; por
-         * defecto [RESULT_KEY], para no romper el punto de llamada de la lista gris.
+         * defecto [RESULT_KEY].
          */
         fun newInstance(
-            initialDir: File = File(Environment.getExternalStorageDirectory(), "UltiMusic"),
             rootTitle: String? = null,
             requestKey: String = RESULT_KEY
         ) = FolderPickerDialogFragment().apply {
             arguments = bundleOf(
-                ARG_INITIAL_DIR to initialDir.absolutePath,
                 ARG_ROOT_TITLE to rootTitle,
                 ARG_REQUEST_KEY to requestKey
             )

@@ -1,16 +1,16 @@
 package com.untar.ultimusic.data.scan
 
+import android.content.Context
 import android.media.MediaMetadataRetriever
-import android.os.Environment
+import android.net.Uri
+import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.File
-
-// TODO: Añadir un FileObserver/ContentObserver para detectar cambios en la fonoteca
 
 /**
  * Parte de "lectura" de la fonoteca. Fiel a la filosofía "libre de MediaStore": escanea
- * directamente el sistema de archivos y devuelve las etiquetas crudas de cada canción
+ * directamente las carpetas concedidas por Storage Access Framework (ver
+ * [com.untar.ultimusic.util.SafStorage]) y devuelve las etiquetas crudas de cada canción
  * ([ScannedSong]), sin IDs ni entidades. La persistencia y el emparejamiento con lo ya
  * guardado los hace la capa de datos.
  */
@@ -28,7 +28,7 @@ object MusicScanner {            // OBJECT = SINGLETON
     /**
      * Resultado de [scan]: [newSongs] son las etiquetas de los archivos que NO estaban ya
      * catalogados (los únicos que hacía falta leer, ver [knownPaths][scan]), y [currentPaths] son
-     * las rutas de TODOS los archivos de audio encontrados, estén catalogados o no. Hace falta este
+     * los docPath de TODOS los archivos de audio encontrados, estén catalogados o no. Hace falta este
      * segundo conjunto para que [com.untar.ultimusic.data.db.LibraryDao.reconcile] sepa qué
      * canciones ya catalogadas han desaparecido, cosa que [newSongs] por sí solo no puede decir (los
      * archivos ya conocidos ni siquiera están en esa lista).
@@ -36,108 +36,129 @@ object MusicScanner {            // OBJECT = SINGLETON
     data class ScanResult(val newSongs: List<ScannedSong>, val currentPaths: Set<String>)
 
     /**
-     * El listado de carpetas en las que se buscan canciones: `UltiMusic` (la raíz por defecto,
-     * siempre presente) más las carpetas raíz adicionales que el usuario haya añadido desde ajustes
-     * (ver [com.untar.ultimusic.data.db.entities.LibraryRootEntity]). [MusicScanner] no conoce la
-     * base de datos —sigue siendo "solo lectura de filesystem"—, así que [extraRoots] se lo pasa
-     * quien sí la tiene ([com.untar.ultimusic.data.LibraryRepository]).
-     */
-    private fun scanRoots(extraRoots: List<File>): List<File> {
-        val ultiMusic = File(Environment.getExternalStorageDirectory(), "UltiMusic")
-        return listOf(ultiMusic) + extraRoots
-    }
-
-    /**
-     * Escanea las carpetas configuradas ([scanRoots]) y devuelve las etiquetas crudas de cada
-     * archivo NUEVO (ver [ScanResult]).
+     * Escanea las carpetas concedidas ahora mismo (ver [SafStorage.grantedRoots]: `UltiMusic` más las
+     * raíces adicionales que el usuario haya añadido desde ajustes) y devuelve las etiquetas crudas de
+     * cada archivo NUEVO (ver [ScanResult]).
      *
-     * @param knownPaths Rutas que la capa de datos ya tiene catalogadas (ver
-     * [com.untar.ultimusic.data.db.LibraryDao.allSongPaths]). No se releen sus etiquetas: para una
-     * ruta que no ha cambiado, [com.untar.ultimusic.data.db.LibraryDao.reconcile] no hace nada con
-     * ellas, así que abrir [MediaMetadataRetriever] para cada una en cada reconciliación era trabajo
-     * desperdiciado —la parte lenta del escaneo—. Solo se lee lo que no está en [knownPaths]:
-     * archivos nuevos o movidos/renombrados desde otra ruta (que [LibraryDao.reconcile] necesita
-     * completos para insertarlos o para su emparejamiento por nombre/duración).
+     * @param knownPaths docPath ya catalogados (ver [com.untar.ultimusic.data.db.LibraryDao.allSongPaths]).
+     * No se releen sus etiquetas: para uno que no ha cambiado, [com.untar.ultimusic.data.db.LibraryDao.reconcile]
+     * no hace nada con él, así que reabrir [MediaMetadataRetriever] para cada uno en cada
+     * reconciliación era trabajo desperdiciado —la parte lenta del escaneo—. Solo se lee lo que no
+     * está en [knownPaths]: archivos nuevos o movidos/renombrados desde otra ruta (que
+     * [LibraryDao.reconcile] necesita completos para insertarlos o para su emparejamiento por
+     * nombre/duración).
      */
     suspend fun scan(
-        extraRoots: List<File> = emptyList(),
+        context: Context,
         knownPaths: Set<String> = emptySet(),
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanResult = withContext(Dispatchers.IO) {
-        val files = LinkedHashSet<File>()
-        for (root in scanRoots(extraRoots)) {
-            if (root.exists() && root.isDirectory) {
-                collectAudioFiles(root, files)
-            }
+        val entries = LinkedHashMap<String, SafStorage.SafEntry>()
+        for ((rootDocPath, treeUri) in SafStorage.grantedRoots()) {
+            collectAudioFiles(context, treeUri, rootDocPath, entries)
         }
-        val currentPaths = files.mapTo(HashSet(files.size)) { it.absolutePath }
-        val newFiles = files.filter { it.absolutePath !in knownPaths }
-        val total = newFiles.size
-        val newSongs = newFiles.mapIndexed { index, file ->
+        val currentPaths = entries.keys.toHashSet()
+        val newEntries = entries.values.filter { it.docPath !in knownPaths }
+        val total = newEntries.size
+        val newSongs = newEntries.mapIndexedNotNull { index, entry ->
             onProgress(index + 1, total)
-            readSong(file)
-        }.filterNotNull()
+            readSong(context, entry)
+        }
         ScanResult(newSongs, currentPaths)
     }
 
     /**
-     * ¿Se pueden leer ahora mismo TODAS las carpetas de la fonoteca?
+     * ¿Se pueden leer ahora mismo TODAS las carpetas concedidas?
      *
      * Sirve para no sacar conclusiones precipitadas: si una carpeta no es accesible (permiso
-     * revocado, almacenamiento no montado…), sus canciones parecerían haber desaparecido. Antes de
-     * dar una por perdida —y borrarla de las listas, que son archivos del usuario y no se pueden
-     * recuperar— hay que comprobar que el problema es de la canción y no de la carpeta.
+     * revocado por el usuario desde Ajustes del sistema...), sus canciones parecerían haber
+     * desaparecido. Antes de dar una por perdida —y borrarla de las listas, que son archivos del
+     * usuario y no se pueden recuperar— hay que comprobar que el problema es de la carpeta y no de
+     * la canción.
      *
-     * Con varias carpetas raíz basta con que UNA no sea legible para que no sea seguro fiarse de lo
-     * que falte de ahí, así que se exige que TODAS lo sean (`.all`, no `.any`).
+     * Sin ninguna carpeta concedida (instalación recién migrada, pendiente del flujo de
+     * re-concesión) tampoco se considera "legible": no hay nada de qué fiarse todavía.
      */
-    suspend fun libraryFolderReadable(extraRoots: List<File> = emptyList()): Boolean = withContext(Dispatchers.IO) {
-        scanRoots(extraRoots).all { it.isDirectory && it.canRead() }
+    suspend fun libraryFolderReadable(context: Context): Boolean = withContext(Dispatchers.IO) {
+        val roots = SafStorage.grantedRoots()
+        roots.isNotEmpty() && roots.all { (_, treeUri) -> SafStorage.isRootReadable(context, treeUri) }
     }
 
     /**
-     * Busca un archivo de audio por su NOMBRE (sin carpetas) dentro de las rutas escaneadas.
+     * Busca un archivo de audio por su NOMBRE (sin carpetas) dentro de las carpetas concedidas.
      *
      * A diferencia de [scan], solo recorre directorios: no abre ningún archivo ni lee etiquetas,
      * así que es muy rápido. Sirve para relocalizar al vuelo una canción cuyo archivo el usuario ha
-     * movido de carpeta y cuya ruta guardada, por tanto, ya no vale.
+     * movido de carpeta y cuyo docPath guardado, por tanto, ya no vale.
      */
-    suspend fun findByFilename(filename: String, extraRoots: List<File> = emptyList()): File? = withContext(Dispatchers.IO) {
-        val files = LinkedHashSet<File>()
-        for (root in scanRoots(extraRoots)) {
-            if (root.exists() && root.isDirectory) {
-                collectAudioFiles(root, files)
-            }
+    suspend fun findByFilename(context: Context, filename: String): String? = withContext(Dispatchers.IO) {
+        val entries = LinkedHashMap<String, SafStorage.SafEntry>()
+        for ((rootDocPath, treeUri) in SafStorage.grantedRoots()) {
+            collectAudioFiles(context, treeUri, rootDocPath, entries)
         }
-        files.firstOrNull { it.name == filename }
+        entries.values.firstOrNull { it.name == filename }?.docPath
     }
 
     /**
-     * Lee las etiquetas de UN archivo suelto, fuera del escaneo completo de [scanRoots].
+     * Lee las etiquetas de UN archivo suelto por su [uri], fuera de las carpetas concedidas.
      *
-     * La usa `MainActivity` al reproducir un archivo llegado por "Abrir con UltiMusic": puede
-     * vivir en cualquier carpeta (Descargas, otra app…), no solo bajo `~/UltiMusic`, así que nunca
-     * pasaría por [scan]. Reutiliza el mismo lector de etiquetas para que se vea exactamente igual
-     * que si estuviera en la fonoteca.
+     * La usa `MainActivity` al reproducir un archivo llegado por "Abrir con UltiMusic": puede venir
+     * de cualquier otra app (Descargas, un gestor de archivos...), no solo de una carpeta concedida,
+     * así que nunca pasaría por [scan]. Reutiliza el mismo lector de etiquetas para que se vea
+     * exactamente igual que si estuviera en la fonoteca; el [ScannedSong.filePath] resultante es el
+     * propio [uri] en texto (ver [SafStorage.uriForDomainPath] sobre las formas que puede tomar).
      */
-    suspend fun readTags(file: File): ScannedSong? = withContext(Dispatchers.IO) { readSong(file) }
+    suspend fun readTagsFromUri(context: Context, uri: Uri): ScannedSong? =
+        withContext(Dispatchers.IO) { readSongFromUri(context, uri, uri.toString(), dateAdded = 0L) }
 
-    /** Recorre recursivamente [dir] añadiendo los archivos de audio a [out]. */
-    private fun collectAudioFiles(dir: File, out: MutableSet<File>) {
-        val children = dir.listFiles() ?: return
-        for (child in children) {
-            when {
-                child.isDirectory -> collectAudioFiles(child, out)
-                child.isFile && child.extension.lowercase() in AUDIO_EXTENSIONS -> out.add(child)
+    /**
+     * Todos los archivos de audio de [rootDocPath] dentro de [treeUri], sin leer ninguna etiqueta
+     * (barato, como [findByFilename]). La usa
+     * [com.untar.ultimusic.data.LibraryRepository.relinkAfterGrant] para recorrer una carpeta recién
+     * concedida y reemparejar canciones catalogadas antes de la migración a SAF.
+     */
+    suspend fun collectAudioEntries(context: Context, treeUri: Uri, rootDocPath: String): List<SafStorage.SafEntry> =
+        withContext(Dispatchers.IO) {
+            val out = LinkedHashMap<String, SafStorage.SafEntry>()
+            collectAudioFiles(context, treeUri, rootDocPath, out)
+            out.values.toList()
+        }
+
+    /** Recorre recursivamente [rootDocPath] dentro de [treeUri], añadiendo los archivos de audio a [out]
+     *  (indexados por su docPath, para no repetir si dos raíces se solaparan por error). */
+    private fun collectAudioFiles(
+        context: Context,
+        treeUri: Uri,
+        rootDocPath: String,
+        out: MutableMap<String, SafStorage.SafEntry>
+    ) {
+        val pending = ArrayDeque<String>()
+        pending.addLast(rootDocPath)
+        while (pending.isNotEmpty()) {
+            val dir = pending.removeLast()
+            for (entry in SafStorage.listChildren(context, treeUri, dir)) {
+                when {
+                    entry.isDirectory -> pending.addLast(entry.docPath)
+                    entry.name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS ->
+                        out[entry.docPath] = entry
+                }
             }
         }
     }
 
-    /** Lee las etiquetas de un archivo de audio y las empaqueta en un [ScannedSong]. */
-    private fun readSong(file: File): ScannedSong? {
+    /** Lee las etiquetas de la canción encontrada en [entry] (ver [collectAudioFiles]). */
+    private fun readSong(context: Context, entry: SafStorage.SafEntry): ScannedSong? {
+        val uri = SafStorage.resolveUri(entry.docPath) ?: return null
+        return readSongFromUri(context, uri, entry.docPath, entry.lastModified)
+    }
+
+    /** Lee las etiquetas de un archivo de audio abrible por [uri] y las empaqueta en un
+     *  [ScannedSong], con [filePath] como su clave de dominio (docPath o URI completo, según quien
+     *  llame). */
+    private fun readSongFromUri(context: Context, uri: Uri, filePath: String, dateAdded: Long): ScannedSong? {
         val retriever = MediaMetadataRetriever()
         try {
-            retriever.setDataSource(file.absolutePath)
+            retriever.setDataSource(context, uri)
 
             fun meta(key: Int): String? =
                 retriever.extractMetadata(key)?.trim()?.takeIf { it.isNotEmpty() }
@@ -158,8 +179,8 @@ object MusicScanner {            // OBJECT = SINGLETON
             val genres = genreTag?.let { listOf(it) } ?: emptyList()
 
             return ScannedSong(
-                filePath = file.absolutePath,
-                title = titleTag ?: file.nameWithoutExtension,
+                filePath = filePath,
+                title = titleTag ?: filePath.substringAfterLast('/').substringBeforeLast('.'),
                 artist = artistTag ?: albumArtistTag,
                 albumArtist = albumArtistTag ?: artistTag,
                 album = albumTag,
@@ -168,7 +189,8 @@ object MusicScanner {            // OBJECT = SINGLETON
                 duration = duration,
                 producer = producer,
                 trackNumber = trackNumber,
-                discNumber = discNumber
+                discNumber = discNumber,
+                dateAdded = dateAdded
             )
         } catch (e: Exception) {
             return null

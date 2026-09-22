@@ -3,13 +3,8 @@ package com.untar.ultimusic.ui
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.ColorStateList
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.DocumentsContract
-import android.provider.OpenableColumns
-import android.provider.Settings
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -62,6 +57,7 @@ import com.untar.ultimusic.ui.preview.PreviewSearchDialogFragment
 import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.LibraryTab
+import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -257,9 +253,16 @@ class MainActivity : AppCompatActivity() {
         registerForActivityResult(ActivityResultContracts.RequestPermission()) { /* Se deniegue o
             no, no hay nada más que hacer aquí: ver el porqué en requestNotificationPermissionIfNeeded. */ }
 
+    /**
+     * Pide la carpeta `UltiMusic` con el selector del sistema (ver [SafStorage]): es la ÚNICA carpeta
+     * obligatoria, sin ella no hay fonoteca. Tras concederla, se ofrece —una sola vez en la vida de la
+     * instalación, ver [offerLegacyRootsRelinkIfNeeded]— re-conceder también Download/Music/las
+     * raíces propias que tuviera de antes de esta migración, para re-enlazar lo ya catalogado.
+     */
     private fun checkStoragePermission() {
         if (hasStoragePermission()) {
             songsViewModel.loadIfNeeded()   /** Si el permiso está, creamos los modelos de las canciones **/
+            offerLegacyRootsRelinkIfNeeded()
         }
         else {
             val dialog = AlertDialog.Builder(this)
@@ -267,7 +270,7 @@ class MainActivity : AppCompatActivity() {
                 .setMessage(R.string.permission_needed_message)
                 .setPositiveButton(R.string.permission_grant) { _, _ ->
                     permissionDialogPending = false
-                    requestStoragePermission()
+                    grantUltiMusicRoot.launch(null)
                 }
                 .setNegativeButton(R.string.permission_cancel) { _, _ ->
                     permissionDialogPending = false
@@ -278,35 +281,49 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    /** Si el permiso no está, lo pedimos **/
-    private fun requestStoragePermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val intent = Intent(
-                Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
-                Uri.parse("package:$packageName")
-            )
-            try {
-                grantStoragePermissionNewPhones.launch(intent)
-            } catch (e: Exception) {
-                grantStoragePermissionNewPhones.launch(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+    private val grantUltiMusicRoot =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) {
+                Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
+                return@registerForActivityResult
             }
-        } else {
-            grantStoragePermissionOldPhones.launch(android.Manifest.permission.READ_EXTERNAL_STORAGE)
+            lifecycleScope.launch {
+                LibraryRepository.get(this@MainActivity).grantUltiMusicRoot(uri)
+                loadIfPermitted()
+                offerLegacyRootsRelinkIfNeeded()
+            }
+        }
+
+    /**
+     * Tras conceder `UltiMusic`, si queda alguna canción catalogada ANTES de la migración a SAF sin
+     * re-enlazar (ver [LibraryRepository.hasUnlinkedLegacySongs]), ofrece re-conceder también
+     * Download/Music/una raíz propia con el mismo selector. Se pregunta como mucho una vez en la vida
+     * de la instalación ([SafStorage.hasOfferedLegacyRootsRelink]): quien la salta siempre puede
+     * añadir una carpeta más tarde a mano desde Ajustes > Carpetas de la fonoteca, con el mismo
+     * selector.
+     */
+    private fun offerLegacyRootsRelinkIfNeeded() {
+        if (SafStorage.hasOfferedLegacyRootsRelink(this)) return
+        lifecycleScope.launch {
+            if (!LibraryRepository.get(this@MainActivity).hasUnlinkedLegacySongs()) return@launch
+            SafStorage.markOfferedLegacyRootsRelink(this@MainActivity)
+            val dialog = AlertDialog.Builder(this@MainActivity)
+                .setTitle(R.string.relink_legacy_roots_title)
+                .setMessage(R.string.relink_legacy_roots_message)
+                .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ -> grantExtraLibraryRoot.launch(null) }
+                .setNegativeButton(R.string.relink_legacy_roots_skip, null)
+                .show()
+            AccentTint.buttons(dialog, playerViewModel.accentColor.value)
         }
     }
 
-    private val grantStoragePermissionNewPhones =
-        registerForActivityResult(ActivityResultContracts.StartActivityForResult()) {
-            loadIfPermitted()
+    private val grantExtraLibraryRoot =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            lifecycleScope.launch { LibraryRepository.get(this@MainActivity).addLibraryRoot(uri) }
         }
 
-    private val grantStoragePermissionOldPhones =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) songsViewModel.loadIfNeeded()
-            else Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-        }
 
-    
     /** OBTENEMOS LA LISTA DE CANCIONES **/
     override fun onResume() {
         super.onResume()
@@ -710,16 +727,12 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    // --- Permisos de almacenamiento ---
+    // --- Permiso de almacenamiento (Storage Access Framework, ver SafStorage) ---
 
-    private fun hasStoragePermission(): Boolean =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Environment.isExternalStorageManager()
-        } else {
-            ContextCompat.checkSelfPermission(
-                this, android.Manifest.permission.READ_EXTERNAL_STORAGE
-            ) == PackageManager.PERMISSION_GRANTED
-        }
+    private fun hasStoragePermission(): Boolean {
+        val treeUri = SafStorage.ultiMusicTreeUri(this) ?: return false
+        return SafStorage.isRootReadable(this, treeUri)
+    }
 
     // Se llama desde el onResume = recargamos la lista de canciones cada vez que volvemos a la aplicación
     private fun loadIfPermitted() {
@@ -734,72 +747,28 @@ class MainActivity : AppCompatActivity() {
     // --- "Abrir con UltiMusic" desde un gestor de archivos ---
 
     /**
-     * Reproduce el archivo que llega en un intent VIEW. Si su ruta ya está catalogada en la
-     * fonoteca, se reproduce esa canción tal cual (con su portada, artistas, letra…); si no —el
-     * caso normal, porque la fonoteca solo indexa lo que hay bajo `~/UltiMusic` (ver
-     * [MusicScanner])—, se leen sus etiquetas al vuelo y se reproduce suelta, sin escribir nada en
-     * la base de datos: el archivo puede venir de cualquier otra carpeta o app.
+     * Reproduce el archivo que llega en un intent VIEW. Si ya está catalogado en la fonoteca (mismo
+     * docPath que alguna fila, ver [SafStorage.docPathOf]), se reproduce esa canción tal cual (con su
+     * portada, artistas, letra…); si no —el caso normal, porque puede venir de cualquier carpeta o
+     * app, no solo de una concedida—, se leen sus etiquetas al vuelo directamente sobre el `Uri` (ver
+     * [MusicScanner.readTagsFromUri]) y se reproduce suelta, sin escribir nada en la base de datos ni
+     * copiar el archivo a ningún sitio: `content://` se reproduce y se lee directamente, sin pasar
+     * por MediaStore (ver CLAUDE.md).
      */
     private fun handleViewIntent(intent: Intent?) {
         val uri = intent?.data?.takeIf { intent.action == Intent.ACTION_VIEW } ?: return
         lifecycleScope.launch {
-            val path = withContext(Dispatchers.IO) { resolvePathFromUri(uri) }
-            val song = path?.let { p ->
-                LibraryRepository.get(this@MainActivity).songByPath(p)
-                    ?: withContext(Dispatchers.IO) { MusicScanner.readTags(File(p))?.toAdHocSong() }
-            }
+            val docPath = if (uri.scheme == "content") SafStorage.docPathOf(uri) else null
+            val song = docPath?.let { LibraryRepository.get(this@MainActivity).songByPath(it) }
+                ?: withContext(Dispatchers.IO) {
+                    MusicScanner.readTagsFromUri(this@MainActivity, uri)?.toAdHocSong()
+                }
             if (song == null) {
                 Toast.makeText(this@MainActivity, R.string.cannot_open_file, Toast.LENGTH_LONG).show()
                 return@launch
             }
             playerViewModel.play(song)
         }
-    }
-
-    /**
-     * Reduce el `Uri` del intent a una ruta de archivo real: [com.untar.ultimusic.playback.PlaybackService]
-     * exige un `File` de verdad, no sirve un `content://` tal cual. Tres caminos, de más a menos
-     * directo:
-     *  - `file://`: ya es una ruta, se usa tal cual.
-     *  - `content://` del proveedor de almacenamiento externo de Android (el que usan la mayoría de
-     *    gestores de archivos al abrir "con otra app"): su id de documento ES la ruta relativa, así
-     *    que se reconstruye sin tocar MediaStore (ver CLAUDE.md: MediaStore solo para sobrescribir
-     *    lo que edita el usuario).
-     *  - Cualquier otro `content://` (gestor con su propio proveedor, sin ruta real accesible): se
-     *    copia su contenido a una carpeta de caché propia y se reproduce esa copia.
-     */
-    private fun resolvePathFromUri(uri: Uri): String? = when (uri.scheme) {
-        "file" -> uri.path
-        "content" -> resolveExternalStorageDocumentPath(uri) ?: copyToCache(uri)
-        else -> null
-    }
-
-    private fun resolveExternalStorageDocumentPath(uri: Uri): String? {
-        if (uri.authority != "com.android.externalstorage.documents") return null
-        val docId = runCatching { DocumentsContract.getDocumentId(uri) }.getOrNull() ?: return null
-        val parts = docId.split(":", limit = 2)
-        if (parts.size != 2 || !parts[0].equals("primary", ignoreCase = true)) return null
-        return "${Environment.getExternalStorageDirectory()}/${parts[1]}".takeIf { File(it).exists() }
-    }
-
-    /** Best-effort: si no se puede leer el nombre o el contenido, se rinde con null. */
-    private fun copyToCache(uri: Uri): String? {
-        val name = queryDisplayName(uri) ?: return null
-        return runCatching {
-            val dest = File(File(cacheDir, "abierto_con").apply { mkdirs() }, name)
-            contentResolver.openInputStream(uri)?.use { input ->
-                dest.outputStream().use { output -> input.copyTo(output) }
-            } ?: return null
-            dest.absolutePath
-        }.getOrNull()
-    }
-
-    private fun queryDisplayName(uri: Uri): String? {
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
-            val index = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
-            if (index >= 0 && cursor.moveToFirst()) return cursor.getString(index)
-        }
-        return null
     }
 
     /**

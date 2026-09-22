@@ -4,9 +4,12 @@ import androidx.room.Entity
 import androidx.room.PrimaryKey
 
 /**
- * Fila de una subcarpeta de la lista gris (ajustes > Lista gris). [path] es la ruta absoluta de la
- * subcarpeta, elegida con el explorador propio de la app, y sirve de clave: no tiene sentido añadir
- * la misma carpeta dos veces.
+ * Fila de una subcarpeta de la lista gris (ajustes > Lista gris). Desde la migración a Storage
+ * Access Framework (ver [com.untar.ultimusic.util.SafStorage]), [path] es la ruta RELATIVA AL
+ * VOLUMEN de la subcarpeta (p. ej. `"UltiMusic/Bootlegs"`, mismo formato que
+ * [com.untar.ultimusic.data.db.entities.SongEntity.filePath]), elegida con el explorador propio de
+ * la app dentro de un árbol YA concedido (no hace falta un permiso nuevo solo para excluir una
+ * subcarpeta), y sirve de clave: no tiene sentido añadir la misma carpeta dos veces.
  *
  * [excluded] es lo que marca el switch de esa fila: `true` (switch encendido) significa que la
  * carpeta está fuera de la biblioteca y sus canciones se ocultan (ver [SongEntity.hiddenByGreylist])

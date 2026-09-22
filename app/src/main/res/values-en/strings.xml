@@ -193,9 +193,6 @@
     <string name="sort_invert_order">Reverse order</string>
     <string name="suggestion_cover_desc">Suggestion cover</string>
     <string name="subtitle_separator">" | "</string>
-    <string name="suggestion_type_album">Album</string>
-    <string name="suggestion_type_single">Single</string>
-    <string name="suggestion_type_ep">EP</string>
 
     <!-- Synced lyrics search (lrclib.net) -->
     <string name="lyrics_suggestions_title">Lyrics suggestions</string>
@@ -388,7 +385,7 @@
 
     <!-- Library folders -->
     <string name="settings_library_roots_title">Library folders</string>
-    <string name="settings_library_roots_subtitle">By default, the folders are UltiMusic, Download and Music. You can add more here</string>
+    <string name="settings_library_roots_subtitle">UltiMusic is your main folder. Add more folders (like Download or Music) if you want them to be part of your library too</string>
     <string name="settings_library_roots_add">Add folder</string>
     <string name="settings_library_root_delete_desc">Remove folder from the library</string>
     <string name="settings_library_roots_remove_confirm">Remove <b>^1</b> from the library? Songs that only exist there will be removed from the library (edits and playlists included), unless they also exist in another included folder with the same file name</string>
@@ -474,17 +471,24 @@
 
     <!-- Subfolder picker -->
     <string name="folder_picker_root_title">UltiMusic</string>
-    <string name="folder_picker_storage_root_title">Storage</string>
     <string name="folder_picker_back">Go up a folder</string>
     <string name="folder_picker_choose">Choose this folder</string>
     <string name="folder_picker_empty">This folder has no subfolders</string>
 
     <!-- Permissions -->
-    <string name="permission_needed_title">Permission needed</string>
-    <string name="permission_needed_message">UltiMusic needs access to all files to read your songs from Downloads and the UltiMusic folder.</string>
-    <string name="permission_grant">Grant</string>
+    <string name="permission_needed_title">Choose your music folder</string>
+    <string name="permission_needed_message">UltiMusic needs access to your music folder</string>
+    <string name="permission_grant">Choose folder</string>
     <string name="permission_cancel">Not now</string>
-    <string name="permission_denied">Songs can\'t be shown without permission</string>
+    <string name="permission_denied">Songs can\'t be shown without the UltiMusic folder</string>
+
+    <!-- Re-granting Download/Music/custom roots after the migration to Storage Access Framework
+         (see SafStorage): offered once, right after granting UltiMusic, if any song catalogued
+         before the migration is still waiting to be re-linked. -->
+    <string name="relink_legacy_roots_title">Add more folders?</string>
+    <string name="relink_legacy_roots_message">Some of your songs were in other folders (like Downloads or Music). Pick one to get them back; you can always add more later from Settings.</string>
+    <string name="relink_legacy_roots_action">Choose folder</string>
+    <string name="relink_legacy_roots_skip">Not now</string>
 
     <!-- Playback notification -->
     <string name="notification_channel_playback">Playback</string>

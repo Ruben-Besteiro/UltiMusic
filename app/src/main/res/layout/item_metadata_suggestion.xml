@@ -1,8 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Fila de un candidato de autorrelleno (ver MetadataSuggestionsAdapter). Calco de item_album_row.xml
-  con una insignia extra para el tipo de publicación (Álbum, Single, "Single (en directo)"...): es
-  justo lo que deja distinguir a simple vista el single del álbum cuando sus datos no coinciden.
+  Fila de un candidato de autorrelleno (ver MetadataSuggestionsAdapter). Calco de item_album_row.xml.
+  El tipo de publicación (Álbum, Single, EP) no lleva insignia propia: va como sufijo dentro del
+  propio título/álbum, igual que hace Apple Music ("... - Single", "... - EP"), así que título y
+  subtítulo pueden ocupar varias líneas en vez de truncarse a una.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
@@ -34,8 +35,6 @@
             android:id="@+id/suggestionTitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:textColor="@color/um_on_background"
             android:textSize="16sp"
             android:textStyle="bold"
@@ -45,21 +44,9 @@
             android:id="@+id/suggestionSubtitle"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:ellipsize="end"
-            android:maxLines="1"
             android:textColor="@color/um_on_surface_muted"
             android:textSize="14sp"
-            tools:text="Queen | A Night at the Opera | 1975" />
-
-        <TextView
-            android:id="@+id/suggestionBadge"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:textColor="@color/um_on_surface_muted"
-            android:textSize="12sp"
-            android:textStyle="italic"
-            tools:text="Single" />
+            tools:text="Queen | A Night at the Opera - Single | 1975" />
 
     </LinearLayout>
 

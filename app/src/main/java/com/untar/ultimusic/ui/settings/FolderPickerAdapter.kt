@@ -6,16 +6,16 @@ import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.R
-import java.io.File
+import com.untar.ultimusic.util.SafStorage
 
 /** Subcarpetas de la carpeta que se esté viendo en [FolderPickerDialogFragment]. Tocar una navega dentro. */
 class FolderPickerAdapter(
-    private val onFolderClick: (File) -> Unit
+    private val onFolderClick: (SafStorage.SafEntry) -> Unit
 ) : RecyclerView.Adapter<FolderPickerAdapter.FolderViewHolder>() {
 
-    private var folders: List<File> = emptyList()
+    private var folders: List<SafStorage.SafEntry> = emptyList()
 
-    fun submit(list: List<File>) {
+    fun submit(list: List<SafStorage.SafEntry>) {
         folders = list
         notifyDataSetChanged()
     }
@@ -34,7 +34,7 @@ class FolderPickerAdapter(
     class FolderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val name: TextView = itemView.findViewById(R.id.folderRowName)
 
-        fun bind(folder: File, onFolderClick: (File) -> Unit) {
+        fun bind(folder: SafStorage.SafEntry, onFolderClick: (SafStorage.SafEntry) -> Unit) {
             name.text = folder.name
             itemView.setOnClickListener { onFolderClick(folder) }
         }
