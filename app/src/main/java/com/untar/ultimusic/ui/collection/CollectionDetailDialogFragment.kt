@@ -264,6 +264,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                     return true
                 }
                 override fun getSwipeThreshold(vh: RecyclerView.ViewHolder): Float = queueGesture.swipeThreshold
+                override fun getSwipeEscapeVelocity(defaultValue: Float): Float = queueGesture.swipeEscapeVelocity
                 override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
                 override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {
                     super.clearView(rv, vh)

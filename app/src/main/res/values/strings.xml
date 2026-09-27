@@ -150,9 +150,6 @@
     <string name="store_links_title">Conseguir el archivo</string>
     <string name="store_links_empty">No se ha encontrado esta canción en ninguna tienda de descargas</string>
     <string name="store_link_free">Gratis</string>
-    <string name="store_download_started">Descargando %1$s…</string>
-    <string name="store_download_done">Descargado: %1$s</string>
-    <string name="store_download_failed">No se ha podido descargar %1$s</string>
 
     <!-- Diálogo "Elige qué quieres sobrescribir" que sale al elegir una sugerencia (de canción o de
          álbum), antes de aplicarla de verdad. Ver
@@ -557,7 +554,7 @@
     <string name="notification_channel_bulk_lyrics">Añadir letras</string>
 
     <!-- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) -->
-    <string name="settings_artist_grouping_title">Agrupar artistas con menos de N canciones</string>
+    <string name="settings_artist_grouping_title">Agrupar artistas con N canciones o menos</string>
 
     <!-- Ecualizador -->
     <string name="settings_eq_title">Ecualizador</string>
@@ -619,6 +616,8 @@
 
     <!-- Selector de subcarpetas -->
     <string name="folder_picker_root_title">UltiMusic</string>
+    <string name="folder_picker_choose_root_title">Elegir carpeta</string>
+    <string name="folder_picker_full_storage">Todo el almacenamiento</string>
     <string name="folder_picker_back">Subir una carpeta</string>
     <string name="folder_picker_choose">Elegir esta carpeta</string>
     <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>

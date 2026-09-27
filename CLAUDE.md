@@ -10,7 +10,7 @@ Los campos og\* del modelo de canciones son para remixes, donde estos campos gua
 
 
 
-No hagas verificaciones automáticas después de hacer cambios. Solo dime qué debo hacer y lo haré yo. Así iremos más rápido y consumiremos menos tokens.
+Cuando termines de escribir código, quiero que compiles la aplicación por si hay algún error de compilación, pero yo me encargo de verificar que todo funciona. Esto es para ahorrar tiempo y tokens.
 
 
 

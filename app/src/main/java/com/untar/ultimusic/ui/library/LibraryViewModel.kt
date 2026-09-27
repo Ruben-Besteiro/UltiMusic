@@ -52,7 +52,11 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val artists: StateFlow<List<PersonSummary>> = combine(repository.artists, _artistsSort) { list, option ->
-        list.sortedByOption(option)
+        // "Otros" (ver PersonSummary.OTHERS_ARTIST_ID) siempre va al final, sea cual sea el criterio
+        // de orden elegido: no es un artista real, así que no tiene sentido que un orden alfabético o
+        // por número de canciones lo intercale entre los de verdad.
+        val (others, real) = list.partition { it.id == PersonSummary.OTHERS_ARTIST_ID }
+        real.sortedByOption(option) + others
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val genres: StateFlow<List<GenreSummary>> = combine(repository.genres, _genresSort) { list, option ->

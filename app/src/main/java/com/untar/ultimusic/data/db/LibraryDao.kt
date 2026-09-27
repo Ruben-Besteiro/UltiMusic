@@ -877,6 +877,21 @@ abstract class LibraryDao {
         // (sin releer ningún archivo), por si la BD cambió entre que el escaneo cogió su foto de
         // rutas conocidas y esta reconciliación —así esta función sigue siendo correcta por sí sola
         // pase lo que pase entre medias.
+        //
+        // Una fila con ruta ABSOLUTA (empieza por "/") es una canción catalogada ANTES de la
+        // migración a Storage Access Framework y todavía sin re-enlazar (ver `MIGRATION_29_30` y
+        // `LibraryRepository.hasUnlinkedLegacySongs`): su ruta nunca puede coincidir con un docPath
+        // de [currentPaths] aunque el archivo siga ahí mismo, sin más motivo que no vivir bajo una
+        // carpeta concedida TODAVÍA (el usuario puede conceder `UltiMusic` primero y Download/Music
+        // más tarde, o directamente saltarse ese paso). SIGUE entrando en `gone`, a propósito: así
+        // las fases 2/3 de más abajo (emparejar por nombre/duración) pueden reemparejarla con el
+        // archivo real en cuanto el escaneo lo encuentre con su docPath nuevo, conservando su id,
+        // ediciones y carátula -justo lo que las evita duplicarse-. Lo único que no puede pasarle es
+        // acabar borrada si no encuentra pareja (ver la fase 4 bis, más abajo): tratarla como una
+        // baja de verdad en ESE punto sí la borraría de la fonoteca sin que el archivo haya
+        // desaparecido, así que ahí se excluye explícitamente y sigue "perdida" hasta que algo la
+        // re-enlace (relinkAfterGrant, o esta misma función la próxima vez que su carpeta esté
+        // concedida), pero nunca se borra por esto.
         val gone = existingInfo.filter { it.filePath !in currentPaths }
         val appeared = newSongs.filter { it.filePath !in existing }
 
@@ -977,8 +992,10 @@ abstract class LibraryDao {
         }
 
         // Fase 4 (bis): bajas reales, es decir, las que han desaparecido sin reaparecer con otro
-        // nombre, otra carpeta, o ambos.
-        val removed = gone.mapNotNull { it.filePath.takeIf { path -> path !in moved } }
+        // nombre, otra carpeta, o ambos. Una fila legacy sin reemparejar (ver el comentario de
+        // `gone` más arriba) NUNCA se borra aquí: solo significa que su carpeta todavía no está
+        // concedida, no que el archivo haya desaparecido de verdad.
+        val removed = gone.mapNotNull { it.filePath.takeIf { path -> path !in moved && !path.startsWith("/") } }
         if (removed.isNotEmpty()) {
             deleteSongsByPath(removed)
             pruneOrphanArtists()

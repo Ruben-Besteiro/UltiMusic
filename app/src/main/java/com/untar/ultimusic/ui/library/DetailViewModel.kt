@@ -81,7 +81,16 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
         }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+        // Eagerly, no WhileSubscribed: `currentKind`/`currentAlbumId`/`currentArtistId` (más abajo)
+        // se leen de [resolvedTarget.value] SÍNCRONAMENTE en cuanto `DetailDialogFragment.onViewCreated`
+        // construye el adaptador de canciones, ANTES de que nada suscriba `header`/`tracks`/`albums`
+        // (eso no pasa hasta el `repeatOnLifecycle(STARTED)` de más abajo, ya fuera de esta misma
+        // llamada). Con `WhileSubscribed` este flujo no arranca a recoger `target` hasta que alguien
+        // lo suscriba, así que [resolvedTarget.value] se quedaba en `null` para siempre en ese punto
+        // -de ahí que abrir CUALQUIER álbum o artista petara con un NullPointerException en el `!!`
+        // de `currentKind`, ver [DetailDialogFragment]-. `Eagerly` lo arranca en cuanto se construye
+        // este ViewModel, antes de que [setTarget] fije el primer valor de verdad.
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
      * Cómo resolver el criterio de orden compartido con la pestaña Canciones. Lo fija el fragmento
@@ -154,12 +163,16 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Qué tipo de ficha es esta. Lo necesita el fragmento para saber si el menú de 3 puntos (acciones
      * de álbum: añadir todo a una lista, editar el álbum...) tiene sentido aquí, porque solo existe
-     * para álbumes. Lee [resolvedTarget], no [target]: si redirige a "Otros" hay que reflejarlo
-     * también aquí. */
-    val currentKind: DetailKind? get() = resolvedTarget.value?.first
+     * para álbumes. Lee [target], no [resolvedTarget]: la redirección a "Otros" solo cambia el ID de
+     * un artista (ver su comentario), nunca el TIPO de ficha, así que no hace falta esperar a que se
+     * resuelva -y [target] es un `MutableStateFlow` normal, siempre al día en cuanto [setTarget] lo
+     * fija, a diferencia de [resolvedTarget] (compartido con `stateIn`, que tarda al menos un ciclo
+     * de corrutina en reflejar el primer valor)-. */
+    val currentKind: DetailKind? get() = target.value?.first
 
-    /** El id del álbum en edición; solo tiene valor cuando [currentKind] es [DetailKind.ALBUM]. */
-    val currentAlbumId: Long? get() = resolvedTarget.value?.takeIf { it.first == DetailKind.ALBUM }?.second
+    /** El id del álbum en edición; solo tiene valor cuando [currentKind] es [DetailKind.ALBUM]. Lee
+     *  [target] por el mismo motivo que [currentKind]: un álbum nunca se redirige. */
+    val currentAlbumId: Long? get() = target.value?.takeIf { it.first == DetailKind.ALBUM }?.second
 
     /** El id del artista de esta ficha; solo tiene valor cuando [currentKind] es [DetailKind.ARTIST]
      *  (ver el botón de discografía de [DetailDialogFragment]). Puede ser

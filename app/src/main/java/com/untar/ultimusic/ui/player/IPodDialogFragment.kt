@@ -427,6 +427,22 @@ class IPodDialogFragment : DialogFragment() {
         var translatingLyrics = false
 
         /**
+         * Resalta y centra la línea de letra que toca a [positionMs] (posición del audio local, SIN
+         * [lyricsOffsetMs] todavía sumado). La llama tanto el collect de [PlayerViewModel.progress]
+         * de más abajo (modo normal) como [VideoScreenController]'s `onPositionTick` (modo vídeo, ver
+         * `startVideo`): mientras dura el modo vídeo el audio local está pausado y su `progress` deja
+         * de avanzar, así que sin este segundo camino la letra se quedaba clavada en cuanto se
+         * entraba en modo vídeo en vez de seguir el vídeo, que es el audio real en ese momento.
+         */
+        fun highlightLyricLine(positionMs: Long) {
+            if (lyricLines.isEmpty()) return
+            val index = LrcParser.currentIndex(lyricLines, positionMs + lyricsOffsetMs)
+            if (lyricsAdapter.setCurrentLine(index) && index >= 0) {
+                lyricsLayoutManager.scrollToPositionWithOffset(index, lyricsBox.height / 2)
+            }
+        }
+
+        /**
          * Pinta [lyricsBox] con la letra ORIGINAL (sin traducir) de [song]: sincronizada línea a
          * línea si tiene marcas LRC, o una única fila con el texto entero / el aviso de "sin letra".
          * Dejaba [lyricLines] y [lyricsOffsetMs] listos para el collect de progress de más abajo.
@@ -608,7 +624,8 @@ class IPodDialogFragment : DialogFragment() {
         val controller = VideoScreenController(
             view = youtubePlayer,
             onPlaybackError = { if (videoMode) exitVideo() },
-            onLoadingChanged = { loading -> videoLoadingSpinner.isVisible = loading }
+            onLoadingChanged = { loading -> videoLoadingSpinner.isVisible = loading },
+            onPositionTick = { positionMs -> if (videoMode) highlightLyricLine(positionMs) }
         )
         videoController = controller
 
@@ -1054,19 +1071,11 @@ class IPodDialogFragment : DialogFragment() {
                                 if (p.durationMs > 0) ((p.positionMs * 1000) / p.durationMs).toInt()
                                 else 0
                         }
-                        // Letra sincronizada: qué línea toca cantar ahora. Con letra sin sincronizar
-                        // lyricLines está vacía y aquí no se hace nada (la única fila que hay se
-                        // queda tal cual la pintó el collect de currentSong).
-                        if (lyricLines.isNotEmpty()) {
-                            val index = LrcParser.currentIndex(lyricLines, p.positionMs + lyricsOffsetMs)
-                            if (lyricsAdapter.setCurrentLine(index) && index >= 0) {
-                                // Mismo truco que centra la fila actual de la cola (queueList más
-                                // abajo): pone el TOPE de la fila a media altura del contenedor. Con
-                                // filas de una sola línea, tan altas todas más o menos igual, se ve
-                                // centrada de verdad.
-                                lyricsLayoutManager.scrollToPositionWithOffset(index, lyricsBox.height / 2)
-                            }
-                        }
+                        // Letra sincronizada: qué línea toca cantar ahora. Mientras dura el modo
+                        // vídeo esto no avanza (el audio local está pausado, ver [videoMode] más
+                        // arriba); es [controller]'s `onPositionTick` quien la sigue resaltando
+                        // entonces con la posición real del vídeo (ver highlightLyricLine).
+                        highlightLyricLine(p.positionMs)
                     }
                 }
                 launch {

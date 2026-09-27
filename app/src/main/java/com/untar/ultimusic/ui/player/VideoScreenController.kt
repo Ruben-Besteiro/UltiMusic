@@ -56,7 +56,16 @@ class VideoScreenController(
      * ese vídeo (ver [awaitingFirstState]), que es cuando YouTube ya pinta algo por su cuenta
      * (su propia ruedecilla, o el vídeo directamente) y tener las dos a la vez sobraría.
      */
-    private val onLoadingChanged: (Boolean) -> Unit = {}
+    private val onLoadingChanged: (Boolean) -> Unit = {},
+    /**
+     * Avisa, una vez por segundo mientras el vídeo avanza (ver [onCurrentSecond]), de la posición
+     * EQUIVALENTE DEL AUDIO LOCAL (ya sin [offsetMs], como [localPositionMs]). Mientras dura el modo
+     * vídeo el audio local está congelado (pausado, ver `IPodDialogFragment.startVideo`), así que su
+     * propio `PlaybackService.progress` deja de avanzar: sin este aviso, la letra sincronizada -que
+     * sigue visible encima del vídeo- se quedaría clavada en la línea de cuando se entró en modo
+     * vídeo en vez de seguir el audio real, que ahora es el del vídeo.
+     */
+    private val onPositionTick: (Long) -> Unit = {}
 ) {
 
     private var player: YouTubePlayer? = null
@@ -146,6 +155,7 @@ class VideoScreenController(
         /** La librería lo llama una vez por segundo mientras el vídeo avanza. */
         override fun onCurrentSecond(youTubePlayer: YouTubePlayer, second: Float) {
             lastKnownPositionMs = (second * 1000).toLong()
+            onPositionTick(localPositionMs())
         }
 
         override fun onStateChange(

@@ -11,7 +11,6 @@ import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.MetadataSuggestion
-import com.untar.ultimusic.model.ReleaseType
 import com.untar.ultimusic.util.CoverLoader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -119,12 +118,10 @@ class MetadataSuggestionsAdapter(
             val context = itemView.context
             boundItem = item
 
-            // El tipo de publicación (ver releaseSuffix) solo se suma al texto que YA es el nombre
-            // de la publicación: el título en una sugerencia de álbum, el álbum dentro del
-            // subtítulo en una de canción (ver buildSubtitle). item.title/item.albumTitle no se
-            // tocan: son los que rellenan el editor al elegir la sugerencia (ver
-            // MetadataSuggestionsDialogFragment.onSuggestionPicked), y ahí el sufijo no pinta nada.
-            title.text = if (item.albumTitle == null) item.title + releaseSuffix(item.releaseType) else item.title
+            // El sufijo de tipo de publicación ("- Single"/"- EP") ya viene incluido en item.title/
+            // item.albumTitle (ver ItunesApi.collectionNameWithType): así lo que se ve aquí es
+            // exactamente lo que se aplica al elegir la sugerencia, sin que desaparezca al guardar.
+            title.text = item.title
             subtitle.text = buildSubtitle(item)
             itemView.setOnClickListener { onPicked(item) }
 
@@ -154,21 +151,8 @@ class MetadataSuggestionsAdapter(
          * "Artista | Año" solo, sin necesidad de distinguir el caso: ahí
          * [MetadataSuggestion.albumTitle] es null porque [MetadataSuggestion.title] YA es el álbum
          * y repetirlo sería redundante. */
-        private fun buildSubtitle(item: MetadataSuggestion): String {
-            val albumWithType = item.albumTitle?.let { it + releaseSuffix(item.releaseType) }
-            return listOfNotNull(item.artist.takeIf { it.isNotBlank() }, albumWithType, item.year?.toString())
+        private fun buildSubtitle(item: MetadataSuggestion): String =
+            listOfNotNull(item.artist.takeIf { it.isNotBlank() }, item.albumTitle, item.year?.toString())
                 .joinToString(itemView.context.getString(R.string.subtitle_separator))
-        }
-
-        /** Sufijo de tipo de publicación, calcado del que trae iTunes en el propio
-         * `collectionName` y que [com.untar.ultimusic.data.remote.ItunesApi] le quita al nombre
-         * antes de guardarlo en [MetadataSuggestion] (ver `cleanCollectionName`): se vuelve a poner
-         * aquí, solo para mostrar, igual que hace Apple Music. Nunca se traduce (tampoco lo hace
-         * Apple en ninguna tienda), así que no hace falta ningún string por idioma. */
-        private fun releaseSuffix(type: ReleaseType): String = when (type) {
-            ReleaseType.ALBUM -> ""
-            ReleaseType.SINGLE -> " - Single"
-            ReleaseType.EP -> " - EP"
-        }
     }
 }

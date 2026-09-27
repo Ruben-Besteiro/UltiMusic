@@ -50,6 +50,13 @@ object DynamicColor {
     const val DEFAULT = 0xFFFFD000.toInt()
 
     /**
+     * Para una carátula sin color real (blanco y negro o casi): más claro que el fondo negro de la
+     * app, pero sin inventar un matiz que no está en la imagen (ver el porqué en [pickSwatch], que
+     * es quien de verdad decide cuándo hace falta este recurso en vez de [DEFAULT]).
+     */
+    private const val GRAYSCALE_FALLBACK = 0xFFA0A0A0.toInt()
+
+    /**
      * Carga la imagen indicada (cualquier dato que entienda Coil: un [Uri], un
      * `AudioCover`...) y devuelve su color de acento, o [DEFAULT] si no hay imagen o no se puede
      * analizar.
@@ -65,48 +72,53 @@ object DynamicColor {
         val palette = runCatching { Palette.from(bitmap).clearFilters().generate() }
             .getOrNull() ?: return@withContext DEFAULT
 
-        val color = readable(pickSwatch(palette).rgb)
+        // null = portada sin color real (blanco y negro o casi, ver pickSwatch): no se pasa por
+        // [readable] -que inventaría un matiz arbitrario para un gris- y se usa directamente
+        // [GRAYSCALE_FALLBACK].
+        val color = pickSwatch(palette)?.let { readable(it.rgb) } ?: GRAYSCALE_FALLBACK
         key?.let { cache[it] = color }
         color
     }
 
     /**
-     * Elige qué [Palette.Swatch] usar, de más a menos "vivo": vibrante, apagado, oscuro, claro...
-     * El dominante (el color que más superficie ocupa) es el último recurso real, y si ni siquiera
-     * ese tiene color de verdad se cae directamente a [DEFAULT] (ver más abajo el porqué).
+     * Elige qué [Palette.Swatch] usar: el que más superficie ocupa de verdad (más población de
+     * píxeles) entre los que tienen color real, no el primero que aparezca en un orden de prioridad
+     * fijo. Antes se probaba vibrante, luego apagado, luego oscuro... en ese orden, y el primero que
+     * superara [MIN_POPULATION_FRACTION] ganaba aunque hubiera otro candidato bastante más grande
+     * más abajo en la lista -así una mancha vibrante pequeña (un detalle rojizo, un reflejo) podía
+     * ganarle al color que de verdad domina la carátula a simple vista (un verde azulado de fondo,
+     * por ejemplo) solo por estar antes en la prioridad-. Ahora se comparan TODOS los candidatos con
+     * color entre sí y gana el más grande.
      *
-     * Antes de aceptar un candidato "vivo" se comprueba que represente al menos
-     * [MIN_POPULATION_FRACTION] de los píxeles analizados: un `vibrantSwatch` sacado de un detalle
-     * minúsculo de la carátula (una etiqueta, un reflejo) no es representativo y descolocaba el
-     * acento respecto a lo que se ve a simple vista. Si ningún "vivo" llega a ese umbral, se cae al
-     * dominante de verdad -el color que de hecho ocupa más carátula-, y solo si ni eso hay se
-     * rescata el primer candidato "vivo" encontrado, por pequeño que sea, antes que rendirse.
+     * [MIN_POPULATION_FRACTION] sigue sirviendo de primer filtro (un candidato que no llegue a
+     * cubrir esa fracción del total ni se considera "representativo"); si ninguno lo alcanza, se
+     * vuelve a intentar sin ese filtro antes de rendirse -mejor el candidato con color más grande
+     * que hay, por pequeño que sea, que ninguno-.
      *
-     * Todos los candidatos (incluido el dominante) pasan además por [hasColor]: un swatch casi
-     * acromático -gris o negro, típico del dominante de una portada oscura- no vale como base para
-     * el acento. El motivo es [readable]: fuerza la saturación de lo que le llegue pero no toca el
-     * matiz, y el matiz que calcula `ColorUtils.colorToHSL` para un color sin saturación real (R≈G≈B)
-     * es arbitrario -normalmente 0°, es decir, rojo-. Sin este filtro, `readable` "rescataba" un
-     * negro convirtiéndolo en un rojo oscuro que no estaba en ningún sitio de la carátula. Por eso
-     * el último recurso ya no es el dominante a pelo, sino [DEFAULT]: mejor el amarillo de siempre
-     * que un color inventado.
+     * Todos los candidatos pasan por [hasColor]: un swatch casi acromático -gris o negro, típico de
+     * una portada de bajo color- no vale como base para el acento. El motivo es [readable]: fuerza
+     * la saturación de lo que le llegue pero no toca el matiz, y el matiz que calcula
+     * `ColorUtils.colorToHSL` para un color sin saturación real (R≈G≈B) es arbitrario -normalmente
+     * 0°, es decir, rojo-. Sin este filtro, `readable` "rescataba" un negro convirtiéndolo en un rojo
+     * oscuro que no estaba en ningún sitio de la carátula. Por eso, si NINGÚN candidato tiene color
+     * de verdad (portada en blanco y negro), esta función devuelve `null` en vez de inventar un
+     * matiz: quien llama ([fromCover]) cae entonces a [GRAYSCALE_FALLBACK], no a [DEFAULT] (el
+     * amarillo, reservado para cuando no hay carátula de la que sacar nada).
      */
-    private fun pickSwatch(palette: Palette): Palette.Swatch {
+    private fun pickSwatch(palette: Palette): Palette.Swatch? {
         val totalPopulation = palette.swatches.sumOf { it.population }.coerceAtLeast(1)
-        val vividCandidates = listOfNotNull(
+        val candidates = listOfNotNull(
             palette.vibrantSwatch,
             palette.lightVibrantSwatch,
             palette.darkVibrantSwatch,
             palette.mutedSwatch,
             palette.lightMutedSwatch,
-            palette.darkMutedSwatch
+            palette.darkMutedSwatch,
+            palette.dominantSwatch
         ).filter { it.hasColor() }
-        val dominant = palette.dominantSwatch?.takeIf { it.hasColor() }
 
-        return vividCandidates.firstOrNull { it.population.toFloat() / totalPopulation >= MIN_POPULATION_FRACTION }
-            ?: dominant
-            ?: vividCandidates.firstOrNull()
-            ?: Palette.Swatch(DEFAULT, 0)
+        val representative = candidates.filter { it.population.toFloat() / totalPopulation >= MIN_POPULATION_FRACTION }
+        return (representative.maxByOrNull { it.population } ?: candidates.maxByOrNull { it.population })
     }
 
     /**

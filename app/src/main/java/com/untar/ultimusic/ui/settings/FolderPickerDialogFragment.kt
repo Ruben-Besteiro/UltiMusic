@@ -1,6 +1,7 @@
 package com.untar.ultimusic.ui.settings
 
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -30,21 +31,27 @@ import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.launch
 
 /**
- * Explorador de carpetas propio de la app, para elegir una SUBCARPETA dentro de la carpeta
- * `UltiMusic` ya concedida por Storage Access Framework (ver [SafStorage]): no hace falta pasar por
- * el selector del sistema, porque no se pide ningún permiso nuevo, solo se navega dentro de un árbol
- * que la app ya puede leer.
+ * Explorador de carpetas propio de la app, para elegir una SUBCARPETA dentro de alguna de las
+ * carpetas ya concedidas por Storage Access Framework (ver [SafStorage]: `UltiMusic` más cualquier
+ * carpeta raíz adicional de "Ajustes > Carpetas de la fonoteca"): no hace falta pasar por el
+ * selector del sistema, porque no se pide ningún permiso nuevo, solo se navega dentro de árboles que
+ * la app ya puede leer.
  *
  * Sirve a la lista gris de ajustes (elegir una subcarpeta que ocultar, ver [SettingsDialogFragment]).
  * Para AÑADIR una raíz nueva de biblioteca (que sí necesita un permiso nuevo) se usa directamente
  * `ActivityResultContracts.OpenDocumentTree()` desde `SettingsDialogFragment`, no este diálogo.
  *
- * Empieza en la raíz de `UltiMusic` y deja navegar hacia dentro tocando una fila; el botón "Elegir
+ * Con una única carpeta concedida, empieza directamente dentro de ella (como antes de que hubiera
+ * más de una raíz posible). Con varias, empieza en un selector plano de raíces -para no asumir que la
+ * fonoteca del usuario vive dentro de `UltiMusic` cuando en realidad puede estar en Download/Music/
+ * cualquier otra carpeta añadida a mano-, y "subir" desde la raíz de cualquiera de ellas vuelve a ese
+ * selector en vez de cerrar el diálogo de golpe. Tocar una fila navega hacia dentro; el botón "Elegir
  * esta carpeta" confirma la que se esté viendo en ese momento (no hace falta llegar a una carpeta sin
- * subcarpetas). El resultado se devuelve con la API de resultados entre fragmentos
- * ([setFragmentResult]/`setFragmentResultListener`), igual que [VideoPickerDialogFragment
- * ][com.untar.ultimusic.ui.player.VideoPickerDialogFragment] hace con el iPod, y es el docPath de la
- * carpeta elegida (mismo formato que [com.untar.ultimusic.data.db.entities.GreylistFolderEntity.path]).
+ * subcarpetas, ni tiene sentido mientras se está en el selector de raíces). El resultado se devuelve
+ * con la API de resultados entre fragmentos ([setFragmentResult]/`setFragmentResultListener`), igual
+ * que [VideoPickerDialogFragment][com.untar.ultimusic.ui.player.VideoPickerDialogFragment] hace con
+ * el iPod, y es el docPath de la carpeta elegida (mismo formato que
+ * [com.untar.ultimusic.data.db.entities.GreylistFolderEntity.path]).
  */
 class FolderPickerDialogFragment : DialogFragment() {
 
@@ -52,21 +59,34 @@ class FolderPickerDialogFragment : DialogFragment() {
     // btnChooseFolder (ver onViewCreated).
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
-    private val treeUri by lazy { SafStorage.ultiMusicTreeUri(requireContext()) }
-    private val root: String by lazy { SafStorage.ultiMusicDocPath(requireContext()).orEmpty() }
-    private val rootTitle: String? by lazy { requireArguments().getString(ARG_ROOT_TITLE) }
+    /** Todas las carpetas concedidas ahora mismo (docPath -> Uri de árbol), `UltiMusic` primero y el
+     *  resto en el mismo orden en que las devuelve [SafStorage.grantedRoots]. */
+    private val roots: List<Pair<String, Uri>> by lazy {
+        val ultiMusicPath = SafStorage.ultiMusicDocPath(requireContext())
+        SafStorage.grantedRoots().sortedBy { (path, _) -> if (path == ultiMusicPath) "" else path.lowercase() }
+    }
     private val requestKey: String by lazy { requireArguments().getString(ARG_REQUEST_KEY) ?: RESULT_KEY }
+
+    /** Índice en [roots] de la raíz que se está viendo, o null mientras se ve el selector de raíces
+     *  (solo posible con más de una raíz concedida, ver [onViewCreated]). */
+    private var currentRootIndex: Int? = null
     private lateinit var currentDocPath: String
 
     private lateinit var toolbar: MaterialToolbar
     private lateinit var recycler: RecyclerView
     private lateinit var emptyView: View
+    private lateinit var chooseButton: MaterialButton
     private lateinit var adapter: FolderPickerAdapter
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
-        currentDocPath = root
+        // Con una sola raíz concedida no hace falta el selector: se entra directamente en ella, como
+        // pasaba cuando `UltiMusic` era la única carpeta posible.
+        if (roots.size == 1) {
+            currentRootIndex = 0
+            currentDocPath = roots[0].first
+        }
     }
 
     override fun onCreateView(
@@ -87,7 +107,7 @@ class FolderPickerDialogFragment : DialogFragment() {
         toolbar = view.findViewById(R.id.folderPickerToolbar)
         recycler = view.findViewById(R.id.folderPickerRecycler)
         emptyView = view.findViewById(R.id.folderPickerEmpty)
-        val chooseButton = view.findViewById<MaterialButton>(R.id.btnChooseFolder)
+        chooseButton = view.findViewById(R.id.btnChooseFolder)
 
         ViewCompat.setOnApplyWindowInsetsListener(pickerRoot) { v, insets ->
             val bars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -96,7 +116,18 @@ class FolderPickerDialogFragment : DialogFragment() {
             insets
         }
 
-        adapter = FolderPickerAdapter { folder -> navigateTo(folder.docPath) }
+        adapter = FolderPickerAdapter { folder ->
+            val rootIndex = currentRootIndex
+            if (rootIndex == null) {
+                // Estábamos en el selector de raíces: la fila tocada ES una raíz completa, se entra
+                // en ella (no es una subcarpeta de nada todavía).
+                currentRootIndex = folder.docPath.let { path -> roots.indexOfFirst { it.first == path } }
+                currentDocPath = folder.docPath
+            } else {
+                navigateTo(folder.docPath)
+            }
+            showFolder()
+        }
         recycler.layoutManager = LinearLayoutManager(requireContext())
         recycler.adapter = adapter
 
@@ -125,38 +156,61 @@ class FolderPickerDialogFragment : DialogFragment() {
             }
         )
 
-        showFolder(currentDocPath)
+        showFolder()
     }
 
     private fun navigateTo(docPath: String) {
         currentDocPath = docPath
-        showFolder(docPath)
+        showFolder()
+    }
+
+    /** ¿Se está viendo la raíz de [currentRootIndex] ahora mismo (ni el selector de raíces, ni una
+     *  subcarpeta suya)? */
+    private fun atRootTop(): Boolean {
+        val index = currentRootIndex ?: return false
+        return currentDocPath == roots[index].first
     }
 
     private fun navigateUpOrDismiss() {
-        if (currentDocPath == root) {
-            dismiss()
-        } else {
-            currentDocPath = currentDocPath.substringBeforeLast('/', root)
-            showFolder(currentDocPath)
+        when {
+            currentRootIndex == null -> dismiss() // ya en el selector de raíces: no hay más arriba
+            atRootTop() && roots.size > 1 -> currentRootIndex = null // vuelve al selector de raíces
+            atRootTop() -> dismiss() // única raíz concedida: comportamiento de siempre
+            else -> currentDocPath = currentDocPath.substringBeforeLast('/', roots[currentRootIndex!!].first)
         }
+        showFolder()
     }
 
-    private fun showFolder(docPath: String) {
-        toolbar.title = if (docPath == root) {
-            rootTitle ?: getString(R.string.folder_picker_root_title)
-        } else {
-            docPath.removePrefix("$root/")
+    private fun showFolder() {
+        val rootIndex = currentRootIndex
+        if (rootIndex == null) {
+            // Selector de raíces: cada una se pinta como si fuera una carpeta de primer nivel.
+            toolbar.title = getString(R.string.folder_picker_choose_root_title)
+            chooseButton.isVisible = false
+            val entries = roots.map { (docPath, _) ->
+                SafStorage.SafEntry(
+                    docPath = docPath,
+                    name = docPath.takeIf { it.isNotEmpty() } ?: getString(R.string.folder_picker_full_storage),
+                    isDirectory = true,
+                    lastModified = 0L
+                )
+            }
+            adapter.submit(entries)
+            emptyView.isVisible = entries.isEmpty()
+            return
         }
 
-        val tree = treeUri
-        val subfolders = if (tree != null) {
-            SafStorage.listChildren(requireContext(), tree, docPath)
-                .filter { it.isDirectory }
-                .sortedBy { it.name.lowercase() }
+        val (rootDocPath, treeUri) = roots[rootIndex]
+        toolbar.title = if (currentDocPath == rootDocPath) {
+            rootDocPath.takeIf { it.isNotEmpty() } ?: getString(R.string.folder_picker_full_storage)
         } else {
-            emptyList()
+            currentDocPath.removePrefix("$rootDocPath/")
         }
+        chooseButton.isVisible = true
+
+        val subfolders = SafStorage.listChildren(requireContext(), treeUri, currentDocPath)
+            .filter { it.isDirectory }
+            .sortedBy { it.name.lowercase() }
         adapter.submit(subfolders)
         emptyView.isVisible = subfolders.isEmpty()
     }
@@ -168,23 +222,14 @@ class FolderPickerDialogFragment : DialogFragment() {
         const val RESULT_KEY = "folder_picker_result"
         const val RESULT_PATH = "path"
 
-        private const val ARG_ROOT_TITLE = "root_title"
         private const val ARG_REQUEST_KEY = "request_key"
 
         /**
-         * @param rootTitle título de la toolbar mientras se ve la raíz de `UltiMusic`; si es null se
-         * usa [R.string.folder_picker_root_title] ("UltiMusic").
          * @param requestKey clave de [setFragmentResult] con la que escuchar el resultado; por
          * defecto [RESULT_KEY].
          */
-        fun newInstance(
-            rootTitle: String? = null,
-            requestKey: String = RESULT_KEY
-        ) = FolderPickerDialogFragment().apply {
-            arguments = bundleOf(
-                ARG_ROOT_TITLE to rootTitle,
-                ARG_REQUEST_KEY to requestKey
-            )
+        fun newInstance(requestKey: String = RESULT_KEY) = FolderPickerDialogFragment().apply {
+            arguments = bundleOf(ARG_REQUEST_KEY to requestKey)
         }
     }
 }

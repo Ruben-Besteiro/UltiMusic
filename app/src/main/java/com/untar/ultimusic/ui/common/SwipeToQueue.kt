@@ -28,7 +28,13 @@ import kotlin.math.min
  * - Devolver [swipeThreshold] en su `getSwipeThreshold`: mayor que 1, para que el gesto nunca se dé
  *   por "confirmado" al soltar (la fila SIEMPRE debe volver sola a su sitio, nunca comportarse como
  *   un swipe-to-delete de verdad).
- * - Dejar `onSwiped` vacío (nunca llega a dispararse con ese umbral, pero el override es obligatorio).
+ * - Devolver [swipeEscapeVelocity] en su `getSwipeEscapeVelocity`: sin esto, un arrastre RÁPIDO (un
+ *   golpe corto de dedo, el gesto natural para encolar deprisa) puede confirmarse por VELOCIDAD
+ *   aunque nunca llegue a la distancia de [swipeThreshold] -son dos condiciones independientes en
+ *   `ItemTouchHelper`-, y entonces la fila sale disparada fuera de la pantalla en vez de volver a su
+ *   sitio (justo el bug que este comentario documenta haber corregido).
+ * - Dejar `onSwiped` vacío (nunca llega a dispararse con esos dos umbrales, pero el override es
+ *   obligatorio).
  * - En su `onChildDraw`, mientras `actionState == ACTION_STATE_SWIPE && dX > 0`, llamar a
  *   [onChildDraw] en vez de a `super.onChildDraw`; para cualquier otro caso (incluida la animación de
  *   vuelta al soltar), dejar que `super.onChildDraw` haga lo suyo como siempre.
@@ -42,9 +48,12 @@ class SwipeToQueueGesture(context: Context, private val accentColor: () -> Int) 
     /** True si ya se disparó la acción durante el arrastre en curso (ver [onChildDraw]/[reset]). */
     private var fired = false
 
-    /** Ver la documentación de la clase: mayor que 1 = "nunca confirmado" para el ItemTouchHelper
-     *  anfitrión. */
+    /** Ver la documentación de la clase: mayor que 1 = "nunca confirmado por DISTANCIA" para el
+     *  ItemTouchHelper anfitrión. */
     val swipeThreshold: Float get() = TRIGGER_UNREACHABLE
+
+    /** Ver la documentación de la clase: un valor altísimo = "nunca confirmado por VELOCIDAD". */
+    val swipeEscapeVelocity: Float get() = Float.MAX_VALUE
 
     /** Llamar desde `clearView` del callback anfitrión, al soltar el dedo. */
     fun reset() {
@@ -117,6 +126,7 @@ fun attachSwipeToQueue(
         ): Boolean = false
 
         override fun getSwipeThreshold(vh: RecyclerView.ViewHolder): Float = gesture.swipeThreshold
+        override fun getSwipeEscapeVelocity(defaultValue: Float): Float = gesture.swipeEscapeVelocity
         override fun onSwiped(vh: RecyclerView.ViewHolder, direction: Int) {}
 
         override fun clearView(rv: RecyclerView, vh: RecyclerView.ViewHolder) {

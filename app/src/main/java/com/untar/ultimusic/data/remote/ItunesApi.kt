@@ -194,16 +194,17 @@ object ItunesApi {
                 val trackCount = item.optInt("trackCount", 0)
                 val artistName = item.optString("artistName")
 
+                val releaseType = releaseTypeOf(collectionName, trackCount)
                 val suggestion = MetadataSuggestion(
                     title = item.optString("trackName"),
                     artist = artistName,
-                    albumTitle = cleanCollectionName(collectionName),
+                    albumTitle = collectionNameWithType(collectionName, releaseType),
                     year = parseYear(item.optString("releaseDate", null)),
                     coverUrl = item.optString("artworkUrl100", null)?.let { resizeArtwork(it, THUMB_SIZE) },
                     genre = item.optString("primaryGenreName", null)?.takeIf { it.isNotBlank() },
                     trackNumber = item.optInt("trackNumber", 0).takeIf { it > 0 },
                     discNumber = item.optInt("discNumber", 0).takeIf { it > 0 },
-                    releaseType = releaseTypeOf(collectionName, trackCount)
+                    releaseType = releaseType
                 )
                 ranked += RankedSuggestion(
                     suggestion,
@@ -252,8 +253,9 @@ object ItunesApi {
                 val collectionName = item.optString("collectionName")
                 val artistName = item.optString("artistName")
 
+                val releaseType = releaseTypeOf(collectionName, item.optInt("trackCount", 0))
                 val suggestion = MetadataSuggestion(
-                    title = cleanCollectionName(collectionName),
+                    title = collectionNameWithType(collectionName, releaseType),
                     artist = artistName,
                     // En una sugerencia de álbum, `title` YA es el título del álbum.
                     albumTitle = null,
@@ -262,7 +264,7 @@ object ItunesApi {
                     genre = item.optString("primaryGenreName", null)?.takeIf { it.isNotBlank() },
                     trackNumber = null,
                     discNumber = null,
-                    releaseType = releaseTypeOf(collectionName, item.optInt("trackCount", 0))
+                    releaseType = releaseType
                 )
                 ranked += RankedSuggestion(
                     suggestion,
@@ -433,14 +435,24 @@ object ItunesApi {
         else -> ReleaseType.ALBUM
     }
 
-    /** Quita el sufijo de tipo del nombre de la colección (ver [releaseTypeOf]): en el campo
-     * "Álbum(es)" del editor tiene que quedar el nombre a secas ("Rejected Diva"), no el rótulo de
-     * la tienda ("Rejected Diva - Single"). El tipo no se pierde: se enseña como etiqueta propia de
-     * la fila (ver [MetadataSuggestion.releaseType]). */
-    private fun cleanCollectionName(collectionName: String): String = collectionName
-        .removeSuffix(SINGLE_SUFFIX)
-        .removeSuffix(EP_SUFFIX)
-        .trim()
+    /**
+     * Nombre de la colección con su sufijo de tipo normalizado (ver [releaseTypeOf]): un single o EP
+     * SIEMPRE queda como "Rejected Diva - Single"/"Rejected Diva - EP" -igual que lo muestra la
+     * propia tienda de Apple-, aunque iTunes no lo haya incluido en el nombre crudo (el caso del
+     * `trackCount == 1` de [releaseTypeOf], que solo se detecta por el número de pistas). Se aplica
+     * tanto al campo que se enseña en la fila de sugerencias como al que de verdad se guarda al
+     * aplicar la sugerencia ([MetadataSuggestion.title]/[MetadataSuggestion.albumTitle]): el usuario
+     * espera ver en el editor el mismo nombre que eligió en la lista, sufijo incluido.
+     */
+    private fun collectionNameWithType(collectionName: String, releaseType: ReleaseType): String {
+        val base = collectionName.removeSuffix(SINGLE_SUFFIX).removeSuffix(EP_SUFFIX).trim()
+        val suffix = when (releaseType) {
+            ReleaseType.ALBUM -> ""
+            ReleaseType.SINGLE -> SINGLE_SUFFIX
+            ReleaseType.EP -> EP_SUFFIX
+        }
+        return base + suffix
+    }
 
     private const val SINGLE_SUFFIX = " - Single"
     private const val EP_SUFFIX = " - EP"

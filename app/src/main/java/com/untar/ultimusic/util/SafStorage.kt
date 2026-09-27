@@ -129,8 +129,8 @@ object SafStorage {
      * Versión ligera de [refreshRegistry] que solo (re)confirma la entrada de `UltiMusic` en el
      * registro, SIN tocar las raíces adicionales que ya hubiera. La llaman consumidores que solo
      * necesitan resolver rutas dentro de `UltiMusic` y no conocen las raíces adicionales de Room
-     * ([com.untar.ultimusic.data.playlist.PlaylistRepository], [CoverArt], `StoreDownloader`, la
-     * copia de seguridad de la BD): así funcionan aunque
+     * ([com.untar.ultimusic.data.playlist.PlaylistRepository], [CoverArt], la copia de seguridad de
+     * la BD): así funcionan aunque
      * [com.untar.ultimusic.data.LibraryRepository.reconcile] (quien sí hace el [refreshRegistry]
      * completo) todavía no haya llegado a ejecutarse en este arranque.
      */

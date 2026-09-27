@@ -44,11 +44,14 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
         SortPreferences.save(LibraryTab.SONGS, option)
     }
 
-    private val _loading = MutableStateFlow(false)
-    val loading = _loading.asStateFlow()
+    /** Compartido por TODA la aplicación (ver [LibraryRepository.reconciling]): así se refleja aquí
+     *  igual una reconciliación disparada por esta pantalla que una disparada, por ejemplo, al añadir
+     *  una carpeta raíz desde Ajustes. */
+    val loading: StateFlow<Boolean> =
+        repository.reconciling.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
-    private val _progress = MutableStateFlow(0)
-    val progress = _progress.asStateFlow()
+    val progress: StateFlow<Int> =
+        repository.reconcileProgress.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     /**
      * Ids de las canciones marcadas en la pestaña Canciones (pulsación larga; ver [SongsAdapter] y
@@ -96,23 +99,18 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch { songs.forEach { repository.deleteSong(it) } }
     }
 
-    /** Reconcilia siempre (detecta archivos nuevos/borrados). Cancela cualquier reconciliación en curso. */
+    /** Reconcilia siempre (detecta archivos nuevos/borrados). Cancela cualquier reconciliación en curso
+     *  pedida desde ESTA pantalla (ver [LibraryRepository.reconcile] sobre por qué cancelar esto no
+     *  aborta el escaneo si lo hubiera disparado otra pantalla). */
     fun reload() {
         reconcileJob?.cancel()
         reconcileJob = viewModelScope.launch {
-            _loading.value = true
-            _progress.value = 0
-            runCatching {
-                repository.reconcile { current, total ->
-                    _progress.value = if (total > 0) (current * 100) / total else 0
-                }
-            }
+            runCatching { repository.reconcile() }
             // Al terminar cada reconciliación, no solo la primera: es la señal más parecida a
             // "abrir la aplicación" que hay, y refreshYouTubeStatsIfDue ya se encarga de no repetir
             // el refresco más de una vez al día por su cuenta.
             repository.refreshYouTubeStatsIfDue()
             reconciled = true
-            _loading.value = false
             reconcileJob = null
         }
     }

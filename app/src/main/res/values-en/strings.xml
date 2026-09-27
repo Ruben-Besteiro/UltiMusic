@@ -127,9 +127,6 @@
     <string name="store_links_title">Get the file</string>
     <string name="store_links_empty">This song wasn\'t found in any download store</string>
     <string name="store_link_free">Free</string>
-    <string name="store_download_started">Downloading %1$s…</string>
-    <string name="store_download_done">Downloaded: %1$s</string>
-    <string name="store_download_failed">Couldn\'t download %1$s</string>
 
     <!-- "Choose what to overwrite" dialog -->
     <string name="overwrite_picker_title">Choose what to overwrite</string>
@@ -415,7 +412,7 @@
     <string name="notification_channel_bulk_lyrics">Add lyrics</string>
 
     <!-- Group small artists into "Other" (see ArtistGroupingPreferences) -->
-    <string name="settings_artist_grouping_title">Group artists with fewer than N songs</string>
+    <string name="settings_artist_grouping_title">Group artists with N songs or fewer</string>
 
     <!-- Equalizer -->
     <string name="settings_eq_title">Equalizer</string>
@@ -471,6 +468,8 @@
 
     <!-- Subfolder picker -->
     <string name="folder_picker_root_title">UltiMusic</string>
+    <string name="folder_picker_choose_root_title">Choose a folder</string>
+    <string name="folder_picker_full_storage">Entire storage</string>
     <string name="folder_picker_back">Go up a folder</string>
     <string name="folder_picker_choose">Choose this folder</string>
     <string name="folder_picker_empty">This folder has no subfolders</string>

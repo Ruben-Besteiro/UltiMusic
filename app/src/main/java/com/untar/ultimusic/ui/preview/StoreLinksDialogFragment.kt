@@ -1,7 +1,9 @@
 package com.untar.ultimusic.ui.preview
 
 import android.app.Dialog
+import android.content.Intent
 import android.content.res.ColorStateList
+import android.net.Uri
 import android.os.Bundle
 import android.view.View
 import android.widget.LinearLayout
@@ -28,7 +30,9 @@ import kotlinx.coroutines.launch
  * [StoreLinksViewModel]): lo abre la flecha hacia abajo de cada fila del buscador de fragmentos
  * ([PreviewSearchDialogFragment]). Solo salen las tiendas de las que MusicBrainz tiene un enlace, es
  * decir, donde la canción consta; si no hay ninguna, lo dice y ya (sin buscar el álbum ni nada
- * parecido). Al tocar una se cierra y abre [StoreWebDialogFragment] con esa página dentro de la app.
+ * parecido). Al tocar una se cierra y abre esa página en el navegador del dispositivo (no en un
+ * WebView embebido: bloqueaba el inicio de sesión con Google/Apple y Google Pay, que sus propios
+ * servidores rechazan dentro de un WebView).
  *
  * Es un diálogo pequeño con `AlertDialog` (patrón de `SortDialogFragment`): como su vista la pone
  * `setView` y no `onCreateView`, la colección del estado se lanza aquí mismo en [onCreateDialog].
@@ -106,10 +110,8 @@ class StoreLinksDialogFragment : DialogFragment() {
     }
 
     private fun openStore(link: StoreLink) {
-        val manager = requireActivity().supportFragmentManager
         dismiss()
-        if (manager.findFragmentByTag(StoreWebDialogFragment.TAG) != null) return
-        StoreWebDialogFragment.newInstance(link.name, link.url).show(manager, StoreWebDialogFragment.TAG)
+        runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(link.url))) }
     }
 
     companion object {

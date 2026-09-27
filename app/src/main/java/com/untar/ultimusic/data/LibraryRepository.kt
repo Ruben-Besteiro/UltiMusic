@@ -43,11 +43,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -115,9 +118,10 @@ class LibraryRepository private constructor(
         dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain() } }
 
     /**
-     * Agrupa bajo un perfil "Otros" (ver [ArtistGroupingPreferences]) los artistas con menos
-     * canciones que el umbral guardado: sus canciones se cuentan juntas y dejan de listarse sueltos
-     * en la pestaña Artistas. Es puramente una vista calculada aquí, en Kotlin -no hay ninguna fila
+     * Agrupa bajo un perfil "Otros" (ver [ArtistGroupingPreferences]) los artistas con el umbral
+     * guardado de canciones O MENOS (p. ej. con el umbral en 1, los artistas con una sola canción
+     * pasan a "Otros"): sus canciones se cuentan juntas y dejan de listarse sueltos en la pestaña
+     * Artistas. Es puramente una vista calculada aquí, en Kotlin -no hay ninguna fila
      * "Otros" en Room, ni se reasigna el artista de ninguna canción-, así que no hace falta ninguna
      * migración de base de datos para esto.
      *
@@ -138,16 +142,22 @@ class LibraryRepository private constructor(
     )
 
     private val artistGrouping: Flow<ArtistGrouping> =
-        combine(rawArtists, ArtistGroupingPreferences.threshold) { list, threshold ->
-            val small = if (threshold > 0) list.filter { it.songCount < threshold } else emptyList()
+        combine(rawArtists, songs, ArtistGroupingPreferences.threshold) { list, allSongs, threshold ->
+            val small = if (threshold > 0) list.filter { it.songCount <= threshold } else emptyList()
             if (small.isEmpty()) return@combine ArtistGrouping(list, null, emptySet())
             val smallIds = small.mapTo(mutableSetOf()) { it.id }
+            // Las cifras de la cabecera de "Otros" salen de las MISMAS canciones que lista su ficha
+            // (ver [artistSongs]), no de sumar el songCount/albumCount/totalDuration de cada artista
+            // pequeño por separado: sumarlos así contaría dos veces una colaboración entre dos
+            // artistas pequeños, y de paso seguiría contando una canción que en realidad NO sale en
+            // "Otros" por tener también un artista grande (ver [artistSongs]).
+            val othersSongs = allSongs.filter { it.artists.isNotEmpty() && it.artists.all { a -> a.id in smallIds } }
             val others = PersonSummary(
                 id = PersonSummary.OTHERS_ARTIST_ID,
                 name = appContext.getString(R.string.artist_others),
-                songCount = small.sumOf { it.songCount },
-                albumCount = small.sumOf { it.albumCount },
-                totalDuration = small.sumOf { it.totalDuration },
+                songCount = othersSongs.size,
+                albumCount = othersSongs.flatMap { it.albums }.map { it.album.id }.distinct().size,
+                totalDuration = othersSongs.sumOf { it.duration },
                 // Sin imagen propia: agrupa a varios artistas reales a la vez, así que no hay un
                 // collage único que resolver (ver CoverRef.group, pensado para UN solo artista).
                 // Cae en el recuadro de reserva de cada ImageView, igual que un artista sin ninguna
@@ -418,16 +428,19 @@ class LibraryRepository private constructor(
     /**
      * Canciones de un artista. Para "Otros" ([PersonSummary.OTHERS_ARTIST_ID]) no hay ninguna
      * consulta propia en Room -esa fila no existe ahí-: se filtran directamente [songs] (que ya
-     * excluye la lista gris) por si alguno de sus artistas está en [smallArtistIds], igual que
-     * [Song.artistDisplay][com.untar.ultimusic.util.artistDisplay] mira esa misma lista para pintar
-     * el subtítulo. Una canción con dos artistas pequeños a la vez (colaboración) sale una sola vez,
-     * no se cuentan `any` como si fueran dos.
+     * excluye la lista gris) por si TODOS sus artistas están en [smallArtistIds]. Si una
+     * colaboración tiene al menos un artista "grande" (con ficha propia), la canción ya sale ahí y
+     * NO se repite en "Otros": duplicarla en los dos sitios sería confuso, y "Otros" es para las
+     * canciones que de otro modo no tendrían ninguna ficha donde aparecer, no para todas las que
+     * tengan de paso algún colaborador pequeño. Una canción sin ningún artista tampoco entra aquí
+     * (`all` sobre una lista vacía daría `true` por vacuidad): "Otros" agrupa artistas pequeños, no
+     * canciones sin artista.
      */
     fun artistSongs(id: Long): Flow<List<Song>> =
         if (id == PersonSummary.OTHERS_ARTIST_ID) {
             combine(songs, smallArtistIds) { all, smallIds ->
                 if (smallIds.isEmpty()) emptyList()
-                else all.filter { song -> song.artists.any { it.id in smallIds } }
+                else all.filter { song -> song.artists.isNotEmpty() && song.artists.all { it.id in smallIds } }
                     .sortedBy { it.title.lowercase() }
             }
         } else {
@@ -466,6 +479,27 @@ class LibraryRepository private constructor(
         SafStorage.refreshRegistry(appContext, dao.libraryRootPaths())
     }
 
+    /** Solo una reconciliación de verdad a la vez: [reconcile] la puede disparar
+     *  [startWatchingLibraryChanges] (el vigilante periódico), [SongsViewModel][com.untar.ultimusic.ui.SongsViewModel]
+     *  (al abrir/reintentar), o añadir/quitar/conceder una carpeta raíz, todos ellos de forma
+     *  independiente: sin serializarlos, dos reconciliaciones a la vez leerían y escribirían la misma
+     *  foto de "qué hay catalogado" y podrían pisarse (una da por buena una baja que la otra ya había
+     *  resuelto de otra forma). */
+    private val reconcileMutex = Mutex()
+
+    /** ¿Hay una reconciliación en curso ahora mismo? Reactivo y compartido por TODA la aplicación (a
+     *  diferencia de antes, donde solo [com.untar.ultimusic.ui.SongsViewModel] lo sabía de la suya
+     *  propia): así la pantalla de Canciones muestra "Actualizando base de datos..." tanto si el
+     *  escaneo lo disparó ella misma como si lo disparó, por ejemplo, añadir una carpeta desde
+     *  Ajustes. */
+    private val _reconciling = MutableStateFlow(false)
+    val reconciling: Flow<Boolean> = _reconciling
+
+    /** Progreso (0-100) de la reconciliación en curso, compartido igual que [reconciling]. Solo tiene
+     *  sentido mientras [reconciling] vale `true`. */
+    private val _reconcileProgress = MutableStateFlow(0)
+    val reconcileProgress: Flow<Int> = _reconcileProgress
+
     /**
      * Reconcilia lo que hay en las carpetas concedidas con lo guardado: escanea (fuera de
      * transacción) y delega en el DAO la inserción de novedades y el borrado de lo que ya no existe.
@@ -475,12 +509,40 @@ class LibraryRepository private constructor(
      * pasárselas a [MusicScanner.scan] como `knownPaths`: así el escaneo solo abre y lee las
      * etiquetas de los archivos NUEVOS, no de toda la fonoteca en cada llamada (ver
      * [MusicScanner.scan] y [LibraryDao.reconcile]).
+     *
+     * El trabajo de verdad se lanza en [observerScope], no en el de quien llama: `SettingsViewModel`
+     * (añadir/quitar una carpeta raíz) vive en el ciclo de vida del diálogo de ajustes, y cerrarlo
+     * ANTES de que termine el escaneo cancelaba silenciosamente la reconciliación a medias -de ahí
+     * que la fonoteca pareciera no actualizarse hasta cerrar y volver a abrir la aplicación entera-.
+     * Aquí solo se espera ([join]) a que termine; si quien llama se cancela antes, el escaneo sigue
+     * su curso en segundo plano y la base de datos (y [reconciling]/[reconcileProgress], que observa
+     * toda la aplicación) queda consistente igualmente.
      */
-    suspend fun reconcile(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) = withContext(Dispatchers.IO) {
-        refreshSafRegistry()
-        val knownPaths = dao.allSongPaths().toHashSet()
-        val result = MusicScanner.scan(appContext, knownPaths, onProgress)
-        dao.reconcile(result.newSongs, result.currentPaths)
+    suspend fun reconcile(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) {
+        observerScope.launch {
+            reconcileMutex.withLock {
+                refreshSafRegistry()
+                // Si alguna carpeta concedida no se puede leer ahora mismo (permiso revocado desde
+                // Ajustes del sistema, tarjeta desmontada...), el escaneo la vería vacía y sus
+                // canciones catalogadas parecerían haber desaparecido. En vez de arriesgarse a que
+                // LibraryDao.reconcile las dé de baja por un problema pasajero de la carpeta, se
+                // salta esta reconciliación entera: la fonoteca se queda tal cual hasta que vuelva a
+                // ser legible. Ver MusicScanner.libraryFolderReadable.
+                if (!MusicScanner.libraryFolderReadable(appContext)) return@withLock
+                _reconciling.value = true
+                _reconcileProgress.value = 0
+                try {
+                    val knownPaths = dao.allSongPaths().toHashSet()
+                    val result = MusicScanner.scan(appContext, knownPaths) { current, total ->
+                        _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
+                        onProgress(current, total)
+                    }
+                    dao.reconcile(result.newSongs, result.currentPaths)
+                } finally {
+                    _reconciling.value = false
+                }
+            }
+        }.join()
     }
 
     /**
