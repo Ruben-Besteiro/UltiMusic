@@ -8,6 +8,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
+import com.untar.ultimusic.ui.common.DiffedList
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.util.CoverArt
@@ -22,12 +23,10 @@ class PeopleAdapter(
     private val onPersonClick: (PersonSummary) -> Unit
 ) : RecyclerView.Adapter<PeopleAdapter.PersonViewHolder>() {
 
-    private var people: List<PersonSummary> = emptyList()
+    /** Ver [DiffedList]: solo se repintan las filas que cambian de verdad. */
+    private val people = DiffedList<PersonSummary>(this) { it.id }
 
-    fun submit(list: List<PersonSummary>) {
-        people = list
-        notifyDataSetChanged()
-    }
+    fun submit(list: List<PersonSummary>) = people.submit(list)
 
     override fun getItemCount(): Int = people.size
 

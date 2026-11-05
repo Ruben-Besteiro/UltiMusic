@@ -8,6 +8,7 @@ import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import java.io.InputStream
 import java.io.OutputStream
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Acceso a almacenamiento vía Storage Access Framework (SAF), que sustituye a
@@ -206,7 +207,12 @@ object SafStorage {
                     val docId = cursor.getString(idIdx) ?: continue
                     val docPath = docId.removePrefix("$VOLUME_PRIMARY:")
                     val name = cursor.getString(nameIdx) ?: docPath.substringAfterLast('/')
-                    out.add(SafEntry(docPath, name, cursor.getString(mimeIdx) == Document.MIME_TYPE_DIR, cursor.getLong(modIdx)))
+                    val modified = cursor.getLong(modIdx)
+                    // Gratis: ya viene en la misma consulta. Si un archivo ya visto vuelve con otra
+                    // fecha (p. ej. el usuario le ha cambiado la carátula embebida con otra app), se
+                    // le sube la versión para que su carátula se recargue (ver [contentVersion]).
+                    noteModified(docPath, modified)
+                    out.add(SafEntry(docPath, name, cursor.getString(mimeIdx) == Document.MIME_TYPE_DIR, modified))
                 }
             }
         }
@@ -219,22 +225,49 @@ object SafStorage {
         val newUri = runCatching {
             DocumentsContract.createDocument(context.contentResolver, parentUri, mimeType, displayName)
         }.getOrNull() ?: return null
-        return docPathOf(newUri)
+        return docPathOf(newUri)?.also { bumpVersion(it) }
     }
 
-    /** Busca una subcarpeta por nombre dentro de [parentDocPath]; si no existe, la crea. */
+    /**
+     * Busca una subcarpeta por nombre dentro de [parentDocPath], SIN crearla si no existe (a
+     * diferencia de [getOrCreateSubfolder]). Para quien solo necesita LEER (p. ej.
+     * [com.untar.ultimusic.util.CoverArt.imagesDocPath] con `createIfMissing = false`): antes
+     * reconstruía la ruta a mano (`"$parentDocPath/$name"`) confiando en que el proveedor resolviera
+     * mayúsculas/minúsculas por su cuenta al abrirla -y ese comportamiento no está garantizado en
+     * todos los pasos (ver el porqué en [getOrCreateSubfolder])-, así que ahora busca igual que la
+     * versión que sí crea: sin distinguir mayúsculas.
+     */
+    fun findSubfolder(context: Context, treeUri: Uri, parentDocPath: String, name: String): String? =
+        listChildren(context, treeUri, parentDocPath)
+            .firstOrNull { it.isDirectory && it.name.equals(name, ignoreCase = true) }
+            ?.docPath
+
+    /**
+     * Busca una subcarpeta por nombre dentro de [parentDocPath]; si no existe, la crea.
+     *
+     * La comparación es SIN distinguir mayúsculas/minúsculas a propósito: el volumen "emulated" de
+     * Android (`/storage/emulated/0`, montado vía FUSE) puede tratar "images" e "Images" como el
+     * MISMO nombre a la hora de evitar un choque al crear un documento, pero seguía dando por buena
+     * una comparación de cadenas EXACTA aquí -distinta de la del sistema de archivos de verdad-. El
+     * resultado, confirmado en un dispositivo real: si la carpeta ya existía con otra capitalización
+     * (p. ej. creada como "Images" en algún momento), esta función nunca la encontraba y creaba una
+     * "images" nueva en cada llamada; como el sistema de archivos SÍ detectaba el choque de nombre,
+     * la iba renombrando sola a "images (1)", "images (2)"... una carpeta nueva -y una carátula
+     * huérfana- por cada guardado. Comparar sin distinguir mayúsculas evita que vuelva a pasar.
+     */
     fun getOrCreateSubfolder(context: Context, treeUri: Uri, parentDocPath: String, name: String): String? {
-        listChildren(context, treeUri, parentDocPath).firstOrNull { it.isDirectory && it.name == name }
-            ?.let { return it.docPath }
+        findSubfolder(context, treeUri, parentDocPath, name)?.let { return it }
         return createFile(context, treeUri, parentDocPath, name, Document.MIME_TYPE_DIR)
     }
 
-    /** Busca un documento (no carpeta) por nombre EXACTO dentro de [parentDocPath]; si no existe, lo
+    /** Busca un documento (no carpeta) por nombre dentro de [parentDocPath]; si no existe, lo
      *  crea. Para un archivo que se sobrescribe entero cada vez (como las listas de
      *  `PlaylistRepository`), donde "crear" y "abrir para escribir" son dos pasos distintos y
-     *  `createFile` sobre un nombre ya existente crearía un duplicado en vez de reutilizarlo. */
+     *  `createFile` sobre un nombre ya existente crearía un duplicado en vez de reutilizarlo. Sin
+     *  distinguir mayúsculas por el mismo motivo que [getOrCreateSubfolder]. */
     fun getOrCreateFile(context: Context, treeUri: Uri, parentDocPath: String, name: String, mimeType: String): String? {
-        listChildren(context, treeUri, parentDocPath).firstOrNull { !it.isDirectory && it.name == name }
+        listChildren(context, treeUri, parentDocPath)
+            .firstOrNull { !it.isDirectory && it.name.equals(name, ignoreCase = true) }
             ?.let { return it.docPath }
         return createFile(context, treeUri, parentDocPath, name, mimeType)
     }
@@ -244,10 +277,11 @@ object SafStorage {
      *  con el nombre cambiado). */
     fun renameTo(context: Context, docPath: String, newName: String): String? {
         val uri = resolveUri(docPath) ?: return null
+        bumpVersion(docPath)
         val newUri = runCatching {
             DocumentsContract.renameDocument(context.contentResolver, uri, newName)
         }.getOrNull() ?: return null
-        return docPathOf(newUri) ?: docPath
+        return (docPathOf(newUri) ?: docPath).also { bumpVersion(it) }
     }
 
     fun exists(context: Context, docPath: String): Boolean {
@@ -256,6 +290,31 @@ object SafStorage {
             context.contentResolver.query(uri, arrayOf(Document.COLUMN_DOCUMENT_ID), null, null, null)
                 ?.use { it.moveToFirst() } ?: false
         }.getOrDefault(false)
+    }
+
+    /**
+     * Espera a que [docPath] sea legible DE VERDAD, con unos pocos reintentos cortos: abre el
+     * documento tal cual lo abriría Coil ([android.content.ContentResolver.openInputStream]), no
+     * solo comprueba que aparece en un `query()` (ver [exists]). En algunos dispositivos (visto en
+     * HyperOS/MIUI) el proveedor de almacenamiento indexa un documento recién creado en DOS PASOS
+     * que no van sincronizados entre sí: el `query()` de [exists] ya lo encuentra, pero la
+     * comprobación interna de "es hijo del árbol concedido" que hace `openTypedAssetFile` (la que
+     * usa una apertura de verdad) todavía falla con `FileNotFoundException` un rato más -confirmado
+     * en logcat: `exists()` daba `true` y la carátula seguía sin poder leerse-. Por eso esta función
+     * abre el archivo de verdad (y lo cierra sin leer nada, solo para comprobar) en vez de reusar
+     * [exists]. Sin esto, [com.untar.ultimusic.data.LibraryRepository.importCoverImage] daba por
+     * buena una carátula que Coil no podía leer todavía, y se quedaba así -el proveedor no vuelve a
+     * avisar de que ya está lista, así que nada disparaba un reintento- hasta la próxima vez que algo
+     * tocara esa fila.
+     */
+    suspend fun awaitReadable(context: Context, docPath: String, attempts: Int = 8, delayMs: Long = 200): Boolean {
+        val uri = resolveUri(docPath) ?: return false
+        repeat(attempts) { attempt ->
+            val readable = runCatching { context.contentResolver.openInputStream(uri)?.use { } }.isSuccess
+            if (readable) return true
+            if (attempt < attempts - 1) kotlinx.coroutines.delay(delayMs)
+        }
+        return false
     }
 
     fun lastModified(context: Context, docPath: String): Long {
@@ -273,8 +332,44 @@ object SafStorage {
         } ?: 0L
     }.getOrDefault(0L)
 
+    /**
+     * Versión EN MEMORIA del contenido de cada archivo, por docPath: sube cada vez que la propia app
+     * lo escribe, crea, renombra o borra ([createFile]/[openOutputStream]/[renameTo]/
+     * [deleteRecursively]), o cuando un escaneo ([listChildren]) ve que su fecha de modificación ha
+     * cambiado desde la última vez que lo vio.
+     *
+     * Es lo que llevan las claves de caché de Coil ([com.untar.ultimusic.util.CoverFileKeyer]/
+     * [com.untar.ultimusic.util.AudioCoverKeyer]) y de [DynamicColor] en vez de la fecha de
+     * modificación del archivo: esas claves se calculan en el HILO PRINCIPAL en cada bind de cada fila
+     * (Coil 2 resuelve la caché en memoria en `Dispatchers.Main.immediate`), y pedir la fecha era una
+     * consulta IPC al proveedor de documentos por carátula y por bind -lo que bloqueaba el hilo
+     * principal al hacer scroll, hasta el punto de que el temporizador de pulsación larga saltaba
+     * antes de que la lista llegara a procesar el arrastre-. Leer de aquí no toca el disco nunca.
+     *
+     * Que viva solo en memoria no pierde nada: la caché de Coil (y la de acentos de [DynamicColor])
+     * también vive solo en memoria y muere con el proceso, así que al arrancar de nuevo no hay nada
+     * viejo que invalidar.
+     */
+    private val versions = ConcurrentHashMap<String, Int>()
+
+    /** Última fecha de modificación vista por [listChildren], para detectar cambios hechos fuera de la app. */
+    private val seenModified = ConcurrentHashMap<String, Long>()
+
+    /** Ver [versions]. Sin ninguna consulta: apto para llamarse en el hilo principal en cada bind. */
+    fun contentVersion(uri: Uri): Int = docPathOf(uri)?.let { versions[it] } ?: 0
+
+    fun bumpVersion(docPath: String) {
+        versions.merge(docPath, 1, Int::plus)
+    }
+
+    private fun noteModified(docPath: String, modified: Long) {
+        val previous = seenModified.put(docPath, modified)
+        if (previous != null && previous != modified) bumpVersion(docPath)
+    }
+
     fun deleteRecursively(context: Context, docPath: String): Boolean {
         val uri = resolveUri(docPath) ?: return false
+        bumpVersion(docPath)
         return runCatching { DocumentsContract.deleteDocument(context.contentResolver, uri) }.getOrDefault(false)
     }
 
@@ -285,7 +380,22 @@ object SafStorage {
 
     fun openOutputStream(context: Context, docPath: String): OutputStream? {
         val uri = resolveUri(docPath) ?: return null
-        return runCatching { context.contentResolver.openOutputStream(uri) }.getOrNull()
+        val raw = runCatching { context.contentResolver.openOutputStream(uri) }.getOrNull() ?: return null
+        // La versión (ver [contentVersion]) sube al CERRAR, cuando el archivo ya está escrito entero:
+        // si subiera al abrir, una carga de Coil que se colara a mitad de la escritura cachearía la
+        // imagen a medias con la clave nueva, y ya nada volvería a invalidarla.
+        return object : OutputStream() {
+            override fun write(b: Int) = raw.write(b)
+            override fun write(b: ByteArray, off: Int, len: Int) = raw.write(b, off, len)
+            override fun flush() = raw.flush()
+            override fun close() {
+                try {
+                    raw.close()
+                } finally {
+                    bumpVersion(docPath)
+                }
+            }
+        }
     }
 
     fun uriOf(docPath: String): Uri? = resolveUri(docPath)

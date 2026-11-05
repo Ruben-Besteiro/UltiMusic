@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /**
  * Expone la lista de canciones observando la base de datos (vía [LibraryRepository]). Así las
@@ -37,7 +39,7 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
     /** Solo lectura; es lo que exponemos a la UI, ya reordenada. */
     val songs: StateFlow<List<Song>> = combine(repository.songs, _sort) { list, option ->
         list.sortedByOption(option)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setSort(option: SortOption) {
         _sort.value = option

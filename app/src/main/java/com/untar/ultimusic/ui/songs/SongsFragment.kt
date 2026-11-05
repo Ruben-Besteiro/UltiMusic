@@ -85,12 +85,13 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
             }
         )
         recycler.layoutManager = LinearLayoutManager(requireContext())
+        recycler.setHasFixedSize(true)
         recycler.adapter = adapter
 
         // -1 porque la posición 0 del RecyclerView es la cabecera de resumen (ver SongsAdapter),
         // no una canción.
         val scrollbar = recycler.attachScrollbarDrag { position ->
-            sectionLetter(songsViewModel.songs.value.getOrNull(position - 1)?.title)
+            sectionLetter(adapter.songAt(position)?.title)
         }
 
         // Arrastrar una fila hacia la derecha la añade a la cola, como el propio "Añadir a cola" del
@@ -100,18 +101,21 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
             accentColor = { playerViewModel.accentColor.value },
             canSwipe = { position -> position > 0 }
         ) { position ->
-            songsViewModel.songs.value.getOrNull(position - 1)?.let { playerViewModel.addToQueue(it) }
+            adapter.songAt(position)?.let { playerViewModel.addToQueue(it) }
         }
 
         /** Pintamos las canciones en la pantalla **/
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    // Se combina con CoverArt.revision (ver su comentario) para que editar SOLO la
-                    // carátula de una canción -reutilizando su nombre de archivo, el caso normal-
-                    // repinte esta lista igual: sin esto, songsViewModel.songs no reemitiría nada
-                    // porque el Song que sale de Room sería idéntico al de antes.
-                    combine(songsViewModel.songs, CoverArt.revision) { list, _ -> list }.collect { list ->
+                    // Editar SOLO la carátula de una canción -reutilizando su nombre de archivo, el
+                    // caso normal- no cambia nada en el Song que sale de Room (ver
+                    // CoverArt.revision), así que el diff del adaptador no lo vería: se repinta lo
+                    // visible aparte, sin rehacer la lista.
+                    CoverArt.revision.collect { adapter.refreshCovers() }
+                }
+                launch {
+                    songsViewModel.songs.collect { list ->
                         adapter.submit(list)
                         adapter.setSummary(
                             joinNonBlank(
@@ -128,9 +132,20 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                     }
                 }
                 launch {
-                    songsViewModel.loading.collect { loading ->
+                    // `loading` y `progress` van COMBINADOS, no en dos collect por separado: cada
+                    // uno es un StateFlow independiente (ver SongsViewModel), y leer el `.value` de
+                    // uno desde dentro del collect del otro no garantiza que ya esté al día -en un
+                    // dispositivo real se veía el texto "Actualizando..." sin el porcentaje, pisado
+                    // por esa carrera-. Combinados, cada emisión trae los dos valores ya
+                    // sincronizados entre sí.
+                    combine(songsViewModel.loading, songsViewModel.progress) { loading, percent ->
+                        loading to percent
+                    }.collect { (loading, percent) ->
                         if (loading) {
-                            emptyView.text = requireContext().getString(R.string.updating_database)
+                            emptyView.text = String.format(
+                                requireContext().getString(R.string.updating_database_percent),
+                                percent
+                            )
                             emptyView.visibility = View.VISIBLE
                         } else if (songsViewModel.songs.value.isEmpty()) {
                             emptyView.text = requireContext().getString(R.string.no_songs)
@@ -140,16 +155,6 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                             // día): el flujo `songs` no reemite y el otro collector nunca se dispara, así
                             // que hay que ocultar el aviso aquí también o se queda clavado en pantalla.
                             emptyView.visibility = View.GONE
-                        }
-                    }
-                }
-                launch {
-                    songsViewModel.progress.collect { percent ->
-                        if (songsViewModel.loading.value) {
-                            emptyView.text = String.format(
-                                requireContext().getString(R.string.updating_database_percent),
-                                percent
-                            )
                         }
                     }
                 }

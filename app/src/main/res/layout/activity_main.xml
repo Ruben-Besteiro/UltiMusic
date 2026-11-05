@@ -91,6 +91,23 @@
                 android:src="@drawable/ic_delete"
                 android:tint="@color/um_on_surface_muted"
                 android:visibility="gone" />
+
+            <!-- Interruptor del modo SQL (ver SearchBarController): solo visible con el buscador
+                 expandido. El color lo pone el controlador: acento dinámico si está activo. -->
+            <TextView
+                android:id="@+id/btnSearchSql"
+                android:layout_width="wrap_content"
+                android:layout_height="28dp"
+                android:background="@drawable/bg_sql_toggle"
+                android:contentDescription="@string/sql_toggle_description"
+                android:gravity="center"
+                android:minWidth="40dp"
+                android:paddingHorizontal="8dp"
+                android:text="@string/sql_toggle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:visibility="gone" />
         </LinearLayout>
 
         <!-- Sustituye a searchBar (mismo hueco, mismo layout_weight) mientras hay canciones

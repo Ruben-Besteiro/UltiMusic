@@ -14,6 +14,7 @@ import androidx.core.view.isVisible
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
+import com.untar.ultimusic.ui.common.DiffedList
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.AccentTint
@@ -84,14 +85,15 @@ class CollectionSongsAdapter(
     fun setSelection(ids: Set<Long>) {
         if (selectedIds == ids) return
         selectedIds = ids
-        notifyDataSetChanged()
+        // Sin notifyDataSetChanged: repinta en el sitio las filas que ya hay, sin rehacer la lista.
+        notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
     }
 
     @SuppressLint("NotifyDataSetChanged")
     fun setAccentColor(color: Int) {
         if (accentColor == color) return
         accentColor = color
-        if (selectedIds.isNotEmpty()) notifyDataSetChanged()
+        if (selectedIds.isNotEmpty()) notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
     }
 
     /** [removable] enseña/oculta la X de cada fila; [descRes] es lo que lee un lector de pantalla al

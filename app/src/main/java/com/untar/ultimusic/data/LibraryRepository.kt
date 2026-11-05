@@ -6,6 +6,7 @@ import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
 import android.os.Environment
 import androidx.core.content.ContextCompat
+import androidx.room.withTransaction
 import coil.request.ImageRequest
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.db.AlbumEdit
@@ -44,10 +45,14 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.shareIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -87,9 +92,31 @@ class LibraryRepository private constructor(
      */
     private val activeWatchRequesters = mutableSetOf<LibraryWatchRequester>()
 
-    /** Canciones persistidas, reactivas: cualquier edición reemite la lista. */
+    /**
+     * Cómo se comparten los flujos de biblioteca de abajo entre TODOS sus consumidores.
+     *
+     * Antes cada flujo era frío: cada `collect` (pestaña Canciones, Artistas -que también mira
+     * [songs]-, Géneros, Etiquetas x3, buscador, Recount, el servicio de reproducción, el editor...)
+     * lanzaba SU PROPIA consulta `observeSongs()` -la biblioteca entera con 6 relaciones- y su propio
+     * `toDomain()`, y lo repetía en cada escritura en la BD: una sola edición de metadatos disparaba
+     * una decena de lecturas completas de la fonoteca a la vez, y el mapeo corría en el hilo de quien
+     * colectaba (casi siempre el principal). Compartidos en [observerScope] (IO), hay UNA consulta y
+     * UN mapeo por cambio, fuera del hilo principal, y todos reciben el mismo resultado.
+     *
+     * `replayExpirationMillis = 0`: cuando ya no queda nadie mirando (pasados 5 s), se tira el último
+     * valor en vez de guardarlo, para que quien vuelva a suscribirse más tarde nunca reciba una lista
+     * vieja de antes de una edición hecha mientras nadie miraba.
+     */
+    private val sharing = SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0)
+
+    /** Canciones persistidas, reactivas: cualquier edición reemite la lista. `distinctUntilChanged`
+     *  porque Room reemite ante CUALQUIER escritura en las tablas que lee (aunque el resultado sea el
+     *  mismo, p. ej. al registrar una reproducción): así nadie aguas abajo recalcula ni repinta nada
+     *  si la lista no ha cambiado de verdad. */
     val songs: Flow<List<Song>> =
         dao.observeSongs().map { list -> list.map { it.toDomain() } }
+            .distinctUntilChanged()
+            .shareIn(observerScope, sharing, replay = 1)
 
     /** Nombres ya existentes, para el autocompletado del editor de metadatos. */
     val artistNames: Flow<List<String>> = dao.observeArtistNames()
@@ -111,6 +138,8 @@ class LibraryRepository private constructor(
 
     val albums: Flow<List<AlbumSummary>> =
         dao.observeAlbumSummaries(null).map { rows -> rows.map { it.toDomain() } }
+            .distinctUntilChanged()
+            .shareIn(observerScope, sharing, replay = 1)
 
     /** Sin agrupar por "Otros" (ver [artistGrouping]): la lista cruda tal cual la guarda Room, una
      *  fila por artista real. */
@@ -167,6 +196,8 @@ class LibraryRepository private constructor(
             )
             ArtistGrouping(list.filterNot { it.id in smallIds } + others, others, smallIds)
         }
+            .distinctUntilChanged()
+            .shareIn(observerScope, sharing, replay = 1)
 
     val artists: Flow<List<PersonSummary>> = artistGrouping.map { it.visible }
 
@@ -202,10 +233,12 @@ class LibraryRepository private constructor(
         byGenre.map { (name, countAndDuration) -> GenreSummary(name, countAndDuration.first, countAndDuration.second) }
             .sortedBy { it.name.lowercase() }
     }
+        .distinctUntilChanged()
+        .shareIn(observerScope, sharing, replay = 1)
 
     /** Canciones que llevan el género [genre] (comparación exacta, como [genres]). */
     fun songsOfGenre(genre: String): Flow<List<Song>> =
-        songs.map { list -> list.filter { genre in it.genres } }
+        songs.map { list -> list.filter { genre in it.genres } }.flowOn(Dispatchers.Default)
 
     // --- Pestaña de Etiquetas ---
     //
@@ -223,8 +256,10 @@ class LibraryRepository private constructor(
     // CollectionDetailViewModel.bindPlaylistSongs; ver TagsViewModel.bindPlaylistFilenames, que es
     // quien lo conecta de verdad al tick de PlaylistsViewModel).
 
-    private val tagEntities: Flow<List<TagEntity>> = dao.observeTags()
-    private val tagCrossRefs: Flow<List<SongTagCrossRef>> = dao.observeSongTagCrossRefs()
+    private val tagEntities: Flow<List<TagEntity>> =
+        dao.observeTags().distinctUntilChanged().shareIn(observerScope, sharing, replay = 1)
+    private val tagCrossRefs: Flow<List<SongTagCrossRef>> =
+        dao.observeSongTagCrossRefs().distinctUntilChanged().shareIn(observerScope, sharing, replay = 1)
 
     /** Una etiqueta ya resuelta contra la biblioteca: su resumen para pintar, y el conjunto de ids de
      *  canción que la tienen (real o calculada, ver [resolveSongsOfTag]) — este último es lo que
@@ -265,7 +300,7 @@ class LibraryRepository private constructor(
     fun tagSummaries(filenamesInAnyPlaylist: Flow<Set<String>>): Flow<List<TagSummary>> =
         combine(tagEntities, tagCrossRefs, songs, filenamesInAnyPlaylist) { tags, crossRefs, allSongs, inPlaylist ->
             resolveAllTags(tags, crossRefs, allSongs, inPlaylist).map { it.summary }
-        }
+        }.flowOn(Dispatchers.Default)
 
     /** Canciones de UNA etiqueta, por [id] (no por nombre: ver la decisión de diseño de usar el id
      *  como clave de una etiqueta en la ficha de detalle). */
@@ -274,7 +309,7 @@ class LibraryRepository private constructor(
             val tag = tags.firstOrNull { it.id == id } ?: return@combine emptyList()
             val memberIds = crossRefs.filter { it.tagId == tag.id }.map { it.songId }.toSet()
             resolveSongsOfTag(tag, allSongs, memberIds, inPlaylist, songsWithCustomTag(tags, crossRefs))
-        }
+        }.flowOn(Dispatchers.Default)
 
     /**
      * Etiquetas de UNA canción (ver [SongTagsDialogFragment][com.untar.ultimusic.ui.library.SongTagsDialogFragment]):
@@ -288,7 +323,7 @@ class LibraryRepository private constructor(
                 .filter { songId in it.matchedSongIds }
                 .map { it.summary }
                 .sortedBy { it.name }
-        }
+        }.flowOn(Dispatchers.Default)
 
     /**
      * Igual que [tagsOfSong] pero para TODAS las canciones a la vez, indexadas por id (reales +
@@ -306,7 +341,7 @@ class LibraryRepository private constructor(
                 }
             }
             bySong.mapValues { (_, list) -> list.sortedBy { it.name } }
-        }
+        }.flowOn(Dispatchers.Default)
 
     /** Añade/quita la membresía real de una canción en una etiqueta (ver
      *  [SongTagsDialogFragment][com.untar.ultimusic.ui.library.SongTagsDialogFragment]/
@@ -363,8 +398,8 @@ class LibraryRepository private constructor(
 
     /**
      * Resuelve qué canciones tiene [tag], según su tipo (ver [SystemTagKey]):
-     * - Descargadas recientemente: las 20 con [Song.dateAdded] más reciente. 100% calculada, nunca
-     *   más de 20.
+     * - Descargadas recientemente: las de [Song.dateAdded] (fecha del archivo al detectarlo por primera vez; no cambia al editarlo) de hace menos de un
+     *   mes, pero nunca menos de [RECENTLY_ADDED_MIN] (si no llegan, las más recientes). 100% calculada.
      * - En ninguna lista: cuyo archivo no está en [inPlaylist] (unión de todas las Listas).
      * - Sin etiquetas personalizadas: todas las canciones EXCEPTO las que ya tengan alguna etiqueta
      *   personalizada ([songsWithCustomTag]).
@@ -383,8 +418,13 @@ class LibraryRepository private constructor(
         songsWithCustomTag: Set<Long>
     ): List<Song> =
         when (tag.systemKey?.let { runCatching { SystemTagKey.valueOf(it) }.getOrNull() }) {
-            SystemTagKey.RECENTLY_ADDED -> allSongs.sortedByDescending { it.dateAdded }.take(20)
-            SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { File(it.filePath).name !in inPlaylist }
+            SystemTagKey.RECENTLY_ADDED -> {
+                val sorted = allSongs.sortedByDescending { it.dateAdded }
+                val cutoff = java.time.ZonedDateTime.now().minusMonths(1).toInstant().toEpochMilli()
+                val lastMonth = sorted.takeWhile { it.dateAdded >= cutoff }
+                if (lastMonth.size >= RECENTLY_ADDED_MIN) lastMonth else sorted.take(RECENTLY_ADDED_MIN)
+            }
+            SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { it.filePath.substringAfterLast('/') !in inPlaylist }
             SystemTagKey.NO_CUSTOM_TAGS -> allSongs.filter { it.id !in songsWithCustomTag }
             SystemTagKey.SYNCED_VIDEO -> allSongs.filter { it.id in memberIds }
             SystemTagKey.REMIX_COVER -> allSongs.filter { it.id in memberIds }
@@ -442,7 +482,7 @@ class LibraryRepository private constructor(
                 if (smallIds.isEmpty()) emptyList()
                 else all.filter { song -> song.artists.isNotEmpty() && song.artists.all { it.id in smallIds } }
                     .sortedBy { it.title.lowercase() }
-            }
+            }.flowOn(Dispatchers.Default)
         } else {
             dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
         }
@@ -957,10 +997,15 @@ class LibraryRepository private constructor(
         producerNames: List<String>,
         previousLanguage: String?
     ) {
-        dao.saveSongEdits(song, artistNames, albums, producerNames)
-        syncSyncedVideoTag(song.id, song.videoOffsetMs)
-        syncRemixCoverTag(song.id, song.ogTitle)
-        syncLanguageTag(song.id, previousLanguage, song.language)
+        // Todo en UNA transacción: Room avisa a sus observadores al cerrar cada transacción, así que
+        // por separado eran cuatro oleadas de relecturas de la biblioteca por cada "Guardar" (la
+        // edición en sí y luego cada una de las tres etiquetas sincronizadas); juntas, una sola.
+        UltiMusicDatabase.get(appContext).withTransaction {
+            dao.saveSongEdits(song, artistNames, albums, producerNames)
+            syncSyncedVideoTag(song.id, song.videoOffsetMs)
+            syncRemixCoverTag(song.id, song.ogTitle)
+            syncLanguageTag(song.id, previousLanguage, song.language)
+        }
     }
 
     /**
@@ -1082,6 +1127,15 @@ class LibraryRepository private constructor(
      * Si la canción ya tenía una carátula propia, quien llame debe borrarla ANTES de llamar aquí
      * (ver [deleteCoverImage]): así, cuando el título no ha cambiado, el nombre vuelve a estar
      * libre y esta imagen ocupa el mismo hueco en vez de acabar en "Título (2).img".
+     *
+     * Aun así, el nombre devuelto es el del `docPath` que de verdad creó el proveedor de
+     * almacenamiento ([SafStorage.createFile]), NO el que se le pidió ([CoverArt.reserveFileName]):
+     * si el borrado anterior falló en silencio (es best-effort, ver [deleteCoverImage]) o hay
+     * cualquier otra colisión de nombre, `DocumentsContract.createDocument` no sobrescribe el
+     * archivo viejo, crea uno nuevo con el nombre cambiado ("Título (1).img") para no chocar. Guardar
+     * el nombre que se PIDIÓ en vez del que de verdad se creó dejaba `Song.imageName` apuntando a un
+     * archivo que no existe -Coil no lo encuentra y cae al recuadro de reserva-, justo el bug que
+     * describió el usuario ("a veces, al cambiar la carátula... aparece el placeholder").
      */
     suspend fun importCoverImage(uri: Uri, title: String): String = withContext(Dispatchers.IO) {
         val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: error("La carpeta UltiMusic no está concedida")
@@ -1093,7 +1147,14 @@ class LibraryRepository private constructor(
             SafStorage.openOutputStream(appContext, docPath)?.use { output -> input.copyTo(output) }
                 ?: error("No se ha podido escribir la carátula")
         } ?: error("No se ha podido leer la imagen seleccionada")
-        name
+        val finalName = docPath.substringAfterLast('/')
+        // Ver SafStorage.awaitReadable: en algunos dispositivos el archivo recién escrito tarda un
+        // poco en ser legible de verdad. Sin esto, Song.imageName quedaba apuntando (de momento) a
+        // un archivo que Coil no podía leer todavía -el bug del placeholder tras editar la carátula-.
+        if (!SafStorage.awaitReadable(appContext, docPath)) {
+            error("La carátula se escribió pero el sistema todavía no la reconoce")
+        }
+        finalName
     }
 
     /**
@@ -1143,7 +1204,11 @@ class LibraryRepository private constructor(
                 SafStorage.openOutputStream(appContext, docPath)?.use { out ->
                     cropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
                 } ?: return@runCatching null
-                name
+                // El nombre real es el del docPath que devolvió el proveedor, no el pedido (ver el
+                // mismo razonamiento en importCoverImage): si hubiera colisión, no coincidirían.
+                // Ver SafStorage.awaitReadable: mismo motivo que en importCoverImage.
+                if (!SafStorage.awaitReadable(appContext, docPath)) return@runCatching null
+                docPath.substringAfterLast('/')
             }.getOrNull()
         }
 
@@ -1210,6 +1275,9 @@ class LibraryRepository private constructor(
     }
 
     companion object {
+        /** Mínimo de canciones de "Descargada recientemente", aunque sean de hace más de un mes. */
+        private const val RECENTLY_ADDED_MIN = 20
+
         /** Cada cuánto reconcilia [startWatchingLibraryChanges] mientras la app está en primer plano
          *  (ver su doc: sustituye al `FileObserver` instantáneo de antes de la migración a SAF). */
         private const val WATCH_INTERVAL_MS = 3 * 60 * 1000L

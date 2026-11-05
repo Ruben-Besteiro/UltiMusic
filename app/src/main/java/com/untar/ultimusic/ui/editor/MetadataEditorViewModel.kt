@@ -15,11 +15,18 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /**
  * Estado y guardado del editor de metadatos de una canción.
@@ -42,11 +49,27 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
      * [_songIds]. Vacío hasta que Room emite la primera vez (por eso el formulario se rellena
      * dentro de un `collect` y no en `onViewCreated`).
      */
-    val songs: StateFlow<List<Song>> = repository.songs
-        .map { list ->
-            val byId = list.associateBy { it.id }
-            _songIds.value.mapNotNull { byId[it] }
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val songs: StateFlow<List<Song>> = _songIds
+        // Esperar a que el fragmento fije los ids (setSongIds, en su onCreate). `song` es Eagerly y
+        // arranca a colectar esto en cuanto se construye el ViewModel, ANTES de ese setSongIds: si
+        // aquí se leyera `_songIds.value` en vez de reaccionar a él, con la biblioteca ya en caché
+        // se evaluaba con la lista vacía y el editor se quedaba vacío para siempre.
+        .filter { it.isNotEmpty() }
+        .flatMapLatest { ids ->
+            flow {
+                // Primero, lectura directa de SOLO estas canciones (consulta pequeña); después, el
+                // flujo reactivo de la biblioteca para que las ediciones se vean al instante.
+                emit(repository.songsByIds(ids))
+                emitAll(
+                    repository.songs.map { list ->
+                        val byId = list.associateBy { it.id }
+                        ids.mapNotNull { byId[it] }
+                    }
+                )
+            }
         }
+        .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Comodidad para el caso normal (una sola canción): la primera de [songs], o null.
@@ -126,14 +149,17 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
                 val result = writeSong(current, form, pickedImage)
                 // Ver CoverArt.revision: sin esto, una carátula que reutiliza el nombre de archivo
                 // de la anterior no cambiaría nada en el Song que sale de Room, y las listas de la
-                // app no se enterarían de que hay una imagen nueva que cargar.
-                CoverArt.touch()
+                // app no se enterarían de que hay una imagen nueva que cargar. SOLO si la carátula
+                // ha cambiado de verdad: touch() invalida TODAS las carátulas y collages de la app
+                // (todas las listas vuelven a cargarlas), y guardar solo el título o la letra no
+                // tiene por qué pagar eso.
+                if (result.coverChanged) CoverArt.touch()
                 // Se relee de Room en vez de construirla a mano aquí: artistas/álbumes/productores
                 // son relaciones que saveSongEdits acaba de resolver (nombre -> fila existente o
-                // nueva), y reconstruir eso a mano duplicaría esa lógica. Por si acaso no apareciera
-                // (no debería: se acaba de guardar), se cae de vuelta a un parche mínimo sobre lo
-                // que ya había.
-                val fresh = repository.songs.first().firstOrNull { it.id == current.id }
+                // nueva), y reconstruir eso a mano duplicaría esa lógica. Solo ESTA fila
+                // (songsByIds), no la biblioteca entera. Por si acaso no apareciera (no debería: se
+                // acaba de guardar), se cae de vuelta a un parche mínimo sobre lo que ya había.
+                val fresh = repository.songsByIds(listOf(current.id)).firstOrNull()
                     ?: current.copy(imageName = result.imageName, videoThumbnailName = result.thumbnailName)
                 _saved.value = SaveResult(fresh)
                 _isSaving.value = false
@@ -159,10 +185,9 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
         _isSaving.value = true
         viewModelScope.launch {
             withContext(NonCancellable) {
-                targets.forEach { current -> writeSong(current, current.mergeUnedited(form, edited), pickedImage) }
-                CoverArt.touch()
-                val ids = targets.map { it.id }.toSet()
-                _savedMulti.value = repository.songs.first().filter { it.id in ids }
+                val results = targets.map { current -> writeSong(current, current.mergeUnedited(form, edited), pickedImage) }
+                if (results.any { it.coverChanged }) CoverArt.touch()
+                _savedMulti.value = repository.songsByIds(targets.map { it.id })
                 _isSaving.value = false
             }
         }
@@ -170,7 +195,7 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Lo que devuelve [writeSong]: el nombre final de la carátula y de la miniatura del vídeo,
      *  para el parche de reserva de [save] si la relectura de Room no encontrara la fila (ver ahí). */
-    private data class WriteResult(val imageName: String?, val thumbnailName: String?)
+    private data class WriteResult(val imageName: String?, val thumbnailName: String?, val coverChanged: Boolean)
 
     /**
      * Escribe TODOS los cambios de una canción: la carátula (o su renombrado si solo cambia el
@@ -270,7 +295,12 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
         if (videoUrlChanged && form.videoUrl != null) {
             repository.refreshYouTubeStatsForSong(current.id, form.videoUrl)
         }
-        return WriteResult(imageName, thumbnailName)
+        // Cualquier cosa que pueda cambiar el CONTENIDO de una imagen bajo el mismo nombre (ver
+        // CoverArt.revision): una portada nueva, o una miniatura de vídeo nueva o quitada. Un simple
+        // renombrado ya cambia el nombre en el Song, así que se repinta solo sin touch().
+        val coverChanged = pickedImage != null || videoUrlChanged ||
+            (form.videoUrl == null && current.videoThumbnailName != null)
+        return WriteResult(imageName, thumbnailName, coverChanged)
     }
 }
 

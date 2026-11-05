@@ -1,12 +1,17 @@
 package com.untar.ultimusic.ui.search
 
+import android.graphics.drawable.ColorDrawable
 import android.text.TextUtils
 import android.transition.AutoTransition
 import android.transition.TransitionManager
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.BaseAdapter
 import android.widget.EditText
+import android.widget.ListPopupWindow
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.activity.OnBackPressedCallback
@@ -14,6 +19,7 @@ import androidx.appcompat.app.AlertDialog
 import androidx.core.view.isVisible
 import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.lifecycleScope
@@ -32,7 +38,8 @@ import com.untar.ultimusic.ui.library.SongTagsDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
-import kotlinx.coroutines.flow.combine
+import com.untar.ultimusic.util.SqlConsole
+import com.untar.ultimusic.util.SqlPlan
 import kotlinx.coroutines.launch
 import java.io.File
 
@@ -71,6 +78,8 @@ class SearchBarController(
     private val searchLeadingIcon: ImageView,
     private val searchInput: EditText,
     private val btnSearchClear: View,
+    private val btnSearchSql: TextView,
+    private val searchBar: View,
     private val contentArea: ViewGroup,
     private val browseContent: View,
     private val searchResultsContainer: View,
@@ -82,6 +91,28 @@ class SearchBarController(
 ) {
     private var expanded = false
 
+    private lateinit var adapter: SearchAdapter
+
+    /** Modo SQL: la caja es una consola contra la BD en vez de un buscador (ver [setSqlMode]). */
+    private var sqlMode = false
+
+    /** Último texto ya procesado al perder el foco, para no repetir (ni volver a preguntar) si no cambió. */
+    private var lastHandledSql: String? = null
+
+    private var suggestions = SqlConsole.Suggestions(0, emptyList())
+
+    private val suggestionPopup: ListPopupWindow by lazy {
+        ListPopupWindow(activity).apply {
+            anchorView = searchBar
+            isModal = false // no debe robarle el foco (ni el teclado) a la caja
+            inputMethodMode = ListPopupWindow.INPUT_METHOD_NOT_NEEDED
+            width = ViewGroup.LayoutParams.MATCH_PARENT
+            height = ViewGroup.LayoutParams.WRAP_CONTENT
+            setBackgroundDrawable(ColorDrawable(activity.getColor(R.color.um_surface)))
+            setOnItemClickListener { _, _, position, _ -> applySuggestion(position) }
+        }
+    }
+
     /** Habilitado solo mientras el buscador está abierto (ver [expand] / [collapse]). */
     private val backCallback = object : OnBackPressedCallback(false) {
         override fun handleOnBackPressed() = collapse()
@@ -90,7 +121,11 @@ class SearchBarController(
     fun bind() {
         activity.onBackPressedDispatcher.addCallback(lifecycleOwner, backCallback)
 
-        val adapter = SearchAdapter(
+        lifecycleOwner.lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onDestroy(owner: LifecycleOwner) = suggestionPopup.dismiss()
+        })
+
+        adapter = SearchAdapter(
             onSongClick = ::playFromResults,
             onAddToQueue = { song -> playerViewModel.addToQueue(song) },
             onAddToPlaylist = ::showAddToPlaylist,
@@ -147,12 +182,31 @@ class SearchBarController(
         // Tocar cualquier punto de la píldora (o la propia caja) expande el buscador y le da el
         // foco; la flecha/lupa de la izquierda, en cambio, colapsa cuando ya está expandido.
         searchInput.setOnClickListener { expand() }
-        searchInput.setOnFocusChangeListener { _, hasFocus -> if (hasFocus) expand() }
+        searchInput.setOnFocusChangeListener { _, hasFocus ->
+            if (hasFocus) {
+                expand()
+                lastHandledSql = null
+                if (sqlMode) updateSuggestions()
+            } else if (sqlMode) {
+                // Perder el foco es el momento en que se ejecuta el comando.
+                suggestionPopup.dismiss()
+                executeSql()
+            }
+        }
+        searchInput.setOnEditorActionListener { _, actionId, _ ->
+            if (sqlMode && actionId == EditorInfo.IME_ACTION_SEARCH) {
+                suggestionPopup.dismiss()
+                hideKeyboard()
+                executeSql()
+                true
+            } else false
+        }
         searchLeadingIcon.setOnClickListener { if (expanded) collapse() else expand() }
+        btnSearchSql.setOnClickListener { setSqlMode(!sqlMode) }
 
         searchInput.doAfterTextChanged { text ->
             val query = text?.toString().orEmpty()
-            viewModel.setQuery(query)
+            if (sqlMode) updateSuggestions() else viewModel.setQuery(query)
             btnSearchClear.isVisible = query.isNotEmpty()
         }
         btnSearchClear.setOnClickListener {
@@ -163,14 +217,21 @@ class SearchBarController(
         lifecycleOwner.lifecycleScope.launch {
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
+                    viewModel.results.collect { results ->
+                        if (sqlMode) return@collect
+                        adapter.submit(results)
+                        showEmptyMessage(results.isEmpty())
+                    }
+                }
+                launch { viewModel.sqlOutcome.collect { if (sqlMode) renderSql() } }
+                launch { viewModel.sqlSchema.collect { if (sqlMode) updateSuggestions() } }
+                launch {
                     // Ver el comentario de CoverArt.revision: los resultados salen de las mismas
-                    // listas de Canciones/Álbumes/Artistas, así que sufren la misma
-                    // laguna si solo cambia una carátula reutilizando su nombre de archivo.
-                    combine(viewModel.results, CoverArt.revision) { results, _ -> results }
-                        .collect { results ->
-                            adapter.submit(results)
-                            showEmptyMessage(results.isEmpty())
-                        }
+                    // listas de Canciones/Álbumes/Artistas, así que sufren la misma laguna si solo
+                    // cambia una carátula reutilizando su nombre de archivo. Va aparte de los
+                    // resultados porque el adaptador ahora compara listas (DiffUtil): reenviarle la
+                    // misma lista no repintaría nada.
+                    CoverArt.revision.collect { adapter.refreshCovers() }
                 }
                 // Los títulos de sección y la barra de scroll van con el color de la canción que
                 // suena, como en las pestañas.
@@ -178,6 +239,7 @@ class SearchBarController(
                     playerViewModel.accentColor.collect { accent ->
                         adapter.setAccent(accent)
                         scrollbar.setAccentColor(accent)
+                        updateSqlToggleColor()
                     }
                 }
             }
@@ -195,6 +257,8 @@ class SearchBarController(
         btnSort.visibility = View.GONE
         searchLeadingIcon.setImageResource(R.drawable.ic_arrow_back)
         searchLeadingIcon.contentDescription = activity.getString(R.string.search_back)
+        btnSearchSql.visibility = View.VISIBLE
+        updateSqlToggleColor()
 
         TransitionManager.beginDelayedTransition(contentArea, AutoTransition().setDuration(ANIM_DURATION_MS))
         browseContent.visibility = View.GONE
@@ -208,6 +272,10 @@ class SearchBarController(
         if (!expanded) return
         expanded = false
         backCallback.isEnabled = false
+
+        // Antes de soltar el foco: si no, el modo SQL intentaría ejecutar lo que hubiera escrito.
+        setSqlMode(false)
+        btnSearchSql.visibility = View.GONE
 
         hideKeyboard()
         searchInput.clearFocus()
@@ -229,11 +297,128 @@ class SearchBarController(
     private fun showEmptyMessage(noResults: Boolean) {
         emptyView.isVisible = noResults
         if (!noResults) return
+        emptyView.setTextColor(activity.getColor(R.color.um_on_surface_muted))
 
         val query = viewModel.query.value.trim()
         emptyView.text =
             if (query.isEmpty()) activity.getString(R.string.search_prompt)
             else activity.getString(R.string.search_no_results, query)
+    }
+
+    // ------------------------------------------------------------------ modo SQL
+
+    private fun setSqlMode(on: Boolean) {
+        if (sqlMode == on) return
+        sqlMode = on
+        suggestionPopup.dismiss()
+        lastHandledSql = null
+        viewModel.clearSql()
+        viewModel.setQuery("")
+        searchInput.setText("")
+        searchInput.setHint(if (on) R.string.sql_hint else R.string.search_hint)
+        updateSqlToggleColor()
+        if (on) viewModel.loadSqlSchema()
+        if (expanded) {
+            if (on) renderSql() else {
+                adapter.submit(viewModel.results.value)
+                showEmptyMessage(viewModel.results.value.isEmpty())
+            }
+        }
+        if (on) updateSuggestions()
+    }
+
+    /** Activo = color dinámico; apagado = gris apagado. */
+    private fun updateSqlToggleColor() {
+        btnSearchSql.setTextColor(
+            if (sqlMode) playerViewModel.accentColor.value else activity.getColor(R.color.um_on_surface_muted)
+        )
+    }
+
+    /** Pinta el resultado del último comando (o la ayuda si todavía no hay ninguno). */
+    private fun renderSql() {
+        val muted = activity.getColor(R.color.um_on_surface_muted)
+        when (val outcome = viewModel.sqlOutcome.value) {
+            is SqlOutcome.Rows -> {
+                adapter.submit(outcome.rows)
+                emptyView.isVisible = false
+            }
+            is SqlOutcome.Done -> showSqlText(outcome.message, muted)
+            is SqlOutcome.Error -> showSqlText(outcome.message, activity.getColor(R.color.um_error))
+            null -> showSqlText(activity.getString(R.string.sql_help), muted)
+        }
+    }
+
+    private fun showSqlText(text: String, color: Int) {
+        adapter.submit(emptyList())
+        emptyView.text = text
+        emptyView.setTextColor(color)
+        emptyView.isVisible = true
+    }
+
+    /** Clasifica el comando escrito y lo ejecuta, pide confirmación o muestra por qué no vale. */
+    private fun executeSql() {
+        val sql = searchInput.text.toString()
+        if (sql.isBlank() || sql == lastHandledSql) return
+        lastHandledSql = sql
+
+        when (val plan = SqlConsole.plan(sql)) {
+            is SqlPlan.Invalid -> viewModel.showSqlError(
+                if (plan.arg != null) activity.getString(plan.messageRes, plan.arg) else activity.getString(plan.messageRes)
+            )
+            SqlPlan.ReadOnly -> viewModel.runSql(sql)
+            is SqlPlan.Write -> {
+                val message = activity.getString(plan.explanation) + "\n\n" +
+                    activity.getString(R.string.sql_confirm_command) + "\n" + sql.trim()
+                val dialog = AlertDialog.Builder(activity)
+                    .setTitle(R.string.sql_confirm_title)
+                    .setMessage(message)
+                    .setNegativeButton(R.string.dialog_cancel, null)
+                    .setPositiveButton(R.string.sql_confirm_run) { _, _ -> viewModel.runSql(sql) }
+                    .show()
+                AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+            }
+        }
+    }
+
+    /** Recalcula y enseña (o esconde) el desplegable según lo escrito hasta el cursor. */
+    private fun updateSuggestions() {
+        if (!sqlMode || !expanded || !searchInput.hasFocus()) {
+            suggestionPopup.dismiss()
+            return
+        }
+        val text = searchInput.text.toString()
+        val cursor = searchInput.selectionStart.let { if (it < 0) text.length else it.coerceAtMost(text.length) }
+        suggestions = SqlConsole.suggest(text.substring(0, cursor), viewModel.sqlSchema.value)
+        if (suggestions.options.isEmpty()) {
+            suggestionPopup.dismiss()
+            return
+        }
+        suggestionPopup.setAdapter(SuggestionAdapter(suggestions.options))
+        suggestionPopup.show()
+    }
+
+    private fun applySuggestion(position: Int) {
+        val option = suggestions.options.getOrNull(position) ?: return
+        val editable = searchInput.text ?: return
+        val cursor = searchInput.selectionStart.let { if (it < 0) editable.length else it }
+        val start = suggestions.replaceStart.coerceAtMost(cursor)
+        editable.replace(start, cursor, option.text + if (option.text.endsWith("(")) "" else " ")
+    }
+
+    private inner class SuggestionAdapter(private val options: List<SqlConsole.Suggestion>) : BaseAdapter() {
+        override fun getCount() = options.size
+        override fun getItem(position: Int) = options[position]
+        override fun getItemId(position: Int) = position.toLong()
+        override fun getView(position: Int, convertView: View?, parent: ViewGroup): View {
+            val view = convertView ?: LayoutInflater.from(parent.context).inflate(R.layout.item_sql_suggestion, parent, false)
+            val option = options[position]
+            view.findViewById<TextView>(R.id.suggestionText).text = option.text
+            view.findViewById<TextView>(R.id.suggestionHint).apply {
+                text = option.hint.orEmpty()
+                isVisible = option.hint != null
+            }
+            return view
+        }
     }
 
     /**

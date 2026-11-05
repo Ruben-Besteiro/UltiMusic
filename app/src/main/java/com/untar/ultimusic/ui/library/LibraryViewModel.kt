@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /**
  * Alimenta las tres pestañas de agrupación: Álbumes, Artistas y Géneros.
@@ -49,7 +51,7 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
 
     val albums: StateFlow<List<AlbumSummary>> = combine(repository.albums, _albumsSort) { list, option ->
         list.sortedByOption(option)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val artists: StateFlow<List<PersonSummary>> = combine(repository.artists, _artistsSort) { list, option ->
         // "Otros" (ver PersonSummary.OTHERS_ARTIST_ID) siempre va al final, sea cual sea el criterio
@@ -57,11 +59,11 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
         // por número de canciones lo intercale entre los de verdad.
         val (others, real) = list.partition { it.id == PersonSummary.OTHERS_ARTIST_ID }
         real.sortedByOption(option) + others
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     val genres: StateFlow<List<GenreSummary>> = combine(repository.genres, _genresSort) { list, option ->
         list.sortedByOption(option)
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     fun setSort(tab: LibraryTab, option: SortOption) {
         when (tab) {

@@ -53,14 +53,15 @@ class SongCheckboxAdapter(
     fun setChecked(ids: Set<Long>) {
         if (checkedIds == ids) return
         checkedIds = ids
-        notifyDataSetChanged()
+        // Sin notifyDataSetChanged: repinta en el sitio las filas que ya hay, sin rehacer la lista.
+        notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
     }
 
     @SuppressLint("NotifyDataSetChanged")
     fun setAccentColor(color: Int) {
         if (accentColor == color) return
         accentColor = color
-        notifyDataSetChanged()
+        notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
     }
 
     override fun getItemCount(): Int = songs.size

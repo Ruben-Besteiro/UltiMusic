@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Píldora del botón SQL: más clara que la barra de búsqueda (um_surface_variant) pero más oscura
+     que el texto "SQL" (gris apagado o acento). -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <solid android:color="@color/um_sql_toggle_bg" />
+    <corners android:radius="16dp" />
+</shape>

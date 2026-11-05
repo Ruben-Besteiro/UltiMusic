@@ -21,6 +21,29 @@
     <string name="search_clear">Clear text</string>
     <string name="search_prompt">Type to search songs, albums and artists.</string>
     <string name="search_no_results">Nothing found for «%1$s».</string>
+    <string name="sql_toggle">SQL</string>
+    <string name="sql_toggle_description">SQL mode</string>
+    <string name="sql_hint">Enter an SQL command</string>
+    <string name="sql_help">SELECT: queries the database\nINSERT: adds rows to a table\nUPDATE: changes rows that already exist\nDELETE: removes rows from a table\nCREATE: creates a table, index or view\nALTER: changes the structure of a table\nDROP: removes a table, index or view\nPRAGMA: reads or adjusts the database\n\nPick an option from the dropdown or type, then tap outside the bar to run.</string>
+    <string name="sql_confirm_title">Run SQL command</string>
+    <string name="sql_confirm_run">Run</string>
+    <string name="sql_confirm_command">Command:</string>
+    <string name="sql_confirm_insert">Rows will be added to UltiMusic\'s internal database.</string>
+    <string name="sql_confirm_update">Rows in UltiMusic\'s internal database will be modified.</string>
+    <string name="sql_confirm_delete">Rows will be deleted from UltiMusic\'s internal database. This cannot be undone.</string>
+    <string name="sql_confirm_create">A new element will be created in the internal database structure.</string>
+    <string name="sql_confirm_alter">A table\'s structure will be changed. If it is one of the app\'s tables, the app may stop working.</string>
+    <string name="sql_confirm_drop">An element of the database structure will be removed. This cannot be undone and the app may stop working.</string>
+    <string name="sql_confirm_other">This command will modify UltiMusic\'s internal database.</string>
+    <string name="sql_error_empty">The command is empty.</string>
+    <string name="sql_error_multi">Only one command at a time is allowed.</string>
+    <string name="sql_error_unknown">\"%1$s\" is not a valid SQL command. Use SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP or PRAGMA.</string>
+    <string name="sql_error_failed">Error: %1$s</string>
+    <string name="sql_rows_header">Rows: %1$d</string>
+    <string name="sql_rows_truncated">Rows: showing the first %1$d</string>
+    <string name="sql_no_rows">The query returned no rows.</string>
+    <string name="sql_done">Command executed.</string>
+    <string name="sql_done_changes">Command executed. Rows affected: %1$d.</string>
 
     <!-- Songs -->
     <string name="shuffle_title">Shuffle</string>
@@ -231,7 +254,6 @@
     <string name="expand_player">Expand player</string>
     <string name="play_pause">Play or pause</string>
     <string name="nothing_playing">Tap anywhere or tap here →</string>
-    <string name="updating_database">Updating local database…</string>
     <string name="updating_database_percent">Updating local database… %d%%</string>
 
     <!-- iPod window -->

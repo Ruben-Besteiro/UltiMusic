@@ -56,14 +56,14 @@ android {
         applicationId = "com.untar.ultimusic"
         minSdk = 24
         targetSdk = 37
-        versionCode = 2
-        versionName = "1.0"
+        versionCode = 8
+        versionName = "1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // Vacío por defecto, y SOLO se rellena en debug (ver buildTypes). Así el token del
         // desarrollador no puede acabar dentro de un APK publicado: ver el comentario del bloque
-        // `release` sobre por qué eso importa tanto.
+        // `release` sobre por qué eso importa tanto.+
         buildConfigField("String", "GENIUS_TOKEN", "\"\"")
         // Mismo motivo que GENIUS_TOKEN de aquí arriba: vacío salvo en debug.
         buildConfigField("String", "YOUTUBE_API_KEY", "\"\"")
@@ -91,6 +91,10 @@ android {
             // justo el problema que se quería resolver. Al no declararse aquí, hereda la cadena
             // vacía de `defaultConfig` y el token ni siquiera existe dentro del binario.
             isMinifyEnabled = false
+            // Empaqueta en el AAB los símbolos de las librerías nativas de las dependencias, para
+            // que Play Console pueda leer los fallos/ANR que ocurran en código nativo (quita la
+            // advertencia de "símbolos de depuración").
+            ndk { debugSymbolLevel = "SYMBOL_TABLE" }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

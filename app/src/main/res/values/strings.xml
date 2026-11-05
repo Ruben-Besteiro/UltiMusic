@@ -23,6 +23,29 @@
     <string name="search_clear">Borrar lo escrito</string>
     <string name="search_prompt">Escribe para buscar canciones, álbumes y artistas.</string>
     <string name="search_no_results">No se ha encontrado nada para «%1$s».</string>
+    <string name="sql_toggle">SQL</string>
+    <string name="sql_toggle_description">Modo SQL</string>
+    <string name="sql_hint">Introduce un comando SQL</string>
+    <string name="sql_help">SELECT: consulta la base de datos\nINSERT: añade filas a una tabla\nUPDATE: modifica filas que ya existen\nDELETE: borra filas de una tabla\nCREATE: crea una tabla, un índice o una vista\nALTER: cambia la estructura de una tabla\nDROP: elimina una tabla, un índice o una vista\nPRAGMA: consulta o ajusta la base de datos\n\nElige una opción del desplegable o escribe, y toca fuera de la barra para ejecutar.</string>
+    <string name="sql_confirm_title">Ejecutar comando SQL</string>
+    <string name="sql_confirm_run">Ejecutar</string>
+    <string name="sql_confirm_command">Comando:</string>
+    <string name="sql_confirm_insert">Se añadirán filas a la base de datos interna de UltiMusic.</string>
+    <string name="sql_confirm_update">Se modificarán filas de la base de datos interna de UltiMusic.</string>
+    <string name="sql_confirm_delete">Se borrarán filas de la base de datos interna de UltiMusic. No se puede deshacer.</string>
+    <string name="sql_confirm_create">Se creará un elemento nuevo en la estructura de la base de datos interna.</string>
+    <string name="sql_confirm_alter">Se cambiará la estructura de una tabla. Si es una de las tablas de la app, esta podría dejar de funcionar.</string>
+    <string name="sql_confirm_drop">Se eliminará un elemento de la estructura de la base de datos. No se puede deshacer y la app podría dejar de funcionar.</string>
+    <string name="sql_confirm_other">Este comando modificará la base de datos interna de UltiMusic.</string>
+    <string name="sql_error_empty">El comando está vacío.</string>
+    <string name="sql_error_multi">Solo se permite un comando a la vez.</string>
+    <string name="sql_error_unknown">«%1$s» no es un comando SQL válido. Usa SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP o PRAGMA.</string>
+    <string name="sql_error_failed">Error: %1$s</string>
+    <string name="sql_rows_header">Filas: %1$d</string>
+    <string name="sql_rows_truncated">Filas: mostrando las primeras %1$d</string>
+    <string name="sql_no_rows">La consulta no ha devuelto filas.</string>
+    <string name="sql_done">Comando ejecutado.</string>
+    <string name="sql_done_changes">Comando ejecutado. Filas afectadas: %1$d.</string>
 
     <!-- Canciones -->
     <string name="shuffle_title">Escoger al azar</string>
@@ -302,7 +325,6 @@
     <string name="expand_player">Expandir reproductor</string>
     <string name="play_pause">Reproducir o pausar</string>
     <string name="nothing_playing">Toca donde quieras o dale aquí →</string>
-    <string name="updating_database">Actualizando base de datos local…</string>
     <string name="updating_database_percent">Actualizando base de datos local… %d%%</string>
 
     <!-- Ventana del iPod -->

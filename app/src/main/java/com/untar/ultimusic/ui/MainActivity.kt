@@ -534,6 +534,8 @@ class MainActivity : AppCompatActivity() {
             searchLeadingIcon = findViewById<ImageView>(R.id.searchLeadingIcon),
             searchInput = findViewById<EditText>(R.id.searchInput),
             btnSearchClear = findViewById(R.id.btnSearchClear),
+            btnSearchSql = findViewById<TextView>(R.id.btnSearchSql),
+            searchBar = findViewById(R.id.searchBar),
             contentArea = findViewById<ViewGroup>(R.id.contentArea),
             browseContent = findViewById(R.id.browseContent),
             searchResultsContainer = findViewById(R.id.searchResultsContainer),

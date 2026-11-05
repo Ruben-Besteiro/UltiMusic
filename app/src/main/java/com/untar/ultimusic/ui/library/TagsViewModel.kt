@@ -24,6 +24,8 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /**
  * Alimenta la pestaña de Etiquetas. Vive en el ámbito de la ACTIVIDAD (`by activityViewModels()`),
@@ -91,7 +93,7 @@ class TagsViewModel(app: Application) : AndroidViewModel(app) {
     val tags: StateFlow<List<TagSummary>> =
         combine(repository.tagSummaries(filenamesInAnyPlaylist), _sort) { list, option ->
             list.sortedByOption(option)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+        }.flowOn(Dispatchers.Default).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** [tags] sin las predefinidas/automáticas vacías (ver [showsWhenEmpty]): esto es lo que pinta de
      *  verdad la pestaña Etiquetas (TagsFragment), tanto la lista como las letras de la barra de

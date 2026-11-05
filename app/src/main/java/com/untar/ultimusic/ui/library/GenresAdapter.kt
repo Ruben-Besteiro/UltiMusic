@@ -5,6 +5,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
+import com.untar.ultimusic.ui.common.DiffedList
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.GenreSummary
 
@@ -18,12 +19,10 @@ class GenresAdapter(
     private val onGenreClick: (GenreSummary) -> Unit
 ) : RecyclerView.Adapter<GenresAdapter.GenreViewHolder>() {
 
-    private var genres: List<GenreSummary> = emptyList()
+    /** Ver [DiffedList]: solo se repintan las filas que cambian de verdad. */
+    private val genres = DiffedList<GenreSummary>(this) { it.name }
 
-    fun submit(list: List<GenreSummary>) {
-        genres = list
-        notifyDataSetChanged()
-    }
+    fun submit(list: List<GenreSummary>) = genres.submit(list)
 
     override fun getItemCount(): Int = genres.size
 

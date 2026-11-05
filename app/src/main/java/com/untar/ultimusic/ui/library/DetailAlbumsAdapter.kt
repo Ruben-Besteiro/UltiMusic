@@ -7,6 +7,7 @@ import android.widget.TextView
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
+import com.untar.ultimusic.ui.common.DiffedList
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.util.CoverArt
@@ -21,12 +22,10 @@ class DetailAlbumsAdapter(
     private val onAlbumClick: (AlbumSummary) -> Unit
 ) : RecyclerView.Adapter<DetailAlbumsAdapter.AlbumViewHolder>() {
 
-    private var albums: List<AlbumSummary> = emptyList()
+    /** Ver [DiffedList]: solo se repintan las filas que cambian de verdad. */
+    private val albums = DiffedList<AlbumSummary>(this) { it.id }
 
-    fun submit(list: List<AlbumSummary>) {
-        albums = list
-        notifyDataSetChanged()
-    }
+    fun submit(list: List<AlbumSummary>) = albums.submit(list)
 
     override fun getItemCount(): Int = albums.size
 

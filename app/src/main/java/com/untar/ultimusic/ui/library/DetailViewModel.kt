@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.io.File
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.flowOn
 
 /** Qué se está mirando en la ficha de detalle. */
 enum class DetailKind { ALBUM, ARTIST }
@@ -140,7 +142,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
                 DetailKind.ALBUM -> repository.albumTracks(t.second)
                 DetailKind.ARTIST -> combine(repository.artistSongs(t.second), songsSort) { list, sort ->
                     list.sortedByOption(sort)
-                }
+                }.flowOn(Dispatchers.Default)
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())

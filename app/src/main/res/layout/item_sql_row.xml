@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Fila de resultado del modo SQL (columna = valor, una por línea) o su cabecera con el nº de filas. -->
+<TextView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/sqlRowText"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fontFamily="monospace"
+    android:paddingHorizontal="16dp"
+    android:paddingVertical="8dp"
+    android:textColor="@color/um_on_background"
+    android:textSize="13sp"
+    tools:text="id = 1\ntitle = Canción" />

@@ -80,8 +80,14 @@ object CoverArt {
 
     /** Ver [revision]. Lo llama cada editor justo después de guardar. */
     fun touch() {
+        imagesDirCache = null
         _revision.value++
     }
+
+    /** Ver [imagesDocPath]: árbol `UltiMusic` concedido -> docPath de su carpeta `images` (o null si
+     *  todavía no existe). */
+    @Volatile
+    private var imagesDirCache: Pair<String, String?>? = null
 
     /**
      * docPath de `UltiMusic/images` (ver [com.untar.ultimusic.util.SafStorage]), donde viven TODAS
@@ -99,12 +105,22 @@ object CoverArt {
     fun imagesDocPath(context: Context, createIfMissing: Boolean = false): String? {
         SafStorage.ensureUltiMusicRegistered(context)
         val treeUri = SafStorage.ultiMusicTreeUri(context) ?: return null
+        val treeKey = treeUri.toString()
+        // Se llama desde CoverArt.cover en CADA bind de cada fila con imagen propia, en el hilo
+        // principal: sin esta caché era un listado IPC de la carpeta UltiMusic por fila. Se
+        // recuerda por árbol concedido (si el usuario cambia de carpeta, se vuelve a buscar) y se
+        // olvida en [touch].
+        imagesDirCache?.let { (key, dir) ->
+            if (key == treeKey && (dir != null || !createIfMissing)) return dir
+        }
         val root = SafStorage.ultiMusicDocPath(context) ?: return null
-        return if (createIfMissing) {
+        val dir = if (createIfMissing) {
             SafStorage.getOrCreateSubfolder(context, treeUri, root, "images")
         } else {
-            "$root/images".takeIf { SafStorage.exists(context, it) }
+            SafStorage.findSubfolder(context, treeUri, root, "images")
         }
+        imagesDirCache = treeKey to dir
+        return dir
     }
 
     /** URI abrible de una imagen ya guardada en `UltiMusic/images` por su nombre, o null si no existe
@@ -212,10 +228,25 @@ class AudioCoverFetcher(
     private val options: Options
 ) : Fetcher {
 
+    /**
+     * Lanza en vez de devolver `null` cuando no hay ni arte embebido ni miniatura: en el
+     * vocabulario de Coil, un [Fetcher.fetch] que devuelve `null` NO significa "no hay imagen, pinta
+     * el error" -significa "este fetcher declina, prueba el SIGUIENTE fetcher registrado para este
+     * mismo tipo de dato" (ver [coil.intercept.EngineInterceptor.fetch], que sigue buscando con
+     * `searchIndex + 1`)-. Como [AudioCover] no tiene ningún otro `Fetcher.Factory` registrado
+     * detrás del nuestro (ver [CoverLoader]), esa búsqueda se quedaba sin candidatos y Coil lanzaba
+     * `IllegalStateException: Unable to create a fetcher that supports: ...` para CUALQUIER canción
+     * sin carátula propia, sin arte embebido y sin miniatura de YouTube -el caso más común de
+     * todos-, en vez de mostrar limpiamente el recuadro de reserva. Lanzar aquí SÍ hace lo que se
+     * quería: la excepción sube tal cual por [coil.intercept.EngineInterceptor.intercept] y se
+     * convierte en un `ErrorResult` de verdad, que es lo que dispara `.error(cover_placeholder)`.
+     */
+    private class NoEmbeddedArt : Exception()
+
     override suspend fun fetch(): FetchResult? {
         val bytes = file?.let { extractEmbeddedArt(options.context, it) }
             ?: fallbackThumbnail?.let { readBytesFromUri(options.context, it) }
-            ?: return null
+            ?: throw NoEmbeddedArt()
         return SourceResult(
             source = ImageSource(
                 source = Buffer().apply { write(bytes) },
@@ -272,6 +303,11 @@ class GroupCoverFetcher(
     private val options: Options
 ) : Fetcher {
 
+    /** Ver [AudioCoverFetcher.NoEmbeddedArt]: mismo motivo, mismo arreglo. Sin collage ni carátula
+     *  de ninguna candidata, hay que LANZAR (no devolver `null`) para que Coil pinte el recuadro de
+     *  reserva en vez de decir que no encuentra fetcher para [GroupCoverSource]. */
+    private class NoCollage : Exception()
+
     override suspend fun fetch(): FetchResult? {
         val context = options.context
         val dao = UltiMusicDatabase.get(context).libraryDao()
@@ -293,7 +329,7 @@ class GroupCoverFetcher(
             composeCollage(distinctCovers.take(side * side), side, targetPx)
         } else {
             distinctCovers.firstOrNull()?.let { decodeSampled(it, targetPx) }
-        } ?: return null
+        } ?: throw NoCollage()
 
         return DrawableResult(
             drawable = BitmapDrawable(context.resources, bitmap),
@@ -386,7 +422,9 @@ private const val DEFAULT_COLLAGE_SIDE_PX = 512
 private const val MIN_COLLAGE_SIDE_PX = 64
 
 /**
- * Claves de caché de Coil que incluyen la fecha de modificación del archivo.
+ * Claves de caché de Coil que incluyen la versión del contenido del archivo (ver
+ * [SafStorage.contentVersion]; antes era su fecha de modificación, que costaba una consulta IPC en el
+ * hilo principal por cada bind).
  *
  * El editor de metadatos reutiliza el MISMO nombre de archivo al reemplazar una carátula (ver
  * [LibraryRepository.importCoverImage][com.untar.ultimusic.data.LibraryRepository.importCoverImage]):
@@ -397,7 +435,7 @@ private const val MIN_COLLAGE_SIDE_PX = 64
  */
 class CoverFileKeyer : Keyer<Uri> {
     override fun key(data: Uri, options: Options): String =
-        "$data:${SafStorage.lastModifiedOfUri(options.context, data)}"
+        "$data:${SafStorage.contentVersion(data)}"
 }
 
 /** Ídem que [CoverFileKeyer] pero para [AudioCover]: incluye la fecha de modificación tanto del
@@ -406,8 +444,8 @@ class AudioCoverKeyer : Keyer<AudioCover> {
     override fun key(data: AudioCover, options: Options): String {
         val file = data.file
         val thumbnail = data.fallbackThumbnail
-        return "$file:${file?.let { SafStorage.lastModifiedOfUri(options.context, it) } ?: 0}:" +
-            "$thumbnail:${thumbnail?.let { SafStorage.lastModifiedOfUri(options.context, it) } ?: 0}"
+        return "$file:${file?.let { SafStorage.contentVersion(it) } ?: 0}:" +
+            "$thumbnail:${thumbnail?.let { SafStorage.contentVersion(it) } ?: 0}"
     }
 }
 

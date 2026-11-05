@@ -98,7 +98,13 @@ fun <T : SortableLibraryItem> List<T>.sortedByOption(option: SortOption): List<T
 private fun <T, R : Comparable<R>> List<T>.sortedByField(
     direction: SortDirection,
     selector: (T) -> R
-): List<T> = if (direction == SortDirection.ASCENDING) sortedBy(selector) else sortedByDescending(selector)
+): List<T> {
+    // La clave se calcula UNA vez por elemento, no en cada comparación: con `sortedBy(selector)` a
+    // pelo, `sortName.lowercase()` se repetía (y reservaba un String nuevo) O(n log n) veces.
+    val keyed = map { it to selector(it) }
+    val sorted = if (direction == SortDirection.ASCENDING) keyed.sortedBy { it.second } else keyed.sortedByDescending { it.second }
+    return sorted.map { it.first }
+}
 
 /** Como [sortedByField] pero para un campo que puede faltar ([Comparable]? ): lo ausente se manda
  *  siempre al final, en las dos direcciones (ver el porqué en el javadoc de la clase), ordenado por
@@ -109,10 +115,6 @@ private fun <T, R : Comparable<R>> List<T>.sortedByNullableField(
     missingSortKey: (T) -> String
 ): List<T> {
     val (withValue, withoutValue) = partition { selector(it) != null }
-    val sorted = if (direction == SortDirection.ASCENDING) {
-        withValue.sortedBy(selector)
-    } else {
-        withValue.sortedByDescending(selector)
-    }
-    return sorted + withoutValue.sortedBy(missingSortKey)
+    val sorted = withValue.sortedByField(direction) { selector(it)!! }
+    return sorted + withoutValue.sortedByField(SortDirection.ASCENDING, missingSortKey)
 }

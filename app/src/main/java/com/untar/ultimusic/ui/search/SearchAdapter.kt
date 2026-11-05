@@ -1,6 +1,5 @@
 package com.untar.ultimusic.ui.search
 
-import android.annotation.SuppressLint
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -9,6 +8,8 @@ import android.widget.ImageView
 import android.widget.PopupMenu
 import android.widget.TextView
 import androidx.annotation.StringRes
+import androidx.recyclerview.widget.AsyncListDiffer
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import coil.load
 import com.google.android.material.imageview.ShapeableImageView
@@ -49,21 +50,33 @@ class SearchAdapter(
     private val onPersonClick: (PersonSummary) -> Unit
 ) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
 
-    private var items: List<SearchResult> = emptyList()
+    /** Diferencias calculadas en segundo plano: al teclear, solo se tocan las filas que entran o
+     *  salen de los resultados, en vez de rehacer la lista entera (y recargar cada carátula) en cada
+     *  letra como hacía el `notifyDataSetChanged` de antes. */
+    private val differ = AsyncListDiffer(this, DIFF)
+
+    private val items: List<SearchResult> get() = differ.currentList
 
     /** Color con el que se pintan los títulos de sección; sigue al de la canción que suena. */
     private var accent: Int = DynamicColor.DEFAULT
 
-    @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<SearchResult>) {
-        items = list
-        notifyDataSetChanged()
+        differ.submitList(list)
     }
 
-    @SuppressLint("NotifyDataSetChanged")
+    /** Solo las cabeceras llevan el acento: ni las canciones ni los álbumes ni las personas cambian. */
     fun setAccent(color: Int) {
+        if (accent == color) return
         accent = color
-        notifyDataSetChanged()
+        items.forEachIndexed { index, item ->
+            if (item is SearchResult.Header || (item is SearchResult.SqlRow && item.isHeader)) notifyItemChanged(index, PAYLOAD_REBIND)
+        }
+    }
+
+    /** Ver [com.untar.ultimusic.util.CoverArt.revision]: repinta lo visible para recoger una carátula
+     *  que ha cambiado de contenido sin cambiar de nombre. Con payload para que no haya fundido. */
+    fun refreshCovers() {
+        if (itemCount > 0) notifyItemRangeChanged(0, itemCount, PAYLOAD_REBIND)
     }
 
     override fun getItemCount(): Int = items.size
@@ -78,6 +91,7 @@ class SearchAdapter(
         is SearchResult.SongRow -> TYPE_SONG
         is SearchResult.AlbumRow -> TYPE_ALBUM
         is SearchResult.PersonRow -> TYPE_PERSON
+        is SearchResult.SqlRow -> TYPE_SQL
     }
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
@@ -86,6 +100,7 @@ class SearchAdapter(
             TYPE_HEADER -> HeaderViewHolder(inflater.inflate(R.layout.item_search_header, parent, false))
             TYPE_SONG -> SongViewHolder(inflater.inflate(R.layout.item_song, parent, false))
             TYPE_ALBUM -> AlbumViewHolder(inflater.inflate(R.layout.item_album_row, parent, false))
+            TYPE_SQL -> SqlViewHolder(inflater.inflate(R.layout.item_sql_row, parent, false))
             else -> PersonViewHolder(inflater.inflate(R.layout.item_person, parent, false))
         }
     }
@@ -99,6 +114,17 @@ class SearchAdapter(
             )
             is SearchResult.AlbumRow -> (holder as AlbumViewHolder).bind(item.album, onAlbumClick)
             is SearchResult.PersonRow -> (holder as PersonViewHolder).bind(item.person, onPersonClick)
+            is SearchResult.SqlRow -> (holder as SqlViewHolder).bind(item, accent)
+        }
+    }
+
+    class SqlViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
+        private val text: TextView = itemView.findViewById(R.id.sqlRowText)
+
+        fun bind(row: SearchResult.SqlRow, accent: Int) {
+            text.text = row.text
+            text.setTextColor(if (row.isHeader) accent else text.context.getColor(R.color.um_on_background))
+            text.setTypeface(null, if (row.isHeader) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
     }
 
@@ -221,5 +247,21 @@ class SearchAdapter(
         const val TYPE_SONG = 1
         const val TYPE_ALBUM = 2
         const val TYPE_PERSON = 3
+        const val TYPE_SQL = 4
+
+        val PAYLOAD_REBIND = Any()
+
+        val DIFF = object : DiffUtil.ItemCallback<SearchResult>() {
+            override fun areItemsTheSame(oldItem: SearchResult, newItem: SearchResult): Boolean = when {
+                oldItem is SearchResult.Header && newItem is SearchResult.Header -> oldItem.titleRes == newItem.titleRes
+                oldItem is SearchResult.SongRow && newItem is SearchResult.SongRow -> oldItem.song.id == newItem.song.id
+                oldItem is SearchResult.AlbumRow && newItem is SearchResult.AlbumRow -> oldItem.album.id == newItem.album.id
+                oldItem is SearchResult.PersonRow && newItem is SearchResult.PersonRow -> oldItem.person.id == newItem.person.id
+                oldItem is SearchResult.SqlRow && newItem is SearchResult.SqlRow -> oldItem.index == newItem.index
+                else -> false
+            }
+
+            override fun areContentsTheSame(oldItem: SearchResult, newItem: SearchResult): Boolean = oldItem == newItem
+        }
     }
 }
