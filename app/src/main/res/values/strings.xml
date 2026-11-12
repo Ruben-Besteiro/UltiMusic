@@ -55,6 +55,8 @@
     <string name="add_to_playlist">Añadir a lista</string>
     <string name="go_to_album">Ir al álbum</string>
     <string name="go_to_artist">Ir al artista</string>
+    <string name="share_song">Compartir</string>
+    <string name="share_song_error">No se puede compartir esta canción</string>
     <string name="delete_song">Eliminar</string>
     <string name="delete_song_confirm">¿Eliminar <b>^1</b> del dispositivo?</string>
     <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
@@ -135,12 +137,15 @@
     <string name="editor_close">Cerrar el editor</string>
     <string name="editor_save">Guardar</string>
     <string name="editor_pick_cover">Elegir portada</string>
+    <string name="editor_remove_cover">Quitar portada</string>
     <string name="editor_saved">Cambios guardados</string>
     <string name="editor_title_required">El título no puede quedar vacío</string>
     <string name="editor_unsaved_changes_title">Cambios sin guardar</string>
     <string name="editor_unsaved_changes_message">Tienes ediciones sin guardar. ¿Seguro que quieres salir?</string>
     <string name="editor_leave">Salir</string>
     <string name="editor_saving_wait">Un momento…</string>
+    <string name="editor_search_lyrics">Buscar la letra</string>
+    <string name="editor_search_video">Buscar el videoclip</string>
     <string name="editor_clear_lyrics">Borrar la letra</string>
     <string name="editor_clear_video_url">Quitar el videoclip</string>
     <!-- Duplica el grupo de campos "Álbum + Nº de disco + Nº de pista" para catalogar la canción en
@@ -305,11 +310,11 @@
     <string name="field_year">Año</string>
     <string name="field_genres">Género(s)</string>
     <string name="field_lyrics">Letra</string>
-    <string name="field_lyrics_hint">Toca para buscarla en lrclib.net</string>
+    <string name="field_lyrics_hint">Escríbela, o toca la lupa para buscarla en lrclib.net</string>
     <string name="field_language">Idioma</string>
     <string name="field_comment">Comentario</string>
     <string name="field_video_url">URL del vídeo</string>
-    <string name="field_video_url_hint">Toca para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo</string>
+    <string name="field_video_url_hint">Pega un enlace, o toca la lupa para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo</string>
     <string name="field_video_url_open">Abrir</string>
     <string name="field_track_number">Nº de pista</string>
     <string name="field_disc_number">Nº de disco</string>
@@ -645,10 +650,11 @@
     <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>
 
     <!-- Permisos -->
-    <string name="permission_needed_title">Elige tu carpeta de música</string>
-    <string name="permission_needed_message">UltiMusic necesita acceso a tu carpeta de música</string>
-    <string name="permission_grant">Elegir carpeta</string>
-    <string name="permission_cancel">Ahora no</string>
+    <string name="permission_needed_title">Acceso requerido</string>
+    <string name="permission_needed_message">Abre el explorador de archivos y selecciona la carpeta UltiMusic para poder utilizar la aplicación.</string>
+    <string name="permission_grant">Abrir explorador</string>
+    <string name="music_folder_prompt_message">Ahora elige tu carpeta de música. Si es UltiMusic, puedes darle a Cancelar.</string>
+    <string name="music_folder_prompt_cancel">Cancelar</string>
     <string name="permission_denied">Sin la carpeta UltiMusic no se pueden mostrar las canciones</string>
 
     <!-- Re-concesión de Download/Music/raíces propias tras la migración a Storage Access Framework

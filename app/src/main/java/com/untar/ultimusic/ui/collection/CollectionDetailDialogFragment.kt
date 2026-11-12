@@ -750,6 +750,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                     R.id.action_add_to_playlist -> { showAddToPlaylistForSelection(selected); true }
                     R.id.action_edit_metadata -> { showMetadataEditorForSelection(selected); true }
                     R.id.action_edit_tags -> { showEditTagsForSelection(selected); true }
+                    R.id.action_share_song -> { viewModel.clearSelection(); com.untar.ultimusic.util.ShareSong.share(requireContext(), selected); true }
                     R.id.action_delete_song -> { showDeleteDialogForSelection(selected); true }
                     else -> false
                 }

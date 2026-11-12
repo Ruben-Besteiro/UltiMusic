@@ -19,6 +19,9 @@
         android:id="@+id/action_edit_tags"
         android:title="@string/edit_tags" />
     <item
+        android:id="@+id/action_share_song"
+        android:title="@string/share_song" />
+    <item
         android:id="@+id/action_delete_song"
         android:title="@string/delete_song" />
 </menu>

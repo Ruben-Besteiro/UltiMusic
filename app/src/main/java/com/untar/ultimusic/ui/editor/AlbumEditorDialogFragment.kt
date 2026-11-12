@@ -181,7 +181,7 @@ class AlbumEditorDialogFragment : DialogFragment() {
                     val defaultStroke = ContextCompat.getColor(requireContext(), R.color.um_divider)
                     playerViewModel.accentColor.collect { accent ->
                         accentColor = accent
-                        AccentTint.fill(view, R.id.btnPickCover, accent)
+                        AccentTint.background(view, R.id.btnPickCover, accent)
                         AccentTint.contentOnAccent(btnPickCover, accent)
                         fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
                         AccentTint.contentOnAccent(fabAutofill, accent)

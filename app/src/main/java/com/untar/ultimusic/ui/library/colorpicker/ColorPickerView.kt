@@ -92,7 +92,7 @@ class ColorPickerView @JvmOverloads constructor(
     private fun publishColor(updateSelectors: Boolean) {
         val color = Color.HSVToColor(hsv)
         updatingProgrammatically = true
-        AccentTint.fill(this, R.id.colorPreview, color)
+        AccentTint.background(this, R.id.colorPreview, color)
         if (updateSelectors) {
             svPicker.hue = hsv[0]
             svPicker.setSaturationValue(hsv[1], hsv[2])
@@ -125,7 +125,7 @@ class ColorPickerView @JvmOverloads constructor(
         svPicker.hue = hsv[0]
         svPicker.setSaturationValue(hsv[1], hsv[2])
         hueSlider.setHue(hsv[0])
-        AccentTint.fill(this, R.id.colorPreview, color)
+        AccentTint.background(this, R.id.colorPreview, color)
         inputR.setText(Color.red(color).toString())
         inputG.setText(Color.green(color).toString())
         inputB.setText(Color.blue(color).toString())

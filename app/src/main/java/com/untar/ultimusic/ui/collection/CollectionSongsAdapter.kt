@@ -219,6 +219,7 @@ class CollectionSongsAdapter(
                             R.id.action_go_to_artist -> { onGoToArtist(song); true }
                             R.id.action_edit_metadata -> { onEditMetadata(song); true }
                             R.id.action_edit_tags -> { onEditTags(song); true }
+                            R.id.action_share_song -> { com.untar.ultimusic.util.ShareSong.share(anchor.context, song); true }
                             R.id.action_delete_song -> { onDeleteSong(song); true }
                             else -> false
                         }

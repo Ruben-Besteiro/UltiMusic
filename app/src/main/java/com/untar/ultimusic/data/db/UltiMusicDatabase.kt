@@ -147,6 +147,10 @@ abstract class UltiMusicDatabase : RoomDatabase() {
     companion object {
         const val DB_NAME = "ultimusic.db"
 
+        /** Copia buena preparada para sustituir a la BD real en el próximo arranque (ver
+         *  [restoreFromBackupIfNeeded]). Vive junto a la BD, en `databases/`, para que el `rename` sea atómico. */
+        const val STAGED_RESTORE_NAME = "ultimusic.restore.db"
+
         @Volatile
         private var instance: UltiMusicDatabase? = null
 
@@ -238,6 +242,17 @@ abstract class UltiMusicDatabase : RoomDatabase() {
          */
         private fun restoreFromBackupIfNeeded(context: Context) {
             val dbFile = context.getDatabasePath(DB_NAME)
+
+            // Restauración en dos tiempos: LibraryRepository.grantUltiMusicRoot deja la copia buena
+            // preparada como STAGED_RESTORE_NAME (la BD real está abierta y no se puede pisar en
+            // caliente) y reinicia el proceso; aquí, con Room todavía sin abrir, entra en su lugar.
+            val staged = File(dbFile.parentFile, STAGED_RESTORE_NAME)
+            if (staged.exists()) {
+                for (suffix in listOf("", "-wal", "-shm")) File(dbFile.path + suffix).delete()
+                if (!staged.renameTo(dbFile)) staged.delete()
+                return
+            }
+
             if (dbFile.exists()) return
 
             SafStorage.refreshRegistry(context)

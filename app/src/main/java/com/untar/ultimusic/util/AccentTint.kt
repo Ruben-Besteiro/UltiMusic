@@ -11,6 +11,7 @@ import androidx.annotation.DimenRes
 import androidx.annotation.IdRes
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
 import androidx.core.widget.ImageViewCompat
 import com.google.android.material.button.MaterialButton
 import com.untar.ultimusic.R
@@ -36,7 +37,6 @@ import com.untar.ultimusic.R
  * `accentColor` de su pantalla.
  */
 object AccentTint {
-
     /**
      * Tiñe iconos ([ImageView] o [android.widget.ImageButton], que es un ImageView) buscándolos por
      * su id dentro de [root].
@@ -79,6 +79,26 @@ object AccentTint {
     fun fill(root: View, @IdRes id: Int, @ColorInt color: Int) {
         val shape = root.findViewById<View>(id)?.background?.mutate() as? GradientDrawable
         shape?.setColor(color)
+    }
+
+    /**
+     * Tiñe el **fondo** de una vista cualquiera que NO sea un botón de Material (un `AppBarLayout`,
+     * un `LinearLayout`, un `TextView`...). Es el equivalente en código de `android:backgroundTint`.
+     *
+     * Úsalo cuando el amarillo del XML venga de un `android:backgroundTint`: ese tinte es un filtro
+     * que se aplica POR ENCIMA del drawable, así que [fill] (que cambia el `<solid>` de dentro) no
+     * se vería nunca. El tinte conserva el alfa del drawable, de modo que un degradado
+     * semitransparente sigue siéndolo pero con el color nuevo.
+     *
+     * Requiere que la vista tenga ya un `android:background`. Para `MaterialButton`, FAB o `Chip`
+     * hay que usar su propia propiedad (`backgroundTintList`, `strokeColor`...), porque gestionan su
+     * fondo por su cuenta.
+     *
+     * Quien llama decide el color: para un `um_yellow_dark` hay que pasar `DynamicColor.dim(accent)`.
+     */
+    fun background(root: View, @IdRes id: Int, @ColorInt color: Int) {
+        val view = root.findViewById<View>(id) ?: return
+        ViewCompat.setBackgroundTintList(view, ColorStateList.valueOf(color))
     }
 
     /**
