@@ -5,7 +5,9 @@
     android:id="@+id/ipodRoot"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/um_background">
+    android:background="@color/um_background"
+    xmlns:tools="http://schemas.android.com/tools"
+    tools:device="spec:width=411dp,height=914dp,dpi=420">
 
     <!-- Cuerpo del iPod -->
     <LinearLayout
@@ -25,7 +27,7 @@
             <ImageButton
                 android:id="@+id/btnClose"
                 android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_height="30dp"
                 android:layout_gravity="start|center_vertical"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/ipod_close"
@@ -44,7 +46,7 @@
             <ImageButton
                 android:id="@+id/btnVideo"
                 android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_height="30dp"
                 android:layout_gravity="end|center_vertical"
                 android:background="?attr/selectableItemBackgroundBorderless"
                 android:contentDescription="@string/ipod_toggle_video"
@@ -57,7 +59,7 @@
             android:id="@+id/topBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="14dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/ipod_display"
             android:padding="5dp">
 
@@ -163,12 +165,12 @@
             android:id="@+id/infoBox"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/ipod_info_box"
             android:gravity="center_vertical"
             android:minHeight="@dimen/ipod_info_box_min_height"
             android:orientation="vertical"
-            android:paddingHorizontal="12dp">
+            android:paddingHorizontal="8dp">
 
             <TextView
                 android:id="@+id/tvTitle"
@@ -202,7 +204,7 @@
             android:id="@+id/positionRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
@@ -217,18 +219,18 @@
                 android:id="@+id/ipodProgress"
                 android:layout_width="0dp"
                 android:layout_height="16dp"
-                android:paddingStart="0dp"
-                android:paddingEnd="0dp"
                 android:layout_marginHorizontal="4dp"
                 android:layout_weight="1"
-                android:max="1000"
-                android:progress="0"
-                android:progressDrawable="@drawable/seekbar_line"
-                android:progressBackgroundTint="@color/um_divider"
-                android:progressTint="@color/um_yellow"
-                android:thumb="@null"
                 android:background="@null"
-                android:splitTrack="false" />
+                android:max="1000"
+                android:paddingStart="0dp"
+                android:paddingEnd="0dp"
+                android:progress="0"
+                android:progressBackgroundTint="@color/um_divider"
+                android:progressDrawable="@drawable/seekbar_line"
+                android:progressTint="@color/um_yellow"
+                android:splitTrack="false"
+                android:thumb="@null" />
 
             <TextView
                 android:id="@+id/tvDuration"
@@ -248,7 +250,7 @@
             android:id="@+id/buttonRow"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
+            android:layout_marginTop="8dp"
             android:background="@drawable/ipod_button_row"
             android:orientation="horizontal"
             android:paddingVertical="10dp">
@@ -264,8 +266,8 @@
                     android:layout_height="52dp"
                     android:layout_gravity="center"
                     android:background="@drawable/ipod_round_button"
-                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:contentDescription="@string/ipod_prev"
+                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_skip_previous"
                     app:tint="@color/um_yellow" />
@@ -282,8 +284,8 @@
                     android:layout_height="52dp"
                     android:layout_gravity="center"
                     android:background="@drawable/ipod_round_button"
-                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:contentDescription="@string/ipod_toggle_view"
+                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_menu"
                     app:tint="@color/um_yellow" />
@@ -306,8 +308,8 @@
                     android:layout_height="52dp"
                     android:layout_gravity="center"
                     android:background="@drawable/ipod_round_button"
-                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:contentDescription="@string/play_pause"
+                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_play"
                     app:tint="@color/um_yellow" />
@@ -324,8 +326,8 @@
                     android:layout_height="52dp"
                     android:layout_gravity="center"
                     android:background="@drawable/ipod_round_button"
-                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:contentDescription="@string/song_more"
+                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_more_vert"
                     app:tint="@color/um_yellow" />
@@ -342,8 +344,8 @@
                     android:layout_height="52dp"
                     android:layout_gravity="center"
                     android:background="@drawable/ipod_round_button"
-                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:contentDescription="@string/ipod_next"
+                    android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_skip_next"
                     app:tint="@color/um_yellow" />
@@ -359,9 +361,9 @@
             android:id="@+id/lyricsBoxContainer"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_weight="1"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="4dp">
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"
+            android:layout_weight="1">
 
             <!-- Lo rellena IPodDialogFragment.onViewCreated con Song.lyrics, una fila por línea (ver
                  IPodLyricsAdapter); si la canción no tiene letra guardada, una única fila con un
@@ -376,7 +378,7 @@
                 android:layout_height="match_parent"
                 android:background="@drawable/ipod_info_box"
                 android:clipToPadding="false"
-                android:padding="14dp" />
+                android:padding="20dp" />
 
             <!-- Botón superior derecho: la "a" en hiragana que traduce la letra al idioma del
                  sistema (ver IPodDialogFragment/LyricsTranslator). Empieza oculto; solo se muestra
@@ -434,7 +436,7 @@
             android:background="@drawable/ipod_info_box"
             android:gravity="center_vertical"
             android:orientation="horizontal"
-            android:paddingHorizontal="12dp"
+            android:paddingHorizontal="8dp"
             android:visibility="gone">
 
             <com.untar.ultimusic.ui.common.ValueRuler
@@ -448,7 +450,7 @@
                 android:id="@+id/ipodOffsetValue"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="12dp"
+                android:layout_marginStart="8dp"
                 android:background="@null"
                 android:gravity="end"
                 android:imeOptions="actionDone"

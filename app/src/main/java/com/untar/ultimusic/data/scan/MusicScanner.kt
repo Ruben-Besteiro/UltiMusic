@@ -5,7 +5,13 @@ import android.media.MediaMetadataRetriever
 import android.net.Uri
 import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
+import java.util.concurrent.atomic.AtomicInteger
 
 /**
  * Parte de "lectura" de la fonoteca. Fiel a la filosofía "libre de MediaStore": escanea
@@ -21,7 +27,10 @@ object MusicScanner {            // OBJECT = SINGLETON
         "mp3", "flac", "m4a", "aac", "ogg", "oga", "opus", "wav", "wma", "mkv"
     )
 
-    const val UNKNOWN_ARTIST = "Artista desconocido"
+    /** Archivos cuyas etiquetas se leen a la vez en [scan]. */
+    private const val READ_PARALLELISM = 6 // TEMPORAL-BENCH
+
+    const val UNKNOWN_ARTIST ="Artista desconocido"
     const val UNKNOWN_ALBUM = ""
 
     /**
@@ -52,17 +61,31 @@ object MusicScanner {            // OBJECT = SINGLETON
         knownPaths: Set<String> = emptySet(),
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanResult = withContext(Dispatchers.IO) {
+        val tWalk = System.nanoTime() // TEMPORAL-BENCH
         val entries = LinkedHashMap<String, SafStorage.SafEntry>()
         for ((rootDocPath, treeUri) in SafStorage.grantedRoots()) {
             collectAudioFiles(context, treeUri, rootDocPath, entries)
         }
+        android.util.Log.d("UMBench", "walk ${entries.size} files in ${(System.nanoTime() - tWalk) / 1_000_000} ms") // TEMPORAL-BENCH
         val currentPaths = entries.keys.toHashSet()
         val newEntries = entries.values.filter { it.docPath !in knownPaths }
         val total = newEntries.size
-        val newSongs = newEntries.mapIndexedNotNull { index, entry ->
-            onProgress(index + 1, total)
-            readSong(context, entry)
+        // Lectura de etiquetas en paralelo: cada archivo es casi todo espera de E/S (SAF + servicio
+        // de medios), así que varias lecturas a la vez acortan mucho el escaneo inicial. El
+        // semáforo acota la concurrencia; awaitAll conserva el orden original de [newEntries].
+        val t0 = System.nanoTime() // TEMPORAL-BENCH
+        val done = AtomicInteger(0)
+        val gate = Semaphore(READ_PARALLELISM)
+        val newSongs = coroutineScope {
+            newEntries.map { entry ->
+                async {
+                    val song = gate.withPermit { readSong(context, entry) }
+                    onProgress(done.incrementAndGet(), total)
+                    song
+                }
+            }.awaitAll().filterNotNull()
         }
+        android.util.Log.d("UMBench", "read ${newEntries.size} files par=$READ_PARALLELISM in ${(System.nanoTime() - t0) / 1_000_000} ms") // TEMPORAL-BENCH
         ScanResult(newSongs, currentPaths)
     }
 

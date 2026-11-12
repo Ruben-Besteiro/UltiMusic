@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Menú que se abre al tocar la caja de información del iPod (ver IPodDialogFragment.showGoToMenu). -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/action_go_to_album"
+        android:title="@string/go_to_album" />
+    <item
+        android:id="@+id/action_go_to_artist"
+        android:title="@string/go_to_artist" />
+</menu>

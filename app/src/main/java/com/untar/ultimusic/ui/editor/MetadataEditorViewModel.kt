@@ -139,14 +139,14 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
      * Con [NonCancellable] el guardado sigue corriendo hasta el final aunque la pantalla ya se haya
      * cerrado.
      */
-    fun save(form: EditorForm, pickedImage: Uri?) {
+    fun save(form: EditorForm, pickedImage: Uri?, removeCover: Boolean = false) {
         val current = song.value ?: return
         // Se marca ANTES de lanzar la corrutina (no dentro): así, aunque el diálogo intente cerrarse
         // en el mismo instante en que se pulsa "Guardar", ya ve isSaving a true.
         _isSaving.value = true
         viewModelScope.launch {
             withContext(NonCancellable) {
-                val result = writeSong(current, form, pickedImage)
+                val result = writeSong(current, form, pickedImage, removeCover)
                 // Ver CoverArt.revision: sin esto, una carátula que reutiliza el nombre de archivo
                 // de la anterior no cambiaría nada en el Song que sale de Room, y las listas de la
                 // app no se enterarían de que hay una imagen nueva que cargar. SOLO si la carátula
@@ -179,13 +179,13 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
      * [pickedImage] (si lo hay) es la única excepción: una portada elegida en esta sesión se aplica
      * a TODAS las canciones seleccionadas, igual que el resto de campos tocados.
      */
-    fun saveMulti(form: EditorForm, edited: EditedFields, pickedImage: Uri?) {
+    fun saveMulti(form: EditorForm, edited: EditedFields, pickedImage: Uri?, removeCover: Boolean = false) {
         val targets = songs.value
         if (targets.isEmpty()) return
         _isSaving.value = true
         viewModelScope.launch {
             withContext(NonCancellable) {
-                val results = targets.map { current -> writeSong(current, current.mergeUnedited(form, edited), pickedImage) }
+                val results = targets.map { current -> writeSong(current, current.mergeUnedited(form, edited), pickedImage, removeCover) }
                 if (results.any { it.coverChanged }) CoverArt.touch()
                 _savedMulti.value = repository.songsByIds(targets.map { it.id })
                 _isSaving.value = false
@@ -214,18 +214,35 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
      * aunque el usuario ya hubiera pulsado "Guardar". Con [NonCancellable] el guardado sigue
      * corriendo hasta el final aunque la pantalla ya se haya cerrado.
      */
-    private suspend fun writeSong(current: Song, form: EditorForm, pickedImage: Uri?): WriteResult {
-        val titleChanged = form.title != current.title
+    private suspend fun writeSong(
+        current: Song,
+        form: EditorForm,
+        pickedImage: Uri?,
+        removeCover: Boolean
+    ): WriteResult {
+        // Las imágenes se llaman "<artistas> - <título>" (ver CoverArt.imageBaseName): cambiar el
+        // título O los artistas obliga a renombrarlas.
+        val imageBase = CoverArt.imageBaseName(form.artists, form.title)
+        val titleChanged = form.title != current.title ||
+            form.artists != current.artists.map { it.name }
         val videoUrlChanged = form.videoUrl != current.videoUrl
 
         val imageName = when {
             pickedImage != null -> {
-                current.imageName?.let { old -> repository.deleteCoverImage(old) }
-                runCatching { repository.importCoverImage(pickedImage, form.title) }
+                current.imageName?.takeIf { CoverArt.isRealImage(it) }
+                    ?.let { old -> repository.deleteCoverImage(old) }
+                runCatching { repository.importCoverImage(pickedImage, imageBase) }
                     .getOrElse { current.imageName }
             }
-            current.imageName != null && titleChanged ->
-                repository.renameImage(current.imageName, form.title, "", "img")
+            // Quitar la carátula: se borra el archivo propio (si lo hay) y se deja el centinela, que
+            // tapa también el arte embebido/MediaStore y la miniatura de YouTube (ver CoverArt.NO_COVER).
+            removeCover -> {
+                current.imageName?.takeIf { CoverArt.isRealImage(it) }
+                    ?.let { old -> repository.deleteCoverImage(old) }
+                CoverArt.NO_COVER
+            }
+            CoverArt.isRealImage(current.imageName) && titleChanged ->
+                repository.renameImage(current.imageName!!, imageBase, "", "img")
             else -> current.imageName
         }
 
@@ -238,11 +255,11 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
             videoUrlChanged -> {
                 current.videoThumbnailName?.let { repository.deleteVideoThumbnail(it) }
                 val videoId = YouTubeUrl.videoId(form.videoUrl)
-                thumbnailName = videoId?.let { repository.downloadVideoThumbnail(it, form.title) }
+                thumbnailName = videoId?.let { repository.downloadVideoThumbnail(it, imageBase) }
             }
             current.videoThumbnailName != null && titleChanged ->
                 thumbnailName =
-                    repository.renameImage(current.videoThumbnailName, form.title, " (video)", "jpg")
+                    repository.renameImage(current.videoThumbnailName, imageBase, " (video)", "jpg")
         }
 
         val entity = SongEntity(
@@ -298,7 +315,7 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
         // Cualquier cosa que pueda cambiar el CONTENIDO de una imagen bajo el mismo nombre (ver
         // CoverArt.revision): una portada nueva, o una miniatura de vídeo nueva o quitada. Un simple
         // renombrado ya cambia el nombre en el Song, así que se repinta solo sin touch().
-        val coverChanged = pickedImage != null || videoUrlChanged ||
+        val coverChanged = pickedImage != null || removeCover || videoUrlChanged ||
             (form.videoUrl == null && current.videoThumbnailName != null)
         return WriteResult(imageName, thumbnailName, coverChanged)
     }

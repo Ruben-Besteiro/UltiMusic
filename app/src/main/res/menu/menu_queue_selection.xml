@@ -19,6 +19,9 @@
         android:id="@+id/action_remove_from_queue"
         android:title="@string/remove_from_queue" />
     <item
+        android:id="@+id/action_share_song"
+        android:title="@string/share_song" />
+    <item
         android:id="@+id/action_delete_song"
         android:title="@string/delete_song" />
 </menu>

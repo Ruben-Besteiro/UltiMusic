@@ -40,6 +40,8 @@ object SafStorage {
     private const val PREFS_NAME = "saf_storage"
     private const val KEY_ULTIMUSIC_TREE_URI = "ultimusic_tree_uri"
     private const val KEY_OFFERED_LEGACY_RELINK = "offered_legacy_relink"
+    private const val KEY_BACKUP_CHECKED = "backup_checked"
+    private const val KEY_MUSIC_FOLDER_PROMPT = "music_folder_prompt_pending"
     private const val VOLUME_PRIMARY = "primary"
     private const val AUTHORITY_EXTERNAL = "com.android.externalstorage.documents"
 
@@ -68,6 +70,29 @@ object SafStorage {
         takePersistablePermission(context, uri)
         prefs(context).edit().putString(KEY_ULTIMUSIC_TREE_URI, uri.toString()).apply()
         ensureUltiMusicRegistered(context)
+    }
+
+    /**
+     * ¿Ya se decidió, en esta instalación, si la BD interna o la copia de `UltiMusic/databases/` es
+     * la buena? Mientras sea false NO se exporta nada a esa carpeta: una instalación nueva arranca
+     * con una BD vacía (el permiso de `UltiMusic` se revoca al desinstalar, así que la restauración
+     * de [com.untar.ultimusic.data.db.UltiMusicDatabase] no puede dispararse antes de conceder la
+     * carpeta) y exportarla encima destruiría la única copia buena.
+     */
+    fun isBackupChecked(context: Context): Boolean = prefs(context).getBoolean(KEY_BACKUP_CHECKED, false)
+
+    fun markBackupChecked(context: Context) {
+        prefs(context).edit().putBoolean(KEY_BACKUP_CHECKED, true).apply()
+    }
+
+    /** Segundo diálogo del primer arranque ("Ahora elige tu carpeta de música"): pendiente desde que
+     *  se concede `UltiMusic` hasta que se muestra. Vive en prefs porque la restauración de la BD
+     *  reinicia el proceso entre un momento y otro. */
+    fun isMusicFolderPromptPending(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_MUSIC_FOLDER_PROMPT, false)
+
+    fun setMusicFolderPromptPending(context: Context, pending: Boolean) {
+        prefs(context).edit().putBoolean(KEY_MUSIC_FOLDER_PROMPT, pending).apply()
     }
 
     fun takePersistablePermission(context: Context, uri: Uri) {

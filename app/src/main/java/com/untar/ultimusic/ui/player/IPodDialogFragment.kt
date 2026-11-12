@@ -438,7 +438,8 @@ class IPodDialogFragment : DialogFragment() {
             if (lyricLines.isEmpty()) return
             val index = LrcParser.currentIndex(lyricLines, positionMs + lyricsOffsetMs)
             if (lyricsAdapter.setCurrentLine(index) && index >= 0) {
-                lyricsLayoutManager.scrollToPositionWithOffset(index, lyricsBox.height / 2)
+                // Con este offset la línea actual se pone en la posición 2 de 7 (o 5)
+                lyricsLayoutManager.scrollToPositionWithOffset(index, lyricsBox.height / 12)
             }
         }
 
@@ -552,6 +553,14 @@ class IPodDialogFragment : DialogFragment() {
         // verdad ([PlayerViewModel.currentSong]), esté o no la ventana en modo navegación: ahí es
         // donde vive esta canción en pantalla (carátula, título, letra...), así que es la que este
         // botón debe poder editar/encolar/borrar. Sin canción sonando no hay nada que ofrecer.
+        // Tocar la caja de información abre el menú "Ir a" de la canción que suena. Con la cola
+        // visible la caja lleva el aviso/la cuenta de seleccionadas, así que ahí no hace nada.
+        view.findViewById<View>(R.id.infoBox).setOnClickListener { anchor ->
+            if (queueList.isVisible) return@setOnClickListener
+            val song = playerViewModel.currentSong.value ?: return@setOnClickListener
+            showGoToMenu(anchor, song)
+        }
+
         btnSongMenu.setOnClickListener { anchor ->
             val song = playerViewModel.currentSong.value ?: return@setOnClickListener
             showSongMenu(anchor, song)
@@ -1326,6 +1335,31 @@ class IPodDialogFragment : DialogFragment() {
      * sonando, así que solo repite el mismo comportamiento que en Canciones (útil para volver a
      * encolarla más adelante en la cola sin buscarla).
      */
+    private fun showGoToMenu(anchor: View, song: Song) {
+        if (song.album == null && song.artists.isEmpty()) return
+        PopupMenu(anchor.context, anchor).apply {
+            menuInflater.inflate(R.menu.menu_go_to, menu)
+            menu.findItem(R.id.action_go_to_album)?.isVisible = song.album != null
+            menu.findItem(R.id.action_go_to_artist)?.isVisible = song.artists.isNotEmpty()
+            setOnMenuItemClickListener { item ->
+                when (item.itemId) {
+                    R.id.action_go_to_album -> {
+                        song.album?.let { DetailDialogFragment.showAlbum(requireActivity(), it.id) }
+                        true
+                    }
+                    R.id.action_go_to_artist -> {
+                        song.artists.firstOrNull()?.let {
+                            DetailDialogFragment.showArtist(requireActivity(), it.id)
+                        }
+                        true
+                    }
+                    else -> false
+                }
+            }
+            show()
+        }
+    }
+
     private fun showSongMenu(anchor: View, song: Song) {
         PopupMenu(anchor.context, anchor).apply {
             menuInflater.inflate(R.menu.menu_song_item, menu)
@@ -1360,6 +1394,7 @@ class IPodDialogFragment : DialogFragment() {
                         }
                         true
                     }
+                    R.id.action_share_song -> { com.untar.ultimusic.util.ShareSong.share(requireContext(), song); true }
                     R.id.action_delete_song -> { showDeleteSongDialog(song); true }
                     else -> false
                 }
@@ -1422,6 +1457,7 @@ class IPodDialogFragment : DialogFragment() {
                     R.id.action_add_to_playlist -> { showAddToPlaylistForQueueSelection(selected); true }
                     R.id.action_edit_metadata -> { showMetadataEditorForQueueSelection(selected); true }
                     R.id.action_edit_tags -> { showEditTagsForQueueSelection(selected); true }
+                    R.id.action_share_song -> { playerViewModel.clearQueueSelection(); com.untar.ultimusic.util.ShareSong.share(requireContext(), selected); true }
                     R.id.action_delete_song -> { showDeleteDialogForQueueSelection(selected); true }
                     else -> false
                 }

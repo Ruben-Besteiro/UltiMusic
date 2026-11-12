@@ -9,9 +9,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:id="@+id/editorRoot"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/um_background">
-
+    android:layout_height="match_parent" >
     <com.google.android.material.appbar.AppBarLayout
         android:id="@+id/editorAppBar"
         android:layout_width="match_parent"
@@ -23,7 +21,6 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
-            android:background="@drawable/bg_toolbar_scrim"
             app:navigationContentDescription="@string/editor_close"
             app:navigationIcon="@drawable/ic_close"
             app:title="@string/metadata_editor_title"
@@ -68,17 +65,27 @@
                     android:contentDescription="@string/editor_pick_cover"
                     android:src="@drawable/ic_image" />
 
+                <ImageButton
+                    android:id="@+id/btnRemoveCover"
+                    android:layout_width="48dp"
+                    android:layout_height="48dp"
+                    android:layout_gravity="bottom|start"
+                    android:layout_margin="12dp"
+                    android:background="@drawable/bg_circle_button"
+                    android:contentDescription="@string/editor_remove_cover"
+                    android:src="@drawable/ic_delete" />
+
             </com.untar.ultimusic.ui.common.SquareFrameLayout>
 
             <LinearLayout
+                android:id="@+id/smallLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@color/um_surface_variant"
                 android:orientation="vertical"
                 android:paddingStart="16dp"
                 android:paddingTop="8dp"
                 android:paddingEnd="16dp"
-                android:paddingBottom="8dp">
+                android:paddingBottom="8dp" >
 
                 <com.google.android.material.textfield.TextInputLayout
                     style="@style/Widget.UltiMusic.TextField"
@@ -101,12 +108,13 @@
             <!-- ===== Resto de campos siempre visibles: Artista(s) y Productor(es) ===== -->
 
             <LinearLayout
+                android:id="@+id/bigLayout"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
                 android:paddingStart="16dp"
                 android:paddingTop="8dp"
-                android:paddingEnd="16dp">
+                android:paddingEnd="16dp" >
 
                 <com.google.android.material.textfield.TextInputLayout
                     android:id="@+id/layoutArtists"
@@ -114,7 +122,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:hint="@string/field_artists"
-                    app:helperText="@string/multi_value_hint">
+                    app:helperText="@string/multi_value_hint" >
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/inputArtists"
@@ -294,13 +302,25 @@
                                 android:id="@+id/inputLyrics"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:focusable="false"
-                                android:focusableInTouchMode="false"
-                                android:cursorVisible="false"
-                                android:longClickable="false"
-                                android:inputType="textMultiLine"
-                                android:maxLines="10" />
+                                android:gravity="top|start"
+                                android:inputType="textMultiLine|textCapSentences"
+                                android:maxLines="15"
+                                android:overScrollMode="ifContentScrolls"
+                                android:scrollbars="vertical" />
                         </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageButton
+                            android:id="@+id/btnSearchLyrics"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_gravity="top|end"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="36dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/editor_search_lyrics"
+                            android:padding="4dp"
+                            android:src="@drawable/ic_search"
+                            android:tint="@color/um_on_surface_muted" />
 
                         <ImageButton
                             android:id="@+id/btnClearLyrics"
@@ -422,12 +442,23 @@
                                 android:id="@+id/inputVideoUrl"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:focusable="false"
-                                android:focusableInTouchMode="false"
-                                android:cursorVisible="false"
-                                android:longClickable="false"
+                                android:inputType="textUri"
+                                android:paddingEnd="72dp"
                                 android:maxLines="2" />
                         </com.google.android.material.textfield.TextInputLayout>
+
+                        <ImageButton
+                            android:id="@+id/btnSearchVideoUrl"
+                            android:layout_width="32dp"
+                            android:layout_height="32dp"
+                            android:layout_gravity="top|end"
+                            android:layout_marginTop="8dp"
+                            android:layout_marginEnd="36dp"
+                            android:background="?attr/selectableItemBackgroundBorderless"
+                            android:contentDescription="@string/editor_search_video"
+                            android:padding="4dp"
+                            android:src="@drawable/ic_search"
+                            android:tint="@color/um_on_surface_muted" />
 
                         <ImageButton
                             android:id="@+id/btnClearVideoUrl"

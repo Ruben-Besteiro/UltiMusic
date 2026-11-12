@@ -53,6 +53,8 @@
     <string name="add_to_playlist">Add to playlist</string>
     <string name="go_to_album">Go to album</string>
     <string name="go_to_artist">Go to artist</string>
+    <string name="share_song">Share</string>
+    <string name="share_song_error">This song cannot be shared</string>
     <string name="delete_song">Delete</string>
     <string name="delete_song_confirm">Delete <b>^1</b> from the device?</string>
     <string name="delete_album_confirm">Delete the album <b>^1</b> and all its songs from the device?</string>
@@ -119,12 +121,15 @@
     <string name="editor_close">Close the editor</string>
     <string name="editor_save">Save</string>
     <string name="editor_pick_cover">Choose cover</string>
+    <string name="editor_remove_cover">Remove cover</string>
     <string name="editor_saved">Changes saved</string>
     <string name="editor_title_required">The title can\'t be empty</string>
     <string name="editor_unsaved_changes_title">Unsaved changes</string>
     <string name="editor_unsaved_changes_message">You have unsaved edits. Are you sure you want to leave?</string>
     <string name="editor_leave">Leave</string>
     <string name="editor_saving_wait">One moment…</string>
+    <string name="editor_search_lyrics">Search lyrics</string>
+    <string name="editor_search_video">Search music video</string>
     <string name="editor_clear_lyrics">Clear lyrics</string>
     <string name="editor_clear_video_url">Remove video</string>
     <string name="editor_add_another_album">+ Add another album</string>
@@ -234,11 +239,11 @@
     <string name="field_year">Year</string>
     <string name="field_genres">Genre(s)</string>
     <string name="field_lyrics">Lyrics</string>
-    <string name="field_lyrics_hint">Tap to search for it on lrclib.net</string>
+    <string name="field_lyrics_hint">Type it, or tap the magnifier to search for it on lrclib.net</string>
     <string name="field_language">Language</string>
     <string name="field_comment">Comment</string>
     <string name="field_video_url">Video URL</string>
-    <string name="field_video_url_hint">Tap to choose the music video on YouTube. If you leave it empty, the iPod will let you choose it the first time you turn on video mode</string>
+    <string name="field_video_url_hint">Paste a link, or tap the magnifier to choose the music video on YouTube. If you leave it empty, the iPod will let you choose it the first time you turn on video mode</string>
     <string name="field_video_url_open">Open</string>
     <string name="field_track_number">Track No.</string>
     <string name="field_disc_number">Disc No.</string>
@@ -497,10 +502,11 @@
     <string name="folder_picker_empty">This folder has no subfolders</string>
 
     <!-- Permissions -->
-    <string name="permission_needed_title">Choose your music folder</string>
-    <string name="permission_needed_message">UltiMusic needs access to your music folder</string>
-    <string name="permission_grant">Choose folder</string>
-    <string name="permission_cancel">Not now</string>
+    <string name="permission_needed_title">Access required</string>
+    <string name="permission_needed_message">Open the file explorer and select the UltiMusic folder to be able to use the app.</string>
+    <string name="permission_grant">Open explorer</string>
+    <string name="music_folder_prompt_message">Now choose your music folder. If it\'s UltiMusic, you can tap Cancel.</string>
+    <string name="music_folder_prompt_cancel">Cancel</string>
     <string name="permission_denied">Songs can\'t be shown without the UltiMusic folder</string>
 
     <!-- Re-granting Download/Music/custom roots after the migration to Storage Access Framework

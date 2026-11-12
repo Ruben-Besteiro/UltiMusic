@@ -939,7 +939,16 @@ abstract class LibraryDao {
         }
 
         // Fase 4: altas reales.
+        // Cachés de la fase: un artista/álbum/productor aparece en muchas canciones (todas las de un
+        // álbum comparten álbum y casi siempre artista), y sin esto cada alta repetía las mismas
+        // consultas `findXByTag`. Las claves replican exactamente la comparación de esas consultas
+        // (igualdad estricta de etiqueta), y es seguro cachear porque dentro de esta transacción
+        // nada borra filas hasta la fase 4 (bis).
+        val artistCache = HashMap<String, Long>()
+        val producerCache = HashMap<String, Long>()
+        val albumCache = HashMap<Pair<String, String>, Long>()
         for (s in inserted) {
+            if (BENCH_NO_CACHE) { artistCache.clear(); producerCache.clear(); albumCache.clear() } // TEMPORAL-BENCH
             // El álbum se resuelve ANTES de insertar la canción: hace falta su id para enlazarlo en
             // `song_album` en cuanto se conozca el id de la canción, un par de líneas más abajo. Sin
             // etiqueta de álbum no hay fila de álbum, en vez de agrupar todo lo suelto bajo un "Álbum
@@ -952,8 +961,11 @@ abstract class LibraryDao {
                 // mismo álbum en vez de crear uno nuevo por cada combinación de colaboradores. Mismo
                 // criterio que ya usaba resolveAlbum para los álbumes creados desde el editor.
                 val albumArtistTag = albumArtistNames.firstOrNull() ?: ""
-                val albumArtistIds = albumArtistNames.map { getOrCreateArtist(it) }
-                getOrCreateAlbum(albumTitle, albumArtistTag, s.year, s.genres, albumArtistIds)
+                val albumKey = albumTitle to albumArtistTag
+                albumCache[albumKey] ?: run {
+                    val albumArtistIds = albumArtistNames.map { getOrCreateArtist(it, artistCache) }
+                    getOrCreateAlbum(albumTitle, albumArtistTag, s.year, s.genres, albumArtistIds)
+                }.also { albumCache[albumKey] = it }
             } else {
                 null
             }
@@ -977,7 +989,7 @@ abstract class LibraryDao {
             // EditText.splitValues en MetadataEditorDialogFragment), no como una sola con nombre
             // compuesto. Igual que el productor (ver más abajo), si la etiqueta no trae artista no
             // se inventa uno: la canción se queda sin artista.
-            val artistIds = splitTagNames(s.artist).map { getOrCreateArtist(it) }
+            val artistIds = splitTagNames(s.artist).map { getOrCreateArtist(it, artistCache) }
             for ((position, artistId) in artistIds.withIndex()) {
                 insertSongArtist(SongArtistCrossRef(songId = songId, artistId = artistId, position = position))
             }
@@ -986,7 +998,7 @@ abstract class LibraryDao {
             // desconocido" que llenaría la pestaña de ruido. Mismo tratamiento de comas que el
             // artista.
             for ((position, producerName) in splitTagNames(s.producer).withIndex()) {
-                val producerId = getOrCreateProducer(producerName)
+                val producerId = getOrCreateProducer(producerName, producerCache)
                 insertSongProducer(SongProducerCrossRef(songId = songId, producerId = producerId, position = position))
             }
         }
@@ -1235,15 +1247,17 @@ abstract class LibraryDao {
         return albumId
     }
 
-    private suspend fun getOrCreateArtist(tagName: String): Long {
-        findArtistByTag(tagName)?.let { return it.id }
-        return insertArtist(ArtistEntity(name = tagName, tagName = tagName, imageName = null))
-    }
+    private suspend fun getOrCreateArtist(tagName: String, cache: MutableMap<String, Long>): Long =
+        cache.getOrPut(tagName) {
+            findArtistByTag(tagName)?.id
+                ?: insertArtist(ArtistEntity(name = tagName, tagName = tagName, imageName = null))
+        }
 
-    private suspend fun getOrCreateProducer(tagName: String): Long {
-        findProducerByTag(tagName)?.let { return it.id }
-        return insertProducer(ProducerEntity(name = tagName, tagName = tagName, imageName = null))
-    }
+    private suspend fun getOrCreateProducer(tagName: String, cache: MutableMap<String, Long>): Long =
+        cache.getOrPut(tagName) {
+            findProducerByTag(tagName)?.id
+                ?: insertProducer(ProducerEntity(name = tagName, tagName = tagName, imageName = null))
+        }
 
     private suspend fun getOrCreateAlbum(
         tagTitle: String,
@@ -1276,6 +1290,8 @@ abstract class LibraryDao {
  * o productor con varios colaboradores en la etiqueta original ("A, B") se enlaza como dos
  * personas, no como una sola con nombre compuesto.
  */
+private const val BENCH_NO_CACHE = false // TEMPORAL-BENCH
+
 private fun splitTagNames(raw: String?): List<String> =
     raw?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()
 

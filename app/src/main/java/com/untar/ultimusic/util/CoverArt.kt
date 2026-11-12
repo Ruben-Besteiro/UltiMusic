@@ -84,6 +84,17 @@ object CoverArt {
         _revision.value++
     }
 
+    /**
+     * Valor centinela de `Song.imageName` que significa "el usuario ha quitado la carátula a
+     * propósito": se muestra el placeholder de UltiMusic aunque el archivo tenga arte embebido o la
+     * canción una miniatura de YouTube. No corresponde a ningún archivo de `images`, así que nunca
+     * hay que intentar abrirlo, borrarlo ni renombrarlo (ver [imageUri], [isRealImage]).
+     */
+    const val NO_COVER = "__none__"
+
+    /** True si [name] es el nombre de un archivo de imagen de verdad (ni vacío, ni [NO_COVER]). */
+    fun isRealImage(name: String?): Boolean = !name.isNullOrEmpty() && name != NO_COVER
+
     /** Ver [imagesDocPath]: árbol `UltiMusic` concedido -> docPath de su carpeta `images` (o null si
      *  todavía no existe). */
     @Volatile
@@ -126,7 +137,7 @@ object CoverArt {
     /** URI abrible de una imagen ya guardada en `UltiMusic/images` por su nombre, o null si no existe
      *  (imagen sin poner, o `UltiMusic` sin conceder todavía). */
     fun imageUri(context: Context, name: String?): Uri? {
-        if (name.isNullOrEmpty()) return null
+        if (name.isNullOrEmpty() || name == NO_COVER) return null
         val dir = imagesDocPath(context) ?: return null
         return SafStorage.resolveUri("$dir/$name")
     }
@@ -135,6 +146,17 @@ object CoverArt {
      * una imagen igual que el título/nombre al que pertenece. */
     fun sanitizeFileName(name: String): String =
         name.replace(Regex("[\\\\/:*?\"<>|]"), "").trim()
+
+    /**
+     * Nombre base (sin extensión ni sufijo) de la imagen de una canción o álbum:
+     * `"<artistas> - <título>"`, con los artistas separados por ", " en el orden del editor. Sin
+     * artistas queda solo el título. Saneado para el sistema de archivos.
+     */
+    fun imageBaseName(artists: List<String>, title: String): String {
+        val who = artists.map { it.trim() }.filter { it.isNotEmpty() }.joinToString(", ")
+        val raw = if (who.isEmpty()) title else "$who - $title"
+        return sanitizeFileName(raw)
+    }
 
     /**
      * Busca un nombre de archivo libre en `UltiMusic/images` para `baseName.ext`.
@@ -175,6 +197,9 @@ object CoverArt {
      * decide, ya de forma asíncrona, si hay collage o toca caer a la carátula de una sola canción.
      */
     fun cover(context: Context, ref: CoverRef): Any {
+        // El usuario quitó la carátula a propósito (ver NO_COVER): ni arte embebido ni miniatura.
+        // AudioCover sin archivo ni miniatura hace que Coil caiga directo al placeholder.
+        if (ref.ownImage == NO_COVER) return AudioCover(null, null)
         imageUri(context, ref.ownImage)?.let { return it }
         ref.group?.let { return it }
         imageUri(context, ref.songImage)?.let { return it }
@@ -343,6 +368,8 @@ class GroupCoverFetcher(
      * YouTube), pero devolviendo los BYTES en vez de un dato para Coil, porque aquí hace falta
      * decidir duplicados y componer el collage a mano. */
     private fun resolveCandidateBytes(context: Context, candidate: CollageCandidateRow): ByteArray? {
+        // Carátula quitada a propósito: esta canción no aporta nada al collage.
+        if (candidate.imageName == CoverArt.NO_COVER) return null
         CoverArt.imageUri(context, candidate.imageName)?.let { uri ->
             readBytesFromUri(context, uri)?.let { return it }
         }

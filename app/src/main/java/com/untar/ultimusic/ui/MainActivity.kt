@@ -143,7 +143,9 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        com.untar.ultimusic.ui.common.DialogOpenLock.install(supportFragmentManager)
         setContentView(R.layout.activity_main)
+        com.untar.ultimusic.ui.common.DialogOpenLock.wrap(window)
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -262,35 +264,71 @@ class MainActivity : AppCompatActivity() {
     private fun checkStoragePermission() {
         if (hasStoragePermission()) {
             songsViewModel.loadIfNeeded()   /** Si el permiso está, creamos los modelos de las canciones **/
-            offerLegacyRootsRelinkIfNeeded()
+            offerExtraFolderStep()
         }
         else {
+            // Primer diálogo: una sola salida (sin "Cancelar"), porque sin UltiMusic no hay
+            // fonoteca ni se puede mirar si hay una BD que restaurar (ver grantUltiMusicRoot).
             val dialog = AlertDialog.Builder(this)
                 .setTitle(R.string.permission_needed_title)
                 .setMessage(R.string.permission_needed_message)
+                .setCancelable(false)
                 .setPositiveButton(R.string.permission_grant) { _, _ ->
                     permissionDialogPending = false
                     grantUltiMusicRoot.launch(null)
-                }
-                .setNegativeButton(R.string.permission_cancel) { _, _ ->
-                    permissionDialogPending = false
-                    loadIfPermitted()       /** No permite -> muestra un toast **/
                 }
                 .show()
             AccentTint.buttons(dialog, playerViewModel.accentColor.value)
         }
     }
 
+    /**
+     * Segundo paso del primer arranque, DESPUÉS de conceder `UltiMusic` (y de decidir si se
+     * restaura una BD, ver [LibraryRepository.grantUltiMusicRoot]): si está pendiente, el diálogo
+     * "Ahora elige tu carpeta de música"; si no, la oferta de siempre de re-enlazar carpetas de
+     * antes de la migración a SAF.
+     */
+    private fun offerExtraFolderStep() {
+        if (SafStorage.isMusicFolderPromptPending(this)) showMusicFolderPrompt()
+        else offerLegacyRootsRelinkIfNeeded()
+    }
+
+    private fun showMusicFolderPrompt() {
+        SafStorage.setMusicFolderPromptPending(this, false)
+        SafStorage.markOfferedLegacyRootsRelink(this)   // este diálogo ya cumple la función de la oferta vieja
+        val dialog = AlertDialog.Builder(this)
+            .setTitle(R.string.permission_needed_title)
+            .setMessage(R.string.music_folder_prompt_message)
+            .setCancelable(false)
+            .setPositiveButton(R.string.permission_grant) { _, _ -> grantExtraLibraryRoot.launch(null) }
+            .setNegativeButton(R.string.music_folder_prompt_cancel, null)
+            .show()
+        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+    }
+
     private val grantUltiMusicRoot =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
             if (uri == null) {
                 Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
+                checkStoragePermission()   // el diálogo no tiene "Cancelar": vuelve a salir
                 return@registerForActivityResult
             }
             lifecycleScope.launch {
-                LibraryRepository.get(this@MainActivity).grantUltiMusicRoot(uri)
+                // Antes de nada, porque la restauración puede reiniciar el proceso: tras el reinicio
+                // el segundo diálogo sigue pendiente (ver offerExtraFolderStep).
+                SafStorage.setMusicFolderPromptPending(this@MainActivity, true)
+                val restartNeeded = LibraryRepository.get(this@MainActivity).grantUltiMusicRoot(uri)
+                if (restartNeeded) {
+                    // Se encontró una copia de la BD más completa que la recién creada: entra en
+                    // su lugar al arrancar (ver UltiMusicDatabase.restoreFromBackupIfNeeded).
+                    packageManager.getLaunchIntentForPackage(packageName)?.let {
+                        startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
+                    }
+                    android.os.Process.killProcess(android.os.Process.myPid())
+                    return@launch
+                }
                 loadIfPermitted()
-                offerLegacyRootsRelinkIfNeeded()
+                offerExtraFolderStep()
             }
         }
 
@@ -448,6 +486,7 @@ class MainActivity : AppCompatActivity() {
                     R.id.action_add_to_playlist -> { showAddToPlaylistForSelection(selected); true }
                     R.id.action_edit_metadata -> { showMetadataEditorForSelection(selected); true }
                     R.id.action_edit_tags -> { showEditTagsForSelection(selected); true }
+                    R.id.action_share_song -> { songsViewModel.clearSelection(); com.untar.ultimusic.util.ShareSong.share(this@MainActivity, selected); true }
                     R.id.action_delete_song -> { showDeleteDialogForSelection(selected); true }
                     else -> false
                 }
@@ -559,21 +598,38 @@ class MainActivity : AppCompatActivity() {
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
         viewPager.adapter = MainPagerAdapter(this, tabTitles)
-        TabLayoutMediator(tabLayout, viewPager) { tab, position ->
+        // Como Phonograph (pager.setOffscreenPageLimit(count - 1)): todas las páginas se crean de
+        // entrada, así que al tocar una pestaña lejana no se infla ningún fragmento en mitad del
+        // scroll suave. Con saltos > 3 páginas (Canciones -> Etiquetas) ViewPager2 encola un
+        // smoothScroll; si el layout se invalidaba entonces, la página acababa siendo otra distinta
+        // a la de la pestaña marcada.
+        viewPager.offscreenPageLimit = tabTitles.size - 1
+        // Sin TabLayoutMediator: su clic en una pestaña llama a setCurrentItem(pos, smooth), que
+        // para saltos > 3 páginas hace el truco del salto a medias + scroll encolado. Aquí el clic
+        // anima con un fake drag (ver animatePagerTo) y la duración de Phonograph.
+        for (position in tabTitles.indices) {
+            val tab = tabLayout.newTab()
             val customView = LayoutInflater.from(this).inflate(R.layout.item_nav_tab, tabLayout, false)
             customView.findViewById<ImageView>(R.id.navIcon).setImageResource(tabIcons[position])
             customView.findViewById<TextView>(R.id.navLabel).text = tabTitles[position]
             tab.customView = customView
             applyTabAppearance(tab, selected = position == 0, currentAccentColor)
-        }.attach()
+            tabLayout.addTab(tab, position == 0)
+        }
+        // Deslizar con el dedo -> marca la pestaña de la página que queda.
+        viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(position: Int) {
+                if (tabLayout.selectedTabPosition != position && pagerAnimator == null) {
+                    tabLayout.getTabAt(position)?.select()
+                }
+            }
+        })
 
-        // redistributeTabPadding necesita todas las pestañas ya montadas para poder recorrerlas
-        // (TabLayoutMediator llama al lambda de arriba una por una, antes de que exista la
-        // siguiente), así que el primer reparto se hace aquí, justo tras el attach().
         redistributeTabPadding(tabLayout, selectedPosition = 0)
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
+                if (viewPager.currentItem != tab.position) animatePagerTo(viewPager, tab.position)
                 applyTabAppearance(tab, true, currentAccentColor)
                 redistributeTabPadding(tabLayout, tab.position)
                 // La selección múltiple es solo de la pestaña Canciones (posición 0, ver
@@ -584,6 +640,43 @@ class MainActivity : AppCompatActivity() {
             override fun onTabUnselected(tab: TabLayout.Tab) = applyTabAppearance(tab, false, currentAccentColor)
             override fun onTabReselected(tab: TabLayout.Tab) {}
         })
+    }
+
+    private var pagerAnimator: android.animation.ValueAnimator? = null
+
+    /**
+     * Mismo scroll que el ViewPager clásico de Phonograph al tocar una pestaña: duración
+     * `(páginas + 1) * 100` ms con tope de 600, e interpolador quíntico `(t-1)^5 + 1`. Se hace con
+     * fake drag porque ViewPager2 no deja fijar la duración de setCurrentItem(smooth). Todas las
+     * páginas existen ya (offscreenPageLimit), así que el recorrido no crea fragmentos.
+     */
+    private fun animatePagerTo(viewPager: ViewPager2, target: Int) {
+        pagerAnimator?.cancel()   // su onAnimationEnd cierra el fake drag anterior
+        val pages = Math.abs(target - viewPager.currentItem)
+        if (pages == 0 || viewPager.width == 0 || !viewPager.beginFakeDrag()) {
+            viewPager.setCurrentItem(target, false)
+            return
+        }
+        val rtl = resources.configuration.layoutDirection == View.LAYOUT_DIRECTION_RTL
+        val sign = (if (target > viewPager.currentItem) -1f else 1f) * (if (rtl) -1f else 1f)
+        val total = sign * pages * viewPager.width
+        var done = 0f
+        pagerAnimator = android.animation.ValueAnimator.ofFloat(0f, total).apply {
+            duration = minOf((pages + 1) * 100L, 600L)
+            interpolator = android.animation.TimeInterpolator { t -> val u = t - 1f; u * u * u * u * u + 1f }
+            addUpdateListener {
+                val v = it.animatedValue as Float
+                viewPager.fakeDragBy(v - done)
+                done = v
+            }
+            addListener(object : android.animation.AnimatorListenerAdapter() {
+                override fun onAnimationEnd(animation: android.animation.Animator) {
+                    if (viewPager.isFakeDragging) viewPager.endFakeDrag()
+                    if (pagerAnimator === animation) pagerAnimator = null
+                }
+            })
+            start()
+        }
     }
 
     /** Icono (y, si `selected`, nombre debajo) en gris apagado o en el color dinámico del acento. */

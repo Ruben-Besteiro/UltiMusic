@@ -195,7 +195,7 @@ class RecountDialogFragment : DialogFragment() {
         val inflater = LayoutInflater.from(requireContext())
         for ((index, slice) in slices.withIndex()) {
             val row = inflater.inflate(R.layout.item_recount_legend, legend, false)
-            AccentTint.fill(row, R.id.legendSwatch, pie.colorAt(index))
+            AccentTint.background(row, R.id.legendSwatch, pie.colorAt(index))
             row.findViewById<TextView>(R.id.legendLabel).text = getString(
                 R.string.recount_legend_entry,
                 if (slice.isOther) getString(R.string.recount_other_genres) else slice.label,

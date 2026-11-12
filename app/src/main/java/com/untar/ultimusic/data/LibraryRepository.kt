@@ -573,11 +573,15 @@ class LibraryRepository private constructor(
                 _reconcileProgress.value = 0
                 try {
                     val knownPaths = dao.allSongPaths().toHashSet()
+                    val tAll = System.nanoTime() // TEMPORAL-BENCH
                     val result = MusicScanner.scan(appContext, knownPaths) { current, total ->
                         _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
                         onProgress(current, total)
                     }
+                    val tDao = System.nanoTime() // TEMPORAL-BENCH
                     dao.reconcile(result.newSongs, result.currentPaths)
+                    android.util.Log.d("UMBench", "dao.reconcile ${result.newSongs.size} songs in ${(System.nanoTime() - tDao) / 1_000_000} ms") // TEMPORAL-BENCH
+                    android.util.Log.d("UMBench", "TOTAL reconcile ${(System.nanoTime() - tAll) / 1_000_000} ms") // TEMPORAL-BENCH
                 } finally {
                     _reconciling.value = false
                 }
@@ -868,10 +872,68 @@ class LibraryRepository private constructor(
      * Concede la carpeta `UltiMusic` (obligatoria: sin ella no hay fonoteca) y re-enlaza lo que
      * pueda de lo ya catalogado antes de la migración a SAF.
      */
-    suspend fun grantUltiMusicRoot(treeUri: Uri) = withContext(Dispatchers.IO) {
-        SafStorage.setUltiMusicTreeUri(appContext, treeUri)
-        refreshSafRegistry()
-        relinkAfterGrant(treeUri)
+    suspend fun grantUltiMusicRoot(treeUri: Uri): Boolean = withContext(Dispatchers.IO) {
+        decisionInProgress = true
+        try {
+            SafStorage.setUltiMusicTreeUri(appContext, treeUri)
+            refreshSafRegistry()
+            // Reinstalación: la BD interna nació vacía antes de poder leer la copia (el permiso de
+            // la carpeta se revoca al desinstalar). Si la copia es más rica, se prepara para entrar
+            // en el próximo arranque y se pide reiniciar; el reenlazado ya lo hará la BD buena.
+            val restartNeeded = stageBackupRestoreIfRicher()
+            SafStorage.markBackupChecked(appContext)
+            if (restartNeeded) return@withContext true
+            relinkAfterGrant(treeUri)
+            false
+        } finally {
+            decisionInProgress = false
+        }
+    }
+
+    /**
+     * ¿Es la copia de `UltiMusic/databases/` más rica (más filas en total) que la BD interna? Si
+     * lo es -y su esquema no es de una versión futura de la app-, la deja como
+     * [UltiMusicDatabase.STAGED_RESTORE_NAME] y devuelve true. Se evalúa una sola vez por
+     * instalación (ver [SafStorage.isBackupChecked]): en uso normal la BD real siempre contiene a
+     * la copia, que sale de ella.
+     */
+    private fun stageBackupRestoreIfRicher(): Boolean = runCatching {
+        val root = SafStorage.ultiMusicDocPath(appContext) ?: return@runCatching false
+        val backupDocPath = "$root/databases/${UltiMusicDatabase.DB_NAME}"
+        if (!SafStorage.exists(appContext, backupDocPath)) return@runCatching false
+
+        val dbFile = appContext.getDatabasePath(UltiMusicDatabase.DB_NAME)
+        val staged = File(dbFile.parentFile, UltiMusicDatabase.STAGED_RESTORE_NAME)
+        try {
+            SafStorage.openInputStream(appContext, backupDocPath)?.use { input ->
+                staged.outputStream().use { input.copyTo(it) }
+            } ?: return@runCatching false
+
+            val live = UltiMusicDatabase.get(appContext)
+            live.query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+            val liveVersion = live.openHelper.readableDatabase.version
+
+            val (backupVersion, backupRows) = openReadOnly(staged).use { it.version to totalRows(it) }
+            val liveRows = openReadOnly(dbFile).use { totalRows(it) }
+
+            if (backupVersion <= liveVersion && backupRows > liveRows) true
+            else { staged.delete(); false }
+        } catch (t: Throwable) {
+            staged.delete()
+            false
+        }
+    }.getOrDefault(false)
+
+    private fun openReadOnly(file: File) = android.database.sqlite.SQLiteDatabase.openDatabase(
+        file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+    )
+
+    private fun totalRows(d: android.database.sqlite.SQLiteDatabase): Long {
+        val names = d.rawQuery(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
+                "AND name NOT LIKE 'android_%' AND name NOT LIKE 'room_%'", null
+        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+        return names.sumOf { t -> d.rawQuery("SELECT COUNT(*) FROM \"$t\"", null).use { c -> c.moveToFirst(); c.getLong(0) } }
     }
 
     /**
@@ -933,7 +995,9 @@ class LibraryRepository private constructor(
         if (videoUrl == song.videoUrl) return@withContext song.videoThumbnailName
         song.videoThumbnailName?.let { deleteVideoThumbnail(it) }
         val thumbnailName = videoUrl?.let { url ->
-            YouTubeUrl.videoId(url)?.let { downloadVideoThumbnail(it, song.title) }
+            YouTubeUrl.videoId(url)?.let {
+                downloadVideoThumbnail(it, CoverArt.imageBaseName(song.artists.map { a -> a.name }, song.title))
+            }
         }
         dao.setVideoUrl(songId = song.id, videoUrl = videoUrl, videoThumbnailName = thumbnailName)
         if (videoUrl != null) {
@@ -1137,10 +1201,10 @@ class LibraryRepository private constructor(
      * archivo que no existe -Coil no lo encuentra y cae al recuadro de reserva-, justo el bug que
      * describió el usuario ("a veces, al cambiar la carátula... aparece el placeholder").
      */
-    suspend fun importCoverImage(uri: Uri, title: String): String = withContext(Dispatchers.IO) {
+    suspend fun importCoverImage(uri: Uri, baseName: String): String = withContext(Dispatchers.IO) {
         val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: error("La carpeta UltiMusic no está concedida")
         val dir = CoverArt.imagesDocPath(appContext, createIfMissing = true) ?: error("La carpeta UltiMusic no está concedida")
-        val name = CoverArt.reserveFileName(appContext, CoverArt.sanitizeFileName(title), "img", null)
+        val name = CoverArt.reserveFileName(appContext, baseName, "img", null)
         val docPath = SafStorage.createFile(appContext, treeUri, dir, name, "image/*")
             ?: error("No se ha podido crear la carátula")
         appContext.contentResolver.openInputStream(uri)?.use { input ->
@@ -1162,14 +1226,15 @@ class LibraryRepository private constructor(
      * con un título nuevo, sin volver a copiarla ni descargarla. Best-effort: si el archivo ya no
      * existe, no hace nada y devuelve el nombre tal cual estaba.
      *
-     * @param suffix lo que va detrás del título saneado, p. ej. `" (video)"` para una miniatura o
-     *   `""` para la carátula propia.
+     * @param baseName nombre ya compuesto con [CoverArt.imageBaseName] (`"<artistas> - <título>"`).
+     * @param suffix lo que va detrás, p. ej. `" (video)"` para una miniatura o `""` para la
+     *   carátula propia.
      */
-    suspend fun renameImage(oldName: String, newTitle: String, suffix: String, ext: String): String =
+    suspend fun renameImage(oldName: String, baseName: String, suffix: String, ext: String): String =
         withContext(Dispatchers.IO) {
             val dir = CoverArt.imagesDocPath(appContext) ?: return@withContext oldName
             if (!SafStorage.exists(appContext, "$dir/$oldName")) return@withContext oldName
-            val baseName = CoverArt.sanitizeFileName(newTitle) + suffix
+            val baseName = baseName + suffix
             val newName = CoverArt.reserveFileName(appContext, baseName, ext, null)
             if (newName == oldName) return@withContext oldName
             SafStorage.renameTo(appContext, "$dir/$oldName", newName)?.let { return@withContext newName }
@@ -1181,7 +1246,7 @@ class LibraryRepository private constructor(
      * `UltiMusic/images` nombrada como [title]. Best-effort: si algo falla (sin red, vídeo
      * borrado...) devuelve null y la canción se queda sin miniatura, cayendo al recuadro negro.
      */
-    suspend fun downloadVideoThumbnail(videoId: String, title: String): String? =
+    suspend fun downloadVideoThumbnail(videoId: String, baseName: String): String? =
         withContext(Dispatchers.IO) {
             runCatching {
                 val request = ImageRequest.Builder(appContext)
@@ -1198,8 +1263,7 @@ class LibraryRepository private constructor(
 
                 val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@runCatching null
                 val dir = CoverArt.imagesDocPath(appContext, createIfMissing = true) ?: return@runCatching null
-                val baseName = "${CoverArt.sanitizeFileName(title)} (video)"
-                val name = CoverArt.reserveFileName(appContext, baseName, "jpg", null)
+                val name = CoverArt.reserveFileName(appContext, "$baseName (video)", "jpg", null)
                 val docPath = SafStorage.createFile(appContext, treeUri, dir, name, "image/jpeg") ?: return@runCatching null
                 SafStorage.openOutputStream(appContext, docPath)?.use { out ->
                     cropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
@@ -1228,7 +1292,9 @@ class LibraryRepository private constructor(
     /** Borra una carátula importada que ya no usa nadie (best-effort). */
     suspend fun deleteCoverImage(imageName: String) = withContext(Dispatchers.IO) {
         val dir = CoverArt.imagesDocPath(appContext)
-        if (dir != null) runCatching { SafStorage.deleteRecursively(appContext, "$dir/$imageName") }
+        if (dir != null && CoverArt.isRealImage(imageName)) {
+            runCatching { SafStorage.deleteRecursively(appContext, "$dir/$imageName") }
+        }
         Unit
     }
 
@@ -1247,6 +1313,15 @@ class LibraryRepository private constructor(
      */
     suspend fun exportDatabaseCopy() = withContext(Dispatchers.IO) {
         runCatching {
+            // Nunca exportar antes de haber decidido cuál es la buena (ver SafStorage.isBackupChecked).
+            // Sin la marca pero con la carpeta ya concedida es una instalación anterior a este
+            // control, cuya BD es la de siempre: se da por decidida.
+            if (decisionInProgress) return@runCatching
+            if (!SafStorage.isBackupChecked(appContext)) {
+                if (SafStorage.ultiMusicTreeUri(appContext) == null) return@runCatching
+                SafStorage.markBackupChecked(appContext)
+            }
+
             val db = UltiMusicDatabase.get(appContext)
             db.query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
 
@@ -1256,6 +1331,7 @@ class LibraryRepository private constructor(
             val destDir = SafStorage.getOrCreateSubfolder(appContext, treeUri, root, "databases") ?: return@runCatching
 
             val dbFile = appContext.getDatabasePath(UltiMusicDatabase.DB_NAME)
+            preserveBackupIfTableEmptied(treeUri, destDir, dbFile)
             for (suffix in listOf("", "-wal", "-shm")) {
                 val src = File(dbFile.path + suffix)
                 if (!src.exists()) continue
@@ -1274,6 +1350,55 @@ class LibraryRepository private constructor(
         Unit
     }
 
+    /**
+     * Antes de que [exportDatabaseCopy] sobrescriba la copia, mira si alguna tabla que tenía filas
+     * en ella está ahora vacía en la BD real (borrado a propósito, o BD perdida/recreada). Si es así,
+     * guarda la copia antigua como `ultimusic.prev.db` y solo entonces se sobrescribe la principal:
+     * nunca se pierde el último estado "con datos", y si el usuario vació la tabla adrede la copia
+     * principal sigue reflejándolo. `prev` solo se reescribe en el siguiente vaciado, no en cada export.
+     */
+    private fun preserveBackupIfTableEmptied(treeUri: Uri, destDir: String, dbFile: File) {
+        val backupDocPath = "$destDir/${dbFile.name}"
+        if (!SafStorage.exists(appContext, backupDocPath)) return
+        val tmp = File(appContext.cacheDir, "backup_check.db")
+        try {
+            SafStorage.openInputStream(appContext, backupDocPath)?.use { input ->
+                tmp.outputStream().use { input.copyTo(it) }
+            } ?: return
+            val emptied = android.database.sqlite.SQLiteDatabase.openDatabase(
+                tmp.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+            ).use { old ->
+                android.database.sqlite.SQLiteDatabase.openDatabase(
+                    dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
+                ).use { cur ->
+                    fun tables(d: android.database.sqlite.SQLiteDatabase) =
+                        d.rawQuery(
+                            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
+                                "AND name NOT LIKE 'android_%' AND name NOT LIKE 'room_%'", null
+                        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
+
+                    fun count(d: android.database.sqlite.SQLiteDatabase, t: String) =
+                        d.rawQuery("SELECT EXISTS(SELECT 1 FROM \"$t\")", null).use { c -> c.moveToFirst() && c.getInt(0) == 1 }
+
+                    val curTables = tables(cur).toSet()
+                    tables(old).any { t -> t in curTables && count(old, t) && !count(cur, t) }
+                }
+            }
+            if (!emptied) return
+            val prevName = "ultimusic.prev.db"
+            val prevDocPath = "$destDir/$prevName"
+            val target = if (SafStorage.exists(appContext, prevDocPath)) prevDocPath
+            else SafStorage.createFile(appContext, treeUri, destDir, prevName, "application/octet-stream")
+            if (target != null) {
+                SafStorage.openOutputStream(appContext, target)?.use { out ->
+                    tmp.inputStream().use { it.copyTo(out) }
+                }
+            }
+        } finally {
+            tmp.delete()
+        }
+    }
+
     companion object {
         /** Mínimo de canciones de "Descargada recientemente", aunque sean de hace más de un mes. */
         private const val RECENTLY_ADDED_MIN = 20
@@ -1281,6 +1406,10 @@ class LibraryRepository private constructor(
         /** Cada cuánto reconcilia [startWatchingLibraryChanges] mientras la app está en primer plano
          *  (ver su doc: sustituye al `FileObserver` instantáneo de antes de la migración a SAF). */
         private const val WATCH_INTERVAL_MS = 3 * 60 * 1000L
+
+        /** true mientras [grantUltiMusicRoot] decide entre BD interna y copia: no se exporta. */
+        @Volatile
+        private var decisionInProgress = false
 
         @Volatile
         private var instance: LibraryRepository? = null

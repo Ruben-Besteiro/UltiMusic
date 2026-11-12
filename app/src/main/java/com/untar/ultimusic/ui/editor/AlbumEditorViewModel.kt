@@ -82,8 +82,11 @@ class AlbumEditorViewModel(app: Application) : AndroidViewModel(app) {
      * cancela con la vista, a diferencia de este `viewModelScope` protegido.
      */
     fun save(form: AlbumEditorForm, pickedImage: Uri?) {
-        val (current, _) = album.value ?: return
-        val titleChanged = form.title != current.title
+        val (current, currentArtists) = album.value ?: return
+        // "<artistas> - <título>" (ver CoverArt.imageBaseName): cambiar cualquiera obliga a renombrar.
+        val imageBase = CoverArt.imageBaseName(form.artists, form.title)
+        val titleChanged = form.title != current.title ||
+            form.artists != currentArtists
         // Se marca ANTES de lanzar la corrutina: ver el mismo comentario en
         // MetadataEditorViewModel.save.
         _isSaving.value = true
@@ -92,11 +95,11 @@ class AlbumEditorViewModel(app: Application) : AndroidViewModel(app) {
                 val imageName = when {
                     pickedImage != null -> {
                         current.imageName?.let { old -> repository.deleteCoverImage(old) }
-                        runCatching { repository.importCoverImage(pickedImage, form.title) }
+                        runCatching { repository.importCoverImage(pickedImage, imageBase) }
                             .getOrElse { current.imageName }
                     }
                     current.imageName != null && titleChanged ->
-                        repository.renameImage(current.imageName, form.title, "", "img")
+                        repository.renameImage(current.imageName, imageBase, "", "img")
                     else -> current.imageName
                 }
 

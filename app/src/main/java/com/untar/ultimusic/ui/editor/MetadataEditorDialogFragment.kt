@@ -10,6 +10,7 @@ import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -58,6 +59,7 @@ import com.untar.ultimusic.ui.player.VideoPickerDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.LanguageDetector
 import com.untar.ultimusic.util.NetworkImage
 import com.untar.ultimusic.util.YouTubeUrl
@@ -190,7 +192,13 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private lateinit var inputOgArtist: EditText
     private lateinit var inputOgYear: EditText
     private lateinit var cover: ImageView
+    private lateinit var editorAppBar: View
     private lateinit var btnPickCover: ImageButton
+    private lateinit var btnRemoveCover: ImageButton
+
+    /** El usuario ha pulsado la papelera: al guardar se quita la carátula (ver CoverArt.NO_COVER).
+     *  Elegir una portada después lo cancela, y viceversa. */
+    private var removeCover = false
     private lateinit var fabAutofill: FloatingActionButton
 
     /**
@@ -203,6 +211,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     ) { uri ->
         if (uri != null) {
             pickedImage = uri
+            removeCover = false
             cover.load(uri)
             markDirty()
         }
@@ -302,11 +311,21 @@ class MetadataEditorDialogFragment : DialogFragment() {
             )
         }
         btnPickCover.setOnClickListener { openPicker() }
+        btnRemoveCover.setOnClickListener {
+            pickedImage = null
+            removeCover = true
+            cover.load(
+                CoverArt.cover(requireContext(), com.untar.ultimusic.util.CoverRef(CoverArt.NO_COVER)),
+                CoverLoader.get(requireContext())
+            )
+            markDirty()
+        }
         fabAutofill.setOnClickListener { openMetadataSuggestions() }
 
         // El campo no se escribe a mano: se pulsa y abre el mismo buscador de YouTube que usa el
         // iPod (ver [VideoPickerDialogFragment]); al elegir un vídeo se rellena con su enlace.
-        inputVideoUrl.setOnClickListener { openVideoPicker() }
+        // Ya se puede escribir a mano; la lupa es la que abre el buscador.
+        view.findViewById<View>(R.id.btnSearchVideoUrl).setOnClickListener { openVideoPicker() }
         childFragmentManager.setFragmentResultListener(
             VideoPickerDialogFragment.RESULT_KEY,
             viewLifecycleOwner
@@ -393,7 +412,19 @@ class MetadataEditorDialogFragment : DialogFragment() {
         // Igual que el campo de vídeo: no se escribe a mano, se pulsa y abre el buscador de
         // lrclib.net (ver [LyricsSuggestionsDialogFragment]); al elegir una letra se rellena con
         // ella. Es la ÚNICA forma de poner letra a una canción.
-        inputLyrics.setOnClickListener { openLyricsPicker() }
+        view.findViewById<View>(R.id.btnSearchLyrics).setOnClickListener { openLyricsPicker() }
+
+        // La letra hace scroll por dentro (maxLines): sin esto el ScrollView del editor se queda el
+        // gesto y la caja nunca se desplaza. Solo se lo pedimos al padre si la caja puede moverse.
+        inputLyrics.setOnTouchListener { v, event ->
+            if (v.canScrollVertically(1) || v.canScrollVertically(-1)) {
+                v.parent.requestDisallowInterceptTouchEvent(true)
+                if (event.action == MotionEvent.ACTION_UP || event.action == MotionEvent.ACTION_CANCEL) {
+                    v.parent.requestDisallowInterceptTouchEvent(false)
+                }
+            }
+            false
+        }
         childFragmentManager.setFragmentResultListener(
             LyricsSuggestionsDialogFragment.RESULT_KEY,
             viewLifecycleOwner
@@ -446,6 +477,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
                             // Ya se importó a disco: si no se vuelve a null, un guardado posterior
                             // sin tocar la portada la reimportaría de nuevo por nada.
                             pickedImage = null
+                            removeCover = false
                             // Si esta es la canción que suena, el reproductor la sustituye entera
                             // (letra, título, carátula...) al instante en vez de esperar a la
                             // siguiente reproducción.
@@ -462,6 +494,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
                             ).show()
                             isDirty = false
                             pickedImage = null
+                            removeCover = false
                             // Ya se han aplicado (los que se tocaran): un guardado posterior sin
                             // tocar nada más no debe repetirlos.
                             touchedFields.clear()
@@ -481,8 +514,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
                         accentColor = accent
                         offsetRuler.accentColor = accent
                         lyricsOffsetRuler.accentColor = accent
-                        AccentTint.fill(view, R.id.btnPickCover, accent)
+                        AccentTint.background(view, R.id.btnPickCover, accent)
                         AccentTint.contentOnAccent(btnPickCover, accent)
+                        AccentTint.background(view, R.id.btnRemoveCover, accent)
+                        AccentTint.contentOnAccent(btnRemoveCover, accent)
                         fabAutofill.backgroundTintList = ColorStateList.valueOf(accent)
                         AccentTint.contentOnAccent(fabAutofill, accent)
                         // linkVideoUrl (texto e icono) no lleva el acento: ver su comentario en el
@@ -626,7 +661,9 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
     private fun bindViews(view: View) {
         cover = view.findViewById(R.id.editorCover)
+        editorAppBar = view.findViewById(R.id.editorAppBar)
         btnPickCover = view.findViewById(R.id.btnPickCover)
+        btnRemoveCover = view.findViewById(R.id.btnRemoveCover)
         fabAutofill = view.findViewById(R.id.fabAutofill)
         inputTitle = view.findViewById(R.id.inputTitle)
         inputAlbum = view.findViewById(R.id.inputAlbum)
@@ -1098,6 +1135,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
             viewLifecycleOwner.lifecycleScope.launch {
                 NetworkImage.download(requireContext(), coverUrl)?.let { uri ->
                     pickedImage = uri
+                    removeCover = false
                     cover.load(uri)
                 }
             }
@@ -1126,7 +1164,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
                     .show()
                 return
             }
-            viewModel.saveMulti(collectForm(title), edited, pickedImage)
+            viewModel.saveMulti(collectForm(title), edited, pickedImage, removeCover)
             return
         }
 
@@ -1135,7 +1173,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
                 .show()
             return
         }
-        viewModel.save(collectForm(title), pickedImage)
+        viewModel.save(collectForm(title), pickedImage, removeCover)
     }
 
     /** Lo que hay AHORA MISMO en el formulario, ya limpio (recortado, vacíos a null, multivalor
