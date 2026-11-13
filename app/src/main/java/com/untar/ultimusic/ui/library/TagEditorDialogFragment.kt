@@ -22,7 +22,7 @@ import com.untar.ultimusic.util.DynamicColor
 /**
  * Crear o editar una etiqueta personalizada: nombre + color (ver [ColorPickerView]), con una
  * vista previa en vivo de la "salchicha" final (mismo trío `AccentTint.fill`/`AccentTint.stroke`/
- * `DynamicColor.dim` que usa [TagsAdapter], para que se vea el resultado real antes de guardar).
+ * `DynamicColor.dark` que usa [TagsAdapter], para que se vea el resultado real antes de guardar).
  *
  * Un único diálogo sirve para los dos casos ([newCreate]/[newEdit]): en modo edición llega
  * precargado con el nombre y color actuales de la etiqueta.
@@ -57,7 +57,7 @@ class TagEditorDialogFragment : DialogFragment() {
         fun refreshChipPreview(color: Int) {
             val name = nameInput.text.toString().trim()
             chipPreview.text = name.ifBlank { getString(R.string.tag_name_hint) }
-            AccentTint.fill(content, R.id.tagChipPreview, DynamicColor.dim(color))
+            AccentTint.fill(content, R.id.tagChipPreview, DynamicColor.dark(color))
             AccentTint.stroke(content, R.id.tagChipPreview, color, R.dimen.tag_chip_stroke_width)
         }
         refreshChipPreview(initialColor)

@@ -194,28 +194,45 @@ object DynamicColor {
     }
 
     /**
-     * El acento "al N-ésimo de intensidad": cada canal de color dividido entre N, dejando la opacidad
-     * intacta. Es lo que sustituye a `@color/um_yellow_dark`, que guarda esa misma relación con
-     * `@color/um_yellow`.
+     * El color **oscuro**: el matiz y la saturación del color dado con una luminosidad FIJA
+     * ([DARK_LIGHTNESS]), y la opacidad intacta. Es lo que sustituye a `@color/um_yellow_dark`.
      *
-     * Se hace en RGB y no en HSL a propósito: dividir los tres canales es literalmente "un N-ésimo de
-     * luz", que es la relación que ya había entre los dos amarillos fijos. Cuidado con no confundirla
-     * con [asBackground], que es otra cosa (ver ahí).
+     * Antes dividía los canales RGB entre 5, que en HSL equivale a dividir la luminosidad entre 5:
+     * como el acento llega con luminosidad 0.45–0.72, el oscuro variaba de 0.09 a 0.14 según la
+     * canción. Con luminosidad fija todas las canciones tienen el mismo "peso" de fondo y solo cambia
+     * el matiz. Cuidado con no confundirlo con [asBackground], que además desatura (ver ahí).
      */
-    fun dim(color: Int): Int = Color.argb(
-        Color.alpha(color),
-        Color.red(color) / 5,
-        Color.green(color) / 5,
-        Color.blue(color) / 5
-    )
+    fun dark(color: Int): Int = withLightness(color, DARK_LIGHTNESS)
+
+    /**
+     * El color **débil** (faint): el [dark] con la mitad de su luminosidad ([FAINT_LIGHTNESS]).
+     * Casi negro, pero con el matiz y la saturación del color dado para que al cambiar de canción
+     * se siga notando. Pensado para fondos donde las filas coloreadas no deben desentonar.
+     */
+    fun faint(color: Int): Int = withLightness(color, FAINT_LIGHTNESS)
+
+    /**
+     * El color **claro**: el inverso del [dark], es decir, el mismo matiz y saturación con una
+     * luminosidad FIJA alta ([LIGHT_LIGHTNESS]). Cercano al blanco pero todavía reconocible como
+     * del color de la canción. Para textos y botones que antes eran grises claros o blancos.
+     */
+    fun light(color: Int): Int = withLightness(color, LIGHT_LIGHTNESS)
+
+    /** Mismo matiz y saturación que [color], con luminosidad [lightness] y la opacidad original. */
+    private fun withLightness(color: Int, lightness: Float): Int {
+        val hsl = FloatArray(3)
+        ColorUtils.colorToHSL(color, hsl)
+        hsl[2] = lightness
+        return ColorUtils.setAlphaComponent(ColorUtils.HSLToColor(hsl), Color.alpha(color))
+    }
 
     /**
      * Versión apagada y oscura del acento, para usarla de FONDO (la cabecera de la ficha de un
      * álbum). Un acento a plena intensidad detrás de un texto sería ilegible.
      *
-     * No es lo mismo que [dim]: aquí además se **desatura** y se fija una luminosidad concreta, para
-     * que el resultado sea un fondo neutro sobre el que se lea el texto, salga de donde salga el
-     * acento. [dim] conserva el tono y la viveza; solo baja la luz.
+     * No es lo mismo que [dark]: aquí además se **desatura**, para que el resultado sea un fondo
+     * neutro sobre el que se lea el texto, salga de donde salga el acento. [dark] conserva el tono y
+     * la viveza; solo fija la luz.
      */
     fun asBackground(color: Int): Int {
         val hsl = FloatArray(3)
@@ -299,6 +316,9 @@ object DynamicColor {
     private const val MIN_SATURATION = 0.35f
     private const val MIN_LIGHTNESS = 0.45f
     private const val MAX_LIGHTNESS = 0.72f
+    private const val DARK_LIGHTNESS = 0.115f
+    private const val FAINT_LIGHTNESS = DARK_LIGHTNESS / 2
+    private const val LIGHT_LIGHTNESS = 0.86f
     private const val BACKGROUND_SATURATION_FACTOR = 0.55f
     private const val BACKGROUND_LIGHTNESS = 0.40f
 }

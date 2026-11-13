@@ -153,7 +153,7 @@ class PreviewSearchDialogFragment : DialogFragment() {
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         loading.indeterminateTintList = ColorStateList.valueOf(accent)
-                        retryButton.backgroundTintList = ColorStateList.valueOf(accent)
+                        com.untar.ultimusic.util.AccentTint.textButton(retryButton, accent)
                         // Solo al terminar el fundido: setAccent hace notifyDataSetChanged.
                         if (accent == playerViewModel.accentTarget.value) adapter.setAccent(accent)
                     }

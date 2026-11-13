@@ -42,7 +42,7 @@ class TagPickerAdapter(
 
         fun bind(tag: TagSummary, onTagClick: (TagSummary) -> Unit) {
             chip.text = tag.name
-            AccentTint.fill(itemView, R.id.tagPillChip, DynamicColor.dim(tag.colorArgb))
+            AccentTint.fill(itemView, R.id.tagPillChip, DynamicColor.dark(tag.colorArgb))
             AccentTint.stroke(itemView, R.id.tagPillChip, tag.colorArgb, R.dimen.tag_chip_stroke_width)
             itemView.setOnClickListener { onTagClick(tag) }
         }

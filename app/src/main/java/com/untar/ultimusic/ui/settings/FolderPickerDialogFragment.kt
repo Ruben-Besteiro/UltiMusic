@@ -142,7 +142,7 @@ class FolderPickerDialogFragment : DialogFragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 playerViewModel.accentColor.collect { accent ->
-                    chooseButton.backgroundTintList = ColorStateList.valueOf(accent)
+                    com.untar.ultimusic.util.AccentTint.textButton(chooseButton, accent)
                 }
             }
         }

@@ -158,6 +158,17 @@ class PlaybackService : MediaSessionService() {
     val accentColor = _accentColor.asStateFlow()
 
     /**
+     * Se emite justo DESPUÉS de que [accentColor] tenga el color de [song] ya extraído de su carátula.
+     * Sirve para que la interfaz arranque a la vez el fundido del acento y el de la tarjeta de lo que
+     * suena (si no, ésta empezaría en cuanto cambia la canción y el acento medio segundo después).
+     * [seq] hace que se emita aunque la canción y el color no cambien.
+     */
+    data class AccentUpdate(val song: Song?, val seq: Int)
+
+    private val _accentUpdate = MutableStateFlow(AccentUpdate(null, 0))
+    val accentUpdate = _accentUpdate.asStateFlow()
+
+    /**
      * Se incrementa cada vez que [refreshSong] sustituye una canción por su versión recién
      * guardada, aunque por casualidad quede exactamente igual que la anterior (`Song.equals`) —
      * puede pasar con la carátula, porque el editor de metadatos reutiliza el mismo nombre de
@@ -1193,6 +1204,7 @@ class PlaybackService : MediaSessionService() {
         accentJob?.cancel()
         accentJob = serviceScope.launch {
             _accentColor.value = DynamicColor.fromCover(this@PlaybackService, CoverArt.cover(this@PlaybackService, song))
+            _accentUpdate.value = AccentUpdate(song, _accentUpdate.value.seq + 1)
         }
     }
 

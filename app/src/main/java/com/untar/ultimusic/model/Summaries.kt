@@ -78,7 +78,7 @@ data class GenreSummary(
 
 /**
  * Resumen de una etiqueta para su pestaña: nombre, color de borde/"salchicha" (ver
- * [com.untar.ultimusic.util.DynamicColor.dim] para el relleno), cuántas canciones tiene y cuánto
+ * [com.untar.ultimusic.util.DynamicColor.dark] para el relleno), cuántas canciones tiene y cuánto
  * duran entre todas. A diferencia de [GenreSummary], una etiqueta SÍ es una entidad propia de la
  * base de datos ([com.untar.ultimusic.data.db.entities.TagEntity]) — de ahí el [id] —, pero su
  * recuento de canciones se sigue calculando aquí en Kotlin (ver

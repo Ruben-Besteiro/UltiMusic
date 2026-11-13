@@ -17,11 +17,14 @@
     <color name="um_surface">#FF141414</color>
     <color name="um_surface_variant">#FF1F1F1F</color>
     <color name="um_sql_toggle_bg">#FF383838</color>
-    <!-- El oscuro es el claro con cada canal RGB dividido entre 3 (ver DynamicColor.dim). Esa
-         relación no es decorativa: es la regla que aplica AccentTint al teñir con el color de la
-         carátula, así que si se cambia um_yellow hay que recalcular este a un tercio. -->
+    <!-- Los cuatro tonos del acento, que en código salen de DynamicColor (mismo matiz y saturación
+         que um_yellow, luminosidad fija): um_yellow_dark = DynamicColor.dark (0.115),
+         um_yellow_faint = DynamicColor.faint (la mitad del oscuro) y um_yellow_light =
+         DynamicColor.light (0.86). Si se cambia um_yellow hay que recalcular los otros tres. -->
     <color name="um_yellow">#FFFFD000</color>
-    <color name="um_yellow_dark">#FF534300</color>
+    <color name="um_yellow_dark">#FF3B3000</color>
+    <color name="um_yellow_faint">#FF1D1800</color>
+    <color name="um_yellow_light">#FFFFF2B8</color>
     <color name="um_on_background">#FFF2F2F2</color>
     <color name="um_on_surface_muted">#FFB0B0B0</color>
     <color name="um_divider">#FF404040</color>
@@ -42,7 +45,7 @@
 
     <!-- Colores de borde de las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags): el
          relleno oscuro de su "salchicha" (ver item_tag.xml/TagsAdapter) sale de aplicar
-         DynamicColor.dim a este mismo color en vez de guardarse aparte. NO son amarillos, así que no
+         DynamicColor.dark a este mismo color en vez de guardarse aparte. NO son amarillos, así que no
          les aplica la regla de color dinámico del resto de la app: son fijos a propósito, uno por
          etiqueta. "En ninguna lista" y "Sin etiquetas personalizadas" comparten el mismo gris casi
          negro a propósito; "Descargada recientemente", "Vídeo sincronizado" y "Remix / Cover" son

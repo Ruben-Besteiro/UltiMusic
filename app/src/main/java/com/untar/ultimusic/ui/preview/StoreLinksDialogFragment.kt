@@ -90,7 +90,7 @@ class StoreLinksDialogFragment : DialogFragment() {
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         loading.indeterminateTintList = ColorStateList.valueOf(accent)
-                        retry.backgroundTintList = ColorStateList.valueOf(accent)
+                        AccentTint.textButton(retry, accent)
                     }
                 }
             }

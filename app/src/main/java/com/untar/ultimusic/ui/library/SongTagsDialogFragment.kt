@@ -196,7 +196,7 @@ class SongTagsDialogFragment : DialogFragment() {
         for (tag in tags) {
             val row = inflater.inflate(R.layout.item_tag_removable, container, false)
             row.findViewById<TextView>(R.id.tagRemovableName).text = tag.name
-            AccentTint.fill(row, R.id.tagRemovableChip, DynamicColor.dim(tag.colorArgb))
+            AccentTint.fill(row, R.id.tagRemovableChip, DynamicColor.dark(tag.colorArgb))
             AccentTint.stroke(row, R.id.tagRemovableChip, tag.colorArgb, R.dimen.tag_chip_stroke_width)
 
             val btnRemove = row.findViewById<ImageButton>(R.id.btnRemoveTag)

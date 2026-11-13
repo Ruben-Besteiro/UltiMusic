@@ -2,8 +2,7 @@
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent"
-    android:background="@color/um_background">
+    android:layout_height="match_parent">
 
     <!-- El resumen de la fonoteca (nº de canciones + duración total) ya NO va aquí como vista fija:
          se pinta como primera fila del propio RecyclerView (ver item_songs_header.xml y
