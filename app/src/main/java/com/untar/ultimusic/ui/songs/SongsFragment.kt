@@ -19,6 +19,7 @@ import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
@@ -94,11 +95,15 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
             sectionLetter(adapter.songAt(position)?.title)
         }
 
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, kind, name ->
+            adapter.songAt(pos)?.id == song.id
+        }
+
         // Arrastrar una fila hacia la derecha la añade a la cola, como el propio "Añadir a cola" del
         // menú de 3 puntos (ver SwipeToQueue.kt); la cabecera (posición 0) no responde.
         attachSwipeToQueue(
             recycler,
-            accentColor = { playerViewModel.accentColor.value },
+            accentColor = { playerViewModel.accentTarget.value },
             canSwipe = { position -> position > 0 }
         ) { position ->
             adapter.songAt(position)?.let { playerViewModel.addToQueue(it) }
@@ -203,6 +208,6 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                 playlistsViewModel.forgetSong(File(song.filePath).name)
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 }

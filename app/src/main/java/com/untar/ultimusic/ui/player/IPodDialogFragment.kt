@@ -389,7 +389,7 @@ class IPodDialogFragment : DialogFragment() {
             onStartDrag = { holder -> itemTouchHelper?.startDrag(holder) },
             onReordered = { newQueue -> playerViewModel.reorderQueue(newQueue) }
         )
-        queueAdapter.setAccent(playerViewModel.accentColor.value)
+        queueAdapter.setAccent(playerViewModel.accentTarget.value)
         val queueLayoutManager = LinearLayoutManager(requireContext())
         queueList.layoutManager = queueLayoutManager
         queueList.adapter = queueAdapter
@@ -403,7 +403,7 @@ class IPodDialogFragment : DialogFragment() {
         // no está sincronizada); es lo que usa el collect de playerViewModel.progress más abajo
         // para saber qué línea resaltar y centrar en cada momento.
         val lyricsAdapter = IPodLyricsAdapter()
-        lyricsAdapter.setAccent(playerViewModel.accentColor.value)
+        lyricsAdapter.setAccent(playerViewModel.accentTarget.value)
         val lyricsLayoutManager = LinearLayoutManager(requireContext())
         lyricsBox.layoutManager = lyricsLayoutManager
         lyricsBox.adapter = lyricsAdapter
@@ -1216,7 +1216,11 @@ class IPodDialogFragment : DialogFragment() {
         AccentTint.fill(view, R.id.ipodBody, DynamicColor.dim(accent))
 
         // El icono de altavoz de la fila "sonando ahora" también sigue el acento.
-        (view.findViewById<RecyclerView>(R.id.queueList).adapter as? IPodQueueAdapter)?.setAccent(accent)
+        // Solo al terminar el fundido (accent == destino): setAccent hace notifyDataSetChanged y
+        // repetirlo en cada paso de los 0,3 s reconstruiría toda la cola decenas de veces.
+        if (accent == playerViewModel.accentTarget.value) {
+            (view.findViewById<RecyclerView>(R.id.queueList).adapter as? IPodQueueAdapter)?.setAccent(accent)
+        }
     }
 
     /**
@@ -1434,7 +1438,7 @@ class IPodDialogFragment : DialogFragment() {
                 }
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** Menú de 3 puntos de la selección múltiple de la cola (ver menu_queue_selection.xml y
@@ -1517,7 +1521,7 @@ class IPodDialogFragment : DialogFragment() {
                 }
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     override fun onDestroyView() {

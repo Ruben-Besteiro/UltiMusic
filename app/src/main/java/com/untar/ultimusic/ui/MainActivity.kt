@@ -278,7 +278,7 @@ class MainActivity : AppCompatActivity() {
                     grantUltiMusicRoot.launch(null)
                 }
                 .show()
-            AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
         }
     }
 
@@ -351,7 +351,7 @@ class MainActivity : AppCompatActivity() {
                 .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ -> grantExtraLibraryRoot.launch(null) }
                 .setNegativeButton(R.string.relink_legacy_roots_skip, null)
                 .show()
-            AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
         }
     }
 
@@ -546,7 +546,7 @@ class MainActivity : AppCompatActivity() {
                 playlistsViewModel.forgetSongs(selected.map { File(it.filePath).name })
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /**

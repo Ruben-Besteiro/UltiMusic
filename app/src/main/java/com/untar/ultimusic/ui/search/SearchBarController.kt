@@ -31,6 +31,7 @@ import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.DetailDialogFragment
@@ -169,13 +170,21 @@ class SearchBarController(
         // Misma barra de scroll arrastrable que las pestañas, sin la burbuja de la letra: los
         // resultados no van en orden alfabético sino agrupados por secciones (ver ScrollbarDrag).
         val scrollbar = recycler.attachScrollbarDrag()
+        scrollbar.highlightNowPlaying(activity, playerViewModel) { pos, song, _, _ ->
+            when (val row = adapter.resultAt(pos)) {
+                is SearchResult.SongRow -> row.song.id == song.id
+                is SearchResult.AlbumRow -> song.albums.any { it.album.id == row.album.id }
+                is SearchResult.PersonRow -> song.artists.any { it.id == row.person.id }
+                else -> false
+            }
+        }
 
         // Arrastrar una fila de canción hacia la derecha la añade a la cola, como en la pestaña
         // Canciones (ver SwipeToQueue.kt); las filas de cabecera/álbum/persona no responden (ver
         // SearchAdapter.songAt).
         attachSwipeToQueue(
             recycler,
-            accentColor = { playerViewModel.accentColor.value },
+            accentColor = { playerViewModel.accentTarget.value },
             canSwipe = { position -> adapter.songAt(position) != null }
         ) { position -> adapter.songAt(position)?.let { playerViewModel.addToQueue(it) } }
 
@@ -330,7 +339,7 @@ class SearchBarController(
     /** Activo = color dinámico; apagado = gris apagado. */
     private fun updateSqlToggleColor() {
         btnSearchSql.setTextColor(
-            if (sqlMode) playerViewModel.accentColor.value else activity.getColor(R.color.um_on_surface_muted)
+            if (sqlMode) playerViewModel.accentTarget.value else activity.getColor(R.color.um_on_surface_muted)
         )
     }
 
@@ -375,7 +384,7 @@ class SearchBarController(
                     .setNegativeButton(R.string.dialog_cancel, null)
                     .setPositiveButton(R.string.sql_confirm_run) { _, _ -> viewModel.runSql(sql) }
                     .show()
-                AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+                AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
             }
         }
     }
@@ -459,7 +468,7 @@ class SearchBarController(
                 }
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** Recoge el teclado. Hace falta antes de abrir una ficha encima (álbum/artista). */

@@ -78,7 +78,7 @@ class GeniusTokenDialogFragment : DialogFragment() {
         // color dinámico (ver AccentTint). Se tiñe aquí y no en onViewCreated porque un
         // DialogFragment que monta su vista en onCreateDialog no pasa por onCreateView, así que
         // onViewCreated no llega a ejecutarse nunca.
-        link.setTextColor(playerViewModel.accentColor.value)
+        link.setTextColor(playerViewModel.accentTarget.value)
         content.findViewById<View>(R.id.geniusSetupCopyName).setOnClickListener {
             copy(getString(R.string.genius_setup_value_name))
         }
@@ -96,7 +96,7 @@ class GeniusTokenDialogFragment : DialogFragment() {
             .create()
 
         dialog.setOnShowListener {
-            AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
             // El listener se pone AQUÍ, y no en setPositiveButton, porque el de la fábrica cierra el
             // diálogo pase lo que pase: si el token no vale, hay que quedarse abierto y decirlo.
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -200,7 +200,7 @@ class GeniusTokenDialogFragment : DialogFragment() {
         status.setText(messageRes)
         status.setTextColor(
             if (isError) requireContext().getColor(R.color.um_error)
-            else playerViewModel.accentColor.value
+            else playerViewModel.accentTarget.value
         )
     }
 

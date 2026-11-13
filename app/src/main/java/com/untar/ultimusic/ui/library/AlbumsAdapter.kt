@@ -28,6 +28,8 @@ class AlbumsAdapter(
 
     fun submit(list: List<AlbumSummary>) = albums.submit(list)
 
+    fun albumAt(position: Int): AlbumSummary? = if (position in 0 until albums.size) albums[position] else null
+
     override fun getItemCount(): Int = albums.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): AlbumViewHolder {

@@ -77,7 +77,7 @@ class SortDialogFragment : DialogFragment() {
         // AccentTint): un DialogFragment que monta su vista en onCreateDialog no pasa por
         // onViewCreated, así que no hay collector de accentColor vivo aquí (mismo motivo que el
         // enlace de GeniusTokenDialogFragment).
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         for (id in fieldButtons.values) {
             content.findViewById<RadioButton>(id).buttonTintList = ColorStateList.valueOf(accent)
         }

@@ -28,6 +28,8 @@ class PeopleAdapter(
 
     fun submit(list: List<PersonSummary>) = people.submit(list)
 
+    fun personAt(position: Int): PersonSummary? = if (position in 0 until people.size) people[position] else null
+
     override fun getItemCount(): Int = people.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PersonViewHolder {

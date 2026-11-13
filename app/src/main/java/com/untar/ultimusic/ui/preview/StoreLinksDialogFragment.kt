@@ -62,7 +62,7 @@ class StoreLinksDialogFragment : DialogFragment() {
             .setView(content)
             .setNegativeButton(R.string.dialog_cancel, null)
             .create()
-        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentColor.value) }
+        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentTarget.value) }
 
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {

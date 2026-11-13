@@ -118,6 +118,8 @@ class CollectionSongsAdapter(
     /** Al soltar la fila arrastrada, avisa del nuevo orden para persistirlo. */
     fun commitReorder() = onReordered(songs.toList())
 
+    fun songAt(position: Int): Song? = songs.getOrNull(position)
+
     override fun getItemCount(): Int = songs.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): SongViewHolder {

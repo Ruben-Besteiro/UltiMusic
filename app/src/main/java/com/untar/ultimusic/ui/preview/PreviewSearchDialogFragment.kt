@@ -154,7 +154,8 @@ class PreviewSearchDialogFragment : DialogFragment() {
                     playerViewModel.accentColor.collect { accent ->
                         loading.indeterminateTintList = ColorStateList.valueOf(accent)
                         retryButton.backgroundTintList = ColorStateList.valueOf(accent)
-                        adapter.setAccent(accent)
+                        // Solo al terminar el fundido: setAccent hace notifyDataSetChanged.
+                        if (accent == playerViewModel.accentTarget.value) adapter.setAccent(accent)
                     }
                 }
             }

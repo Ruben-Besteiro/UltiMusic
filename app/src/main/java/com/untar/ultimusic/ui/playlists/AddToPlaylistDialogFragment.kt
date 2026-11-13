@@ -87,7 +87,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         // vez al abrir el diálogo (`.value`, no una colecta en vivo): es una interacción corta y
         // no hace falta recolorear a media que se marca una casilla.
         dialog.setOnShowListener {
-            val accent = playerViewModel.accentColor.value
+            val accent = playerViewModel.accentTarget.value
             val tint = ColorStateList.valueOf(accent)
             for (i in 0 until fieldsContainer.childCount) {
                 (fieldsContainer.getChildAt(i) as? MaterialCheckBox)?.buttonTintList = tint
@@ -113,7 +113,7 @@ class AddToPlaylistDialogFragment : DialogFragment() {
         // y un contexto de la actividad: el segundo diálogo debe seguir funcionando aunque el fragmento
         // ya no esté attached cuando el usuario escriba el nombre y pulse Aceptar.
         val vm = viewModel
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         val context = requireActivity()
         val input = EditText(context).apply {
             hint = getString(R.string.playlist_name_hint)

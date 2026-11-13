@@ -41,7 +41,7 @@ class TagEditorDialogFragment : DialogFragment() {
         val editingId = requireArguments().getLong(ARG_TAG_ID, -1L).takeIf { it != -1L }
         val initialName = requireArguments().getString(ARG_TAG_NAME).orEmpty()
         val initialColor = requireArguments().getInt(ARG_TAG_COLOR, DynamicColor.DEFAULT)
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
 
         val content = LayoutInflater.from(requireContext()).inflate(R.layout.dialog_tag_editor, null, false)
         val nameInput = content.findViewById<EditText>(R.id.inputTagName)

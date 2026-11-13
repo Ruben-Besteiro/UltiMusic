@@ -92,7 +92,7 @@ class TagPickerDialogFragment : DialogFragment() {
             .setView(content)
             .setNegativeButton(R.string.dialog_cancel, null)
             .create()
-        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentColor.value) }
+        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentTarget.value) }
         return dialog
     }
 

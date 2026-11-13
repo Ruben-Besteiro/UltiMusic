@@ -38,6 +38,8 @@ class PlaylistsAdapter(
         notifyDataSetChanged()
     }
 
+    fun playlistAt(position: Int): PlaylistSummary? = playlists.getOrNull(position)
+
     override fun getItemCount(): Int = playlists.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): PlaylistViewHolder {

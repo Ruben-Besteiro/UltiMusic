@@ -13,6 +13,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.CoverArt
 import kotlinx.coroutines.flow.combine
@@ -38,6 +39,11 @@ class AlbumsFragment : Fragment(R.layout.fragment_library_grid) {
         recycler.adapter = adapter
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(libraryViewModel.albums.value.getOrNull(position)?.title)
+        }
+
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, kind, name ->
+            val id = adapter.albumAt(pos)?.id
+            id != null && song.albums.any { it.album.id == id }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {

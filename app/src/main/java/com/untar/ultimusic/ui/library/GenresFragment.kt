@@ -14,6 +14,7 @@ import com.untar.ultimusic.R
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.sectionLetter
 import kotlinx.coroutines.launch
 
@@ -42,6 +43,11 @@ class GenresFragment : Fragment(R.layout.fragment_library_list) {
         recycler.adapter = adapter
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(libraryViewModel.genres.value.getOrNull(position)?.name)
+        }
+
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, kind, name ->
+            val genre = adapter.genreAt(pos)?.name
+            genre != null && song.genres.any { it.equals(genre, ignoreCase = true) }
         }
 
         viewLifecycleOwner.lifecycleScope.launch {

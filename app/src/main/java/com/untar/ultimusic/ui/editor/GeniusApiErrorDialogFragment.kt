@@ -35,7 +35,7 @@ class GeniusApiErrorDialogFragment : DialogFragment() {
             .create()
 
         // Regla del proyecto: nada de amarillo fijo, todo con el color de la canción que suena.
-        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentColor.value) }
+        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentTarget.value) }
         return dialog
     }
 

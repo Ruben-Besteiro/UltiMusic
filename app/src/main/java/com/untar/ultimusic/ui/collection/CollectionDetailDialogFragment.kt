@@ -47,6 +47,7 @@ import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.ShuffleToggleIcon
 import com.untar.ultimusic.ui.common.SwipeToQueueGesture
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
@@ -238,12 +239,15 @@ class CollectionDetailDialogFragment : DialogFragment() {
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(viewModel.songs.value.getOrNull(position)?.title)
         }
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, _, _ ->
+            adapter.songAt(pos)?.id == song.id
+        }
 
         // Arrastrar una fila hacia la derecha la añade a la cola, igual que en el resto de listas de
         // canciones (ver SwipeToQueue.kt). Aquí solo puede haber UN ItemTouchHelper por RecyclerView,
         // así que si además reordena (ver más abajo) el gesto va combinado en su mismo callback; si
         // no reordena (género), va suelto.
-        val queueGesture = SwipeToQueueGesture(requireContext()) { playerViewModel.accentColor.value }
+        val queueGesture = SwipeToQueueGesture(requireContext()) { playerViewModel.accentTarget.value }
         val onAddToQueue: (Int) -> Unit = { position ->
             adapter.currentSongs().getOrNull(position)?.let { playerViewModel.addToQueue(it) }
         }
@@ -289,7 +293,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
             }
             itemTouchHelper = ItemTouchHelper(callback).also { it.attachToRecyclerView(recycler) }
         } else {
-            attachSwipeToQueue(recycler, accentColor = { playerViewModel.accentColor.value }, onAddToQueue = onAddToQueue)
+            attachSwipeToQueue(recycler, accentColor = { playerViewModel.accentTarget.value }, onAddToQueue = onAddToQueue)
         }
 
         toolbar.setNavigationOnClickListener {
@@ -318,7 +322,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         playerViewModel.setListaShuffle(key, adapter.currentSongs(), newState)
                         // Repintado inmediato: no hay ningún StateFlow que avise de este cambio, así
                         // que se hace aquí mismo para que se vea al instante (regla del CLAUDE.md).
-                        refreshShuffleIcon(toolbar, playerViewModel.accentColor.value)
+                        refreshShuffleIcon(toolbar, playerViewModel.accentTarget.value)
                     } else {
                         playerViewModel.shuffleCollection(adapter.currentSongs(), viewModel.currentKey, viewModel.currentKind)
                     }
@@ -564,7 +568,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
      */
     private fun showRenameGenreDialog() {
         val currentName = viewModel.currentKey ?: return
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         val input = EditText(requireContext()).apply {
             setText(currentName)
             setSelection(text.length)
@@ -631,7 +635,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                 dismiss()
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** Abre el diálogo de "añadir canciones de golpe" que toque según [CollectionKind.currentKind]:
@@ -718,7 +722,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                 }
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     private fun showDeleteSongDialog(song: Song) {
@@ -728,7 +732,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.delete_song) { _, _ -> viewModel.deleteSong(song) }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** Menú de 3 puntos de la selección múltiple (ver menu_song_selection.xml, el mismo que usa
@@ -801,7 +805,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.delete_song) { _, _ -> viewModel.deleteSongs(selected) }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     companion object {
@@ -812,7 +816,14 @@ class CollectionDetailDialogFragment : DialogFragment() {
 
         private fun show(manager: FragmentManager, kind: CollectionKind, key: String) {
             // Guarda anti-duplicado: dos toques rápidos abrirían dos fichas apiladas.
-            if (manager.findFragmentByTag(TAG) != null) return
+            val existing = manager.findFragmentByTag(TAG) as? DialogFragment
+            if (existing != null) {
+                // Una ficha que sigue registrada pero ya no está en pantalla (su ventana se cerró
+                // sin pasar por dismiss(), p. ej. al desaparecer el género) bloqueaba para siempre
+                // los toques siguientes: se descarta y se abre la nueva.
+                if (existing.dialog?.isShowing == true) return
+                existing.dismissAllowingStateLoss()
+            }
             CollectionDetailDialogFragment().apply {
                 arguments = Bundle().apply {
                     putString(ARG_KIND, kind.name)

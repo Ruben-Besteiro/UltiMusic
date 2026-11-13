@@ -30,4 +30,9 @@ Cuando se vaya a tocar un string, ese cambio se debe aplicar a todos los idiomas
 
 
 
-El menú de tres puntos de la selección múltiple de canciones debe ser idéntico al de una canción individual (menu_song_item.xml), pero aplicándose a todas las seleccionadas. Cualquier opción nueva del menú individual debe añadirse también a los menús de selección (menu_song_selection.xml y menu_queue_selection.xml) y viceversa. Únicas excepciones: "Ir al álbum/artista", que no tiene sentido con varias canciones.
+El menú de tres puntos de la selección múltiple de canciones debe ser idéntico al de una canción individual (menu\_song\_item.xml), pero aplicándose a todas las seleccionadas. Cualquier opción nueva del menú individual debe añadirse también a los menús de selección (menu\_song\_selection.xml y menu\_queue\_selection.xml) y viceversa. Únicas excepciones: "Ir al álbum/artista", que no tiene sentido con varias canciones.
+
+
+
+Para hacer ediciones utiliza Edit a no ser que tenga alguna desventaja importante (explícala), para que así salgan los diffs en la terminal.
+

@@ -43,8 +43,10 @@ import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.ui.common.ItemCardDecoration
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.SongsViewModel
@@ -193,10 +195,13 @@ class DetailDialogFragment : DialogFragment() {
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(viewModel.tracks.value.getOrNull(position)?.title)
         }
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, _, _ ->
+            adapter.songAt(pos)?.id == song.id
+        }
 
         // Arrastrar una fila hacia la derecha la añade a la cola, como el propio "Añadir a cola" del
         // menú de 3 puntos (ver SwipeToQueue.kt); aquí todas las filas son canciones, sin cabecera.
-        attachSwipeToQueue(recycler, accentColor = { playerViewModel.accentColor.value }) { position ->
+        attachSwipeToQueue(recycler, accentColor = { playerViewModel.accentTarget.value }) { position ->
             viewModel.tracks.value.getOrNull(position)?.let { playerViewModel.addToQueue(it) }
         }
 
@@ -208,6 +213,14 @@ class DetailDialogFragment : DialogFragment() {
         recyclerAlbums.layoutManager =
             LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
         recyclerAlbums.adapter = albumsAdapter
+        // Tarjeta con el acento detrás de cada álbum, como en el resto de listas; se resalta el que
+        // contiene lo que suena.
+        val albumCards = ItemCardDecoration(resources.displayMetrics.density)
+        recyclerAlbums.addItemDecoration(albumCards)
+        albumCards.highlight = { pos ->
+            val id = albumsAdapter.albumAt(pos)?.id
+            id != null && playerViewModel.currentSong.value?.albums?.any { it.album.id == id } == true
+        }
 
         toolbar.setNavigationOnClickListener {
             if (viewModel.selectedIds.value.isEmpty()) dismiss() else viewModel.clearSelection()
@@ -314,6 +327,7 @@ class DetailDialogFragment : DialogFragment() {
                         albumsDivider.visibility = visibility
                     }
                 }
+                launch { playerViewModel.currentSong.collect { recyclerAlbums.invalidate() } }
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         // Toda la ficha sigue el acento de LO QUE SUENA, el mismo que lleva el
@@ -323,6 +337,7 @@ class DetailDialogFragment : DialogFragment() {
                         // cabecera; la barra de scroll lo usa a plena intensidad.
                         applyAccent(accent, headerBox, toolbar, infoLines)
                         scrollbar.setAccentColor(accent)
+                        albumCards.setAccentColor(accent, recyclerAlbums)
                         adapter.setAccentColor(accent)
                     }
                 }
@@ -464,7 +479,7 @@ class DetailDialogFragment : DialogFragment() {
             .show()
         // Mismo acento que el resto de la ficha: el de lo que suena (ver el comentario de
         // playerViewModel.accentColor.collect más arriba).
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** Menú de 3 puntos de la selección múltiple (ver menu_song_selection.xml, el mismo que usa
@@ -545,7 +560,7 @@ class DetailDialogFragment : DialogFragment() {
                 }
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /**
@@ -636,7 +651,7 @@ class DetailDialogFragment : DialogFragment() {
      */
     private fun showRenameArtistDialog() {
         val currentName = viewModel.header.value?.title ?: return
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         val input = EditText(requireContext()).apply {
             setText(currentName)
             setSelection(text.length)
@@ -706,7 +721,7 @@ class DetailDialogFragment : DialogFragment() {
             .show()
         // Mismo acento que el resto de la ficha: el de lo que suena (ver el comentario de
         // playerViewModel.accentColor.collect más arriba).
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     companion object {

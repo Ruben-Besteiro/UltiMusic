@@ -15,9 +15,11 @@ import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.TagSummary
+import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
@@ -41,6 +43,7 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerLibrary)
         val createButton = view.findViewById<FloatingActionButton>(R.id.btnCreateTag)
+        val emptyView = view.findViewById<View>(R.id.emptyView)
 
         val adapter = TagsAdapter(
             onTagClick = { tag -> CollectionDetailDialogFragment.showTag(this, tag.id) },
@@ -53,6 +56,11 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
             sectionLetter(tagsViewModel.visibleTags.value.getOrNull(position)?.name)
         }
 
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, kind, name ->
+            // Una etiqueta solo se marca si se reproduce directamente desde ella.
+            kind == CollectionKind.TAG && name != null && adapter.tagAt(pos)?.name == name
+        }
+
         createButton.setOnClickListener {
             TagEditorDialogFragment.newCreate().show(parentFragmentManager, TagEditorDialogFragment.TAG)
         }
@@ -60,9 +68,12 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch {
-                    // El aviso de "sin etiquetas personalizadas" ya no es un emptyView aparte: es la
-                    // última fila del propio adapter (ver TagsAdapter.submit/HintViewHolder).
-                    tagsViewModel.visibleTags.collect { list -> adapter.submit(list) }
+                    tagsViewModel.visibleTags.collect { list ->
+                        adapter.submit(list)
+                        // Aviso centrado mientras no exista ninguna etiqueta personalizada.
+                        emptyView.visibility =
+                            if (list.none { it.systemKey == null && !it.isAutoAssigned }) View.VISIBLE else View.GONE
+                    }
                 }
                 // El amarillo dinámico del botón "+" y de la barra de scroll sigue el color de lo
                 // que suena (ver PlaylistsFragment, mismo patrón): a diferencia del color propio de
@@ -99,6 +110,6 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.playlist_delete) { _, _ -> tagsViewModel.deleteTag(tag.id) }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 }

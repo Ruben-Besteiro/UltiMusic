@@ -40,8 +40,22 @@ fun sectionLetter(text: String?): String {
  *
  * [bubble] es nulo cuando la barra se pegó sin burbuja de letra (ver [attachScrollbarDrag]).
  */
-class ScrollbarController internal constructor(private val thumb: View, private val bubble: TextView?) {
+class ScrollbarController internal constructor(
+    private val thumb: View,
+    private val bubble: TextView?,
+    private val recycler: RecyclerView,
+    private val cards: ItemCardDecoration
+) {
+    /** Ver [highlightNowPlaying]. */
+    fun setHighlight(predicate: ((Int) -> Boolean)?) {
+        cards.highlight = predicate
+        recycler.invalidate()
+    }
+
+    fun refreshHighlight() = recycler.invalidate()
+
     fun setAccentColor(color: Int) {
+        cards.setAccentColor(color, recycler)
         (thumb.background as GradientDrawable).setColor(color)
         bubble?.let {
             (it.background as GradientDrawable).setColor(color)
@@ -86,6 +100,11 @@ fun RecyclerView.attachScrollbarDrag(
     val thumbHeightPx = THUMB_HEIGHT_DP.dpToPx(density)
     val bubbleMarginPx = BUBBLE_MARGIN_DP.dpToPx(density)
     val bubbleSizePx = BUBBLE_SIZE_DP.dpToPx(density)
+
+    // Fondo de tarjeta de cada elemento (ver ItemCardDecoration); su color lo actualiza
+    // ScrollbarController.setAccentColor junto con el de la barra.
+    val cards = ItemCardDecoration(density)
+    addItemDecoration(cards)
 
     val parentView = parent as ViewGroup
 
@@ -269,5 +288,5 @@ fun RecyclerView.attachScrollbarDrag(
         override fun onRequestDisallowInterceptTouchEvent(disallowIntercept: Boolean) = Unit
     })
 
-    return ScrollbarController(thumb, bubble)
+    return ScrollbarController(thumb, bubble, this, cards)
 }

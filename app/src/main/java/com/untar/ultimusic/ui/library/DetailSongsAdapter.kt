@@ -85,6 +85,8 @@ class DetailSongsAdapter(
         if (selectedIds.isNotEmpty()) notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
     }
 
+    fun songAt(position: Int): Song? = tracks.getOrNull(position)
+
     override fun getItemCount(): Int = tracks.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): TrackViewHolder {

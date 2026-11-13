@@ -21,9 +21,11 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.PlaylistSummary
+import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.util.AccentTint
 import kotlinx.coroutines.flow.combine
@@ -61,6 +63,11 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
         recycler.adapter = adapter
         val scrollbar = recycler.attachScrollbarDrag { position ->
             sectionLetter(viewModel.playlists.value.getOrNull(position)?.name)
+        }
+
+        scrollbar.highlightNowPlaying(viewLifecycleOwner, playerViewModel) { pos, song, kind, name ->
+            // Una lista solo se marca si se reproduce directamente desde ella.
+            kind == CollectionKind.LISTA && name != null && adapter.playlistAt(pos)?.name == name
         }
 
         createButton.setOnClickListener { showCreateDialog() }
@@ -124,7 +131,7 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.playlist_delete) { _, _ -> viewModel.delete(playlist.name) }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /**
@@ -137,7 +144,7 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
         positive: String,
         onAccept: (String) -> Unit
     ) {
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         val input = EditText(requireContext()).apply {
             setText(initial)
             setSelection(text.length)

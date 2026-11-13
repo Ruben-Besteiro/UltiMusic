@@ -392,7 +392,7 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
 
         // Mismo amarillo dinámico que el resto del diálogo (spinner, botón de reintentar): ver el
         // `collect` de accentColor en onViewCreated.
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         val tint = ColorStateList.valueOf(accent)
         checkboxes.forEach { it.buttonTintList = tint }
         toggleAll.setTextColor(accent)

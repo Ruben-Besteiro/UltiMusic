@@ -62,7 +62,7 @@ class BulkLyricsProgressDialogFragment : DialogFragment() {
         // que esperar a setOnShowListener. El collect de más abajo se encarga de los cambios de
         // acento MIENTRAS el diálogo está abierto; esto es solo el primer teñido.
         dialog.setOnShowListener {
-            AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
         }
 
         lifecycleScope.launch {

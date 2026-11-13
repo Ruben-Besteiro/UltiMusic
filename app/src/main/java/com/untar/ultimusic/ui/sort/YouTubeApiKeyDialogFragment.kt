@@ -54,7 +54,7 @@ class YouTubeApiKeyDialogFragment : DialogFragment() {
         // El enlace es amarillo en el XML y la regla del proyecto es que todo lo amarillo use el
         // color dinámico (ver AccentTint). Se tiñe aquí y no en onViewCreated porque un
         // DialogFragment que monta su vista en onCreateDialog no pasa por onCreateView.
-        link.setTextColor(playerViewModel.accentColor.value)
+        link.setTextColor(playerViewModel.accentTarget.value)
 
         val dialog = AlertDialog.Builder(requireContext())
             .setTitle(R.string.youtube_setup_title)
@@ -64,7 +64,7 @@ class YouTubeApiKeyDialogFragment : DialogFragment() {
             .create()
 
         dialog.setOnShowListener {
-            AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
             // Igual que en GeniusTokenDialogFragment: el listener va aquí, no en setPositiveButton,
             // porque el de la fábrica cierra el diálogo pase lo que pase.
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
@@ -145,7 +145,7 @@ class YouTubeApiKeyDialogFragment : DialogFragment() {
         status.setText(messageRes)
         status.setTextColor(
             if (isError) requireContext().getColor(R.color.um_error)
-            else playerViewModel.accentColor.value
+            else playerViewModel.accentTarget.value
         )
     }
 

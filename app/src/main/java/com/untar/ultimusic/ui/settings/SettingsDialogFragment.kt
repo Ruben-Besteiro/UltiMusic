@@ -381,7 +381,7 @@ class SettingsDialogFragment : DialogFragment() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeLibraryRoot(treeUri) }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /**
@@ -418,7 +418,7 @@ class SettingsDialogFragment : DialogFragment() {
             .setNegativeButton(R.string.dialog_cancel, null)
             .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeGreylistFolder(folder.path) }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /**
@@ -445,7 +445,7 @@ class SettingsDialogFragment : DialogFragment() {
                 showBulkLyricsProgress()
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     private fun showBulkLyricsProgress() {
@@ -621,7 +621,7 @@ class SettingsDialogFragment : DialogFragment() {
             .setMessage(bodyRes)
             .setPositiveButton(R.string.dialog_ok, null)
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /**
@@ -679,7 +679,7 @@ class SettingsDialogFragment : DialogFragment() {
     /** Pide un nombre y guarda la configuración actual (bandas + refuerzos) como preset nuevo. */
     private fun showSavePresetDialog() {
         val padding = (16 * resources.displayMetrics.density).toInt()
-        val accent = playerViewModel.accentColor.value
+        val accent = playerViewModel.accentTarget.value
         val input = EditText(requireContext()).apply {
             hint = getString(R.string.settings_eq_save_preset_name)
             val current = playerViewModel.currentPresetName.value
@@ -707,7 +707,7 @@ class SettingsDialogFragment : DialogFragment() {
                 }
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** Confirmación antes de borrar el preset guardado que esté seleccionado ahora mismo. */
@@ -723,7 +723,7 @@ class SettingsDialogFragment : DialogFragment() {
                 toast(R.string.settings_eq_preset_deleted)
             }
             .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
+        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
     }
 
     /** "230" -> "230 Hz", "1200" -> "1.2 kHz". Con Locale.ROOT para que el punto no cambie con el idioma. */
@@ -1028,7 +1028,8 @@ class SettingsDialogFragment : DialogFragment() {
                         additionalOptionsCheck.buttonTintList = tint
                         libraryRootsTitle.setTextColor(accent)
                         greylistTitle.setTextColor(accent)
-                        greylistAdapter.setAccent(accent)
+                        // Solo al terminar el fundido: setAccent hace notifyDataSetChanged.
+                        if (accent == playerViewModel.accentTarget.value) greylistAdapter.setAccent(accent)
                         addAllLyricsTitle.setTextColor(accent)
                         eqTitle.setTextColor(accent)
                         // Solo se tiñe la pista (parte exterior) y solo en el estado encendido; el

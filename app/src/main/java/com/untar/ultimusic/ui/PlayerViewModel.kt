@@ -1,5 +1,8 @@
 package com.untar.ultimusic.ui
 
+import android.animation.ArgbEvaluator
+import android.animation.ValueAnimator
+import androidx.interpolator.view.animation.FastOutSlowInInterpolator
 import android.app.Application
 import android.content.ComponentName
 import android.content.Context
@@ -21,6 +24,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlin.math.log2
@@ -249,6 +253,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
      * que cerrar desde "recientes" tampoco lo corte—, y si no estaba sonando nada se para solo.
      */
     override fun onCleared() {
+        accentFade?.cancel()
         if (bound) {
             bound = false
             runCatching { getApplication<Application>().unbindService(serviceConnection) }
@@ -304,7 +309,37 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
      * que así dejan de ser amarillos y se tiñen con la canción. Mientras no hay nada sonando (o el
      * Service todavía no está listo) vale [DynamicColor.DEFAULT], el amarillo de toda la vida.
      */
-    val accentColor: StateFlow<Int> = serviceState(DynamicColor.DEFAULT) { it.accentColor }
+    val accentTarget: StateFlow<Int> = serviceState(DynamicColor.DEFAULT) { it.accentColor }
+
+    private val _accentColor = MutableStateFlow(DynamicColor.DEFAULT)
+    private var accentFade: ValueAnimator? = null
+
+    /**
+     * El acento tal como se ve: igual que [accentTarget] pero cuando éste cambia, pasa del color
+     * viejo al nuevo en [ACCENT_FADE_MS] emitiendo los colores intermedios, así que todo lo que lo
+     * observa (pestañas, iconos, tarjetas de la lista...) funde sin tocar nada más.
+     *
+     * Lo que NO debe fundir usa [accentTarget]: lecturas puntuales de `.value` (botones de
+     * diálogos que se tiñen una sola vez al mostrarse, el gesto de deslizar a la cola) y la
+     * notificación, que lee el acento del servicio directamente.
+     */
+    val accentColor: StateFlow<Int> = _accentColor.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            accentTarget.collect { target ->
+                accentFade?.cancel()
+                val from = _accentColor.value
+                if (from == target) return@collect
+                accentFade = ValueAnimator.ofObject(ArgbEvaluator(), from, target).apply {
+                    duration = ACCENT_FADE_MS
+                    interpolator = FastOutSlowInInterpolator()
+                    addUpdateListener { _accentColor.value = it.animatedValue as Int }
+                    start()
+                }
+            }
+        }
+    }
 
     /** Ver [PlaybackService.coverRevision]. Quien pinte una carátula sacada de [currentSong] o
      * [queue] debe recargarla también cuando esto cambie, no solo cuando esos dos cambien: si no,
@@ -498,6 +533,7 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private companion object {
+        const val ACCENT_FADE_MS = 300L
         const val FALLBACK_FLAT_PRESET_NAME = "Plano"
         const val FALLBACK_USER_MODIFIED_PRESET_NAME = "Usuario"
         val FALLBACK_REVERB_PRESET_NAMES = listOf(

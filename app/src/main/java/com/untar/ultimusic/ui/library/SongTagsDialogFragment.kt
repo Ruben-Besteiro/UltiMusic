@@ -93,7 +93,7 @@ class SongTagsDialogFragment : DialogFragment() {
             .setView(content)
             .setPositiveButton(R.string.dialog_ok) { _, _ -> if (isMultiEdit) applyMultiChanges() }
             .create()
-        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentColor.value) }
+        dialog.setOnShowListener { AccentTint.buttons(dialog, playerViewModel.accentTarget.value) }
         return dialog
     }
 

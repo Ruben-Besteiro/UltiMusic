@@ -24,6 +24,8 @@ class GenresAdapter(
 
     fun submit(list: List<GenreSummary>) = genres.submit(list)
 
+    fun genreAt(position: Int): GenreSummary? = if (position in 0 until genres.size) genres[position] else null
+
     override fun getItemCount(): Int = genres.size
 
     override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): GenreViewHolder {
