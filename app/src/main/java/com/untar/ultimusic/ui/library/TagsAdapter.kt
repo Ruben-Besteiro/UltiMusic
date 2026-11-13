@@ -62,7 +62,7 @@ class TagsAdapter(
             // resto de "amarillos" de la app, cada etiqueta tiene su propio color de verdad (elegido
             // en TagEditorDialogFragment, o sembrado en Migrations.kt.seedDefaultTags para las
             // predefinidas), así que no le aplica la regla de color dinámico.
-            AccentTint.fill(itemView, R.id.tagChip, DynamicColor.dim(tag.colorArgb))
+            AccentTint.fill(itemView, R.id.tagChip, DynamicColor.dark(tag.colorArgb))
             AccentTint.stroke(itemView, R.id.tagChip, tag.colorArgb, R.dimen.tag_chip_stroke_width)
             subtitle.text = context.resources.getQuantityString(
                 R.plurals.song_count, tag.songCount, tag.songCount

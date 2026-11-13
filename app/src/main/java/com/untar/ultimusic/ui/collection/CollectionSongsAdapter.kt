@@ -93,7 +93,8 @@ class CollectionSongsAdapter(
     fun setAccentColor(color: Int) {
         if (accentColor == color) return
         accentColor = color
-        if (selectedIds.isNotEmpty()) notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
+        // Siempre, no solo con selección: el título de cada fila va en el color claro (ver bind).
+        notifyItemRangeChanged(0, itemCount, DiffedList.PAYLOAD_REBIND)
     }
 
     /** [removable] enseña/oculta la X de cada fila; [descRes] es lo que lee un lector de pantalla al
@@ -184,6 +185,7 @@ class CollectionSongsAdapter(
             onRemove: (Song) -> Unit
         ) {
             title.text = song.title
+            title.setTextColor(com.untar.ultimusic.util.DynamicColor.light(accentColor))
             bindSongSubtitle(song, subtitleArtist, subtitleRest, youtubeIcon, youtubeViews)
 
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))

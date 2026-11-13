@@ -1180,7 +1180,7 @@ class IPodDialogFragment : DialogFragment() {
      *
      * Es el sitio donde se ve mejor la regla de los dos amarillos (ver [AccentTint]): todo lo que en
      * el XML era `um_yellow` lleva el acento tal cual, y lo que era `um_yellow_dark` lo lleva
-     * atenuado ([DynamicColor.dim]).
+     * atenuado ([DynamicColor.dark]).
      */
     private fun tintIPod(view: View, accent: Int) {
         AccentTint.icons(
@@ -1213,7 +1213,7 @@ class IPodDialogFragment : DialogFragment() {
         // El cuerpo es el único sitio de la app pintado con `@color/um_yellow_dark`, así que es el
         // único que lleva el acento atenuado. Antes se quedaba con el amarillo oscuro fijo del XML
         // aunque sonara una canción azul, porque aquí solo se repintaban los contornos.
-        AccentTint.fill(view, R.id.ipodBody, DynamicColor.dim(accent))
+        AccentTint.fill(view, R.id.ipodBody, DynamicColor.dark(accent))
 
         // El icono de altavoz de la fila "sonando ahora" también sigue el acento.
         // Solo al terminar el fundido (accent == destino): setAccent hace notifyDataSetChanged y

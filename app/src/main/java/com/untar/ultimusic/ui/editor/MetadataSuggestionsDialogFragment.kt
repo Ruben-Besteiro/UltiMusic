@@ -159,7 +159,7 @@ class MetadataSuggestionsDialogFragment : DialogFragment() {
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         loading.indeterminateTintList = ColorStateList.valueOf(accent)
-                        retryButton.backgroundTintList = ColorStateList.valueOf(accent)
+                        AccentTint.textButton(retryButton, accent)
                         adapter.setAccent(accent)
                     }
                 }

@@ -134,7 +134,8 @@ class SongsAdapter(
     fun setAccentColor(color: Int) {
         if (accentColor == color) return
         accentColor = color
-        if (selectedIds.isNotEmpty()) notifySongsChanged(PAYLOAD_STATE)
+        // Siempre, no solo con selección: el título de cada fila va en el color claro (ver bindState).
+        notifySongsChanged(PAYLOAD_STATE)
     }
 
     /** Ver [com.untar.ultimusic.util.CoverArt.revision]: vuelve a pedir la carátula de lo visible,
@@ -264,6 +265,7 @@ class SongsAdapter(
         }
 
         fun bindState(selected: Boolean, accentColor: Int, tags: List<TagSummary>) {
+            title.setTextColor(DynamicColor.light(accentColor))
             selectionScrim.visibility = if (selected) View.VISIBLE else View.GONE
             selectionCheck.visibility = if (selected) View.VISIBLE else View.GONE
             if (selected) AccentTint.fill(itemView, R.id.selectionCheck, accentColor)
@@ -286,7 +288,7 @@ class SongsAdapter(
                 chip.text = tag.name
                 // Colores FIJOS por etiqueta, no el acento dinámico: igual que en TagsAdapter, cada
                 // etiqueta tiene su propio color de verdad, no le aplica la regla de amarillo dinámico.
-                AccentTint.fill(chip, R.id.tagChipMini, DynamicColor.dim(tag.colorArgb))
+                AccentTint.fill(chip, R.id.tagChipMini, DynamicColor.dark(tag.colorArgb))
                 AccentTint.stroke(chip, R.id.tagChipMini, tag.colorArgb, R.dimen.tag_chip_stroke_width)
                 tagsContainer.addView(chip)
             }

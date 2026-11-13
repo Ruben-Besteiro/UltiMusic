@@ -17,7 +17,7 @@
     <color name="um_surface">#FF141414</color>
     <color name="um_surface_variant">#FF1F1F1F</color>
     <color name="um_sql_toggle_bg">#FF383838</color>
-    <!-- El oscuro es el claro con cada canal RGB dividido entre 3 (ver DynamicColor.dim). Esa
+    <!-- El oscuro es el claro con cada canal RGB dividido entre 3 (ver DynamicColor.dark, que ahora usa luminosidad fija). Esa
          relación no es decorativa: es la regla que aplica AccentTint al teñir con el color de la
          carátula, así que si se cambia um_yellow hay que recalcular este a un tercio. -->
     <color name="um_yellow">#FFFFD000</color>
@@ -42,7 +42,7 @@
 
     <!-- Colores de borde de las 5 etiquetas predefinidas (ver Migrations.kt.seedDefaultTags): el
          relleno oscuro de su "salchicha" (ver item_tag.xml/TagsAdapter) sale de aplicar
-         DynamicColor.dim a este mismo color en vez de guardarse aparte. NO son amarillos, así que no
+         DynamicColor.dark a este mismo color en vez de guardarse aparte. NO son amarillos, así que no
          les aplica la regla de color dinámico del resto de la app: son fijos a propósito, uno por
          etiqueta. "En ninguna lista" y "Sin etiquetas personalizadas" comparten el mismo gris casi
          negro a propósito; "Descargada recientemente", "Vídeo sincronizado" y "Remix / Cover" son

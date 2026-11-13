@@ -24,7 +24,7 @@ import com.untar.ultimusic.util.DynamicColor
 
 /**
  * Pinta detrás de cada elemento de un RecyclerView un rectángulo de esquinas redondeadas con el
- * color dinámico en su versión oscura ([DynamicColor.dim]), y deja un pequeño hueco entre elementos
+ * color dinámico en su versión oscura ([DynamicColor.dark]), y deja un pequeño hueco entre elementos
  * para que se lean como tarjetas.
  *
  * Es una decoración y no un `android:background` en cada item_*.xml para que el color siga al
@@ -42,7 +42,7 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
     private val radius = RADIUS_DP * density
     private val marginH = MARGIN_H_DP * density
     private val marginV = MARGIN_V_DP * density
-    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DynamicColor.dim(DynamicColor.DEFAULT) }
+    private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DynamicColor.dark(DynamicColor.DEFAULT) }
     private val rect = RectF()
     private var accent = DynamicColor.DEFAULT
 
@@ -91,14 +91,15 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
                 child.right + child.translationX,
                 child.bottom + child.translationY
             )
-            // Lo que suena (o está en pausa) lleva el acento a secas en vez de su versión oscura.
+            // Lo que suena (o está en pausa) lleva el color difuso (hay texto encima, y es el mismo
+            // de la cabecera de las fichas) en vez de su versión oscura.
             val position = parent.getChildAdapterPosition(child)
             val playing = position != RecyclerView.NO_POSITION && highlight?.invoke(position) == true
             val amount = stepHighlight(child, position, playing, step)
             if (amount != (if (playing) 1f else 0f)) animating = true
             // Misma curva que el fundido del acento (un ValueAnimator, que por defecto acelera y
             // frena): con una lineal este parecía terminar antes aunque durase lo mismo.
-            paint.color = ColorUtils.blendARGB(DynamicColor.dim(accent), accent, easing.getInterpolation(amount))
+            paint.color = ColorUtils.blendARGB(DynamicColor.dark(accent), DynamicColor.asBackground(accent),easing.getInterpolation(amount))
             paint.alpha = (child.alpha * 255).toInt()
             c.drawRoundRect(rect, radius, radius, paint)
         }

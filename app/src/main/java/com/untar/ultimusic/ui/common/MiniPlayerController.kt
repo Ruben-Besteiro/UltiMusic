@@ -23,6 +23,7 @@ import com.untar.ultimusic.ui.player.IPodDialogFragment
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
+import com.untar.ultimusic.util.DynamicColor
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -172,6 +173,9 @@ class MiniPlayerController(
                     playerViewModel.accentColor.collect { accent ->
                         progress.progressTintList = ColorStateList.valueOf(accent)
                         AccentTint.icons(miniPlayer, accent, R.id.btnPlayPause)
+                        // Fondo débil y título claro, como la barra superior (ver MainActivity).
+                        miniPlayer.setBackgroundColor(DynamicColor.faint(accent))
+                        title.setTextColor(DynamicColor.light(accent))
                     }
                 }
             }

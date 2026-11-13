@@ -24,7 +24,7 @@ import com.untar.ultimusic.R
  *
  * - Lo que en el XML sea **`@color/um_yellow`** se repinta con el **acento** de la canción que suena.
  * - Lo que sea **`@color/um_yellow_dark`** se repinta con ese mismo acento **a un N-ésimo**, es decir
- *   con [DynamicColor.dim]. (Los dos amarillos fijos cumplen esa misma relación, así que mientras no
+ *   con [DynamicColor.dark]. (Los dos amarillos fijos cumplen esa misma relación, así que mientras no
  *   suena nada la app se ve igual que siempre.)
  *
  * Aquí no hay ninguna magia que adivine qué vistas son amarillas: **cada pantalla dice cuáles son**.
@@ -67,6 +67,16 @@ object AccentTint {
      */
     fun contentOnAccent(icon: ImageView, @ColorInt accent: Int) {
         ImageViewCompat.setImageTintList(icon, ColorStateList.valueOf(DynamicColor.onColor(accent)))
+    }
+
+    /**
+     * Pinta un botón CON TEXTO (los "Reintentar", "Elegir carpeta"...) con el color difuso del
+     * acento ([DynamicColor.asBackground]) y le pone un texto que se lea encima.
+     */
+    fun textButton(button: MaterialButton, @ColorInt accent: Int) {
+        val diffuse = DynamicColor.asBackground(accent)
+        button.backgroundTintList = ColorStateList.valueOf(diffuse)
+        button.setTextColor(DynamicColor.onColor(diffuse))
     }
 
     /**
