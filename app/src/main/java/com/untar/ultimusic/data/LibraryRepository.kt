@@ -573,11 +573,15 @@ class LibraryRepository private constructor(
                 _reconcileProgress.value = 0
                 try {
                     val knownPaths = dao.allSongPaths().toHashSet()
+                    val tAll = System.nanoTime() // TEMPORAL-BENCH
                     val result = MusicScanner.scan(appContext, knownPaths) { current, total ->
                         _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
                         onProgress(current, total)
                     }
+                    val tDao = System.nanoTime() // TEMPORAL-BENCH
                     dao.reconcile(result.newSongs, result.currentPaths)
+                    android.util.Log.d("UMBench", "dao.reconcile ${result.newSongs.size} songs in ${(System.nanoTime() - tDao) / 1_000_000} ms") // TEMPORAL-BENCH
+                    android.util.Log.d("UMBench", "TOTAL reconcile ${(System.nanoTime() - tAll) / 1_000_000} ms") // TEMPORAL-BENCH
                 } finally {
                     _reconciling.value = false
                 }

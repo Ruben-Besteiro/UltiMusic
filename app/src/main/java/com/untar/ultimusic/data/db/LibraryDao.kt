@@ -948,6 +948,7 @@ abstract class LibraryDao {
         val producerCache = HashMap<String, Long>()
         val albumCache = HashMap<Pair<String, String>, Long>()
         for (s in inserted) {
+            if (BENCH_NO_CACHE) { artistCache.clear(); producerCache.clear(); albumCache.clear() } // TEMPORAL-BENCH
             // El álbum se resuelve ANTES de insertar la canción: hace falta su id para enlazarlo en
             // `song_album` en cuanto se conozca el id de la canción, un par de líneas más abajo. Sin
             // etiqueta de álbum no hay fila de álbum, en vez de agrupar todo lo suelto bajo un "Álbum

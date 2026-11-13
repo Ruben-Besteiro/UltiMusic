@@ -61,10 +61,12 @@ object MusicScanner {            // OBJECT = SINGLETON
         knownPaths: Set<String> = emptySet(),
         onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }
     ): ScanResult = withContext(Dispatchers.IO) {
+        val tWalk = System.nanoTime() // TEMPORAL-BENCH
         val entries = LinkedHashMap<String, SafStorage.SafEntry>()
         for ((rootDocPath, treeUri) in SafStorage.grantedRoots()) {
             collectAudioFiles(context, treeUri, rootDocPath, entries)
         }
+        android.util.Log.d("UMBench", "walk ${entries.size} files in ${(System.nanoTime() - tWalk) / 1_000_000} ms") // TEMPORAL-BENCH
         val currentPaths = entries.keys.toHashSet()
         val newEntries = entries.values.filter { it.docPath !in knownPaths }
         val total = newEntries.size
@@ -82,6 +84,7 @@ object MusicScanner {            // OBJECT = SINGLETON
                 }
             }.awaitAll().filterNotNull()
         }
+        android.util.Log.d("UMBench", "read ${newEntries.size} files par=$READ_PARALLELISM in ${(System.nanoTime() - t0) / 1_000_000} ms") // TEMPORAL-BENCH
         ScanResult(newSongs, currentPaths)
     }
 
