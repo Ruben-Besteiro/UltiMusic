@@ -825,8 +825,6 @@ class MainActivity : AppCompatActivity() {
                     val light = DynamicColor.light(accent)
                     val root = findViewById<View>(R.id.main)
                     // Ni la raíz ni los resultados de búsqueda se pintan: dejan ver la imagen de fondo.
-                    // La imagen se tiñe con el acento (las tarjetas hacen lo mismo con su versión borrosa).
-                    findViewById<ImageView>(R.id.mainBackground).colorFilter = BlurredBackground.tintFilter(accent)
                     findViewById<View>(R.id.toolbar).setBackgroundColor(faint)
                     tabLayout.setBackgroundColor(faint)
                     AccentTint.icons(root, light, R.id.btnSettings, R.id.btnHelp, R.id.btnSort)
