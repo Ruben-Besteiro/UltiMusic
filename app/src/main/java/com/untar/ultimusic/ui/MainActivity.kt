@@ -42,6 +42,7 @@ import com.untar.ultimusic.model.Producer
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.SongAlbumEntry
 import com.untar.ultimusic.data.playlist.PlaylistRepository
+import com.untar.ultimusic.ui.common.BlurredBackground
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.SongTagsDialogFragment
@@ -599,6 +600,9 @@ class MainActivity : AppCompatActivity() {
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
         viewPager.adapter = MainPagerAdapter(this, tabTitles)
+        // Sin rebote al llegar a la primera/última pestaña (deformaría la imagen de las tarjetas, ver
+        // ItemCardDecoration).
+        viewPager.getChildAt(0).overScrollMode = View.OVER_SCROLL_NEVER
         // Como Phonograph (pager.setOffscreenPageLimit(count - 1)): todas las páginas se crean de
         // entrada, así que al tocar una pestaña lejana no se infla ningún fragmento en mitad del
         // scroll suave. Con saltos > 3 páginas (Canciones -> Etiquetas) ViewPager2 encola un
@@ -820,9 +824,10 @@ class MainActivity : AppCompatActivity() {
                     val faint = DynamicColor.faint(accent)
                     val light = DynamicColor.light(accent)
                     val root = findViewById<View>(R.id.main)
-                    root.setBackgroundColor(faint)
+                    // Ni la raíz ni los resultados de búsqueda se pintan: dejan ver la imagen de fondo.
+                    // La imagen se tiñe con el acento (las tarjetas hacen lo mismo con su versión borrosa).
+                    findViewById<ImageView>(R.id.mainBackground).colorFilter = BlurredBackground.tintFilter(accent)
                     findViewById<View>(R.id.toolbar).setBackgroundColor(faint)
-                    findViewById<View>(R.id.searchResultsContainer).setBackgroundColor(faint)
                     tabLayout.setBackgroundColor(faint)
                     AccentTint.icons(root, light, R.id.btnSettings, R.id.btnHelp, R.id.btnSort)
                     findViewById<TextView>(R.id.tvSelectionCount).setTextColor(light)

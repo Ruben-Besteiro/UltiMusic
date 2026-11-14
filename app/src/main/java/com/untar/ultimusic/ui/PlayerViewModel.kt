@@ -311,6 +311,17 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
      */
     val accentTarget: StateFlow<Int> = serviceState(DynamicColor.DEFAULT) { it.accentColor }
 
+    private val accentUpdate: StateFlow<PlaybackService.AccentUpdate> =
+        serviceState(PlaybackService.AccentUpdate(null, 0)) { it.accentUpdate }
+
+    private val _highlightSong = MutableStateFlow<Song?>(null)
+
+    /**
+     * La canción cuya tarjeta se resalta en las listas. Es [currentSong] pero con retraso: cambia
+     * cuando el acento nuevo ya está listo y arranca su fundido, para que ambos fundidos vayan a la vez.
+     */
+    val highlightSong: StateFlow<Song?> = _highlightSong.asStateFlow()
+
     private val _accentColor = MutableStateFlow(DynamicColor.DEFAULT)
     private var accentFade: ValueAnimator? = null
 
@@ -327,9 +338,12 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     init {
         viewModelScope.launch {
-            accentTarget.collect { target ->
+            accentUpdate.collect { update ->
+                // La canción resaltada y el fundido del acento arrancan en el mismo instante.
+                _highlightSong.value = update.song
                 accentFade?.cancel()
                 val from = _accentColor.value
+                val target = service?.accentColor?.value ?: return@collect
                 if (from == target) return@collect
                 accentFade = ValueAnimator.ofObject(ArgbEvaluator(), from, target).apply {
                     duration = ACCENT_FADE_MS

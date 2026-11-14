@@ -47,6 +47,7 @@ import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.ui.common.GradientStrokeDrawable
 import com.untar.ultimusic.ui.common.SquareFrameLayout
 import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.common.attachVerticalDrag
@@ -1193,27 +1194,50 @@ class IPodDialogFragment : DialogFragment() {
         // fija directo, igual que offsetRuler en el editor de metadatos.
         view.findViewById<ValueRuler>(R.id.ipodOffsetRuler).accentColor = accent
 
-        val strokeWidths = listOf(
-            R.id.ipodBody to R.dimen.ipod_stroke_body,
-            R.id.topBox to R.dimen.ipod_stroke_display,
-            R.id.infoBox to R.dimen.ipod_stroke_info_box,
-            R.id.buttonRow to R.dimen.ipod_stroke_info_box,
-            R.id.lyricsBox to R.dimen.ipod_stroke_info_box,
-            R.id.videoOffsetBox to R.dimen.ipod_stroke_info_box,
-            R.id.btnMenu to R.dimen.ipod_stroke_button_ring,
-            R.id.btnPrev to R.dimen.ipod_stroke_button_ring,
-            R.id.btnPlayPauseBig to R.dimen.ipod_stroke_button_ring,
-            R.id.btnSongMenu to R.dimen.ipod_stroke_button_ring,
-            R.id.btnNext to R.dimen.ipod_stroke_button_ring
-        )
-        for ((id, widthDimen) in strokeWidths) {
-            AccentTint.stroke(view, id, accent, widthDimen)
-        }
-
+        // Los contornos del iPod son un degradado (claro -> acento, en diagonal), no un color liso:
+        // un `<stroke>` de XML no admite degradado, así que estos fondos son GradientStrokeDrawable
+        // (ver su doc) y se crean aquí la primera vez; las siguientes (cada paso del fundido de
+        // acento) solo se actualizan los colores. El relleno y la geometría replican los
+        // drawable/ipod_*.xml, que quedan como fondo inicial hasta este primer paso.
+        //
         // El cuerpo es el único sitio de la app pintado con `@color/um_yellow_dark`, así que es el
-        // único que lleva el acento atenuado. Antes se quedaba con el amarillo oscuro fijo del XML
-        // aunque sonara una canción azul, porque aquí solo se repintaban los contornos.
-        AccentTint.fill(view, R.id.ipodBody, DynamicColor.dark(accent))
+        // único que lleva el acento atenuado (relleno = DynamicColor.dark(accent)).
+        val ctx = requireContext()
+        val density = resources.displayMetrics.density
+        val surface = ctx.getColor(R.color.um_surface_variant)
+        val strokeStart = DynamicColor.light(accent)
+        val ring = R.dimen.ipod_stroke_button_ring
+        val box = R.dimen.ipod_stroke_info_box
+        // id, grosor, ovalado, radio (dp) y relleno
+        class StrokeSpec(val id: Int, val width: Int, val oval: Boolean, val radiusDp: Float, val fill: Int)
+        val specs = listOf(
+            StrokeSpec(R.id.ipodBody, R.dimen.ipod_stroke_body, false, 28f, DynamicColor.dark(accent)),
+            StrokeSpec(R.id.topBox, R.dimen.ipod_stroke_display, false, 12f, ctx.getColor(R.color.um_cover_placeholder)),
+            StrokeSpec(R.id.buttonRow, box, false, 100f, surface),
+            StrokeSpec(R.id.videoOffsetBox, box, false, 10f, surface),
+            StrokeSpec(R.id.btnMenu, ring, true, 0f, surface),
+            StrokeSpec(R.id.btnPrev, ring, true, 0f, surface),
+            StrokeSpec(R.id.btnPlayPauseBig, ring, true, 0f, surface),
+            StrokeSpec(R.id.btnSongMenu, ring, true, 0f, surface),
+            StrokeSpec(R.id.btnNext, ring, true, 0f, surface)
+        )
+        for (spec in specs) {
+            val target = view.findViewById<View>(spec.id) ?: continue
+            val existing = target.background as? GradientStrokeDrawable
+            if (existing != null) {
+                existing.fillColor = spec.fill
+                existing.setStrokeColors(strokeStart, accent)
+            } else {
+                target.background = GradientStrokeDrawable(
+                    oval = spec.oval,
+                    cornerRadiusPx = spec.radiusDp * density,
+                    strokeWidthPx = resources.getDimension(spec.width),
+                    fillColor = spec.fill,
+                    strokeStart = strokeStart,
+                    strokeEnd = accent
+                )
+            }
+        }
 
         // El icono de altavoz de la fila "sonando ahora" también sigue el acento.
         // Solo al terminar el fundido (accent == destino): setAccent hace notifyDataSetChanged y

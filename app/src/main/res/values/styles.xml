@@ -22,11 +22,11 @@
     </style>
 
     <!--
-      Solo para IPodNanoDialogFragment: igual que Animation.UltiMusic.SlideUp pero sin animación de
+      Solo para IPodDialogFragment: igual que Animation.UltiMusic.SlideUp pero sin animación de
       salida, porque esa ventana siempre se cierra a mano con una traslación (ver
-      [IPodNanoDialogFragment.animateClose]) para poder arrancarla desde una posición a medio camino
+      [IPodDialogFragment.animateClose]) para poder arrancarla desde una posición a medio camino
       cuando el cierre viene de un arrastre, en vez de dar un salto. Se aplica en código
-      ([IPodNanoDialogFragment.onStart]), no desde el tema, porque además al abrir arrastrando el
+      ([IPodDialogFragment.onStart]), no desde el tema, porque además al abrir arrastrando el
       mini-reproductor tampoco debe llevar NINGUNA animación de ventana propia (ver
       [MainActivity.setupMiniPlayerDrag]).
     -->
