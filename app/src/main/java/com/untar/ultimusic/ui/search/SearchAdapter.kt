@@ -122,11 +122,13 @@ class SearchAdapter(
 
     class SqlViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val text: TextView = itemView.findViewById(R.id.sqlRowText)
+        // Conserva el monospace del layout: setTypeface(null, estilo) lo sustituiría por la del sistema.
+        private val baseTypeface = text.typeface
 
         fun bind(row: SearchResult.SqlRow, accent: Int) {
             text.text = row.text
             text.setTextColor(if (row.isHeader) accent else text.context.getColor(R.color.um_on_background))
-            text.setTypeface(null, if (row.isHeader) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
+            text.setTypeface(baseTypeface, if (row.isHeader) android.graphics.Typeface.BOLD else android.graphics.Typeface.NORMAL)
         }
     }
 

@@ -185,7 +185,6 @@ class CollectionSongsAdapter(
             onRemove: (Song) -> Unit
         ) {
             title.text = song.title
-            title.setTextColor(com.untar.ultimusic.util.DynamicColor.light(accentColor))
             bindSongSubtitle(song, subtitleArtist, subtitleRest, youtubeIcon, youtubeViews)
 
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))

@@ -166,6 +166,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:background="@drawable/ipod_info_box"
             android:gravity="center_vertical"
             android:minHeight="@dimen/ipod_info_box_min_height"
             android:orientation="vertical"
@@ -375,8 +376,9 @@
                 android:id="@+id/lyricsBox"
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
+                android:background="@drawable/ipod_info_box"
                 android:clipToPadding="false"
-                android:padding="8dp" />
+                android:padding="20dp" />
 
             <!-- Botón superior derecho: la "a" en hiragana que traduce la letra al idioma del
                  sistema (ver IPodDialogFragment/LyricsTranslator). Empieza oculto; solo se muestra

@@ -1194,7 +1194,7 @@ class IPodDialogFragment : DialogFragment() {
         // fija directo, igual que offsetRuler en el editor de metadatos.
         view.findViewById<ValueRuler>(R.id.ipodOffsetRuler).accentColor = accent
 
-        // Los contornos del iPod son un degradado (claro -> acento, en diagonal), no un color liso:
+        // Los contornos del iPod son un degradado (claro -> acento, de arriba a abajo), no un color liso:
         // un `<stroke>` de XML no admite degradado, así que estos fondos son GradientStrokeDrawable
         // (ver su doc) y se crean aquí la primera vez; las siguientes (cada paso del fundido de
         // acento) solo se actualizan los colores. El relleno y la geometría replican los
@@ -1210,9 +1210,13 @@ class IPodDialogFragment : DialogFragment() {
         val box = R.dimen.ipod_stroke_info_box
         // id, grosor, ovalado, radio (dp) y relleno
         class StrokeSpec(val id: Int, val width: Int, val oval: Boolean, val radiusDp: Float, val fill: Int)
+
+        // Aquí es donde se define qué tendrá el gradiente. Si no está aquí, no lo tiene.
         val specs = listOf(
             StrokeSpec(R.id.ipodBody, R.dimen.ipod_stroke_body, false, 28f, DynamicColor.dark(accent)),
             StrokeSpec(R.id.topBox, R.dimen.ipod_stroke_display, false, 12f, ctx.getColor(R.color.um_cover_placeholder)),
+            StrokeSpec(R.id.infoBox, box, false, 10f, surface),
+            StrokeSpec(R.id.lyricsBox, box, false, 10f, surface),
             StrokeSpec(R.id.buttonRow, box, false, 100f, surface),
             StrokeSpec(R.id.videoOffsetBox, box, false, 10f, surface),
             StrokeSpec(R.id.btnMenu, ring, true, 0f, surface),

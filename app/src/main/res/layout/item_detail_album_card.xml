@@ -37,7 +37,7 @@
         android:maxLines="1"
         android:textColor="@color/um_on_background"
         android:textSize="13sp"
-        android:textStyle="italic"
+        android:textStyle="bold"
         tools:text="AiAiA - Single" />
 
     <TextView

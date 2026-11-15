@@ -73,6 +73,8 @@ class IPodLyricsAdapter : RecyclerView.Adapter<IPodLyricsAdapter.LineViewHolder>
 
     class LineViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val text = itemView as TextView
+        // Fuente del tema: setTypeface(null, estilo) la sustituiría por la del sistema.
+        private val baseTypeface: Typeface? = text.typeface
 
         fun bind(line: String, synced: Boolean, isCurrent: Boolean, accent: Int) {
             text.text = line
@@ -80,17 +82,17 @@ class IPodLyricsAdapter : RecyclerView.Adapter<IPodLyricsAdapter.LineViewHolder>
                 // La línea que toca cantar ahora mismo.
                 isCurrent -> {
                     text.setTextColor(accent)
-                    text.setTypeface(null, Typeface.BOLD)
+                    text.setTypeface(baseTypeface, Typeface.BOLD)
                 }
                 // El resto de líneas de una letra sincronizada, atenuadas (aún no llega / ya pasó).
                 synced -> {
                     text.setTextColor(ContextCompat.getColor(itemView.context, R.color.um_on_surface_muted))
-                    text.setTypeface(null, Typeface.NORMAL)
+                    text.setTypeface(baseTypeface, Typeface.NORMAL)
                 }
                 // Letra sin sincronizar (o sin letra): una única fila neutra, como antes.
                 else -> {
                     text.setTextColor(ContextCompat.getColor(itemView.context, R.color.um_on_background))
-                    text.setTypeface(null, Typeface.NORMAL)
+                    text.setTypeface(baseTypeface, Typeface.NORMAL)
                 }
             }
         }

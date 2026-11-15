@@ -19,7 +19,7 @@
         android:maxLines="1"
         android:textColor="@color/um_on_background"
         android:textSize="16sp"
-        android:textStyle="italic"
+        android:textStyle="bold"
         tools:text="Rock" />
 
     <TextView

@@ -21,6 +21,23 @@
     android:layout_height="match_parent"
     android:background="#99000000" />
 
+<!-- Franjas bajo las barras del sistema, del mismo color que la barra de herramientas y el selector
+     de pestañas que tienen al lado: así la imagen solo se ve en el área de contenido. El alto lo
+     fija MainActivity con los insets; el color, setupDynamicColor. -->
+<View
+    android:id="@+id/statusBarScrim"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_gravity="top"
+    android:background="@color/um_surface" />
+
+<View
+    android:id="@+id/navBarScrim"
+    android:layout_width="match_parent"
+    android:layout_height="0dp"
+    android:layout_gravity="bottom"
+    android:background="@color/um_surface" />
+
 <LinearLayout
     android:id="@+id/main"
     android:layout_width="match_parent"

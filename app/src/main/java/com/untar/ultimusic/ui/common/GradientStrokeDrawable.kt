@@ -18,7 +18,7 @@ import android.graphics.drawable.Drawable
  * contorno va DENTRO de los límites (su centro queda a medio grosor del borde) y el relleno llega
  * hasta ese centro, de modo que la geometría es idéntica a la de los shapes que sustituye.
  *
- * El degradado va en diagonal, de arriba-izquierda ([strokeStart]) a abajo-derecha ([strokeEnd]).
+ * El degradado va en vertical, de arriba ([strokeStart]) a abajo ([strokeEnd]).
  * Los tres colores se pueden cambiar en cualquier momento (el iPod los recalcula en cada paso del
  * fundido de acento), por eso son propiedades y no se crea un drawable nuevo cada vez.
  *
@@ -74,7 +74,7 @@ class GradientStrokeDrawable(
         val b = bounds
         if (b.isEmpty) return
         strokePaint.shader = LinearGradient(
-            b.left.toFloat(), b.top.toFloat(), b.right.toFloat(), b.bottom.toFloat(),
+            b.left.toFloat(), b.top.toFloat(), b.left.toFloat(), b.bottom.toFloat(),
             strokeStart, strokeEnd, Shader.TileMode.CLAMP
         )
     }

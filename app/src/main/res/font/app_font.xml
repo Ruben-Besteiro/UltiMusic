@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  ÚNICO sitio a tocar para cambiar la tipografía de toda la app.
+  Cómo cambiarla: copia tus .ttf/.otf a res/font/ (nombres en minúsculas, con _ en vez de espacios)
+  y sustituye los 5 pesos de abajo por los tuyos. Si tu fuente solo tiene regular y negrita,
+  deja el mismo @font/ en los pesos que falten. Nada más.
+-->
+<font-family xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <font android:font="@font/sst_light" android:fontStyle="normal" android:fontWeight="300"
+        app:font="@font/sst_light" app:fontStyle="normal" app:fontWeight="300" />
+    <font android:font="@font/sst_light_italic" android:fontStyle="italic" android:fontWeight="300"
+        app:font="@font/sst_light_italic" app:fontStyle="italic" app:fontWeight="300" />
+    <font android:font="@font/sst_regular" android:fontStyle="normal" android:fontWeight="400"
+        app:font="@font/sst_regular" app:fontStyle="normal" app:fontWeight="400" />
+    <font android:font="@font/sst_regular_italic" android:fontStyle="italic" android:fontWeight="400"
+        app:font="@font/sst_regular_italic" app:fontStyle="italic" app:fontWeight="400" />
+    <font android:font="@font/sst_medium" android:fontStyle="normal" android:fontWeight="500"
+        app:font="@font/sst_medium" app:fontStyle="normal" app:fontWeight="500" />
+    <font android:font="@font/sst_medium_italic" android:fontStyle="italic" android:fontWeight="500"
+        app:font="@font/sst_medium_italic" app:fontStyle="italic" app:fontWeight="500" />
+    <font android:font="@font/sst_bold" android:fontStyle="normal" android:fontWeight="700"
+        app:font="@font/sst_bold" app:fontStyle="normal" app:fontWeight="700" />
+    <font android:font="@font/sst_bold_italic" android:fontStyle="italic" android:fontWeight="700"
+        app:font="@font/sst_bold_italic" app:fontStyle="italic" app:fontWeight="700" />
+    <font android:font="@font/sst_heavy" android:fontStyle="normal" android:fontWeight="900"
+        app:font="@font/sst_heavy" app:fontStyle="normal" app:fontWeight="900" />
+    <font android:font="@font/sst_heavy_italic" android:fontStyle="italic" android:fontWeight="900"
+        app:font="@font/sst_heavy_italic" app:fontStyle="italic" app:fontWeight="900" />
+</font-family>
