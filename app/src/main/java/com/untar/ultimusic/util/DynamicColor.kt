@@ -318,7 +318,7 @@ object DynamicColor {
     private const val MAX_LIGHTNESS = 0.72f
     private const val DARK_LIGHTNESS = 0.115f
     private const val FAINT_LIGHTNESS = DARK_LIGHTNESS / 2
-    private const val LIGHT_LIGHTNESS = 0.86f
+    private const val LIGHT_LIGHTNESS = 0.82f
     private const val BACKGROUND_SATURATION_FACTOR = 0.55f
     private const val BACKGROUND_LIGHTNESS = 0.40f
 }

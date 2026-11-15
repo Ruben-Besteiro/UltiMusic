@@ -1,6 +1,23 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Tema base de UltiMusic: siempre oscuro (negro) con acento amarillo. -->
     <style name="Base.Theme.UltiMusic" parent="Theme.Material3.Dark.NoActionBar">
+        <item name="android:fontFamily">@font/app_font</item>
+        <item name="fontFamily">@font/app_font</item>
+        <item name="textAppearanceDisplayLarge">@style/TextAppearance.UltiMusic.DisplayLarge</item>
+        <item name="textAppearanceDisplayMedium">@style/TextAppearance.UltiMusic.DisplayMedium</item>
+        <item name="textAppearanceDisplaySmall">@style/TextAppearance.UltiMusic.DisplaySmall</item>
+        <item name="textAppearanceHeadlineLarge">@style/TextAppearance.UltiMusic.HeadlineLarge</item>
+        <item name="textAppearanceHeadlineMedium">@style/TextAppearance.UltiMusic.HeadlineMedium</item>
+        <item name="textAppearanceHeadlineSmall">@style/TextAppearance.UltiMusic.HeadlineSmall</item>
+        <item name="textAppearanceTitleLarge">@style/TextAppearance.UltiMusic.TitleLarge</item>
+        <item name="textAppearanceTitleMedium">@style/TextAppearance.UltiMusic.TitleMedium</item>
+        <item name="textAppearanceTitleSmall">@style/TextAppearance.UltiMusic.TitleSmall</item>
+        <item name="textAppearanceBodyLarge">@style/TextAppearance.UltiMusic.BodyLarge</item>
+        <item name="textAppearanceBodyMedium">@style/TextAppearance.UltiMusic.BodyMedium</item>
+        <item name="textAppearanceBodySmall">@style/TextAppearance.UltiMusic.BodySmall</item>
+        <item name="textAppearanceLabelLarge">@style/TextAppearance.UltiMusic.LabelLarge</item>
+        <item name="textAppearanceLabelMedium">@style/TextAppearance.UltiMusic.LabelMedium</item>
+        <item name="textAppearanceLabelSmall">@style/TextAppearance.UltiMusic.LabelSmall</item>
         <item name="colorPrimary">@color/um_yellow</item>
         <item name="colorOnPrimary">#404040</item>
         <item name="colorSecondary">@color/um_yellow</item>

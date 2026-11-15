@@ -173,9 +173,8 @@ class MiniPlayerController(
                     playerViewModel.accentColor.collect { accent ->
                         progress.progressTintList = ColorStateList.valueOf(accent)
                         AccentTint.icons(miniPlayer, accent, R.id.btnPlayPause)
-                        // Fondo débil y título claro, como la barra superior (ver MainActivity).
+                        // Fondo débil, como la barra superior (ver MainActivity).
                         miniPlayer.setBackgroundColor(DynamicColor.faint(accent))
-                        title.setTextColor(DynamicColor.light(accent))
                     }
                 }
             }

@@ -22,11 +22,11 @@
     </style>
 
     <!--
-      Solo para IPodNanoDialogFragment: igual que Animation.UltiMusic.SlideUp pero sin animación de
+      Solo para IPodDialogFragment: igual que Animation.UltiMusic.SlideUp pero sin animación de
       salida, porque esa ventana siempre se cierra a mano con una traslación (ver
-      [IPodNanoDialogFragment.animateClose]) para poder arrancarla desde una posición a medio camino
+      [IPodDialogFragment.animateClose]) para poder arrancarla desde una posición a medio camino
       cuando el cierre viene de un arrastre, en vez de dar un salto. Se aplica en código
-      ([IPodNanoDialogFragment.onStart]), no desde el tema, porque además al abrir arrastrando el
+      ([IPodDialogFragment.onStart]), no desde el tema, porque además al abrir arrastrando el
       mini-reproductor tampoco debe llevar NINGUNA animación de ventana propia (ver
       [MainActivity.setupMiniPlayerDrag]).
     -->
@@ -83,5 +83,66 @@
     -->
     <style name="ThemeOverlay.UltiMusic.SwitchRippleWhite" parent="">
         <item name="android:colorControlActivated">@android:color/white</item>
+    </style>
+    <!-- Apariencias de texto de Material con la fuente de la app (ver res/font/app_font.xml). -->
+    <style name="TextAppearance.UltiMusic.DisplayLarge" parent="TextAppearance.Material3.DisplayLarge">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.DisplayMedium" parent="TextAppearance.Material3.DisplayMedium">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.DisplaySmall" parent="TextAppearance.Material3.DisplaySmall">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.HeadlineLarge" parent="TextAppearance.Material3.HeadlineLarge">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.HeadlineMedium" parent="TextAppearance.Material3.HeadlineMedium">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
+    </style>
+    <style name="TextAppearance.UltiMusic.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="fontFamily">@font/app_font</item>
+        <item name="android:fontFamily">@font/app_font</item>
     </style>
 </resources>

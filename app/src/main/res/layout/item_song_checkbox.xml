@@ -49,7 +49,7 @@
             android:maxLines="1"
             android:textColor="@color/um_on_background"
             android:textSize="14sp"
-            android:textStyle="italic"
+            android:textStyle="bold"
             tools:text="AAAAAAAAAAAAAAAA" />
 
         <TextView

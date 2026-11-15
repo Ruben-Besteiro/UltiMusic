@@ -43,9 +43,7 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
     private val marginH = MARGIN_H_DP * density
     private val marginV = MARGIN_V_DP * density
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DynamicColor.dark(DynamicColor.DEFAULT) }
-    private val blurPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-        colorFilter = BlurredBackground.tintFilter(DynamicColor.DEFAULT)
-    }
+    private val blurPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
     private var accent = DynamicColor.DEFAULT
 
@@ -62,7 +60,6 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
     fun setAccentColor(accent: Int, recycler: RecyclerView) {
         if (this.accent == accent) return
         this.accent = accent
-        blurPaint.colorFilter = BlurredBackground.tintFilter(accent)
         recycler.invalidate()
     }
 
@@ -199,7 +196,7 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
         const val NO_CARD = "nocard"
         const val FADE_MS = 300L
         /** Opacidad del color de la tarjeta cuando hay imagen de fondo detrás (1 = opaca). */
-        const val CARD_ALPHA = 0.5f
+        const val CARD_ALPHA = 0.7f
         const val RADIUS_DP = 14f
         const val MARGIN_H_DP = 3f
         const val MARGIN_V_DP = 3f

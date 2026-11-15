@@ -151,6 +151,10 @@ class MainActivity : AppCompatActivity() {
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
+            findViewById<View>(R.id.statusBarScrim).layoutParams.height = systemBars.top
+            findViewById<View>(R.id.navBarScrim).layoutParams.height = systemBars.bottom
+            findViewById<View>(R.id.statusBarScrim).requestLayout()
+            findViewById<View>(R.id.navBarScrim).requestLayout()
             insets
         }
 
@@ -825,12 +829,11 @@ class MainActivity : AppCompatActivity() {
                     val light = DynamicColor.light(accent)
                     val root = findViewById<View>(R.id.main)
                     // Ni la raíz ni los resultados de búsqueda se pintan: dejan ver la imagen de fondo.
-                    // La imagen se tiñe con el acento (las tarjetas hacen lo mismo con su versión borrosa).
-                    findViewById<ImageView>(R.id.mainBackground).colorFilter = BlurredBackground.tintFilter(accent)
                     findViewById<View>(R.id.toolbar).setBackgroundColor(faint)
+                    findViewById<View>(R.id.statusBarScrim).setBackgroundColor(faint)
+                    findViewById<View>(R.id.navBarScrim).setBackgroundColor(faint)
                     tabLayout.setBackgroundColor(faint)
                     AccentTint.icons(root, light, R.id.btnSettings, R.id.btnHelp, R.id.btnSort)
-                    findViewById<TextView>(R.id.tvSelectionCount).setTextColor(light)
                     // Solo repintamos la pestaña actual: las demás ya están en gris y no cambian.
                     tabLayout.getTabAt(tabLayout.selectedTabPosition)?.let { tab ->
                         applyTabAppearance(tab, selected = true, accent)

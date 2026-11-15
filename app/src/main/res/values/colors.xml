@@ -20,11 +20,11 @@
     <!-- Los cuatro tonos del acento, que en código salen de DynamicColor (mismo matiz y saturación
          que um_yellow, luminosidad fija): um_yellow_dark = DynamicColor.dark (0.115),
          um_yellow_faint = DynamicColor.faint (la mitad del oscuro) y um_yellow_light =
-         DynamicColor.light (0.86). Si se cambia um_yellow hay que recalcular los otros tres. -->
+         DynamicColor.light (0.82). Si se cambia um_yellow hay que recalcular los otros tres. -->
     <color name="um_yellow">#FFFFD000</color>
     <color name="um_yellow_dark">#FF3B3000</color>
     <color name="um_yellow_faint">#FF1D1800</color>
-    <color name="um_yellow_light">#FFFFF2B8</color>
+    <color name="um_yellow_light">#FFFFEEA3</color>
     <color name="um_on_background">#FFF2F2F2</color>
     <color name="um_on_surface_muted">#FFB0B0B0</color>
     <color name="um_divider">#FF404040</color>

@@ -5,9 +5,6 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapShader
 import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.ColorMatrix
-import android.graphics.ColorMatrixColorFilter
 import android.graphics.Matrix
 import android.graphics.Shader
 import android.view.View
@@ -59,36 +56,11 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
             return found
         }
 
-        /**
-         * Filtro que tiñe la imagen con [accent]: la pasa a luminancia y la multiplica por el acento
-         * (con su canal más alto a tope, para que el brillo no dependa de lo oscuro que sea el
-         * acento). Se usa igual en la imagen de fondo y en su versión borrosa, para que casen.
-         */
-        fun tintFilter(accent: Int): ColorMatrixColorFilter {
-            val peak = maxOf(Color.red(accent), Color.green(accent), Color.blue(accent)).coerceAtLeast(1)
-            val r = Color.red(accent) / peak.toFloat()
-            val g = Color.green(accent) / peak.toFloat()
-            val b = Color.blue(accent) / peak.toFloat()
-            val lr = 0.213f
-            val lg = 0.715f
-            val lb = 0.072f
-            return ColorMatrixColorFilter(
-                ColorMatrix(
-                    floatArrayOf(
-                        lr * r, lg * r, lb * r, 0f, 0f,
-                        lr * g, lg * g, lb * g, 0f, 0f,
-                        lr * b, lg * b, lb * b, 0f, 0f,
-                        0f, 0f, 0f, 1f, 0f
-                    )
-                )
-            )
-        }
-
         fun get(context: Context): BlurredBackground = instance ?: create(context).also { instance = it }
 
         private fun create(context: Context): BlurredBackground {
             val options = BitmapFactory.Options().apply { inSampleSize = 2 }
-            val source = BitmapFactory.decodeResource(context.resources, R.drawable.bg_main, options)
+            val source = BitmapFactory.decodeResource(context.resources, R.drawable.bg_main2, options)
             val width = BLUR_WIDTH_PX
             val height = (width * source.height / source.width.toFloat()).toInt().coerceAtLeast(1)
             val small = Bitmap.createScaledBitmap(source, width, height, true)
