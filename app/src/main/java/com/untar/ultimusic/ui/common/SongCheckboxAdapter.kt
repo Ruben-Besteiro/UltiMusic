@@ -84,7 +84,7 @@ class SongCheckboxAdapter(
 
         fun bind(song: Song, checked: Boolean, accentColor: Int, onToggle: (Song) -> Unit) {
             title.text = song.title
-            subtitle.text = joinNonBlank(song.artistDisplay(), song.albumDisplay())
+            subtitle.text = joinNonBlank(song.artistDisplay(itemView.context), song.albumDisplay())
 
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
 

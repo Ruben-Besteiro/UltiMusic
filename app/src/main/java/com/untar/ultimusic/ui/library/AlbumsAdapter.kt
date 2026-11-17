@@ -9,11 +9,11 @@ import coil.load
 import com.google.android.material.imageview.ShapeableImageView
 import com.untar.ultimusic.ui.common.DiffedList
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.joinNonBlank
+import com.untar.ultimusic.util.unknownArtist
 
 /**
  * Rejilla de álbumes: una carátula cuadrada grande con el título y el artista debajo. El número de
@@ -52,7 +52,7 @@ class AlbumsAdapter(
             title.text = album.title
             // El año ya viene con su propio fallback resuelto en SQL (el más tardío de las
             // canciones del álbum si no hay uno puesto a mano, ver LibraryDao.observeAlbumSummaries).
-            subtitle.text = joinNonBlank(album.artistName ?: MusicScanner.UNKNOWN_ARTIST, album.year?.toString())
+            subtitle.text = joinNonBlank(album.artistName ?: unknownArtist(context), album.year?.toString())
             songCount.text = context.resources.getQuantityString(
                 R.plurals.song_count, album.songCount, album.songCount
             )

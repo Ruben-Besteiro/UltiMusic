@@ -71,32 +71,75 @@ object LrcLibApi {
     suspend fun search(query: String, songDurationMs: Long): List<LyricsSuggestion> =
         runSearch("q=${URLEncoder.encode(query, "UTF-8")}", songDurationMs)
 
+    /**
+     * Un resultado de lrclib.net tal cual, SIN filtrar ni ordenar, para la búsqueda automática (ver
+     * [com.untar.ultimusic.data.LyricsAutoFetcher]): a diferencia del buscador manual, esa necesita
+     * ver también los instrumentales, porque que el mejor candidato lo sea es justo lo que le dice
+     * que deje de buscar letra para esa canción.
+     */
+    data class Candidate(
+        val trackName: String,
+        val artistName: String,
+        val albumName: String?,
+        val durationMs: Long?,
+        val instrumental: Boolean,
+        val syncedLyrics: String?,
+        val plainLyrics: String?
+    )
+
+    /** Búsqueda por campos para [com.untar.ultimusic.data.LyricsAutoFetcher]; [album] opcional,
+     *  como la segunda variante de consulta de namida. Lanza excepción si falla la red. */
+    suspend fun searchCandidates(title: String, artist: String, album: String?): List<Candidate> =
+        withContext(Dispatchers.IO) {
+            val params = buildList {
+                add("track_name=${URLEncoder.encode(title, "UTF-8")}")
+                if (artist.isNotBlank()) add("artist_name=${URLEncoder.encode(artist, "UTF-8")}")
+                if (!album.isNullOrBlank()) add("album_name=${URLEncoder.encode(album, "UTF-8")}")
+            }.joinToString("&")
+            fetchCandidates(params)
+        }
+
+    private fun fetchCandidates(queryParams: String): List<Candidate> {
+        val results = httpGet("${BASE_URL}search?$queryParams")
+        return (0 until results.length()).map { i ->
+            val item = results.getJSONObject(i)
+            Candidate(
+                trackName = item.optString("trackName"),
+                artistName = item.optString("artistName"),
+                albumName = item.optText("albumName"),
+                durationMs = item.optDouble("duration").takeIf { !it.isNaN() }?.let { (it * 1000).toLong() },
+                instrumental = item.optBoolean("instrumental"),
+                syncedLyrics = item.optText("syncedLyrics"),
+                plainLyrics = item.optText("plainLyrics")
+            )
+        }
+    }
+
+    /**
+     * Campo de texto o null. Ojo: el `optString` de Android convierte un `null` JSON en el TEXTO
+     * "null", y lrclib.net devuelve `null` en las letras que no tiene; sin este filtro ese "null"
+     * pasaba por letra de verdad y se guardaba tal cual. También se descarta si viene como texto.
+     */
+    private fun JSONObject.optText(key: String): String? {
+        if (isNull(key)) return null
+        return optString(key).takeIf { it.isNotBlank() && !it.trim().equals("null", ignoreCase = true) }
+    }
+
     private suspend fun runSearch(queryParams: String, songDurationMs: Long): List<LyricsSuggestion> =
         withContext(Dispatchers.IO) {
-            val results = httpGet("${BASE_URL}search?$queryParams")
-
-            val suggestions = mutableListOf<LyricsSuggestion>()
-            for (i in 0 until results.length()) {
-                val item = results.getJSONObject(i)
-                if (item.optBoolean("instrumental")) continue
-
-                val synced = item.optString("syncedLyrics", null)?.takeIf { it.isNotBlank() }
-                val plain = item.optString("plainLyrics", null)?.takeIf { it.isNotBlank() }
-                if (synced == null && plain == null) continue
-
-                val durationMs = item.optDouble("duration").takeIf { !it.isNaN() }
-                    ?.let { (it * 1000).toLong() }
-
-                suggestions += LyricsSuggestion(
-                    trackName = item.optString("trackName"),
-                    artistName = item.optString("artistName"),
-                    albumName = item.optString("albumName", null)?.takeIf { it.isNotBlank() },
-                    durationMs = durationMs,
-                    durationMatches = durationMatches(songDurationMs, durationMs),
-                    syncedLyrics = synced,
-                    plainLyrics = plain
-                )
-            }
+            val suggestions = fetchCandidates(queryParams)
+                .filter { !it.instrumental && (it.syncedLyrics != null || it.plainLyrics != null) }
+                .map { candidate ->
+                    LyricsSuggestion(
+                        trackName = candidate.trackName,
+                        artistName = candidate.artistName,
+                        albumName = candidate.albumName,
+                        durationMs = candidate.durationMs,
+                        durationMatches = durationMatches(songDurationMs, candidate.durationMs),
+                        syncedLyrics = candidate.syncedLyrics,
+                        plainLyrics = candidate.plainLyrics
+                    )
+                }
 
             // Dos criterios, en este orden: primero la letra sincronizada (sin ella el buscador no
             // tiene sentido) y luego la duración. `sortedWith` mantiene el orden relativo original

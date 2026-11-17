@@ -33,6 +33,7 @@
 
         <TextView
             android:id="@+id/suggestionTitle"
+            android:textAlignment="viewStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/um_on_background"
@@ -42,6 +43,7 @@
 
         <TextView
             android:id="@+id/suggestionSubtitle"
+            android:textAlignment="viewStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:textColor="@color/um_on_surface_muted"

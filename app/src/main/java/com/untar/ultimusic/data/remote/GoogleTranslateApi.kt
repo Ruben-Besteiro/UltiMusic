@@ -3,6 +3,7 @@ package com.untar.ultimusic.data.remote
 import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.untar.ultimusic.util.HttpStatusException
 import org.json.JSONArray
 import java.io.IOException
 import java.net.HttpURLConnection
@@ -32,7 +33,10 @@ object GoogleTranslateApi {
     /** Caracteres máximos por petición (el endpoint admite ~5000 en el cuerpo del POST). */
     private const val MAX_CHUNK_CHARS = 4_000
 
-    private val rateLimitGuard = RateLimitGuard("GoogleTranslate")
+    /** Al primer 429, 1 h de castigo (ver [RateLimitGuard]): Google renueva el bloqueo anti-bot con
+     *  cada petición recibida mientras dura, y cada reintento tras un cooldown corto lo alargaba. */
+    private val rateLimitGuard = RateLimitGuard("GoogleTranslate", cooldownMs = COOLDOWN_MS)
+    private const val COOLDOWN_MS = 60 * 60_000L
 
     /**
      * Traduce [lines] al idioma del SISTEMA con el idioma de origen autodetectado. Devuelve la lista
@@ -41,8 +45,8 @@ object GoogleTranslateApi {
      * sincronizada). Nunca lanza. [lines] no debería incluir líneas en blanco (ya las filtra
      * [com.untar.ultimusic.util.LyricsTranslator]).
      */
-    suspend fun translateLines(lines: List<String>): List<String>? {
-        if (lines.isEmpty()) return emptyList()
+    suspend fun translateLines(lines: List<String>): Result<List<String>> {
+        if (lines.isEmpty()) return Result.success(emptyList())
         val target = Locale.getDefault().language
 
         return withContext(Dispatchers.IO) {
@@ -61,12 +65,98 @@ object GoogleTranslateApi {
                 result
             }.onFailure { e ->
                 Log.e(TAG, "Fallo traduciendo ${lines.size} líneas: ${e.message}", e)
-            }.getOrNull()
+            }
         }
     }
 
-    private fun request(target: String, text: String): String {
-        val url = "$ENDPOINT?client=gtx&sl=auto&tl=${URLEncoder.encode(target, "UTF-8")}&dt=t"
+    /**
+     * Romanización ESTÁNDAR del texto original (Hepburn, pinyin, Romanización Revisada, cirílico a
+     * la inglesa...) con su lectura según el contexto —los kanji salen con la lectura japonesa, no
+     * la china— que es lo que ICU no sabe hacer; la pide a Google con `dt=rm` (campo 3 del segmento
+     * final: transliteración del texto de origen). Devuelve una entrada por línea de [lines], o
+     * un fallo (con su excepción) si falla alguna petición. Nunca lanza. Cada trozo de la letra
+     * ([MAX_CHUNK_CHARS]) va en UNA petición ([transliterateBatch]), con recurso a una por línea.
+     * Si cualquier trozo falla, falla todo: no se devuelve una romanización a medias.
+     */
+    suspend fun transliterateLines(lines: List<String>, sourceLanguage: String? = null): Result<List<String>> {
+        if (lines.isEmpty()) return Result.success(emptyList())
+        // Con idioma de origen fijado, una línea de solo kanji no se puede confundir con chino.
+        val source = when (sourceLanguage) {
+            null, "" -> "auto"
+            "zh" -> "zh-CN"
+            "iw" -> "he"
+            else -> sourceLanguage
+        }
+        return withContext(Dispatchers.IO) {
+            runCatching {
+                val result = mutableListOf<String>()
+                for (piece in chunk(lines)) {
+                    rateLimitGuard.ensureNotBlocked()
+                    val batch = transliterateBatch(piece, source)
+                    if (batch != null) {
+                        result.addAll(batch)
+                    } else {
+                        // Recurso: una petición por línea. Una línea sin romanización se queda como estaba.
+                        for (line in piece) {
+                            rateLimitGuard.ensureNotBlocked()
+                            val body = request("en", line, dt = "t&dt=rm", source = source)
+                            result.add(runCatching { parseTransliteration(body) }.getOrDefault(line))
+                        }
+                    }
+                    rateLimitGuard.onSuccess()
+                }
+                result
+            }.onFailure { e ->
+                Log.e(TAG, "Fallo romanizando ${lines.size} líneas: ${e.message}", e)
+            }
+        }
+    }
+
+    /** Separador entre líneas al romanizar en bloque. Verificado en dispositivo (noviembre de 2026):
+     *  Google devuelve la romanización de todo el texto como UNA sola cadena, sin saltos de línea y
+     *  sin segmentos por línea, pero un "|" entre líneas sobrevive tal cual (`a | b | c`). */
+    private const val BATCH_SEPARATOR = "|"
+    private val BATCH_SPLIT = Regex("""\s*\|\s*""")
+
+    /**
+     * Romaniza [piece] en UNA petición, con [BATCH_SEPARATOR] en una línea propia entre cada par de
+     * líneas, y parte la respuesta por él. `null` si no se puede fiarse del resultado (alguna línea
+     * ya contiene el separador, la petición falla por algo que no es el límite de peticiones, o el
+     * número de partes no cuadra): el llamador pide entonces línea a línea. Un límite de peticiones
+     * ([ApiRateLimitException]) sí se propaga: insistir con 70 peticiones más solo lo empeoraría.
+     */
+    private fun transliterateBatch(piece: List<String>, source: String): List<String>? {
+        if (piece.size < 2 || piece.any { it.contains(BATCH_SEPARATOR) }) return null
+        rateLimitGuard.ensureNotBlocked()
+        return try {
+            val body = request("en", piece.joinToString("\n$BATCH_SEPARATOR\n"), dt = "t&dt=rm", source = source)
+            val parts = parseTransliteration(body).trim().split(BATCH_SPLIT)
+            if (parts.size == piece.size) parts
+            else {
+                Log.w(TAG, "Bloque con ${parts.size} partes romanizadas, se mandaron ${piece.size}; línea a línea")
+                null
+            }
+        } catch (e: ApiRateLimitException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w(TAG, "Romanización en bloque fallida (${e.message}); línea a línea")
+            null
+        }
+    }
+
+    private fun parseTransliteration(body: String): String {
+        val segments = JSONArray(body).getJSONArray(0)
+        val sb = StringBuilder()
+        for (i in 0 until segments.length()) {
+            val seg = segments.optJSONArray(i) ?: continue
+            if (seg.length() > 3 && !seg.isNull(3)) sb.append(seg.optString(3, ""))
+        }
+        if (sb.isBlank()) throw IOException("Google no devolvió romanización")
+        return sb.toString().trimEnd('\n')
+    }
+
+    private fun request(target: String, text: String, dt: String = "t", source: String = "auto"): String {
+        val url = "$ENDPOINT?client=gtx&sl=${URLEncoder.encode(source, "UTF-8")}&tl=${URLEncoder.encode(target, "UTF-8")}&dt=$dt"
         val connection = URL(url).openConnection() as HttpURLConnection
         try {
             connection.requestMethod = "POST"
@@ -82,7 +172,7 @@ object GoogleTranslateApi {
             if (code == 429) {
                 rateLimitGuard.rateLimited(connection.getHeaderField("Retry-After"))
             }
-            if (code != HttpURLConnection.HTTP_OK) throw IOException("HTTP $code")
+            if (code != HttpURLConnection.HTTP_OK) throw HttpStatusException(code)
             return connection.inputStream.reader(Charsets.UTF_8).use { it.readText() }
         } finally {
             connection.disconnect()

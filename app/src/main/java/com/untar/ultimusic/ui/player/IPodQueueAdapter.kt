@@ -156,7 +156,7 @@ class IPodQueueAdapter(
             selected: Boolean,
             selectionActive: Boolean
         ) {
-            subtitle.text = joinNonBlank(song.title, song.artistDisplay())
+            subtitle.text = joinNonBlank(song.title, song.artistDisplay(itemView.context))
             cover.load(CoverArt.cover(itemView.context, song), CoverLoader.get(itemView.context))
 
             selectionScrim.visibility = if (selected) View.VISIBLE else View.GONE

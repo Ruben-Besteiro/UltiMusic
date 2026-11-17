@@ -19,11 +19,11 @@ import android.widget.FrameLayout
  * medida imponiendo el alto que toca según [aspectRatio].
  *
  * La pantalla del iPod usa además [animateAspectRatio] para pasar de cuadrada (carátula/cola) a
- * 16:9 (vídeo) con una animación corta en vez de un salto brusco, y para lo mismo con el botón
- * "Ver más/menos" del contenedor de la letra (ver [com.untar.ultimusic.ui.player.IPodDialogFragment]):
- * ahí el objetivo es 0f, así el recuadro se estrecha solo verticalmente hasta quedar en una línea,
- * momento en el que [onEnd] lo oculta del todo (`isVisible = false`) para que ese hueco final no
- * se quede ocupando espacio.
+ * 16:9 (vídeo) con una animación corta en vez de un salto brusco. (El botón "Ver más/menos" del
+ * contenedor de la letra, hoy desactivado y comentado en
+ * [com.untar.ultimusic.ui.player.IPodDialogFragment], la usaba también con objetivo 0f: el
+ * recuadro se estrechaba solo verticalmente hasta quedar en una línea, momento en el que [onEnd]
+ * lo ocultaba del todo (`isVisible = false`) para que ese hueco final no ocupara espacio.)
  */
 class SquareFrameLayout @JvmOverloads constructor(
     context: Context,
@@ -61,9 +61,9 @@ class SquareFrameLayout @JvmOverloads constructor(
      *
      * [onEnd], si se pasa, se llama al terminar la animación de verdad (con `end()`, no con
      * `cancel()`: una animación cancelada por otra que la reemplaza a medio camino no debe disparar
-     * el remate de la anterior). Lo usa el botón "Ver más/menos" del iPod para ocultar del todo el
-     * recuadro de la carátula/vídeo (`isVisible = false`) justo cuando ha terminado de encogerse
-     * hasta convertirse en una línea, no antes.
+     * el remate de la anterior). Lo usaba el botón "Ver más/menos" del iPod (hoy desactivado)
+     * para ocultar del todo el recuadro de la carátula/vídeo (`isVisible = false`) justo cuando
+     * había terminado de encogerse hasta convertirse en una línea, no antes.
      */
     fun animateAspectRatio(target: Float, durationMs: Long = 200, onEnd: (() -> Unit)? = null) {
         ratioAnimator?.cancel()

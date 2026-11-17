@@ -31,9 +31,10 @@ data class Song(
      * [com.untar.ultimusic.data.db.entities.SongEntity.videoThumbnailName]. */
     val videoThumbnailName: String?,
 
-    /** Milisegundos que se adelanta (positivo) o atrasa (negativo) el vídeo respecto al audio local,
-     * para corregir videoclips que no van del todo sincronizados. Ver los ajustes del reproductor de
-     * vídeo del iPod. */
+    /** Milisegundos que se adelanta (positivo) o atrasa (negativo) la letra respecto del vídeo EN MODO
+     * VÍDEO (audio y vídeo salen de YouTube, así que entre ellos no hay desfase); p. ej. un número
+     * negativo grande si el vídeo tiene intro. Se suma al [lyricsOffsetMs] normal. Ver la regla del
+     * modo vídeo del iPod y el editor de metadatos. */
     val videoOffsetMs: Long,
 
     /** Milisegundos que se adelanta (positivo) o atrasa (negativo) la letra sincronizada respecto al
@@ -54,7 +55,16 @@ data class Song(
 
     /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.dateAdded]. Default `0` para no romper
      * construcciones con nombre existentes. */
-    val dateAdded: Long = 0
+    val dateAdded: Long = 0,
+
+    /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.lyricsSearchedAt]. */
+    val lyricsSearchedAt: Long? = null,
+
+    /** Canal de YouTube del vídeo, refrescado solo; ver SongEntity.youtubeChannelId. */
+    val youtubeChannelId: String? = null,
+
+    /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.size]. */
+    val size: Long = 0L
 ) : SortableLibraryItem {
     /**
      * Álbum "principal" (el primero de [albums]), para el resto de la aplicación que solo necesita

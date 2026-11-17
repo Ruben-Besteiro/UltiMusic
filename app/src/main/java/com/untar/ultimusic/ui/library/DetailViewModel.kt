@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.playlist.PlaylistRepository
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
@@ -17,6 +16,7 @@ import com.untar.ultimusic.util.SortOption
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.formatCompactCount
 import com.untar.ultimusic.util.sortedByOption
+import com.untar.ultimusic.util.unknownArtist
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -259,7 +259,7 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
                 R.drawable.ic_person,
                 artistNames.takeIf { it.isNotEmpty() }?.joinToString(", ")
                     ?: artistName
-                    ?: MusicScanner.UNKNOWN_ARTIST
+                    ?: unknownArtist(getApplication())
             ),
             InfoLine(R.drawable.ic_music_note, songsText(songCount)),
             InfoLine(R.drawable.ic_timer, TimeFormat.hhmmss(totalDuration)),

@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Una bandera de la cuadrícula de idiomas de Ajustes (dialog_settings.xml, @+id/languageGrid).
+     La imagen y el contentDescription (nombre del idioma en sí mismo) los pone
+     SettingsDialogFragment.setupLanguage desde AppLocale.LANGUAGES. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:background="?attr/selectableItemBackground"
+    android:padding="2dp">
+
+    <ImageView
+        android:id="@+id/flagImage"
+        android:layout_width="56dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_flag_clip"
+        android:clipToOutline="true"
+        android:importantForAccessibility="no"
+        android:scaleType="centerCrop" />
+
+    <View
+        android:id="@+id/flagSelectedBorder"
+        android:layout_width="56dp"
+        android:layout_height="36dp"
+        android:background="@drawable/bg_flag_selected"
+        android:visibility="gone" />
+
+</FrameLayout>

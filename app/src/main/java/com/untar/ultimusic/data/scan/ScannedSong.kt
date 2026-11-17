@@ -26,5 +26,8 @@ data class ScannedSong(
      *  desde la migración a Storage Access Framework, `filePath` ya no es una ruta de archivo real
      *  sobre la que se pueda llamar `File.lastModified()`. `0` para una canción "suelta" leída fuera
      *  del escaneo (ver [MusicScanner.readTagsFromUri]), que nunca se persiste. */
-    val dateAdded: Long = 0L
+    val dateAdded: Long = 0L,
+    /** Tamaño del archivo en bytes, también del listado SAF (ver `SafStorage.SafEntry.size`) y por
+     *  tanto `0` para una canción "suelta". Ver [com.untar.ultimusic.data.db.entities.SongEntity.size]. */
+    val size: Long = 0L
 )

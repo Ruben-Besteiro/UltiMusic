@@ -3,54 +3,46 @@ package com.untar.ultimusic.ui.settings
 import android.net.Uri
 import android.view.LayoutInflater
 import android.view.View
-import android.view.ViewGroup
 import android.widget.ImageButton
+import android.widget.LinearLayout
 import android.widget.TextView
-import androidx.recyclerview.widget.RecyclerView
+import androidx.core.view.isVisible
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.util.SafStorage
 
 /**
- * Lista de carpetas raíz adicionales de la fonoteca (ajustes > Carpetas de la fonoteca). Cada fila
- * muestra el docPath de la carpeta concedida (ver [SafStorage.docPathOfTree]; a diferencia de
- * [GreylistAdapter], aquí no hay un prefijo común como `UltiMusic/` que recortar: cada carpeta puede
- * vivir en cualquier parte del volumen) y una papelera que la quita. Sin switch: una carpeta raíz
- * está dentro de la biblioteca o no lo está, no tiene el estado intermedio de "excluida pero sin
- * quitar" que sí tiene la lista gris. Al no llevar switch tampoco lleva acento propio (la papelera no
- * se tiñe en [GreylistAdapter] tampoco). Mismo patrón plano que [GreylistAdapter]: sin DiffUtil,
- * `submit()` repinta entera.
+ * Lista de carpetas raíz de la fonoteca (ajustes > Carpetas de la fonoteca). Cada fila muestra el
+ * docPath de la carpeta concedida (ver [SafStorage.docPathOfTree]) y una papelera que la quita (la
+ * carpeta principal UltiMusic no la lleva).
+ *
+ * Pinta las filas directamente en un [LinearLayout] en vez de usar un RecyclerView: dentro del
+ * ScrollView de ajustes, un RecyclerView `wrap_content` se quedaba midiendo una sola fila aunque el
+ * adaptador tuviera varias, y las carpetas añadidas nunca aparecían. Son muy pocas filas, así que
+ * no hace falta reciclar nada.
  */
 class LibraryRootAdapter(
+    private val container: LinearLayout,
     private val onDelete: (LibraryRoot) -> Unit
-) : RecyclerView.Adapter<LibraryRootAdapter.LibraryRootViewHolder>() {
-
-    private var roots: List<LibraryRoot> = emptyList()
+) {
 
     fun submit(list: List<LibraryRoot>) {
-        roots = list
-        notifyDataSetChanged()
-    }
-
-    override fun getItemCount(): Int = roots.size
-
-    override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): LibraryRootViewHolder {
-        val inflater = LayoutInflater.from(parent.context)
-        return LibraryRootViewHolder(inflater.inflate(R.layout.item_library_root, parent, false))
-    }
-
-    override fun onBindViewHolder(holder: LibraryRootViewHolder, position: Int) {
-        holder.bind(roots[position], onDelete)
-    }
-
-    class LibraryRootViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        private val path: TextView = itemView.findViewById(R.id.libraryRootPath)
-        private val delete: ImageButton = itemView.findViewById(R.id.btnLibraryRootDelete)
-
-        fun bind(root: LibraryRoot, onDelete: (LibraryRoot) -> Unit) {
-            path.text = runCatching { Uri.parse(root.path) }.getOrNull()
-                ?.let { SafStorage.docPathOfTree(it) } ?: root.path
-            delete.setOnClickListener { onDelete(root) }
+        container.removeAllViews()
+        val inflater = LayoutInflater.from(container.context)
+        for (root in list) {
+            val row = inflater.inflate(R.layout.item_library_root, container, false)
+            bind(row, root)
+            container.addView(row)
         }
+    }
+
+    private fun bind(row: View, root: LibraryRoot) {
+        val path: TextView = row.findViewById(R.id.libraryRootPath)
+        val delete: ImageButton = row.findViewById(R.id.btnLibraryRootDelete)
+        path.text = runCatching { Uri.parse(root.path) }.getOrNull()
+            ?.let { SafStorage.docPathOfTree(it) } ?: root.path
+        // La carpeta UltiMusic no se puede quitar: se enseña sin papelera.
+        delete.isVisible = !root.isMain
+        delete.setOnClickListener { onDelete(root) }
     }
 }

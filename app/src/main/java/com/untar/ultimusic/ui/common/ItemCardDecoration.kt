@@ -42,6 +42,7 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
     private val radius = RADIUS_DP * density
     private val marginH = MARGIN_H_DP * density
     private val marginV = MARGIN_V_DP * density
+    private val edge = (EDGE_DP * density).toInt()
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = DynamicColor.dark(DynamicColor.DEFAULT) }
     private val blurPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     private val rect = RectF()
@@ -99,8 +100,53 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
     }
 
     override fun getItemOffsets(outRect: Rect, view: View, parent: RecyclerView, state: RecyclerView.State) {
+        watchAdapter(parent)
+        val lm = parent.layoutManager as? androidx.recyclerview.widget.LinearLayoutManager
+        val position = parent.getChildAdapterPosition(view)
+        val count = state.itemCount
         if (!hasCard(view)) return
-        outRect.set(marginH.toInt(), marginV.toInt(), marginH.toInt(), marginV.toInt())
+        var top = marginV.toInt()
+        var bottom = marginV.toInt()
+        // Hueco extra antes de la primera fila y después de la última, en todas las listas por
+        // igual (antes cada layout lo ponía a mano con paddingTop, y solo algunos). Las cabeceras
+        // sin tarjeta (resumen de Canciones, secciones de la búsqueda) llevan su propio hueco en
+        // el XML, así que aquí no se tocan.
+        if (lm != null && lm.orientation == RecyclerView.VERTICAL && position != RecyclerView.NO_POSITION && count > 0) {
+            val grid = lm as? androidx.recyclerview.widget.GridLayoutManager
+            val row = grid?.spanSizeLookup?.getSpanGroupIndex(position, grid.spanCount) ?: position
+            val lastRow = grid?.spanSizeLookup?.getSpanGroupIndex(count - 1, grid.spanCount) ?: (count - 1)
+            if (row == 0) top += edge
+            if (row == lastRow) bottom += edge
+        }
+        outRect.set(marginH.toInt(), top, marginH.toInt(), bottom)
+    }
+
+    // El hueco del último depende de cuántos elementos haya: al añadir o quitar filas, la que
+    // antes era la última no se vuelve a medir sola y se quedaría con el hueco (o sin él).
+    private var watchedAdapter: RecyclerView.Adapter<*>? = null
+    private var adapterRecycler: RecyclerView? = null
+    private val invalidateDecorations = Runnable {
+        adapterRecycler?.let { if (!it.isComputingLayout) it.invalidateItemDecorations() }
+    }
+    private val adapterObserver = object : RecyclerView.AdapterDataObserver() {
+        override fun onChanged() = schedule()
+        override fun onItemRangeInserted(positionStart: Int, itemCount: Int) = schedule()
+        override fun onItemRangeRemoved(positionStart: Int, itemCount: Int) = schedule()
+        override fun onItemRangeMoved(fromPosition: Int, toPosition: Int, itemCount: Int) = schedule()
+        private fun schedule() {
+            val recycler = adapterRecycler ?: return
+            recycler.removeCallbacks(invalidateDecorations)
+            recycler.post(invalidateDecorations)
+        }
+    }
+
+    private fun watchAdapter(parent: RecyclerView) {
+        val adapter = parent.adapter
+        if (adapter === watchedAdapter) return
+        watchedAdapter?.unregisterAdapterDataObserver(adapterObserver)
+        watchedAdapter = adapter
+        adapterRecycler = parent
+        adapter?.registerAdapterDataObserver(adapterObserver)
     }
 
     // Este método es el que dibuja la decoración detrás de cada hijo del RecyclerView.
@@ -116,11 +162,6 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
         }
         blurPaint.shader = blurShader
         usesBlur = blurShader != null
-        // El rebote por defecto (estiramiento en Android 12+) deforma lo dibujado por la lista pero no
-        // la imagen de fondo de detrás: se desactiva cuando hay imagen.
-        if (usesBlur && parent.overScrollMode != View.OVER_SCROLL_NEVER) {
-            parent.overScrollMode = View.OVER_SCROLL_NEVER
-        }
         parent.getLocationOnScreen(drawnAt)
         watchPosition(parent)
         val colorAlpha = if (blurShader != null) CARD_ALPHA else 1f
@@ -200,6 +241,8 @@ internal class ItemCardDecoration(density: Float) : RecyclerView.ItemDecoration(
         const val RADIUS_DP = 14f
         const val MARGIN_H_DP = 3f
         const val MARGIN_V_DP = 3f
+        /** Hueco extra encima de la primera fila y debajo de la última. */
+        const val EDGE_DP = 10f
     }
 }
 

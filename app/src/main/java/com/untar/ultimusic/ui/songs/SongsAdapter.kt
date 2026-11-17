@@ -265,7 +265,6 @@ class SongsAdapter(
         }
 
         fun bindState(selected: Boolean, accentColor: Int, tags: List<TagSummary>) {
-            title.setTextColor(DynamicColor.light(accentColor))
             selectionScrim.visibility = if (selected) View.VISIBLE else View.GONE
             selectionCheck.visibility = if (selected) View.VISIBLE else View.GONE
             if (selected) AccentTint.fill(itemView, R.id.selectionCheck, accentColor)

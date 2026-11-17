@@ -89,6 +89,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputTitle"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -119,6 +120,7 @@
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/inputArtists"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -134,6 +136,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputYear"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="number"
@@ -150,6 +153,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputGenres"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="textCapWords"

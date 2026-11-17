@@ -1,0 +1,732 @@
+<resources>
+    <string name="app_name">UltiMusic</string>
+
+    <!-- Pestañas -->
+    <string name="tab_songs">Canciones</string>
+    <string name="tab_albums">Álbumes</string>
+    <string name="tab_artists">Artistas</string>
+    <string name="tab_genres">Géneros</string>
+    <string name="tab_tags">Etiquetas</string>
+    <string name="tab_playlists">Listas</string>
+
+    <!-- Barra superior -->
+    <string name="action_menu">Menú</string>
+    <string name="action_search">Buscar</string>
+    <string name="action_more">Más opciones</string>
+    <!-- Botón de ordenar de la barra superior (antes "Más opciones", que no hacía nada): abre
+         SortDialogFragment para la pestaña actual del ViewPager. -->
+    <string name="action_sort">Ordenar</string>
+
+    <!-- Buscador -->
+    <string name="search_hint">Buscar</string>
+    <string name="search_back">Cerrar la búsqueda</string>
+    <string name="search_clear">Borrar lo escrito</string>
+    <string name="search_prompt">Escribe para buscar canciones, álbumes y artistas.</string>
+    <string name="search_by_lyrics">Buscar por letra</string>
+    <string name="search_prompt_lyrics">Escribe para buscar canciones por su letra.</string>
+    <string name="search_no_results">No se ha encontrado nada para «%1$s».</string>
+    <string name="sql_toggle">SQL</string>
+    <string name="sql_toggle_description">Modo SQL</string>
+    <string name="sql_hint">Introduce un comando SQL</string>
+    <string name="sql_help">SELECT: consulta la base de datos\nINSERT: añade filas a una tabla\nUPDATE: modifica filas que ya existen\nDELETE: borra filas de una tabla\nCREATE: crea una tabla, un índice o una vista\nALTER: cambia la estructura de una tabla\nDROP: elimina una tabla, un índice o una vista\nPRAGMA: consulta o ajusta la base de datos\n\nElige una opción del desplegable o escribe, y toca fuera de la barra para ejecutar.</string>
+    <string name="sql_confirm_title">Ejecutar comando SQL</string>
+    <string name="sql_confirm_run">Ejecutar</string>
+    <string name="sql_confirm_command">Comando:</string>
+    <string name="sql_confirm_insert">Se añadirán filas a la base de datos interna de UltiMusic.</string>
+    <string name="sql_confirm_update">Se modificarán filas de la base de datos interna de UltiMusic.</string>
+    <string name="sql_confirm_delete">Se borrarán filas de la base de datos interna de UltiMusic. No se puede deshacer.</string>
+    <string name="sql_confirm_create">Se creará un elemento nuevo en la estructura de la base de datos interna.</string>
+    <string name="sql_confirm_alter">Se cambiará la estructura de una tabla. Si es una de las tablas de la app, esta podría dejar de funcionar.</string>
+    <string name="sql_confirm_drop">Se eliminará un elemento de la estructura de la base de datos. No se puede deshacer y la app podría dejar de funcionar.</string>
+    <string name="sql_confirm_other">Este comando modificará la base de datos interna de UltiMusic.</string>
+    <string name="sql_error_empty">El comando está vacío.</string>
+    <string name="sql_error_multi">Solo se permite un comando a la vez.</string>
+    <string name="sql_error_unknown">«%1$s» no es un comando SQL válido. Usa SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP o PRAGMA.</string>
+    <string name="sql_error_failed">Error: %1$s</string>
+    <string name="sql_rows_header">Filas: %1$d</string>
+    <string name="sql_rows_truncated">Filas: mostrando las primeras %1$d</string>
+    <string name="sql_no_rows">La consulta no ha devuelto filas.</string>
+    <string name="sql_done">Comando ejecutado.</string>
+    <string name="sql_done_changes">Comando ejecutado. Filas afectadas: %1$d.</string>
+
+    <!-- Canciones -->
+    <string name="shuffle_title">Escoger al azar</string>
+    <string name="song_subtitle_format">%1$s | %2$s</string>
+    <string name="song_more">Más opciones de la canción</string>
+    <string name="add_to_queue">Añadir a cola</string>
+    <string name="add_to_playlist">Añadir a lista</string>
+    <string name="go_to_album">Ir al álbum</string>
+    <string name="go_to_artist">Ir al artista</string>
+    <string name="share_song">Compartir</string>
+    <string name="share_song_error">No se puede compartir esta canción</string>
+    <string name="delete_song">Eliminar</string>
+    <string name="delete_song_confirm">¿Eliminar <b>^1</b> del dispositivo?</string>
+    <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
+    <string name="album_cover_desc">Portada del álbum</string>
+    <string name="song_cover_desc">Portada de la canción</string>
+    <string name="no_songs">Para utilizar UltiMusic necesitas archivos de audio. Untar Technologies recomienda obtenerlos de tiendas como iTunes Store, Amazon Music, etc.</string>
+    <string name="song_file_missing">No se ha podido encontrar el archivo de %1$s</string>
+    <string name="cannot_open_file">No se ha podido abrir el archivo</string>
+    <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
+    <string name="cannot_add_to_empty_queue">No hay cola de reproducción</string>
+    <string name="playback_error_file_not_found">no se encuentra el archivo</string>
+    <string name="playback_error_no_permission">sin permiso para leer el archivo</string>
+    <string name="playback_error_decoding">fallo al decodificar el audio</string>
+    <string name="playback_error_io">fallo al leer el archivo</string>
+    <string name="playback_error_skip_known">No se ha podido reproducir %1$s (%2$s), se salta a la siguiente</string>
+    <string name="playback_error_skip_unknown">No se ha podido reproducir %1$s, se salta a la siguiente</string>
+
+    <!-- Placeholder de una canción/álbum sin ningún artista etiquetado (ver Subtitles.artistDisplay). -->
+    <string name="unknown_artist">Artista desconocido</string>
+
+    <!-- Selección múltiple de canciones (pulsación larga en la pestaña Canciones): ver
+         SongsAdapter/SongsFragment y el icono de 3 puntos que sustituye al ojo de la toolbar
+         mientras hay algo seleccionado (MainActivity.setupToolbar). -->
+    <string name="song_selected_desc">Canción seleccionada</string>
+    <string name="song_selection_more">Más opciones de las canciones seleccionadas</string>
+    <!-- Sustituye a la barra de búsqueda en la toolbar mientras hay canciones seleccionadas (ver
+         MainActivity.setupToolbar). -->
+    <plurals name="song_selection_count">
+        <item quantity="one">%d seleccionada</item>
+        <item quantity="other">%d seleccionadas</item>
+    </plurals>
+    <plurals name="delete_songs_confirm">
+        <item quantity="one">¿Eliminar %d canción del dispositivo?</item>
+        <item quantity="other">¿Eliminar %d canciones del dispositivo?</item>
+    </plurals>
+
+    <!-- Álbumes y artistas -->
+    <string name="person_image_desc">Imagen del artista</string>
+    <string name="shuffle_collection">Reproducir en orden aleatorio</string>
+    <string name="no_albums">Todavía no hay ningún álbum</string>
+    <string name="no_artists">Todavía no hay ningún artista</string>
+    <!-- Perfil que agrupa a los artistas con pocas canciones (ver ArtistGroupingPreferences) -->
+    <string name="artist_others">Otros</string>
+    <string name="no_genres">Todavía no hay ningún género</string>
+    <string name="tags_no_custom_hint">Todavía no hay ninguna etiqueta personalizada. Las etiquetas sirven para agrupar canciones en base a algo que tengan en común</string>
+    <string name="no_songs_here">Aquí no hay ninguna canción</string>
+
+    <!--
+      Los <plurals> son la forma en que Android elige automáticamente entre "1 canción" y
+      "5 canciones" según la cantidad. Se usan en vez de un if en el código porque cada idioma
+      tiene sus propias reglas de plural (el ruso tiene tres formas, por ejemplo).
+    -->
+    <plurals name="song_count">
+        <item quantity="one">%d canción</item>
+        <item quantity="other">%d canciones</item>
+    </plurals>
+    <plurals name="album_count">
+        <item quantity="one">%d álbum</item>
+        <item quantity="other">%d álbumes</item>
+    </plurals>
+    <plurals name="toast_added_to_queue">
+        <item quantity="one">Añadida %d canción a la cola</item>
+        <item quantity="other">Añadidas %d canciones a la cola</item>
+    </plurals>
+    <plurals name="toast_added_to_playlist">
+        <item quantity="one">Añadida %1$d canción a «%2$s»</item>
+        <item quantity="other">Añadidas %1$d canciones a «%2$s»</item>
+    </plurals>
+
+    <!-- Editor de metadatos -->
+    <string name="edit_metadata">Editar metadatos</string>
+    <string name="edit_tags">Editar etiquetas</string>
+    <string name="metadata_editor_title">Editor de metadatos</string>
+    <!-- Título de la toolbar cuando se editan varias canciones a la vez (selección múltiple en
+         Canciones). Ver MetadataEditorDialogFragment.isMultiEdit. -->
+    <string name="metadata_editor_title_multi">Editar %1$d canciones</string>
+    <!-- Placeholder de un campo cuando las canciones seleccionadas no coinciden en ese valor: se
+         deja en blanco (ver MetadataEditorDialogFragment.fillMultiField) y solo se sobrescribe en
+         todas si el usuario lo toca de verdad. -->
+    <string name="editor_multiple_values">Varios valores</string>
+    <string name="editor_close">Cerrar el editor</string>
+    <string name="editor_save">Guardar</string>
+    <string name="editor_pick_cover">Elegir portada</string>
+    <string name="editor_remove_cover">Quitar portada</string>
+    <string name="editor_saved">Cambios guardados</string>
+    <string name="editor_title_required">El título no puede quedar vacío</string>
+    <string name="editor_unsaved_changes_title">Cambios sin guardar</string>
+    <string name="editor_unsaved_changes_message">Tienes ediciones sin guardar. ¿Seguro que quieres salir?</string>
+    <string name="editor_leave">Salir</string>
+    <string name="editor_saving_wait">Un momento…</string>
+    <string name="editor_search_lyrics">Buscar la letra</string>
+    <string name="editor_search_video">Buscar el videoclip</string>
+    <string name="editor_clear_lyrics">Borrar la letra</string>
+    <string name="editor_clear_video_url">Quitar el videoclip</string>
+    <!-- Duplica el grupo de campos "Álbum + Nº de disco + Nº de pista" para catalogar la canción en
+         otro álbum más (N:M, ver SongAlbumCrossRef). Ver MetadataEditorDialogFragment.addAlbumGroup. -->
+    <string name="editor_add_another_album">+ Añadir otro álbum</string>
+    <string name="editor_remove_album">Quitar este álbum</string>
+
+    <!-- Autorrelleno de metadatos (iTunes): botón de la toolbar de los dos editores (canción
+         y álbum) y el diálogo de sugerencias que abre. Ver MetadataSuggestionsDialogFragment. -->
+    <string name="editor_autofill">Autorrelleno de metadatos</string>
+    <string name="autofill_missing_query_song">Escribe al menos el título o el artista para poder buscar</string>
+    <string name="autofill_missing_query_album">Escribe al menos el título del álbum o el artista para poder buscar</string>
+    <string name="suggestions_title">Sugerencias de metadatos</string>
+    <string name="suggestions_empty">No se han encontrado resultados</string>
+    <string name="suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
+    <!-- Vale para iTunes y para lrclib.net: los dos buscadores enseñan este mismo mensaje cuando la
+         API correspondiente nos limita las peticiones. %1$d son los segundos que quedan de espera. -->
+    <string name="suggestions_rate_limited">Se han hecho demasiadas búsquedas seguidas. Vuelve a intentarlo dentro de %1$d segundos</string>
+    <!-- Aviso pasajero al elegir una sugerencia cuando Genius nos ha limitado: el autorrelleno sigue
+         adelante con los datos de iTunes, solo se queda sin los extras (productores, remix, vídeo). -->
+    <string name="suggestions_genius_rate_limited">Genius ha limitado las peticiones (%1$d s): se han rellenado los datos de iTunes, pero sin productores ni datos del remix</string>
+    <string name="suggestions_retry">Reintentar</string>
+    <string name="preview_search_title">Descubrir música</string>
+    <string name="preview_search_hint">Título o artista</string>
+    <string name="preview_search_idle">Busca una canción que no tengas</string>
+    <string name="preview_play_desc">Reproducir fragmento</string>
+    <string name="preview_pause_desc">Pausar fragmento</string>
+    <string name="preview_playback_error">No se ha podido reproducir el fragmento</string>
+    <string name="preview_stores_desc">Dónde conseguir el archivo</string>
+    <string name="store_links_title">Conseguir el archivo</string>
+    <string name="store_links_empty">No se ha encontrado esta canción en ninguna tienda de descargas</string>
+    <string name="store_link_free">Gratis</string>
+
+    <!-- Diálogo "Elige qué quieres sobrescribir" que sale al elegir una sugerencia (de canción o de
+         álbum), antes de aplicarla de verdad. Ver
+         MetadataSuggestionsDialogFragment.showOverwritePicker. Las etiquetas de las casillas
+         reutilizan los mismos field_* que ya rotulan esos campos en los editores (mismo campo,
+         mismo nombre en todas partes); solo "Portada" y "Canción original" son nuevas, porque no
+         hay un field_* con el que casen: la portada no es un EditText con hint, y "Canción
+         original" agrupa en UNA casilla los cuatro campos og* (ver el javadoc del método). -->
+    <string name="overwrite_picker_title">Elige qué quieres sobrescribir</string>
+    <string name="overwrite_check_all">Marcar todo</string>
+    <string name="overwrite_uncheck_all">Desmarcar todo</string>
+    <string name="overwrite_field_cover">Carátula</string>
+    <!-- Aviso en gris al pie del diálogo cuando la sugerencia no trae alguno de los metadatos que la
+         app utiliza (título, álbum, artista(s), año, género(s), nº de pista, nº de disco, carátula o
+         productor(es)): %1$s es la lista de los que faltan, ya unidos en una frase ("Año, Género(s)
+         y Carátula"). -->
+    <string name="overwrite_missing_fields">No se han podido obtener los campos %1$s</string>
+
+    <!-- Diálogo de "Acción requerida" que sale al tocar la varita del editor de CANCIÓN sin token de
+         Genius configurado (ver GeniusTokenDialogFragment). No sale en el editor de álbum: ese
+         autorrelleno solo usa iTunes, que no pide clave. -->
+    <string name="genius_setup_title">Acción requerida</string>
+    <string name="genius_setup_intro">El sistema de rellenado automático de metadatos utiliza la API de Genius. Por causas ajenas a UltiMusic, para utilizar esta función debes seguir un proceso corto:</string>
+    <string name="genius_setup_step1">1 - Abre este enlace e inicia sesión:</string>
+    <string name="genius_setup_step2">2 - Dale a New API Client e introduce lo siguiente:</string>
+    <!-- Las etiquetas van con el valor incrustado porque al lado hay un botón que copia justo ese
+         valor: separarlos haría dudar de qué se está copiando. -->
+    <string name="genius_setup_field_name">App Name: UltiMusic</string>
+    <string name="genius_setup_field_url">App Website URL: https://github.com/Ruben-Besteiro/UltiMusic</string>
+    <string name="genius_setup_step3">3 - Hecho esto, abajo del todo dale a Generate Access Token y copia lo que te salga. Se comprobará automáticamente cuando le des a <b>Continuar</b>.</string>
+    <!-- Lo que copian los botones: el valor a secas, sin la etiqueta "App Name:" de delante. -->
+    <string name="genius_setup_value_name">UltiMusic</string>
+    <!-- Valor a copiar/pegar en el campo "App Website URL" del paso 2: el repositorio del proyecto. -->
+    <string name="genius_setup_url">https://github.com/Ruben-Besteiro/UltiMusic</string>
+    <!-- Enlace que abre el paso 1: la gestión de API Clients de Genius, NO el repositorio de arriba
+         (son dos URLs distintas, aunque el paso 2 pida pegar la de GitHub una vez ya está allí). Si
+         el usuario no tiene sesión iniciada, Genius redirige sola al login y vuelve aquí después. -->
+    <string name="genius_setup_login_url">https://genius.com/api-clients</string>
+    <string name="genius_setup_copy">Copiar</string>
+    <string name="genius_setup_copied">Copiado</string>
+    <string name="genius_setup_exit">Salir</string>
+    <string name="genius_setup_continue">Continuar</string>
+    <string name="genius_setup_checking">Comprobando el token…</string>
+    <string name="genius_setup_ok">Token guardado</string>
+    <string name="genius_setup_invalid">Ese token no vale. Comprueba que has copiado el Client Access Token, no el Client ID ni el Client Secret</string>
+    <string name="genius_setup_no_token">No hay ningún token copiado. Copia el Client Access Token y vuelve a darle a Continuar</string>
+    <string name="genius_setup_no_browser">No se ha encontrado ningún navegador para abrir el enlace</string>
+    <!-- Cierre del diálogo largo: deja claro que se puede decir que no. Importa porque el usuario
+         puede estar baneado de Genius y no poder completar el proceso aunque quiera. -->
+    <string name="genius_setup_optional">Este proceso es opcional, pero si lo rechazas, no podrás sacarle el máximo partido a esta función.</string>
+
+    <!-- Aviso previo cuando el API Client del usuario deja de funcionar (401 invalid_token: lo ha
+         borrado, lo ha regenerado, o le han suspendido la cuenta). Al aceptar se abre el diálogo
+         largo. Ver GeniusApiErrorDialogFragment. -->
+    <string name="genius_error_title">Error con la API de Genius</string>
+    <string name="genius_error_message">Se ha producido un error con tu API Client de Genius. Para continuar sacándole el máximo partido al rellenado automático de metadatos, debes crear otro. Disculpa las molestias.</string>
+
+    <!-- Diálogo de "Acción requerida" de la clave de la YouTube Data API, gemelo del de Genius de
+         arriba: sale al elegir "Popularidad" en el diálogo de ordenar sin tener clave guardada. Ver
+         YouTubeApiKeyDialogFragment. -->
+    <string name="youtube_setup_title">Acción requerida</string>
+    <string name="youtube_setup_intro">Ordenar por popularidad utiliza la YouTube Data API. Por causas ajenas a UltiMusic, para utilizar esta función debes seguir un proceso corto:</string>
+    <string name="youtube_setup_step1">1 - Abre este enlace y crea un proyecto (o elige uno que ya tengas):</string>
+    <string name="youtube_setup_step2">2 - En Biblioteca de APIs, busca YouTube Data API v3 y habilítala para ese proyecto (si no lo estaba ya). El paso 3 solo te dejará elegirla si la habilitas primero.</string>
+    <string name="youtube_setup_step3">3 - Vuelve al proyecto, dale a Crear credenciales y selecciona YouTube Data API v3 donde te lo pida.</string>
+    <string name="youtube_setup_step4">4 - Copia la clave que te dio el paso 3. Se comprobará automáticamente cuando le des a <b>Continuar</b>.</string>
+    <string name="youtube_setup_login_url">https://console.cloud.google.com/apis/credentials</string>
+    <string name="youtube_setup_exit">Salir</string>
+    <string name="youtube_setup_continue">Continuar</string>
+    <string name="youtube_setup_checking">Comprobando la clave…</string>
+    <string name="youtube_setup_ok">Clave guardada</string>
+    <string name="youtube_setup_invalid">Esa clave no vale. Comprueba que has copiado la Clave de API y que YouTube Data API v3 está habilitada en su proyecto</string>
+    <string name="youtube_setup_no_key">No hay ninguna clave copiada. Cópiala y vuelve a darle a Continuar</string>
+    <!-- Cierre del diálogo: deja claro que se puede decir que no, y que se pierde solo el orden por
+         popularidad, nada más de la aplicación. -->
+    <string name="youtube_setup_optional">Este proceso es opcional, pero si lo rechazas, no podrás ordenar canciones ni artistas por popularidad.</string>
+    <!-- Aviso al tocar "Popularidad" habiendo rechazado ya la configuración antes (SortDialogFragment):
+         no se vuelve a insistir con el diálogo, así que hay que decir dónde retomarlo si cambia de
+         idea. -->
+    <string name="youtube_setup_declined_hint">No podrás ordenar por popularidad sin la clave de la YouTube Data API. Puedes configurarla desde Ajustes &gt; Servicios externos</string>
+
+    <!-- Aviso al tocar "Popularidad" en Canciones con la clave puesta pero ninguna canción con el
+         campo de vídeo relleno (SortDialogFragment): ese campo es la única fuente de la popularidad
+         de una canción, así que sin él el orden no tendría nada que consultar. -->
+    <string name="songs_popularity_no_video_url">Rellena el campo \'URL de YouTube\' de alguna canción</string>
+
+    <!-- Diálogo de ordenar (ver SortDialogFragment), abierto desde el botón del ojo de la barra
+         superior. %1$s es el nombre de la pestaña actual (tab_songs, tab_albums…). -->
+    <string name="sort_title">Ordenar %1$s</string>
+    <string name="sort_field_name">Nombre</string>
+    <string name="sort_field_song_count">Número de canciones</string>
+    <string name="sort_field_duration">Duración</string>
+    <string name="sort_field_year">Año</string>
+    <string name="sort_field_popularity">Popularidad</string>
+    <!-- Última línea de la ficha de un artista (DetailViewModel.toHeader), junto al icono de
+         YouTube: los suscriptores de su canal ya compactados (ver formatCompactCount). A
+         diferencia del subtítulo de la fila (item_person.xml), aquí SÍ lleva la palabra
+         "suscriptores" porque hay sitio de sobra para ella. %1$s es el número compactado. -->
+    <string name="youtube_subscribers_format">%1$s suscriptores</string>
+    <!-- Casilla que invierte el orden natural de cada criterio (ver SortField.naturalDirection):
+         desmarcada es Nombre A-Z, Número de canciones/Duración/Popularidad de más a menos y Año de
+         menos a más. -->
+    <string name="sort_invert_order">Invertir orden</string>
+    <string name="suggestion_cover_desc">Portada de la sugerencia</string>
+    <!-- Separador de las partes del subtítulo de una sugerencia ("Artista | Álbum | Año"), el
+         mismo que ya usa song_subtitle_format en las listas de canciones/álbumes. -->
+    <string name="subtitle_separator">" | "</string>
+
+    <!-- Buscador de letras sincronizadas de lrclib.net (ver LyricsSuggestionsDialogFragment), abierto
+         desde el icono de lupa del campo "Letra" del editor. -->
+    <string name="lyrics_suggestions_title">Sugerencias de letra</string>
+    <string name="lyrics_suggestions_empty">No se han encontrado letras. Vuelve a introducir el título y el artista (esto último es opcional)</string>
+    <string name="lyrics_suggestions_error">No se ha podido buscar. Comprueba tu conexión e inténtalo de nuevo</string>
+    <string name="lyrics_suggestions_search_hint">Título y artista</string>
+    <string name="lyrics_suggestions_badge_synced">Sincronizada</string>
+    <!-- Marca de que el candidato dura lo mismo que el archivo del usuario: si no coincide, el
+         audio viene de otra fuente y la letra sincronizada probablemente vaya desfasada. -->
+    <string name="lyrics_suggestions_badge_duration_match">Duración coincide</string>
+
+    <!-- Editor de metadatos de ÁLBUM: mismo editor que el de canciones, pero con los campos que
+         tiene un álbum (no una canción suelta). Ver AlbumEditorDialogFragment. -->
+    <string name="album_editor_title">Editor de álbum</string>
+    <string name="album_editor_title_required">El título del álbum no puede quedar vacío</string>
+    <string name="field_album_title">Título del álbum</string>
+
+    <string name="field_title">Título</string>
+    <string name="field_albums">Álbum</string>
+    <string name="field_artists">Artista(s)</string>
+    <string name="field_producers">Productor(es)</string>
+    <string name="field_year">Año</string>
+    <string name="field_genres">Género(s)</string>
+    <string name="field_lyrics">Letra</string>
+    <string name="field_lyrics_hint">Escríbela, o toca la lupa para buscarla en lrclib.net</string>
+    <string name="field_language">Idioma</string>
+    <string name="field_comment">Comentario</string>
+    <string name="field_video_url">URL del vídeo</string>
+    <string name="field_video_url_hint">Pega un enlace, o toca la lupa para elegir el videoclip en YouTube. Si lo dejas vacío, el iPod te dejará elegirlo la primera vez que actives el modo vídeo</string>
+    <string name="field_video_url_open">Abrir</string>
+    <string name="field_track_number">Nº de pista</string>
+    <string name="field_disc_number">Nº de disco</string>
+    <string name="field_og_title">Título original</string>
+    <string name="field_og_artist">Artista original</string>
+    <string name="field_og_year">Año original</string>
+
+    <string name="section_details">Detalles</string>
+    <string name="section_original">Grabación original (remix)</string>
+    <string name="multi_value_hint">Separa varios valores con comas</string>
+
+    <!-- Mini-reproductor -->
+    <string name="expand_player">Expandir reproductor</string>
+    <string name="play_pause">Reproducir o pausar</string>
+    <string name="nothing_playing">Toca donde quieras o dale aquí →</string>
+    <string name="updating_database_percent">Actualizando base de datos local… %d%%</string>
+
+    <!-- Ventana del iPod -->
+    <string name="ipod_title">UltiMusicPod</string>
+    <string name="ipod_close">Cerrar</string>
+    <string name="ipod_toggle_view">Alternar carátula y cola</string>
+    <string name="ipod_prev">Anterior</string>
+    <string name="ipod_next">Siguiente</string>
+    <string name="ipod_now_playing">Sonando ahora</string>
+    <string name="ipod_toggle_video">Alternar audio y vídeo</string>
+    <!-- (Botón DESACTIVADO por ahora, ver dialog_ipod.xml; strings conservados por si vuelve.)
+         Botón flotante inferior derecho del contenedor de la letra: encoge la carátula/vídeo hasta
+         desaparecer y le cede su hueco a la letra (ver IPodDialogFragment). Cambia a
+         ipod_lyrics_collapse mientras está desplegado. -->
+    <string name="ipod_lyrics_expand">Ver más</string>
+    <string name="ipod_lyrics_collapse">Ver menos</string>
+    <!-- Botón flotante superior derecho del contenedor de la letra: la "a" en hiragana (あ) que
+         traduce la letra al idioma del sistema (ver IPodDialogFragment/LyricsTranslator). Solo
+         aparece si el idioma detectado de la canción no es el del sistema. -->
+    <string name="ipod_translate_lyrics_glyph">?</string>
+    <string name="ipod_translate_lyrics_desc">Traducir la letra al idioma del sistema</string>
+    <string name="ipod_translate_lyrics_failed">No se ha podido traducir la letra</string>
+    <!-- Mientras LyricsTranslator/LingvaTranslateApi tienen la petición en marcha: sin este aviso,
+         la espera se ve igual que si el botón no hiciera nada. -->
+    <string name="ipod_translate_lyrics_working">Traduciendo letra…</string>
+    <string name="ipod_romanize_lyrics_working">Convirtiendo letra…</string>
+    <string name="error_with_reason">%1$s: %2$s</string>
+    <string name="error_reason_no_connection">sin conexión a internet</string>
+    <string name="error_reason_timeout">el servidor ha tardado demasiado en responder</string>
+    <string name="error_reason_rate_limited">Has alcanzado el límite. Espera al menos 15 minutos</string>
+    <string name="error_reason_rate_limited_hour">Has alcanzado el límite. Espera al menos una hora</string>
+    <string name="error_reason_http">el servidor ha respondido con el error %1$d</string>
+    <string name="error_reason_bad_response">respuesta inesperada del servidor</string>
+    <string name="error_reason_no_content">no hay texto que procesar</string>
+    <string name="error_reason_other">%1$s</string>
+    <string name="share_song_error_no_file">No se encuentra el archivo de la canción</string>
+    <string name="ipod_romanize_lyrics_failed">No se ha podido convertir la letra</string>
+    <!-- Descripción del botón de arriba a la izquierda del recuadro de la letra, que pasa la letra
+         a la escritura del idioma de la app (ver LyricsRomanizer). -->
+    <string name="ipod_romanize_lyrics_desc">Pasar la letra a la escritura del idioma de la app</string>
+    <!-- Lo que queda de cola, en @+id/tvTitle (ver IPodDialogFragment.updateInfoBox), mientras se ve
+         la cola/lista en vez de la carátula. No cuenta la canción actual: son las que quedan POR
+         sonar. Debajo, en tvMeta, va lo que duran todas ellas juntas (TimeFormat.hhmmss). -->
+    <plurals name="queue_remaining">
+        <item quantity="one">Queda %d canción</item>
+        <item quantity="other">Quedan %d canciones</item>
+    </plurals>
+    <!-- Aviso de la cola/lista, en @+id/tvMeta (ver IPodDialogFragment.updateInfoBox), cuando ya no
+         queda ninguna canción por sonar (la actual es la última): la cola suelta y la lista
+         admiten seguir añadiendo canciones a mano, así que invitan a hacerlo;
+         álbum/artista/género son colecciones fijas, así que solo avisan de que se han
+         acabado. -->
+    <string name="queue_hint_loose">Puedes añadir más música a la cola dándole a los tres puntos y a \"Añadir a cola\"</string>
+    <!-- Aviso DENTRO del propio contenedor de la cola (@+id/queueExpandHint, debajo de la fila que
+         suena, ver dialog_ipod.xml/IPodDialogFragment.updateInfoBox), solo mientras la canción
+         actual es la ÚNICA que hay en una cola suelta (recién tocada desde Canciones): explica que
+         se irá alargando ella sola. Distinto de queue_hint_loose (ese vive siempre en infoBox,
+         incluso con la cola ya alargada). -->
+    <string name="queue_expand_hint">La cola de reproducción se expandirá automáticamente. Para añadir canciones a la cola, puedes arrastrar hacia la derecha o darle a los tres puntos y a \"Añadir a cola\"</string>
+    <!-- Igual que queue_expand_hint, pero cuando la cola suelta está anclada a un género (ver
+         PlaybackService.playFromGenre): se alarga sola, pero solo con canciones de ese género. -->
+    <string name="queue_expand_hint_genre">La cola de reproducción se expandirá automáticamente con canciones del género que escogiste. Para añadir canciones a la cola, puedes arrastrar hacia la derecha o darle a los tres puntos y a \"Añadir a cola\"</string>
+    <string name="queue_hint_playlist">Puedes añadir más música a la lista dándole a los tres puntos y a \"Añadir a lista\"</string>
+    <string name="queue_end">Has llegado al final</string>
+    <!-- Igual que queue_end, pero para cuando no es que se haya acabado la cola/lista: es que
+         está vacía de por sí (cola real sin ninguna canción, o lista navegada sin canciones). -->
+    <string name="queue_empty">No hay cola de reproducción</string>
+    <!--<string name="playlist_empty">Esta lista está vacía</string>-->
+    <!-- @+id/tvMeta en modo carátula (ver IPodDialogFragment.updateInfoBox) cuando no suena nada
+         todavía (app recién abierta en frío): tvTitle se oculta igual que en modo cola/lista vacía,
+         así que este texto ocupa toda la caja de info. -->
+    <string name="ipod_nothing_playing">Nada en reproducción</string>
+
+    <!-- Modo vídeo del iPod -->
+    <string name="video_picker_title">Elige el vídeo</string>
+    <string name="video_picker_saved">Vídeo guardado para <b>^1</b></string>
+    <string name="video_no_song">No hay ninguna canción sonando</string>
+    <string name="video_bad_url">El enlace del vídeo no es válido</string>
+    <string name="video_loading_desc">Cargando vídeo</string>
+    <!-- Desplazamiento de la letra respecto del vídeo en modo vídeo (Song.videoOffsetMs), en el editor
+         de metadatos (ver dialog_metadata_editor.xml, debajo del campo de la URL del vídeo) y en la
+         regla del iPod. -->
+    <string name="video_settings_offset_title">Desplazamiento de la letra (modo vídeo)</string>
+    <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar la letra respecto del vídeo y en negativo para atrasarla</string>
+    <string name="video_settings_offset_unit">ms</string>
+    <!-- Desplazamiento letra/audio, debajo del campo de la letra en el editor de metadatos. Solo
+         tiene efecto con letra sincronizada (ver LrcParser); reutiliza video_settings_offset_unit
+         para la unidad (ms), igual para los dos desplazamientos. -->
+    <string name="lyrics_offset_title">Desplazamiento de la letra</string>
+    <string name="lyrics_offset_subtitle">Ponlo en positivo para adelantar la letra y en negativo para atrasarla</string>
+    <string name="queue_subtitle_format">%1$s | %2$s</string>
+
+    <!-- Listas -->
+    <string name="no_playlists">Todavía no hay ninguna lista. Las listas están diseñadas para crecer indefinidamente y reproducirse en secuencia sin repeticiones</string>
+    <string name="playlist_subtitle_format">%1$s | %2$s</string>
+    <string name="playlist_more">Más opciones de la lista</string>
+    <string name="playlist_create">Nueva lista</string>
+    <string name="playlist_name_hint">Nombre de la lista</string>
+    <string name="playlist_name_invalid">Ese nombre contiene caracteres no válidos</string>
+    <string name="playlist_rename">Renombrar</string>
+    <string name="action_rename">Renombrar</string>
+    <string name="artist_name_hint">Nombre del artista</string>
+    <string name="genre_name_hint">Nombre del género</string>
+    <string name="discography_action_desc">Ver discografía</string>
+    <string name="discography_action_desc_album">Ver discografía del álbum</string>
+    <string name="discography_title">Discografía de %1$s</string>
+    <string name="discography_close">Cerrar</string>
+    <string name="discography_empty">No se ha encontrado discografía para este artista en MusicBrainz</string>
+    <string name="discography_empty_album">No se ha encontrado este álbum en el catálogo oficial de MusicBrainz</string>
+    <string name="discography_error">No se ha podido cargar la discografía. Comprueba tu conexión e inténtalo de nuevo</string>
+    <string name="play_album_action_desc">Reproducir álbum</string>
+    <string name="playlist_delete">Eliminar</string>
+    <string name="playlist_delete_confirm">¿Eliminar la lista <b>^1</b>? Los archivos de audio no se tocarán</string>
+    <string name="playlist_add_button">Crear lista</string>
+    <string name="playlist_reorder_desc">Arrastrar para reordenar</string>
+    <string name="playlist_name_taken">Ya existe una lista con ese nombre</string>
+    <string name="playlist_empty">Esta lista está vacía</string>
+    <string name="add_to_playlist_title">Añadir a lista</string>
+    <!-- Ficha de una lista: última canción reproducida dentro de ELLA (no cuenta si esa misma
+         canción se reprodujo desde cualquier otro sitio, ver PlaylistResumeStore). -->
+    <string name="playlist_current_song">Canción actual: %1$s</string>
+    <string name="playlist_resume">REANUDAR</string>
+    <!-- Fila de la pestaña Listas (ver PlaylistsAdapter): debajo de "N canciones | duración", cuántas
+         de sus canciones ya han sonado esta vuelta del ciclo "sin repeticiones" (ver
+         PlaylistHistoryStore), con un botón justo al lado para vaciar ese historial a mano. -->
+    <plurals name="playlist_played_count">
+        <item quantity="one">%d reproducida</item>
+        <item quantity="other">%d reproducidas</item>
+    </plurals>
+    <string name="playlist_reset_history_desc">Reiniciar canciones ya reproducidas</string>
+
+    <!-- Etiquetas: nombre de las predefinidas del sistema (ver Migrations.kt.seedDefaultTags).
+         Fuente de verdad de estos textos: se leen en la migración/onCreate vía context.getString y
+         se guardan tal cual en TagEntity.name, no se recalculan en tiempo de ejecución. Hubo dos,
+         "Debug" (retirada en MIGRATION_19_20) y "Favoritos" (retirada en MIGRATION_27_28), en cuanto
+         dejaron de hacer falta. -->
+    <string name="tag_recently_added_name">Descargada recientemente</string>
+    <string name="tag_not_in_playlist_name">En ninguna lista</string>
+    <string name="tag_no_custom_tags_name">Sin etiquetas personalizadas</string>
+    <!-- Membresía real como Vídeo sincronizado, pero LibraryRepository.syncRemixCoverTag la mantiene
+         sola en cuanto "Título original" deja de estar vacío en el editor de metadatos (ver
+         SystemTagKey.REMIX_COVER). -->
+    <string name="tag_remix_cover_name">Remix / Cover</string>
+
+    <!-- Diálogo de etiquetas de una canción (SongTagsDialogFragment/TagPickerDialogFragment). El
+         "_multi" es para la edición múltiple (selección de varias canciones, ver
+         SongTagsDialogFragment.isMultiEdit): al principio solo salen las comunes a todas, y lo que
+         se añada/quite se aplica a todas al aceptar. -->
+    <string name="song_tags_title">Etiquetas de la canción</string>
+    <string name="song_tags_title_multi">Etiquetas de %1$d canciones</string>
+    <string name="song_tags_empty">Esta canción no tiene etiquetas todavía</string>     <!-- No se utiliza (?) -->
+    <string name="song_tags_empty_multi">Estas canciones no tienen etiquetas en común</string>
+    <string name="add_tag_button">+ Añadir</string>
+    <string name="remove_tag">Quitar etiqueta</string>
+    <string name="tag_picker_title">Añadir etiqueta</string>
+    <string name="tag_picker_search_hint">Buscar etiquetas</string>
+
+    <!-- Ficha de una lista o una etiqueta (CollectionDetailDialogFragment/CollectionSongsAdapter):
+         botón "+" flotante -en una lista, siempre; en una etiqueta, solo si tiene membresía real, ver
+         TagsViewModel.isEditable- que abre AddSongsToPlaylistDialogFragment/AddSongsToTagDialogFragment,
+         y la X de cada fila -en las dos, nunca en un género- para quitar esa canción del destino. El
+         texto de la X cambia según de cuál se trate (ver CollectionDetailDialogFragment.showAddSongs
+         y el `when` que llama a CollectionSongsAdapter.setRemovable). -->
+    <string name="add_songs_desc">Añadir canciones</string>
+    <string name="remove_song_from_tag_desc">Quitar de la etiqueta</string>
+    <string name="remove_song_from_playlist_desc">Quitar de la lista</string>
+    <string name="remove_song_from_tag_confirm">¿Quitar <b>^1</b> de esta etiqueta?</string>
+    <string name="remove_song_from_playlist_confirm">¿Quitar <b>^1</b> de esta lista?</string>
+
+    <!-- menu_queue_selection.xml: acción de la selección múltiple de la cola del iPod (ver
+         IPodDialogFragment.showQueueSelectionMenu) que reemplaza a "Añadir a la cola". -->
+    <string name="remove_from_queue">Quitar de la cola</string>
+
+    <!-- dialog_add_songs.xml, compartido por AddSongsToTagDialogFragment y
+         AddSongsToPlaylistDialogFragment (ver el comentario del layout): buscador de canciones que
+         TODAVÍA no están en el destino, para añadirlas de golpe. La X de arriba cierra sin aplicar
+         nada; el check aplica lo marcado y cierra (ver cada clase). El título SÍ es distinto según el
+         destino (etiqueta o lista), cada fragmento usa el suyo. -->
+    <string name="add_songs_to_tag_title">Añadir etiqueta «%1$s» a canciones</string>
+    <string name="add_songs_to_playlist_title">Añadir canciones a «%1$s»</string>
+    <string name="add_songs_close_desc">Cerrar sin añadir canciones</string>
+    <string name="add_songs_confirm_desc">Añadir las canciones marcadas</string>
+    <string name="add_songs_search_hint">Buscar canciones</string>
+    <string name="add_songs_empty">No hay canciones que añadir</string>
+
+    <!-- Crear/editar/borrar una etiqueta personalizada (TagEditorDialogFragment, botón "+" y menú
+         de 3 puntos de TagsFragment/TagsAdapter). "Eliminar" se reutiliza de playlist_delete: es un
+         texto genérico, no hace falta duplicarlo. -->
+    <string name="tag_create">Nueva etiqueta</string>
+    <string name="tag_edit">Editar etiqueta</string>
+    <string name="tag_name_hint">Nombre de la etiqueta</string>
+    <string name="tag_delete_confirm">¿Eliminar la etiqueta <b>^1</b>? Las canciones no se tocarán</string>
+    <string name="tag_more">Más opciones de la etiqueta</string>
+
+    <!-- Color picker del editor de etiquetas (ver ui/library/colorpicker/ColorPickerView.kt): los
+         únicos campos de texto son estos 3, sin H/S/V/CMYK/hex. -->
+    <string name="color_picker_r_label">R</string>
+    <string name="color_picker_g_label">G</string>
+    <string name="color_picker_b_label">B</string>
+
+    <string name="ipod_shuffle_random">Reproducir una canción al azar</string>
+    <string name="dialog_cancel">Cancelar</string>
+    <string name="dialog_ok">Aceptar</string>
+    <!-- Sí/No, distintos de dialog_ok/dialog_cancel: para confirmaciones que se formulan como
+         pregunta directa (el antiguo "Añadir todas las letras" ya no existe) en vez de como
+         "Cancelar"/"Aceptar". -->
+    <string name="dialog_yes">Sí</string>
+    <string name="dialog_no">No</string>
+
+    <!-- Ajustes -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_back">Cerrar los ajustes</string>
+    <string name="settings_audio_section_title">Ajustes auditivos</string>
+    <string name="settings_visual_section_title">Ajustes visuales</string>
+    <string name="settings_boost_title">Amplificador de volumen</string>
+    <string name="settings_boost_subtitle">Untar Technologies no se hace legalmente responsable de cualquier pérdida auditiva causada por su uso</string>
+    <string name="settings_boost_no_limit">Desactivar límite</string>
+    <string name="settings_boost_no_limit_headphones">Desconecta los auriculares para poder desactivar el límite</string>
+    <string name="settings_boost_device_unknown">No se puede saber si el dispositivo conectado es un altavoz o unos auriculares, así que el límite se mantiene</string>
+    <string name="settings_boost_bluetooth_denied">Sin ese permiso, UltiMusic no puede distinguir un altavoz Bluetooth de unos auriculares, así que mantiene el límite</string>
+
+    <!-- Idioma (primer ajuste del grupo "Ajustes visuales"): cuadrícula de 20 banderas que cambian
+         el idioma de toda la aplicación al instante (ver AppLocale y
+         SettingsDialogFragment.setupLanguage). Por defecto se elige el idioma del sistema si está
+         soportado, e inglés si no. El nombre de cada idioma (contentDescription de su bandera) va
+         en AppLocale.LANGUAGES, en el propio idioma, así que no se traduce. -->
+    <string name="settings_language_title">Idioma</string>
+    <string name="settings_language_subtitle">Elige el idioma de la aplicación</string>
+
+    <!-- Carpetas de la fonoteca -->
+    <string name="settings_library_roots_title">Carpetas de la fonoteca</string>
+    <string name="settings_library_roots_subtitle">Añade aquí tus carpetas que contengan música</string>
+    <string name="settings_library_roots_add">Añadir carpeta</string>
+    <string name="settings_library_root_delete_desc">Quitar carpeta de la fonoteca</string>
+    <string name="settings_library_roots_remove_confirm">¿Quitar <b>^1</b> de la fonoteca? Las canciones que solo estén ahí se borrarán de la biblioteca (ediciones y listas incluidas), salvo que también estén en otra carpeta incluida con el mismo nombre de archivo</string>
+    <string name="settings_library_root_error_nested">Esa carpeta ya forma parte de la fonoteca</string>
+
+    <!-- Lista gris -->
+    <string name="settings_greylist_title">Lista gris</string>
+    <string name="settings_greylist_subtitle">Con esta opción podrás ocultar y desocultar carpetas</string>
+    <string name="settings_greylist_add">Añadir subcarpeta</string>
+    <string name="settings_greylist_switch_desc">Activar o desactivar esta subcarpeta</string>
+    <string name="settings_greylist_delete_desc">Quitar de la lista gris</string>
+    <string name="settings_greylist_remove_confirm">¿Quitar <b>^1</b> de la lista gris?</string>
+    <string name="settings_greylist_empty">Todavía no has añadido ninguna subcarpeta</string>
+
+    <string name="settings_add_all_lyrics_title">Ajustes adicionales</string>
+
+    <!-- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) -->
+    <string name="settings_artist_grouping_title">Agrupar artistas con N canciones o menos</string>
+
+    <!-- Ecualizador -->
+    <string name="settings_eq_title">Ecualizador</string>
+    <string name="settings_eq_subtitle">Permite potenciar o debilitar rangos de frecuencias (por ejemplo si tienes auriculares de mala calidad)</string>
+    <string name="settings_eq_switch_desc">Activar o desactivar el ecualizador</string>
+    <string name="settings_eq_reset">Restablecer</string>
+    <string name="settings_eq_bass_boost">Refuerzo de graves</string>
+    <string name="settings_eq_virtualizer">Sonido envolvente</string>
+    <string name="settings_eq_unavailable">Este dispositivo no tiene ecualizador</string>
+    <string name="settings_eq_bass_unsupported">No soportado en este dispositivo</string>
+    <string name="settings_eq_virtualizer_unsupported">No soportado en este dispositivo</string>
+    <string name="settings_eq_presets">Presets</string>
+    <string name="settings_eq_pre_gain">Ganancia maestra</string>
+    <string name="settings_eq_save_preset">Guardar como preset</string>
+    <string name="settings_eq_save_preset_name">Nombre del preset</string>
+    <string name="settings_eq_delete_preset">Borrar</string>
+    <string name="settings_eq_preset_deleted">Preset borrado</string>
+    <string name="settings_eq_preset_saved">Preset guardado</string>
+    <string name="settings_eq_preset_name_invalid">Ese nombre no está disponible</string>
+    <string name="settings_eq_delete_preset_confirm">¿Borrar el preset <b>^1</b>?</string>
+
+    <!-- Ecualizador: opciones adicionales (refuerzo de graves, sonido envolvente, reverberación y
+         compresor), agrupadas y ocultas por defecto detrás de una casilla. Cada una lleva un botón
+         de ayuda (?) porque hace algo que un slider vertical del ecualizador no puede replicar. -->
+    <string name="settings_eq_additional_options">Opciones adicionales</string>
+    <string name="settings_eq_bass_boost_help_desc">Qué es el refuerzo de graves</string>
+    <string name="settings_eq_bass_boost_help_title">Refuerzo de graves</string>
+    <string name="settings_eq_bass_boost_help_body">A diferencia de subir la banda más grave del ecualizador, este efecto actúa sobre todo el rango de graves, incluidas frecuencias más bajas que ninguna banda de este dispositivo cubre. En muchos móviles, además, añade armónicos para que el bajo se note incluso en altavoces pequeños que no pueden reproducir esas frecuencias tan bajas.</string>
+    <string name="settings_eq_virtualizer_help_desc">Qué es el sonido envolvente</string>
+    <string name="settings_eq_virtualizer_help_title">Sonido envolvente</string>
+    <string name="settings_eq_virtualizer_help_body">Ensancha el estéreo simulando altavoces separados a los lados. No es un ajuste de volumen por frecuencia: mezcla los canales izquierdo y derecho de otra forma para que el sonido parezca venir de fuera de la cabeza. Ningún slider del ecualizador puede lograr este efecto, porque esos solo suben o bajan bandas de frecuencia por igual en ambos canales.</string>
+    <string name="settings_eq_reverb_title">Reverberación</string>
+    <string name="settings_eq_reverb_help_desc">Qué es la reverberación</string>
+    <string name="settings_eq_reverb_help_title">Reverberación</string>
+    <string name="settings_eq_reverb_help_body">Simula el eco de un espacio (una habitación, una sala, un auditorio…) añadiendo repeticiones retardadas del sonido. Es un efecto en el tiempo, no en la frecuencia ni en el estéreo: ni el ecualizador ni el sonido envolvente pueden crear esta sensación de espacio. El desplegable elige el tamaño de la sala; \"Ninguno\" lo desactiva.</string>
+    <string name="settings_eq_reverb_unsupported">No soportado en este dispositivo</string>
+    <string name="settings_eq_dynamics_title">Compresor de rango dinámico</string>
+    <string name="settings_eq_dynamics_help_desc">Qué es el compresor de rango dinámico</string>
+    <string name="settings_eq_dynamics_help_title">Compresor de rango dinámico</string>
+    <string name="settings_eq_dynamics_help_body">A diferencia del amplificador de volumen, que sube el sonido una cantidad fija, este efecto reacciona en cada instante: sube lo que suena flojo y baja lo que suena fuerte, para que la diferencia entre ambos sea menor. Sirve para oír música a poco volumen sin perder las voces, o para nivelar canciones grabadas con masterizaciones muy distintas. Cuanto más alto el valor, más agresiva la compresión.</string>
+    <string name="settings_eq_dynamics_unsupported">No soportado en este dispositivo</string>
+
+    <!-- ===== Grupo: servicios externos (Genius y YouTube Data API) ===== -->
+    <!-- Entrada de Ajustes desde la que reconfigurar el token de Genius o la clave de la YouTube Data
+         API tras haberlas rechazado: sin esto, decir que no en GeniusTokenDialogFragment o
+         YouTubeApiKeyDialogFragment era una puerta sin vuelta atrás (setupDeclined no se borra solo).
+         Los dos botones abren el mismo diálogo de siempre, esta vez sin pasar por shouldOfferSetup. -->
+    <string name="settings_services_section_title">Servicios externos</string>
+    <string name="settings_service_status_configured">Configurado</string>
+    <string name="settings_service_status_not_configured">No configurado</string>
+    <string name="settings_genius_title">Genius</string>
+    <string name="settings_genius_subtitle">Se usa al autorrellenar canciones: productores, canción original (si es un remix) y videoclip</string>
+    <string name="settings_genius_configure">Configurar token</string>
+    <string name="settings_genius_reconfigure">Cambiar token</string>
+    <string name="settings_youtube_title">YouTube Data API</string>
+    <string name="settings_youtube_subtitle">Se usa para ordenar canciones y artistas por popularidad</string>
+    <string name="settings_youtube_configure">Configurar clave</string>
+    <string name="settings_youtube_reconfigure">Cambiar clave</string>
+
+    <!-- Selector de subcarpetas -->
+    <string name="folder_picker_root_title">UltiMusic</string>
+    <string name="folder_picker_choose_root_title">Elegir carpeta</string>
+    <string name="folder_picker_full_storage">Todo el almacenamiento</string>
+    <string name="folder_picker_back">Subir una carpeta</string>
+    <string name="folder_picker_choose">Elegir esta carpeta</string>
+    <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>
+
+    <!-- Permisos -->
+    <string name="permission_needed_title">Acceso requerido</string>
+    <!-- Primer diálogo del primer arranque. "Usar esta carpeta" es el texto EXACTO del botón del selector de
+         carpetas del sistema (DocumentsUI de Android) en cada idioma: no lo traduzcas, usa literalmente
+         esta etiqueta según el idioma de destino: en "Use this folder", pt "Usar esta pasta",
+         de "Diesen Ordner verwenden", fr "Utiliser ce dossier", it "Usa questa cartella",
+         ru "Использовать эту папку", tr "Bu klasörü kullan", ar "استخدام هذا المجلد",
+         fa "استفاده از این پوشه", ur "اس فولڈر کو استعمال کریں", hi "यह फ़ोल्डर इस्तेमाल करें",
+         bn "এই ফোল্ডার ব্যবহার করুন", zh "使用此文件夹", ja "このフォルダを使用", ko "이 폴더 사용",
+         vi "Sử dụng thư mục này", th "ใช้โฟลเดอร์นี้", in "Gunakan folder ini",
+         fil "Gamitin ang folder na ito". -->
+    <string name="permission_needed_message">UltiMusic necesita una carpeta en el almacenamiento interno para funcionar, pero no puede crearla automáticamente.\nSe te abrirá un explorador de archivos, y lo que debes hacer es crear una carpeta llamada \"UltiMusic\", abrirla y darle a \"Usar esta carpeta\".</string>
+    <string name="permission_grant">Abrir explorador</string>
+    <string name="music_folder_prompt_message">Ahora elige tu carpeta de música. Si es UltiMusic, puedes darle a Cancelar.</string>
+    <string name="music_folder_prompt_cancel">Cancelar</string>
+    <string name="permission_denied">Sin la carpeta UltiMusic no se pueden mostrar las canciones</string>
+
+    <!-- Re-concesión de Download/Music/raíces propias tras la migración a Storage Access Framework
+         (ver SafStorage): se ofrece una sola vez, después de conceder UltiMusic, si queda alguna
+         canción catalogada antes de la migración sin re-enlazar. -->
+    <string name="relink_legacy_roots_title">¿Añadir más carpetas?</string>
+    <string name="relink_legacy_roots_message">Algunas canciones de tu fonoteca estaban en otras carpetas (como Descargas o Música). Elige una para recuperarlas; siempre puedes añadir más luego desde Ajustes.</string>
+    <string name="relink_legacy_roots_action">Elegir carpeta</string>
+    <string name="relink_legacy_roots_skip">Ahora no</string>
+
+    <!-- Notificación de reproducción (PlaybackService/UltiMusicNotificationProvider) -->
+    <string name="notification_channel_playback">Reproducción</string>
+    <string name="notif_play">Reproducir</string>
+    <string name="notif_pause">Pausar</string>
+    <string name="notif_previous">Canción anterior</string>
+    <string name="notif_next">Canción siguiente</string>
+
+    <!--
+      UltiMusic Recount (ver RecountDialogFragment y RecountReminder). Se llama "Recount" y no
+      "Wrapped" a propósito: "Wrapped" es de Spotify.
+    -->
+    <string name="recount_title">UltiMusic Recount</string>
+    <string name="recount_back">Cerrar</string>
+    <string name="recount_histogram_title">Desglose de tu fonoteca</string>
+    <string name="recount_histogram_subtitle">Cuántas canciones tienes de cada año, en toda tu fonoteca</string>
+    <string name="recount_histogram_empty">Todavía no hay canciones con año en tu fonoteca</string>
+    <string name="recount_top_songs_title">Canciones más reproducidas</string>
+    <string name="recount_top_artists_title">Artistas más reproducidos</string>
+    <string name="recount_top_genres_title">Géneros más reproducidos</string>
+    <string name="recount_pie_empty">Ninguna de las canciones que escuchaste tiene género</string>
+    <!-- La fila del top de canciones que agrupa las escuchas cuya canción ya no está en la fonoteca. -->
+    <string name="recount_deleted_songs">Canciones borradas</string>
+    <!-- El sector de la tarta que agrupa los géneros demasiado pequeños para dibujarse aparte. -->
+    <string name="recount_other_genres">Otros</string>
+    <!-- Subtítulo de una fila de cualquiera de los tres tops:
+         "42 reproducciones | 2:51:20 | 18%". El porcentaje es sobre las REPRODUCCIONES del año, no
+         sobre el tiempo (ver RecountEntry.share); el %% es un porcentaje literal. -->
+    <string name="recount_entry_stats">%1$s | %2$s | %3$d%%</string>
+    <!-- Una entrada de la leyenda de la tarta: "Rock 38%". El %% es un porcentaje literal. -->
+    <string name="recount_legend_entry">%1$s %2$d%%</string>
+    <string name="recount_year_empty">No escuchaste nada en %d</string>
+    <plurals name="recount_play_count">
+        <item quantity="one">%d reproducción</item>
+        <item quantity="other">%d reproducciones</item>
+    </plurals>
+    <plurals name="recount_unknown_year">
+        <item quantity="one">%d canción sin año</item>
+        <item quantity="other">%d canciones sin año</item>
+    </plurals>
+
+    <!-- Entrada de Recount en la pantalla de Ajustes, la última de todas. -->
+    <string name="settings_recount_title">UltiMusic Recount</string>
+    <string name="settings_recount_subtitle">Lo que más has escuchado este año</string>
+    <string name="settings_recount_open">Ver UltiMusic Recount</string>
+
+    <!-- Aviso de la última semana de diciembre (RecountReminder/RecountReminderWorker). -->
+    <string name="notification_channel_recount">UltiMusic Recount</string>
+    <string name="recount_reminder_title">¿Por qué no miras tu UltiMusic Recount de %d?</string>
+    <string name="recount_reminder_text">Mira lo que más has escuchado este año</string>
+    <string name="recount_reminder_see">Ver</string>
+    <string name="recount_reminder_later">Ahora no</string>
+
+</resources>

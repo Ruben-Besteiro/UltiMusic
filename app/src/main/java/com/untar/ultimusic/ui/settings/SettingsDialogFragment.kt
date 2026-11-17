@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.net.Uri
 import android.text.TextUtils
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,6 +17,8 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.GridLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.Spinner
 import android.widget.TextView
@@ -41,7 +44,6 @@ import com.google.android.material.checkbox.MaterialCheckBox
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.slider.Slider
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.BulkLyricsAdder
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
@@ -136,10 +138,9 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var audioSectionTitle: TextView
     private lateinit var visualSectionTitle: TextView
     private lateinit var languageTitle: TextView
-    private lateinit var languageSpainButton: View
-    private lateinit var languageEnglishButton: View
-    private lateinit var languageSpainBorder: View
-    private lateinit var languageEnglishBorder: View
+    private lateinit var languageGrid: GridLayout
+    /** Una celda por idioma, en el orden de [AppLocale.LANGUAGES] (ver [setupLanguage]). */
+    private val languageCells = mutableListOf<Pair<AppLocale.Language, View>>()
     private lateinit var boostTitle: TextView
     private lateinit var slider: Slider
     private lateinit var ruler: ValueRuler
@@ -152,7 +153,6 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var artistGroupingTitle: TextView
     private lateinit var artistGroupingValue: EditText
     private lateinit var addAllLyricsTitle: TextView
-    private lateinit var btnAddAllLyrics: TextView
 
     private lateinit var eqTitle: TextView
     private lateinit var eqUnavailable: View
@@ -240,17 +240,14 @@ class SettingsDialogFragment : DialogFragment() {
         audioSectionTitle = view.findViewById(R.id.audioSectionTitle)
         visualSectionTitle = view.findViewById(R.id.visualSectionTitle)
         languageTitle = view.findViewById(R.id.languageTitle)
-        languageSpainButton = view.findViewById(R.id.languageSpainButton)
-        languageEnglishButton = view.findViewById(R.id.languageEnglishButton)
-        languageSpainBorder = view.findViewById(R.id.languageSpainSelectedBorder)
-        languageEnglishBorder = view.findViewById(R.id.languageEnglishSelectedBorder)
+        languageGrid = view.findViewById(R.id.languageGrid)
         boostTitle = view.findViewById(R.id.boostTitle)
         slider = view.findViewById(R.id.boostSlider)
         ruler = view.findViewById(R.id.boostRuler)
         valueInput = view.findViewById(R.id.boostValue)
         noLimitCheck = view.findViewById(R.id.boostNoLimit)
         libraryRootsTitle = view.findViewById(R.id.libraryRootsTitle)
-        val libraryRootsRecycler = view.findViewById<RecyclerView>(R.id.libraryRootsRecycler)
+        val libraryRootsRecycler = view.findViewById<android.widget.LinearLayout>(R.id.libraryRootsRecycler)
         val addLibraryRootButton = view.findViewById<View>(R.id.btnAddLibraryRoot)
         greylistTitle = view.findViewById(R.id.greylistTitle)
         val greylistRecycler = view.findViewById<RecyclerView>(R.id.greylistRecycler)
@@ -258,7 +255,6 @@ class SettingsDialogFragment : DialogFragment() {
         artistGroupingTitle = view.findViewById(R.id.artistGroupingTitle)
         artistGroupingValue = view.findViewById(R.id.artistGroupingValue)
         addAllLyricsTitle = view.findViewById(R.id.addAllLyricsTitle)
-        btnAddAllLyrics = view.findViewById(R.id.btnAddAllLyrics)
         eqTitle = view.findViewById(R.id.eqTitle)
         eqUnavailable = view.findViewById(R.id.eqUnavailable)
         eqSwitch = view.findViewById(R.id.eqSwitch)
@@ -312,7 +308,6 @@ class SettingsDialogFragment : DialogFragment() {
         setupLibraryRoots(libraryRootsRecycler, addLibraryRootButton)
         setupGreylist(greylistRecycler, addGreylistFolderButton)
         setupArtistGrouping()
-        setupBulkLyrics()
         setupEqualizer(eqBandsContainer)
         setupServices()
         setupRecount(openRecountButton)
@@ -320,26 +315,43 @@ class SettingsDialogFragment : DialogFragment() {
     }
 
     /**
-     * Las dos banderas del selector de idioma (ver [AppLocale]): tocar una cambia el idioma de toda
-     * la aplicación al instante -[AppLocale.select] recrea sola cualquier Activity viva- y mueve el
-     * borde marcado a la bandera recién elegida. Tocar la que ya está seleccionada no hace nada.
+     * La cuadrícula de banderas del selector de idioma (ver [AppLocale]): 5 columnas x 4 filas, en el
+     * orden de [AppLocale.LANGUAGES]. Tocar una cambia el idioma de toda la aplicación al instante
+     * -[AppLocale.select] recrea sola cualquier Activity viva- y mueve el borde marcado a la bandera
+     * recién elegida. Tocar la que ya está seleccionada no hace nada.
      */
     private fun setupLanguage() {
+        val inflater = LayoutInflater.from(languageGrid.context)
+        val rowGap = resources.getDimensionPixelSize(R.dimen.language_grid_row_gap)
+        languageGrid.removeAllViews()
+        languageCells.clear()
+        AppLocale.LANGUAGES.forEachIndexed { index, language ->
+            val cell = inflater.inflate(R.layout.item_language_flag, languageGrid, false)
+            cell.findViewById<ImageView>(R.id.flagImage).setImageResource(language.flag)
+            cell.contentDescription = language.nativeName
+            cell.setOnClickListener {
+                AppLocale.select(language)
+                updateLanguageSelection()
+            }
+            val columns = languageGrid.columnCount
+            cell.layoutParams = GridLayout.LayoutParams(
+                GridLayout.spec(index / columns),
+                GridLayout.spec(index % columns, 1f),
+            ).apply {
+                setGravity(Gravity.CENTER)
+                if (index >= columns) topMargin = rowGap
+            }
+            languageGrid.addView(cell)
+            languageCells += language to cell
+        }
         updateLanguageSelection()
-        languageSpainButton.setOnClickListener {
-            AppLocale.select(spanish = true)
-            updateLanguageSelection()
-        }
-        languageEnglishButton.setOnClickListener {
-            AppLocale.select(spanish = false)
-            updateLanguageSelection()
-        }
     }
 
     private fun updateLanguageSelection() {
-        val spanish = AppLocale.isSpanishSelected()
-        languageSpainBorder.isVisible = spanish
-        languageEnglishBorder.isVisible = !spanish
+        val current = AppLocale.current()
+        languageCells.forEach { (language, cell) ->
+            cell.findViewById<View>(R.id.flagSelectedBorder).isVisible = language == current
+        }
     }
 
     /**
@@ -348,10 +360,8 @@ class SettingsDialogFragment : DialogFragment() {
      * lista gris, aquí sí hace falta un permiso nuevo, ver [com.untar.ultimusic.util.SafStorage]) y la
      * papelera de cada fila.
      */
-    private fun setupLibraryRoots(recycler: RecyclerView, addFolderButton: View) {
-        libraryRootAdapter = LibraryRootAdapter(onDelete = { root -> showRemoveLibraryRootDialog(root) })
-        recycler.layoutManager = LinearLayoutManager(requireContext())
-        recycler.adapter = libraryRootAdapter
+    private fun setupLibraryRoots(container: android.widget.LinearLayout, addFolderButton: View) {
+        libraryRootAdapter = LibraryRootAdapter(container, onDelete = { root -> showRemoveLibraryRootDialog(root) })
 
         addFolderButton.setOnClickListener { addLibraryRootLauncher.launch(null) }
     }
@@ -419,38 +429,6 @@ class SettingsDialogFragment : DialogFragment() {
             .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeGreylistFolder(folder.path) }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
-    }
-
-    /**
-     * "Añadir todas las letras", al final de "ajustes visuales" (ver [BulkLyricsAdder]): pide
-     * confirmación y, si se acepta, lanza el pase y abre su diálogo de progreso.
-     *
-     * Si ya hay un pase en marcha —el usuario lo mandó a segundo plano y ha vuelto a Ajustes, o
-     * simplemente lo dejó corriendo y reabrió esta pantalla— se reabre directamente el diálogo de
-     * progreso, sin volver a pedir confirmación: ya se dio una vez para ESTE pase.
-     */
-    private fun setupBulkLyrics() {
-        btnAddAllLyrics.setOnClickListener {
-            if (BulkLyricsAdder.isRunning) showBulkLyricsProgress() else showBulkLyricsConfirm()
-        }
-    }
-
-    private fun showBulkLyricsConfirm() {
-        val dialog = AlertDialog.Builder(requireContext())
-            .setTitle(R.string.settings_bulk_lyrics_confirm_title)
-            .setMessage(R.string.settings_bulk_lyrics_confirm_message)
-            .setNegativeButton(R.string.dialog_no, null)
-            .setPositiveButton(R.string.dialog_yes) { _, _ ->
-                BulkLyricsAdder.start(requireContext())
-                showBulkLyricsProgress()
-            }
-            .show()
-        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
-    }
-
-    private fun showBulkLyricsProgress() {
-        if (childFragmentManager.findFragmentByTag(BulkLyricsProgressDialogFragment.TAG) != null) return
-        BulkLyricsProgressDialogFragment().show(childFragmentManager, BulkLyricsProgressDialogFragment.TAG)
     }
 
     /**
@@ -920,7 +898,7 @@ class SettingsDialogFragment : DialogFragment() {
                     playerViewModel.volumeBoost.collect { percent -> showValue(percent) }
                 }
                 launch {
-                    settingsViewModel.libraryRoots.collect { roots -> libraryRootAdapter.submit(roots) }
+                    settingsViewModel.visibleRoots.collect { roots -> libraryRootAdapter.submit(roots) }
                 }
                 launch {
                     settingsViewModel.greylistFolders.collect { folders -> greylistAdapter.submit(folders) }
@@ -1018,8 +996,9 @@ class SettingsDialogFragment : DialogFragment() {
                         audioSectionTitle.setTextColor(accent)
                         visualSectionTitle.setTextColor(accent)
                         languageTitle.setTextColor(accent)
-                        AccentTint.stroke(languageSpainBorder, R.id.languageSpainSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
-                        AccentTint.stroke(languageEnglishBorder, R.id.languageEnglishSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
+                        languageCells.forEach { (_, cell) ->
+                            AccentTint.stroke(cell, R.id.flagSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
+                        }
                         boostTitle.setTextColor(accent)
                         slider.trackActiveTintList = tint
                         slider.thumbTintList = tint

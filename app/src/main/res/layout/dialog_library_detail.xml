@@ -127,6 +127,7 @@
     -->
     <SeekBar
         android:id="@+id/songProgress"
+        android:layoutDirection="ltr"
         android:layout_width="match_parent"
         android:layout_height="10dp"
         android:paddingStart="0dp"

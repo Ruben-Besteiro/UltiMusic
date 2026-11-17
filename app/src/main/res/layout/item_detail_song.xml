@@ -66,6 +66,7 @@
 
         <TextView
             android:id="@+id/trackTitle"
+            android:textAlignment="viewStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:ellipsize="end"
@@ -83,6 +84,7 @@
 
             <TextView
                 android:id="@+id/trackDuration"
+                android:textAlignment="viewStart"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"

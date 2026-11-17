@@ -27,6 +27,7 @@
 
             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                 android:id="@+id/groupInputAlbum"
+                android:textAlignment="viewStart"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:imeOptions="actionNext"
@@ -58,6 +59,7 @@
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/groupInputDiscNumber"
+            android:textAlignment="viewStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="number"
@@ -73,6 +75,7 @@
 
         <com.google.android.material.textfield.TextInputEditText
             android:id="@+id/groupInputTrackNumber"
+            android:textAlignment="viewStart"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:inputType="number"

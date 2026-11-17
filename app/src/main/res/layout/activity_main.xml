@@ -14,7 +14,7 @@
     android:layout_height="match_parent"
     android:importantForAccessibility="no"
     android:scaleType="centerCrop"
-    android:src="@drawable/bg_main2" />
+    tools:src="@drawable/bg_main" />
 
 <View
     android:layout_width="match_parent"
@@ -100,6 +100,7 @@
 
             <EditText
                 android:id="@+id/searchInput"
+                android:textAlignment="viewStart"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="4dp"
@@ -216,6 +217,7 @@
 
             <SeekBar
                 android:id="@+id/songProgress"
+                android:layoutDirection="ltr"
                 android:layout_width="match_parent"
                 android:layout_height="10dp"
                 android:paddingStart="0dp"
@@ -247,18 +249,34 @@
                  pone MainActivity.redistributeTabPadding directamente en el customView, no
                  Material, así el reparto (quitarle padding a las no seleccionadas para hacerle
                  sitio al nombre de la actual) es exacto y no hay un padding "de fábrica" adicional
-                 sumándose por debajo. -->
-            <com.google.android.material.tabs.TabLayout
-                android:id="@+id/tabLayout"
+                 sumándose por debajo.
+
+                 La TabLayout va en wrap_content centrada dentro de un FrameLayout (que lleva el
+                 fondo), NO en match_parent: con match_parent, cuando las pestañas caben de sobra,
+                 Material estira la tira al ancho de la barra y, con tabGravity="center", les fija a
+                 todas el ancho de la más ancha en ese momento. Ese ancho se queda puesto en sus
+                 LayoutParams, así que al cambiar de pestaña la nueva no podía crecer y su nombre
+                 salía recortado (pasaba en alemán, donde los nombres son cortos y sí cabían). En
+                 wrap_content la tira nunca es más estrecha que la barra y Material no iguala nada;
+                 si no cupiera en pantalla, sigue pudiendo desplazarse. -->
+            <FrameLayout
                 android:layout_width="match_parent"
                 android:layout_height="64dp"
-                android:background="@color/um_surface"
-                app:tabGravity="center"
-                app:tabIndicatorHeight="0dp"
-                app:tabMinWidth="0dp"
-                app:tabMode="scrollable"
-                app:tabPaddingStart="0dp"
-                app:tabPaddingEnd="0dp" />
+                android:background="@color/um_surface">
+
+                <com.google.android.material.tabs.TabLayout
+                    android:id="@+id/tabLayout"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:layout_gravity="center_horizontal"
+                    android:background="@android:color/transparent"
+                    app:tabGravity="center"
+                    app:tabIndicatorHeight="0dp"
+                    app:tabMinWidth="0dp"
+                    app:tabMode="scrollable"
+                    app:tabPaddingStart="0dp"
+                    app:tabPaddingEnd="0dp" />
+            </FrameLayout>
         </LinearLayout>
 
         <FrameLayout
@@ -287,6 +305,36 @@
                 android:textColor="@color/um_on_surface_muted"
                 android:textSize="16sp"
                 tools:text="Escribe para buscar…" />
+
+            <!-- Va DESPUÉS del recycler y del mensaje vacío para que se dibuje siempre encima.
+                 Contenedor transparente; solo se muestra si no hay resultados (ver
+                 SearchBarController.showEmptyMessage). -->
+            <LinearLayout
+                android:id="@+id/searchLyricsRow"
+                android:layout_width="match_parent"
+                android:layout_height="48dp"
+                android:layout_gravity="top"
+                android:background="@android:color/transparent"
+                android:gravity="center"
+                android:orientation="horizontal"
+                android:paddingStart="16dp"
+                android:paddingEnd="16dp">
+
+                <TextView
+                    android:id="@+id/searchLyricsLabel"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/search_by_lyrics"
+                    android:textColor="@color/um_on_background"
+                    android:textSize="15sp" />
+
+                <com.google.android.material.checkbox.MaterialCheckBox
+                    android:id="@+id/searchLyricsCheck"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:contentDescription="@string/search_by_lyrics"
+                    app:rippleColor="@color/um_ripple_white" />
+            </LinearLayout>
         </FrameLayout>
     </FrameLayout>
 

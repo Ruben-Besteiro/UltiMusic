@@ -3,6 +3,7 @@
 // JavaPluginExtension), y tapa el nombre del paquete. Cualificarlo entero falla con
 // «Unresolved reference 'util'».
 import java.util.Properties
+import java.io.IOException
 
 plugins {
     alias(libs.plugins.android.application)
@@ -56,8 +57,8 @@ android {
         applicationId = "com.untar.ultimusic"
         minSdk = 24
         targetSdk = 37
-        versionCode = 8
-        versionName = "1"
+        versionCode = 9
+        versionName = "2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -90,7 +91,11 @@ android {
             // los usuarios volverían a compartir la cuota (y la cuenta) del desarrollador, que es
             // justo el problema que se quería resolver. Al no declararse aquí, hereda la cadena
             // vacía de `defaultConfig` y el token ni siquiera existe dentro del binario.
-            isMinifyEnabled = false
+            // R8: ofuscación/optimización del DEX (Play Console exige >25 % en cada categoría) y
+            // recorte de recursos sin usar. Las librerías (Room, Coil, Media3, WorkManager, ML Kit)
+            // traen sus propias reglas de consumidor.
+            isMinifyEnabled = true
+            isShrinkResources = true
             // Empaqueta en el AAB los símbolos de las librerías nativas de las dependencias, para
             // que Play Console pueda leer los fallos/ANR que ocurran en código nativo (quita la
             // advertencia de "símbolos de depuración").
@@ -106,6 +111,43 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 }
+
+/**
+ * Traducción automática de los strings: antes de cada compilación lanza
+ * `tools/translate_strings.py`, que compara `values/strings.xml` (español) con su última copia y
+ * traduce a los otros 19 idiomas lo nuevo o cambiado con la API de Claude (ver la cabecera del
+ * script). Si no ha cambiado nada termina enseguida sin conectarse a nada.
+ *
+ * Necesita Python con `pip install anthropic` y la clave en `local.properties`
+ * (`anthropic.api_key=...`). Si falta algo, o no hay conexión, solo avisa y la compilación sigue:
+ * los strings nuevos se verán en español en los demás idiomas hasta la siguiente compilación que
+ * consiga traducirlos. Para saltarse la tarea: variable de entorno `ULTIMUSIC_SKIP_TRANSLATE=1`.
+ *
+ * No declara entradas ni salidas a propósito, así que se ejecuta siempre: si un intento falla, el
+ * siguiente build tiene que volver a probar aunque strings.xml no haya cambiado desde entonces.
+ */
+val translateStrings by tasks.registering {
+    group = "ultimusic"
+    description = "Traduce los strings nuevos o cambiados de values/strings.xml a todos los idiomas"
+    val script = rootProject.file("tools/translate_strings.py")
+    val workDir = rootProject.projectDir
+    doLast {
+        if (System.getenv("ULTIMUSIC_SKIP_TRANSLATE") == "1") return@doLast
+        try {
+            val process = ProcessBuilder("python", script.absolutePath, "--gradle")
+                .directory(workDir)
+                .redirectErrorStream(true)
+                .apply { environment()["PYTHONIOENCODING"] = "utf-8" }
+                .start()
+            process.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { println(it) }
+            process.waitFor()
+        } catch (e: IOException) {
+            logger.warn("[translateStrings] AVISO: no se ha podido ejecutar Python (${e.message}); no se traduce nada")
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn(translateStrings) }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

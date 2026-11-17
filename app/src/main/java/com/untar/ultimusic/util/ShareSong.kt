@@ -20,7 +20,7 @@ object ShareSong {
             SafStorage.resolveUri(song.filePath)?.let { song to it }
         }
         if (pairs.isEmpty()) {
-            Toast.makeText(context, R.string.share_song_error, Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, R.string.share_song_error_no_file, Toast.LENGTH_SHORT).show()
             return
         }
         fun mimeOf(song: Song): String =
@@ -49,6 +49,10 @@ object ShareSong {
             if (context !is Activity) addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
         runCatching { context.startActivity(chooser) }
-            .onFailure { Toast.makeText(context, R.string.share_song_error, Toast.LENGTH_SHORT).show() }
+            .onFailure { error ->
+                Toast.makeText(
+                    context, context.errorWithReason(R.string.share_song_error, error), Toast.LENGTH_SHORT
+                ).show()
+            }
     }
 }

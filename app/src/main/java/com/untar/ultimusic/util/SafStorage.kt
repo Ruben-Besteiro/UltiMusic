@@ -46,7 +46,15 @@ object SafStorage {
     private const val AUTHORITY_EXTERNAL = "com.android.externalstorage.documents"
 
     /** Una fila de [listChildren]: ya trae su propio docPath, no hace falta reconstruirlo. */
-    data class SafEntry(val docPath: String, val name: String, val isDirectory: Boolean, val lastModified: Long)
+    /** [size] en bytes (`0` si el proveedor no lo informa o es una carpeta); sale gratis en la misma
+     *  consulta que el resto, ver [listChildren]. */
+    data class SafEntry(
+        val docPath: String,
+        val name: String,
+        val isDirectory: Boolean,
+        val lastModified: Long,
+        val size: Long = 0L
+    )
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -70,6 +78,20 @@ object SafStorage {
         takePersistablePermission(context, uri)
         prefs(context).edit().putString(KEY_ULTIMUSIC_TREE_URI, uri.toString()).apply()
         ensureUltiMusicRegistered(context)
+    }
+
+    /**
+     * Intenta crear `~/UltiMusic` (best-effort: sin `MANAGE_EXTERNAL_STORAGE`, Android 11+ suele
+     * denegar crear carpetas en la raíz con la API de archivos; en versiones anteriores o según el
+     * fabricante, puede funcionar) y devuelve la ubicación inicial para el selector del sistema:
+     * la propia carpeta `UltiMusic` si existe (así el usuario solo tiene que pulsar "Usar esta
+     * carpeta"), o si no, la raíz del almacenamiento interno (`~`).
+     */
+    fun initialPickerUri(): Uri {
+        val folder = java.io.File(android.os.Environment.getExternalStorageDirectory(), "UltiMusic")
+        val exists = runCatching { folder.isDirectory || folder.mkdirs() }.getOrDefault(false)
+        val docId = if (exists) "$VOLUME_PRIMARY:UltiMusic" else "$VOLUME_PRIMARY:"
+        return DocumentsContract.buildDocumentUri(AUTHORITY_EXTERNAL, docId)
     }
 
     /**
@@ -219,7 +241,8 @@ object SafStorage {
             Document.COLUMN_DOCUMENT_ID,
             Document.COLUMN_DISPLAY_NAME,
             Document.COLUMN_MIME_TYPE,
-            Document.COLUMN_LAST_MODIFIED
+            Document.COLUMN_LAST_MODIFIED,
+            Document.COLUMN_SIZE
         )
         val out = ArrayList<SafEntry>()
         runCatching {
@@ -228,6 +251,7 @@ object SafStorage {
                 val nameIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_DISPLAY_NAME)
                 val mimeIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_MIME_TYPE)
                 val modIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_LAST_MODIFIED)
+                val sizeIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_SIZE)
                 while (cursor.moveToNext()) {
                     val docId = cursor.getString(idIdx) ?: continue
                     val docPath = docId.removePrefix("$VOLUME_PRIMARY:")
@@ -237,7 +261,12 @@ object SafStorage {
                     // fecha (p. ej. el usuario le ha cambiado la carátula embebida con otra app), se
                     // le sube la versión para que su carátula se recargue (ver [contentVersion]).
                     noteModified(docPath, modified)
-                    out.add(SafEntry(docPath, name, cursor.getString(mimeIdx) == Document.MIME_TYPE_DIR, modified))
+                    // Un proveedor que no sabe el tamaño devuelve NULL (getLong da 0) o un valor
+                    // negativo: ambos significan "desconocido", que aquí es 0.
+                    val size = if (cursor.isNull(sizeIdx)) 0L else cursor.getLong(sizeIdx).coerceAtLeast(0L)
+                    out.add(
+                        SafEntry(docPath, name, cursor.getString(mimeIdx) == Document.MIME_TYPE_DIR, modified, size)
+                    )
                 }
             }
         }

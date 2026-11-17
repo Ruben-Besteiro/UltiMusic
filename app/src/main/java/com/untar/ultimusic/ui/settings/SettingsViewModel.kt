@@ -11,6 +11,7 @@ import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -43,6 +44,24 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
     // --- Carpetas raíz de la fonoteca (ajustes > Carpetas de la fonoteca) ---
 
     val libraryRoots: StateFlow<List<LibraryRoot>> = repository.libraryRoots
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Lo que enseña la lista de ajustes: TODAS las carpetas que lee el escáner (ver
+     * [SafStorage.grantedRoots]), es decir, UltiMusic más las raíces añadidas, filtradas a las que
+     * todavía tienen permiso concedido. Antes salía solo de la tabla `library_roots`, así que
+     * UltiMusic nunca aparecía. Las raíces con permiso revocado no se muestran (el escáner tampoco
+     * las lee). [libraryRoots] se queda como estaba: lo usa la comprobación de carpetas repetidas.
+     */
+    val visibleRoots: StateFlow<List<LibraryRoot>> = repository.libraryRoots
+        .map { extras ->
+            val app = getApplication<Application>()
+            val main = SafStorage.ultiMusicTreeUri(app)?.let { LibraryRoot(it.toString(), isMain = true) }
+            (listOfNotNull(main) + extras).filter { root ->
+                runCatching { Uri.parse(root.path) }.getOrNull()
+                    ?.let { SafStorage.isRootReadable(app, it) } == true
+            }
+        }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /** Por qué no se pudo añadir una carpeta raíz nueva, para que la UI elija el aviso adecuado. */

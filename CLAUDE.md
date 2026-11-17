@@ -15,8 +15,10 @@ Al hacer ediciones dentro de la aplicación, lo nuevo debe aparecer instantánea
 
 Al tocar la base de datos, se debe crear una migración de BD y destruir la anterior.
 
-Cuando se vaya a tocar un string, ese cambio se debe aplicar a todos los idiomas
-
 El menú de tres puntos de la selección múltiple de canciones debe ser idéntico al de una canción individual (menu\_song\_item.xml), pero aplicándose a todas las seleccionadas. Cualquier opción nueva del menú individual debe añadirse también a los menús de selección (menu\_song\_selection.xml y menu\_queue\_selection.xml) y viceversa. Únicas excepciones: "Ir al álbum/artista", que no tiene sentido con varias canciones.
 
 Para hacer ediciones utiliza Edit a no ser que tenga alguna desventaja importante (explícala), para que así salgan los diffs en la terminal.
+
+Si hay que cambiar los strings, los cambios deben aplicarse a todos los idiomas. Tras usar la API de traducciones de Claude, dime cuánto dinero se gastó. Usa tail para verlo.
+
+Si estamos probando la API de Google Translate, no llames al endpoint porque me pueden bloquear por tráfico automatizado. En vez de eso, dime cómo probarlo yo.

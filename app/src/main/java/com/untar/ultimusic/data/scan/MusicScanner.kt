@@ -30,7 +30,6 @@ object MusicScanner {            // OBJECT = SINGLETON
     /** Archivos cuyas etiquetas se leen a la vez en [scan]. */
     private const val READ_PARALLELISM = 6
 
-    const val UNKNOWN_ARTIST ="Artista desconocido"
     const val UNKNOWN_ALBUM = ""
 
     /**
@@ -40,8 +39,16 @@ object MusicScanner {            // OBJECT = SINGLETON
      * segundo conjunto para que [com.untar.ultimusic.data.db.LibraryDao.reconcile] sepa qué
      * canciones ya catalogadas han desaparecido, cosa que [newSongs] por sí solo no puede decir (los
      * archivos ya conocidos ni siquiera están en esa lista).
+     *
+     * [currentSizes] es el tamaño en bytes de cada uno de esos archivos (docPath → bytes, solo los
+     * que el proveedor informa): viene del mismo listado de carpetas, sin abrir nada, y permite a
+     * [com.untar.ultimusic.data.db.LibraryDao.reconcile] rellenar `songs.size` de lo ya catalogado.
      */
-    data class ScanResult(val newSongs: List<ScannedSong>, val currentPaths: Set<String>)
+    data class ScanResult(
+        val newSongs: List<ScannedSong>,
+        val currentPaths: Set<String>,
+        val currentSizes: Map<String, Long> = emptyMap()
+    )
 
     /**
      * Escanea las carpetas concedidas ahora mismo (ver [SafStorage.grantedRoots]: `UltiMusic` más las
@@ -82,7 +89,9 @@ object MusicScanner {            // OBJECT = SINGLETON
                 }
             }.awaitAll().filterNotNull()
         }
-        ScanResult(newSongs, currentPaths)
+        val currentSizes = HashMap<String, Long>(entries.size)
+        for ((path, entry) in entries) if (entry.size > 0L) currentSizes[path] = entry.size
+        ScanResult(newSongs, currentPaths, currentSizes)
     }
 
     /**
@@ -115,6 +124,59 @@ object MusicScanner {            // OBJECT = SINGLETON
             collectAudioFiles(context, treeUri, rootDocPath, entries)
         }
         entries.values.firstOrNull { it.name == filename }?.docPath
+    }
+
+    /** Máximo de archivos cuya duración se lee en [findRelocated] (leerla abre el archivo, a
+     *  diferencia del tamaño): evita que reproducir una canción perdida se eternice si hubiera
+     *  miles de archivos sin catalogar. */
+    private const val MAX_DURATION_PROBES = 300
+
+    /**
+     * Busca un archivo que ha sido MOVIDO Y RENOMBRADO a la vez (ver [findByFilename], que solo vale
+     * si el nombre se conserva), entre los archivos de audio de las carpetas concedidas que
+     * TODAVÍA NO están catalogados ([knownPaths]: una canción que ya tiene su fila no puede ser el
+     * archivo perdido de otra).
+     *
+     * Primero por TAMAÑO exacto en bytes ([size], `0` = desconocido): sale gratis del listado de
+     * carpetas, sin abrir ningún archivo. Si hay un único candidato con ese tamaño, es ese. Si hay
+     * varios, se desempata por DURACIÓN exacta ([durationMs]) solo entre ellos; si ninguno tiene ese
+     * tamaño (o se desconoce, o otra app ha reetiquetado el archivo y lo ha cambiado) se prueba la
+     * duración entre todos los candidatos, hasta [MAX_DURATION_PROBES]. Nunca adivina: con cero o
+     * varias coincidencias devuelve null.
+     */
+    suspend fun findRelocated(
+        context: Context,
+        size: Long,
+        durationMs: Long,
+        knownPaths: Set<String>
+    ): String? = withContext(Dispatchers.IO) {
+        val entries = LinkedHashMap<String, SafStorage.SafEntry>()
+        for ((rootDocPath, treeUri) in SafStorage.grantedRoots()) {
+            collectAudioFiles(context, treeUri, rootDocPath, entries)
+        }
+        val candidates = entries.values.filter { it.docPath !in knownPaths }
+        if (candidates.isEmpty()) return@withContext null
+
+        val bySize = if (size > 0L) candidates.filter { it.size == size } else emptyList()
+        bySize.singleOrNull()?.let { return@withContext it.docPath }
+
+        if (durationMs <= 0L) return@withContext null
+        val pool = (if (bySize.isNotEmpty()) bySize else candidates).take(MAX_DURATION_PROBES)
+        pool.filter { readDurationMs(context, it.docPath) == durationMs }.singleOrNull()?.docPath
+    }
+
+    /** Solo la duración (ms) de un archivo, o null si no se puede leer. Más ligera que [readSongFromUri]. */
+    private fun readDurationMs(context: Context, docPath: String): Long? {
+        val uri = SafStorage.resolveUri(docPath) ?: return null
+        val retriever = MediaMetadataRetriever()
+        return try {
+            retriever.setDataSource(context, uri)
+            retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.trim()?.toLongOrNull()
+        } catch (e: Exception) {
+            null
+        } finally {
+            runCatching { retriever.release() }
+        }
     }
 
     /**
@@ -167,13 +229,19 @@ object MusicScanner {            // OBJECT = SINGLETON
     /** Lee las etiquetas de la canción encontrada en [entry] (ver [collectAudioFiles]). */
     private fun readSong(context: Context, entry: SafStorage.SafEntry): ScannedSong? {
         val uri = SafStorage.resolveUri(entry.docPath) ?: return null
-        return readSongFromUri(context, uri, entry.docPath, entry.lastModified)
+        return readSongFromUri(context, uri, entry.docPath, entry.lastModified, entry.size)
     }
 
     /** Lee las etiquetas de un archivo de audio abrible por [uri] y las empaqueta en un
      *  [ScannedSong], con [filePath] como su clave de dominio (docPath o URI completo, según quien
      *  llame). */
-    private fun readSongFromUri(context: Context, uri: Uri, filePath: String, dateAdded: Long): ScannedSong? {
+    private fun readSongFromUri(
+        context: Context,
+        uri: Uri,
+        filePath: String,
+        dateAdded: Long,
+        size: Long = 0L
+    ): ScannedSong? {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(context, uri)
@@ -208,7 +276,8 @@ object MusicScanner {            // OBJECT = SINGLETON
                 producer = producer,
                 trackNumber = trackNumber,
                 discNumber = discNumber,
-                dateAdded = dateAdded
+                dateAdded = dateAdded,
+                size = size
             )
         } catch (e: Exception) {
             return null

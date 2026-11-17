@@ -535,66 +535,16 @@
                 android:textColor="@color/um_on_surface_muted"
                 android:textSize="14sp" />
 
-            <LinearLayout
-                android:layout_width="wrap_content"
+            <!-- Cuadrícula de 5 columnas x 4 filas con las 20 banderas, en el orden de
+                 AppLocale.LANGUAGES. Se rellena desde SettingsDialogFragment.setupLanguage con
+                 item_language_flag.xml. -->
+            <GridLayout
+                android:id="@+id/languageGrid"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:orientation="horizontal">
-
-                <FrameLayout
-                    android:id="@+id/languageSpainButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:background="?attr/selectableItemBackground"
-                    android:contentDescription="@string/settings_language_spanish"
-                    android:padding="4dp">
-
-                    <ImageView
-                        android:layout_width="56dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_flag_clip"
-                        android:clipToOutline="true"
-                        android:importantForAccessibility="no"
-                        android:scaleType="centerCrop"
-                        android:src="@drawable/flag_spain" />
-
-                    <View
-                        android:id="@+id/languageSpainSelectedBorder"
-                        android:layout_width="56dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_flag_selected"
-                        android:visibility="gone" />
-
-                </FrameLayout>
-
-                <FrameLayout
-                    android:id="@+id/languageEnglishButton"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="16dp"
-                    android:background="?attr/selectableItemBackground"
-                    android:contentDescription="@string/settings_language_english"
-                    android:padding="4dp">
-
-                    <ImageView
-                        android:layout_width="56dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_flag_clip"
-                        android:clipToOutline="true"
-                        android:importantForAccessibility="no"
-                        android:scaleType="centerCrop"
-                        android:src="@drawable/flag_uk" />
-
-                    <View
-                        android:id="@+id/languageEnglishSelectedBorder"
-                        android:layout_width="56dp"
-                        android:layout_height="36dp"
-                        android:background="@drawable/bg_flag_selected"
-                        android:visibility="gone" />
-
-                </FrameLayout>
-
-            </LinearLayout>
+                android:columnCount="5"
+                android:useDefaultMargins="false" />
 
             <!-- ===== Ajuste: carpetas de la fonoteca ===== -->
 
@@ -617,12 +567,12 @@
                 android:textSize="14sp" />
 
             <!-- nestedScrollingEnabled=false: mismo motivo que greylistRecycler, ver más abajo. -->
-            <androidx.recyclerview.widget.RecyclerView
+            <LinearLayout
                 android:id="@+id/libraryRootsRecycler"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                android:nestedScrollingEnabled="false" />
+                android:orientation="vertical" />
 
             <TextView
                 android:id="@+id/btnAddLibraryRoot"
@@ -675,12 +625,7 @@
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold" />
 
-            <!--
-              ===== Ajuste: Añadir todas las letras =====
-              Al final de "ajustes visuales" porque toca las canciones directamente (ver
-              BulkLyricsAdder), no es un ajuste de la aplicación en sí como el resto del grupo. Sin
-              título ni subtítulo propios, como pidió el usuario: es solo el texto de la acción.
-            -->
+            <!-- ===== Ajustes adicionales ===== -->
 
             <TextView
                 android:id="@+id/addAllLyricsTitle"
@@ -690,17 +635,6 @@
                 android:text="@string/settings_add_all_lyrics_title"
                 android:textColor="@color/um_yellow"
                 android:textSize="18sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/btnAddAllLyrics"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:background="?attr/selectableItemBackground"
-                android:paddingVertical="8dp"
-                android:text="@string/settings_bulk_lyrics_add"
-                android:textColor="@color/um_on_background"
                 android:textStyle="bold" />
 
             <!--
@@ -782,6 +716,7 @@
 
             <TextView
                 android:id="@+id/geniusTitle"
+                android:textAlignment="viewStart"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -821,6 +756,7 @@
 
             <TextView
                 android:id="@+id/youtubeTitle"
+                android:textAlignment="viewStart"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"

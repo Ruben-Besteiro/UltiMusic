@@ -32,8 +32,8 @@
     <!-- Velo semitransparente sobre la carátula cuando el iPod muestra la cola encima de ella
          (ver IPodDialogFragment): la carátula se ve de fondo, atenuada, en vez de desaparecer. -->
     <color name="um_queue_scrim">#D9000000</color>
-    <!-- Fondo de los dos botones flotantes del contenedor de la letra del iPod ("Ver más/menos" y
-         el de traducir, ver ipod_lyrics_overlay_button.xml): semitransparente para no tapar del
+    <!-- Fondo de los botones flotantes del contenedor de la letra del iPod (traducir, romanizar y
+         editar; también el de "Ver más/menos", hoy desactivado; ver ipod_lyrics_overlay_button.xml): semitransparente para no tapar del
          todo la letra que quede debajo, fijo en vez de con el color dinámico porque no es amarillo. -->
     <color name="um_lyrics_overlay_button">#99000000</color>
     <!-- Rojo de "esto ha ido mal" (de momento solo el token de Genius que no vale, ver
@@ -53,7 +53,6 @@
     <color name="um_tag_recently_added">#FFFFFFFF</color>  <!-- blanco -->
     <color name="um_tag_not_in_playlist">#FF333333</color> <!-- gris casi negro -->
     <color name="um_tag_no_custom_tags">#FF333333</color>  <!-- gris casi negro -->
-    <color name="um_tag_synced_video">#FFFFFFFF</color>    <!-- blanco -->
     <!-- Se asigna sola si "Título original" no está vacío en el editor de metadatos (ver
          SystemTagKey.REMIX_COVER); membresía real en song_tag, mantenida por
          LibraryRepository.syncRemixCoverTag, igual que "Vídeo sincronizado". -->

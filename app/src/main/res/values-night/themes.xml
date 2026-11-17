@@ -36,6 +36,7 @@
         <item name="android:textSelectHandle">@drawable/handle_teardrop</item>
         <item name="android:textSelectHandleLeft">@drawable/handle_teardrop</item>
         <item name="android:textSelectHandleRight">@drawable/handle_teardrop</item>
+        <item name="recyclerViewStyle">@style/Widget.UltiMusic.RecyclerView</item>
     </style>
 
     <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />

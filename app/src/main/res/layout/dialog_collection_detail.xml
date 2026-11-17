@@ -110,6 +110,30 @@
         </LinearLayout>
     </LinearLayout>
 
+    <!--
+      Solo para un género (ver CollectionDetailDialogFragment): carrusel horizontal con los álbumes
+      que llevan ese género entre los suyos, igual que recyclerDetailAlbums de
+      dialog_library_detail.xml en la ficha de un artista. Oculto si no hay ninguno.
+    -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/recyclerCollectionAlbums"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:clipToPadding="false"
+        android:orientation="horizontal"
+        android:scrollbars="none"
+        android:visibility="gone"
+        tools:listitem="@layout/item_detail_album_card" />
+
+    <View
+        android:id="@+id/collectionAlbumsDivider"
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginBottom="4dp"
+        android:background="@color/um_divider"
+        android:visibility="gone" />
+
     <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
@@ -163,6 +187,7 @@
     -->
     <SeekBar
         android:id="@+id/songProgress"
+        android:layoutDirection="ltr"
         android:layout_width="match_parent"
         android:layout_height="10dp"
         android:paddingStart="0dp"

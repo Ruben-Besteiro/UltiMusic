@@ -209,7 +209,7 @@ fun migration17To18(context: Context): Migration = object : Migration(17, 18) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_song_tag_tagId ON song_tag(tagId)")
 
         backfillDateAdded(db)
-        seedDefaultTags(db, context)
+        seedDefaultTags(db, context, hasAutoAssignedColumn = false) // la columna llega en v23
     }
 }
 
@@ -253,17 +253,24 @@ private fun backfillDateAdded(db: SupportSQLiteDatabase) {
  * único motivo de resolverlos con `Context` en vez de leer el recurso directamente desde `db.execSQL`
  * es que SQL no sabe de recursos de Android.
  */
-internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context) {
+internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context, hasAutoAssignedColumn: Boolean = true) {
     val rows = listOf(
         Triple(SystemTagKey.RECENTLY_ADDED, R.string.tag_recently_added_name, R.color.um_tag_recently_added),
         Triple(SystemTagKey.NOT_IN_PLAYLIST, R.string.tag_not_in_playlist_name, R.color.um_tag_not_in_playlist),
         Triple(SystemTagKey.NO_CUSTOM_TAGS, R.string.tag_no_custom_tags_name, R.color.um_tag_no_custom_tags),
-        Triple(SystemTagKey.SYNCED_VIDEO, R.string.tag_synced_video_name, R.color.um_tag_synced_video),
         Triple(SystemTagKey.REMIX_COVER, R.string.tag_remix_cover_name, R.color.um_tag_remix_cover)
     )
     rows.forEachIndexed { sortOrder, (systemKey, nameRes, colorRes) ->
         db.execSQL(
-            "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder) VALUES (?, ?, ?, ?)",
+            // isAutoAssigned va explícito: en una instalación nueva Room crea la columna como
+            // `INTEGER NOT NULL` SIN DEFAULT (el DEFAULT 0 solo existe en las BD migradas, ver
+            // migration22To23), y `INSERT OR IGNORE` se traga en silencio la violación de NOT NULL,
+            // así que sin esto no se sembraba ninguna etiqueta predefinida.
+            if (hasAutoAssignedColumn) {
+                "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder, isAutoAssigned) VALUES (?, ?, ?, ?, 0)"
+            } else {
+                "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder) VALUES (?, ?, ?, ?)"
+            },
             arrayOf<Any>(
                 context.getString(nameRes),
                 ContextCompat.getColor(context, colorRes),
@@ -283,7 +290,7 @@ internal fun seedDefaultTags(db: SupportSQLiteDatabase, context: Context) {
  */
 fun migration18To19(context: Context): Migration = object : Migration(18, 19) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        seedDefaultTags(db, context)
+        seedDefaultTags(db, context, hasAutoAssignedColumn = false) // la columna llega en v23
     }
 }
 
@@ -305,38 +312,16 @@ val MIGRATION_19_20 = object : Migration(19, 20) {
 }
 
 /**
- * v20 → v21: sin cambio de esquema — siembra la 5ª etiqueta predefinida "Vídeo sincronizado" (ver
- * [SystemTagKey.SYNCED_VIDEO]), que a partir de ahora [com.untar.ultimusic.data.LibraryRepository]
- * mantiene sola en `song_tag` según [com.untar.ultimusic.model.Song.videoOffsetMs] (ver
- * `LibraryRepository.syncSyncedVideoTag`).
- *
- * A diferencia de Favoritos -que nace siempre vacía, nadie tiene canciones favoritas antes de que
- * exista el botón para marcarlas-, aquí YA puede haber canciones con un desplazamiento de vídeo
- * distinto de 0 guardado desde antes de esta versión (el editor de metadatos y el iPod llevan tiempo
- * dejando ajustarlo). Sin este backfill, esas canciones se quedarían sin la etiqueta hasta que
- * alguien les tocara el desplazamiento a mano una vez más — así que, tras sembrar la fila, se rellena
- * `song_tag` para todas las que ya cumplan la condición.
+ * v20 → v21: sin cambio de esquema. Sembraba la etiqueta predefinida "Vídeo sincronizado"
+ * (`SYNCED_VIDEO`) y la rellenaba con las canciones de `videoOffsetMs != 0`, pero esa etiqueta se
+ * retira en [MIGRATION_32_33], así que ya no se siembra para no crear una fila que 12 versiones
+ * después se borra. Se conserva el salto (y la firma con `Context`) para no tocar la cadena de
+ * migraciones.
  */
+@Suppress("UNUSED_PARAMETER")
 fun migration20To21(context: Context): Migration = object : Migration(20, 21) {
     override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL(
-            "INSERT OR IGNORE INTO tags (name, colorArgb, systemKey, sortOrder) VALUES (?, ?, ?, ?)",
-            arrayOf<Any>(
-                context.getString(R.string.tag_synced_video_name),
-                ContextCompat.getColor(context, R.color.um_tag_synced_video),
-                SystemTagKey.SYNCED_VIDEO.name,
-                4
-            )
-        )
-        db.query("SELECT id FROM tags WHERE systemKey = ?", arrayOf(SystemTagKey.SYNCED_VIDEO.name)).use { cursor ->
-            if (cursor.moveToFirst()) {
-                val tagId = cursor.getLong(0)
-                db.execSQL(
-                    "INSERT OR IGNORE INTO song_tag (songId, tagId) SELECT id, ? FROM songs WHERE videoOffsetMs != 0",
-                    arrayOf<Any>(tagId)
-                )
-            }
-        }
+        // Nada: ver el comentario de arriba.
     }
 }
 
@@ -697,6 +682,51 @@ val MIGRATION_29_30 = object : Migration(29, 30) {
 }
 
 /**
+ * v30 → v31: columna nueva `songs.lyricsSearchedAt` (ver
+ * [com.untar.ultimusic.data.db.entities.SongEntity.lyricsSearchedAt]), para la búsqueda automática de
+ * letras. Nullable y sin `DEFAULT`, así que basta un `ALTER TABLE` y todas las filas existentes quedan
+ * a null ("nunca buscada"), que es justo lo que son: no se pierde nada de la fonoteca.
+ */
+val MIGRATION_30_31 = object : Migration(30, 31) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE songs ADD COLUMN lyricsSearchedAt INTEGER")
+    }
+}
+
+/**
+ * v31 → v32: columna nueva `songs.size` (ver [com.untar.ultimusic.data.db.entities.SongEntity.size]),
+ * el tamaño en bytes del archivo, para reencontrar canciones movidas y renombradas a la vez. Mismo
+ * patrón que `dateAdded` en su día: `NOT NULL DEFAULT 0`, así que basta un `ALTER TABLE` y todas las
+ * filas existentes quedan a `0` ("desconocido"): no se pierde nada de la fonoteca. El siguiente
+ * escaneo las rellena desde el listado de la carpeta, sin releer etiquetas (ver `LibraryDao.reconcile`).
+ */
+val MIGRATION_31_32 = object : Migration(31, 32) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE songs ADD COLUMN size INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
+ * v32 → v33: sin cambio de esquema, dos cambios de datos por el rediseño del modo vídeo (el vídeo y
+ * el audio salen ahora los dos de YouTube, así que siempre están sincronizados):
+ *
+ * - Se retira la etiqueta predefinida "Vídeo sincronizado" (`SYNCED_VIDEO`, ya fuera de
+ *   [SystemTagKey]) con sus enlaces en `song_tag` (se borran a mano antes por si las claves foráneas
+ *   no estuvieran activas en la migración). Sin este DELETE la fila se quedaría huérfana y, al no
+ *   reconocerla el enum, la app la trataría como una etiqueta personalizada.
+ * - `songs.videoOffsetMs` pasa de "adelanta el vídeo respecto del audio" a "adelanta la LETRA respecto
+ *   del vídeo" (ver [com.untar.ultimusic.model.Song.videoOffsetMs]): es el mismo desfase visto desde
+ *   el otro lado, así que se invierte el signo para que cada canción conserve su ajuste.
+ */
+val MIGRATION_32_33 = object : Migration(32, 33) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DELETE FROM song_tag WHERE tagId IN (SELECT id FROM tags WHERE systemKey = 'SYNCED_VIDEO')")
+        db.execSQL("DELETE FROM tags WHERE systemKey = 'SYNCED_VIDEO'")
+        db.execSQL("UPDATE songs SET videoOffsetMs = -videoOffsetMs WHERE videoOffsetMs != 0")
+    }
+}
+
+/**
  * v25 → v26: sin cambio de esquema — recolorea 4 de las etiquetas predefinidas y siembra la 6ª,
  * "Remix / Cover" (ver [SystemTagKey.REMIX_COVER]):
  *
@@ -723,8 +753,7 @@ fun migration25To26(context: Context): Migration = object : Migration(25, 26) {
         val recoloredTags = listOf(
             SystemTagKey.NOT_IN_PLAYLIST to R.color.um_tag_not_in_playlist,
             SystemTagKey.NO_CUSTOM_TAGS to R.color.um_tag_no_custom_tags,
-            SystemTagKey.RECENTLY_ADDED to R.color.um_tag_recently_added,
-            SystemTagKey.SYNCED_VIDEO to R.color.um_tag_synced_video
+            SystemTagKey.RECENTLY_ADDED to R.color.um_tag_recently_added
         )
         recoloredTags.forEach { (systemKey, colorRes) ->
             db.execSQL(

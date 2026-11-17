@@ -43,6 +43,7 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.TagSummary
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
+import com.untar.ultimusic.ui.common.ItemCardDecoration
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.ShuffleToggleIcon
 import com.untar.ultimusic.ui.common.SwipeToQueueGesture
@@ -52,6 +53,7 @@ import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.library.AddSongsToTagDialogFragment
+import com.untar.ultimusic.ui.library.DetailAlbumsAdapter
 import com.untar.ultimusic.ui.library.DetailDialogFragment
 import com.untar.ultimusic.ui.library.SongTagsDialogFragment
 import com.untar.ultimusic.ui.library.TagEditorDialogFragment
@@ -162,6 +164,8 @@ class CollectionDetailDialogFragment : DialogFragment() {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerCollectionSongs)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
         val btnAddSongs = view.findViewById<FloatingActionButton>(R.id.btnAddSongs)
+        val recyclerAlbums = view.findViewById<RecyclerView>(R.id.recyclerCollectionAlbums)
+        val albumsDivider = view.findViewById<View>(R.id.collectionAlbumsDivider)
         val miniPlayer = view.findViewById<View>(R.id.miniPlayer)
         val miniProgress = view.findViewById<SeekBar>(R.id.songProgress)
         MiniPlayerController(miniPlayer, miniProgress, playerViewModel, parentFragmentManager, viewLifecycleOwner)
@@ -243,6 +247,22 @@ class CollectionDetailDialogFragment : DialogFragment() {
             adapter.songAt(pos)?.id == song.id
         }
 
+        // Carrusel de álbumes: solo sale en la ficha de un género (ver
+        // CollectionDetailViewModel.albums, vacío para lista/etiqueta). Mismo montaje que el de la
+        // ficha de artista en DetailDialogFragment.
+        val albumsAdapter = DetailAlbumsAdapter(
+            onAlbumClick = { album -> DetailDialogFragment.showAlbum(this, album.id) }
+        )
+        recyclerAlbums.layoutManager =
+            LinearLayoutManager(requireContext(), LinearLayoutManager.HORIZONTAL, false)
+        recyclerAlbums.adapter = albumsAdapter
+        val albumCards = ItemCardDecoration(resources.displayMetrics.density)
+        recyclerAlbums.addItemDecoration(albumCards)
+        albumCards.highlight = { pos ->
+            val id = albumsAdapter.albumAt(pos)?.id
+            id != null && playerViewModel.currentSong.value?.albums?.any { it.album.id == id } == true
+        }
+
         // Arrastrar una fila hacia la derecha la añade a la cola, igual que en el resto de listas de
         // canciones (ver SwipeToQueue.kt). Aquí solo puede haber UN ItemTouchHelper por RecyclerView,
         // así que si además reordena (ver más abajo) el gesto va combinado en su mismo callback; si
@@ -256,7 +276,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
         // CollectionSongsAdapter.reorderable (su manejador ya viene oculto).
         if (viewModel.reorderable) {
             val callback = object : ItemTouchHelper.SimpleCallback(
-                ItemTouchHelper.UP or ItemTouchHelper.DOWN, ItemTouchHelper.RIGHT
+                ItemTouchHelper.UP or ItemTouchHelper.DOWN, ItemTouchHelper.END
             ) {
                 override fun isLongPressDragEnabled() = false
                 override fun onMove(
@@ -284,7 +304,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                     actionState: Int,
                     isCurrentlyActive: Boolean
                 ) {
-                    if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
+                    if (queueGesture.isQueueSwipe(actionState, vh, dX)) {
                         queueGesture.onChildDraw(c, vh, dX, onAddToQueue)
                     } else {
                         super.onChildDraw(c, rv, vh, dX, dY, actionState, isCurrentlyActive)
@@ -404,6 +424,15 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         )
                     }
                 }
+                launch {
+                    combine(viewModel.albums, CoverArt.revision) { list, _ -> list }.collect { list ->
+                        albumsAdapter.submit(list)
+                        val visibility = if (list.isEmpty()) View.GONE else View.VISIBLE
+                        recyclerAlbums.visibility = visibility
+                        albumsDivider.visibility = visibility
+                    }
+                }
+                launch { playerViewModel.currentSong.collect { recyclerAlbums.invalidate() } }
                 // "Posición actual"/REANUDAR: SOLO para una Lista (ver PlaylistResumeStore). Se
                 // recalcula con cada cambio de canciones/contexto de reproducción, no solo una vez,
                 // para que el texto siga la pista mientras esta misma lista suena (el botón se
@@ -447,6 +476,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         // DetailDialogFragment).
                         applyAccent(accent, headerBox, toolbar, summaryIcon, summaryText, resumeIcon, resumeText, btnResume)
                         scrollbar.setAccentColor(accent)
+                        albumCards.setAccentColor(accent, recyclerAlbums)
                         // El botón "+" es chrome de la app (como btnCreateTag de TagsFragment), no
                         // el color propio de la etiqueta: sí le aplica la regla de amarillo dinámico.
                         btnAddSongs.backgroundTintList = ColorStateList.valueOf(accent)

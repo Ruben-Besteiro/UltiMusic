@@ -29,6 +29,7 @@ import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.LyricsAutoFetcher
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.EqBand
@@ -1084,6 +1085,8 @@ class PlaybackService : MediaSessionService() {
         // diferencia del historial de listas, el contador NO mira de qué colección venga la cola:
         // todo lo que suene cuenta, salga de una lista, de un género o de la cola suelta.
         playTracker.start(song)
+        // Y lo mismo para la letra: si la canción no tiene, se busca en lrclib.net ahora.
+        autoFetchLyrics(song)
         // Cualquier carga por el camino normal es un intento nuevo y limpio, aunque sea la misma
         // canción que acaba de fallar (p. ej. repetir la cola): el reintento de onPlayerError no
         // pasa por aquí (llama a player.prepare() directamente), así que esto no le pisa nada.
@@ -1158,7 +1161,7 @@ class PlaybackService : MediaSessionService() {
      * miraba esta metadata; ahora la mira la notificación (y, con ella, la pantalla de bloqueo).
      */
     private fun buildMediaItem(song: Song, path: String): MediaItem {
-        val artistName = song.artistDisplay()
+        val artistName = song.artistDisplay(this)
         val albumName = song.album?.title
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)
@@ -1190,6 +1193,24 @@ class PlaybackService : MediaSessionService() {
      * arrancaba otra canción (que sí recarga [Song] fresca desde el repositorio, ver [play]), por
      * mucho que Room ya tuviera el cambio guardado.
      */
+    /**
+     * Rellenado automático de letra al reproducir (ver [LyricsAutoFetcher]). Una canción "suelta"
+     * (Abrir con UltiMusic) no está en la BD, así que no hay dónde guardarla. Al guardarse, la
+     * canción releída de Room se mete en la cola con [refreshSong]: así el iPod (que lee
+     * [currentSong]) la pinta al momento, y el resto de pantallas ya se enteran solas por Room.
+     */
+    private fun autoFetchLyrics(song: Song) {
+        if (song.id <= 0L || "://" in song.filePath) return
+        if (!LyricsAutoFetcher.needsSearch(song)) return
+        serviceScope.launch {
+            // La copia de la cola puede ir desfasada (p. ej. un "no encontrada" guardado hace un
+            // rato no la toca): se decide con la fila de Room de ahora.
+            val fresh = library.songsByIds(listOf(song.id)).firstOrNull() ?: return@launch
+            if (!LyricsAutoFetcher.needsSearch(fresh)) return@launch
+            LyricsAutoFetcher.fetchAndSave(this@PlaybackService, fresh)?.let(::refreshSong)
+        }
+    }
+
     fun refreshSong(fresh: Song) {
         fun patch(song: Song) = if (song.id == fresh.id) fresh else song
         _queue.value = _queue.value.map(::patch)

@@ -61,9 +61,9 @@ abstract class LibraryDao {
             a.id AS id,
             a.title AS title,
             a.imageName AS imageName,
-            -- Si el usuario no ha puesto año, cae al de su primera canción (ver el comentario
-            -- de más abajo, en observeAlbumsOfArtist): un fallback SOLO para pintar, nunca se
-            -- escribe en la fila del álbum.
+            a.genres AS genres,
+            -- Si el usuario no ha puesto año, cae al de su primera canción: un fallback SOLO para
+            -- pintar (y ordenar), nunca se escribe en la fila del álbum.
             COALESCE(a.year, (SELECT s.year FROM songs s
                 JOIN song_album sa ON sa.songId = s.id
                 WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
@@ -209,81 +209,6 @@ abstract class LibraryDao {
     )
     abstract fun observeSongsOfArtist(artistId: Long): Flow<List<SongWithRelations>>
 
-    // --- Álbumes de un artista (carrusel horizontal de su ficha) ---
-    //
-    // Un álbum "es" de este artista si alguna de sus canciones lo tiene entre sus artistas (mismo
-    // criterio que `albumCount` en observeArtistSummaries de arriba, para que ambas cifras
-    // cuadren). Más reciente primero (sin año al final), como en la captura de referencia.
-
-    @Query(
-        """
-        SELECT
-            a.id AS id,
-            a.title AS title,
-            a.imageName AS imageName,
-            -- Fallback si el usuario no ha puesto año: el de su primera canción (nunca se
-            -- escribe en la fila del álbum, solo se calcula para pintar y para ordenar el carrusel).
-            COALESCE(a.year, (SELECT s.year FROM songs s
-                JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
-                LIMIT 1)) AS year,
-            -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
-            -- en el orden en que se enlazaron, no solo el primero (GROUP_CONCAT sobre la subconsulta
-            -- ya ordenada por posición; ver también [LibraryRepository.albumArtistNames], que trae
-            -- la misma lista para la ficha de detalle). Si el álbum no tiene ninguno enlazado, el
-            -- fallback es el artista de la etiqueta original ([AlbumEntity.tagAlbumArtist], que no se
-            -- toca al reenlazar artistas y por eso sobrevive aunque el usuario vacíe el álbum); si
-            -- tampoco hay eso, el artista que más se repite entre las canciones del álbum, no el
-            -- primero que salga: GROUP BY + ORDER BY COUNT(*) DESC halla la moda. Empate a nombre más
-            -- corto (si una canción es una colaboración "A, B" y otra es solo "A", gana "A", que es
-            -- el artista real del álbum); si hasta la longitud empata, a menor id de artista, para
-            -- que el resultado sea determinista.
-            COALESCE(
-                (SELECT GROUP_CONCAT(name, ', ') FROM (
-                    SELECT ar.name AS name FROM album_artist aa
-                        JOIN artists ar ON ar.id = aa.artistId
-                        WHERE aa.albumId = a.id ORDER BY aa.position
-                )),
-                NULLIF(a.tagAlbumArtist, ''),
-                (SELECT ar.name FROM song_artist x
-                    JOIN songs s ON s.id = x.songId
-                    JOIN song_album sa ON sa.songId = s.id
-                    JOIN artists ar ON ar.id = x.artistId
-                    WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
-                    GROUP BY x.artistId
-                    ORDER BY COUNT(*) DESC, LENGTH(ar.name), x.artistId
-                    LIMIT 1)
-            ) AS artistName,
-            (SELECT COUNT(*) FROM songs s
-                JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
-            (SELECT COALESCE(SUM(s.duration), 0) FROM songs s
-                JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
-        FROM albums a
-        WHERE EXISTS (
-            SELECT 1 FROM songs s
-            JOIN song_album sa ON sa.songId = s.id
-            JOIN song_artist x ON x.songId = s.id
-            WHERE sa.albumId = a.id AND x.artistId = :artistId AND s.hiddenByGreylist = 0
-        )
-        ORDER BY
-            (COALESCE(a.year, (SELECT s.year FROM songs s
-                JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
-                LIMIT 1))) IS NULL,
-            (COALESCE(a.year, (SELECT s.year FROM songs s
-                JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
-                ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
-                LIMIT 1))) ASC,
-            LOWER(a.title)
-        """
-    )
-    abstract fun observeAlbumsOfArtist(artistId: Long): Flow<List<AlbumSummaryRow>>
-
     // --- Candidatas al collage de carátulas (álbum/artista sin imagen propia) ---
     //
     // Lectura puntual (suspend, no Flow): las pide bajo demanda `GroupCoverFetcher` (ver
@@ -343,8 +268,8 @@ abstract class LibraryDao {
     @Query("SELECT filePath FROM songs")
     abstract suspend fun allSongPaths(): List<String>
 
-    /** Como [allSongPaths] pero con la duración, para el emparejamiento por contenido de [reconcile]. */
-    @Query("SELECT filePath, duration FROM songs")
+    /** Como [allSongPaths] pero con la duración y el tamaño, para el emparejamiento por contenido de [reconcile]. */
+    @Query("SELECT filePath, duration, size FROM songs")
     abstract suspend fun allSongPathsAndDurations(): List<SongPathDurationRow>
 
     /** Filas crudas (sin relaciones), para [renameGenre]: los géneros no tienen su propia consulta
@@ -658,6 +583,10 @@ abstract class LibraryDao {
     @Query("UPDATE songs SET lyrics = :lyrics WHERE id = :songId")
     abstract suspend fun setLyrics(songId: Long, lyrics: String?)
 
+    /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.lyricsSearchedAt]. */
+    @Query("UPDATE songs SET lyricsSearchedAt = :searchedAt WHERE id = :songId")
+    abstract suspend fun setLyricsSearchedAt(songId: Long, searchedAt: Long?)
+
     /** Guarda el idioma deducido de una letra guardada fuera del editor de metadatos, ver
      *  [com.untar.ultimusic.data.LibraryRepository.setLyrics]. */
     @Query("UPDATE songs SET language = :language WHERE id = :songId")
@@ -741,6 +670,10 @@ abstract class LibraryDao {
     /** Reapunta una canción a su nueva ruta cuando el usuario ha movido el archivo (ver [reconcile]). */
     @Query("UPDATE songs SET filePath = :newPath WHERE filePath = :oldPath")
     abstract suspend fun updateSongPath(oldPath: String, newPath: String)
+
+    /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.size]. */
+    @Query("UPDATE songs SET size = :size WHERE filePath = :path")
+    abstract suspend fun updateSongSize(path: String, size: Long)
 
     // Un artista puede quedarse sin ninguna canción propia (song_artist) y aun así seguir siendo
     // el artista de un álbum entero (album_artist) — el caso típico es precisamente el álbum
@@ -836,15 +769,22 @@ abstract class LibraryDao {
      *  1. Se separan las rutas que han DESAPARECIDO del disco de las que han APARECIDO.
      *  2. Se emparejan por nombre de archivo: una ruta que desaparece y otra que aparece con el
      *     mismo nombre es, casi con total seguridad, el mismo archivo MOVIDO de carpeta.
-     *  3. Lo que sigue sin emparejar se prueba por DURACIÓN exacta (ms): si el archivo se ha movido
-     *     Y renombrado a la vez, ni la ruta ni el nombre sirven de ancla, pero la duración del audio
-     *     no cambia por eso (a diferencia del título, que el editor puede haber sobrescrito). Solo se
-     *     empareja si esa duración es única a ambos lados (una baja y un alta, ni más ni menos): con
-     *     ambigüedad no se adivina, se deja caer al paso siguiente.
-     *  4. Lo que queda sin emparejar por ninguna vía sí son altas y bajas de verdad: se insertan y
+     *  3. Lo que sigue sin emparejar se prueba por TAMAÑO exacto en bytes: si el archivo se ha movido
+     *     Y renombrado a la vez, ni la ruta ni el nombre sirven de ancla, pero su tamaño no cambia
+     *     por eso. Es la mejor pista (casi única, y sale gratis del listado de carpetas). Solo se
+     *     empareja si es único a ambos lados (una baja y un alta, ni más ni menos) y conocido
+     *     (`size > 0`): con ambigüedad no se adivina, se deja caer al paso siguiente.
+     *  4. Lo que sigue sin emparejar se prueba por DURACIÓN exacta (ms), con la misma exigencia de
+     *     unicidad a ambos lados. Cubre lo catalogado antes de v32 (tamaño aún desconocido) y los
+     *     archivos cuyo tamaño cambió porque otra app los reetiquetó. La duración no cambia por
+     *     mover o renombrar (a diferencia del título, que el editor puede haber sobrescrito).
+     *  5. Lo que queda sin emparejar por ninguna vía sí son altas y bajas de verdad: se insertan y
      *     se borran.
      *
-     * En cualquiera de los emparejamientos (2 o 3) solo se reapunta el `filePath` de la fila
+     * Aparte, antes de nada, se rellena/actualiza `songs.size` de lo ya catalogado con el tamaño que
+     * dio el listado de carpetas ([currentSizes]): sin releer ningún archivo.
+     *
+     * En cualquiera de los emparejamientos (2, 3 o 4) solo se reapunta el `filePath` de la fila
      * ([updateSongPath]), y así la canción conserva su id, sus ediciones del editor de metadatos, su
      * carátula importada y sus enlaces con artistas, álbumes y productores. Si en vez de esto se
      * borrara y se volviera a insertar, mover o renombrar un archivo equivaldría a perder todo lo
@@ -852,8 +792,8 @@ abstract class LibraryDao {
      *
      * El emparejamiento por nombre (fase 2) asume que no hay dos archivos con el mismo nombre en
      * carpetas distintas, que es la misma suposición que ya hacen las listas (ver
-     * `PlaylistRepository`). El de duración (fase 3) no depende de esa suposición, pero exige
-     * unicidad para no reapuntar dos canciones distintas entre sí por casualidad.
+     * `PlaylistRepository`). El de tamaño y el de duración (fases 3 y 4) no dependen de esa
+     * suposición, pero exigen unicidad para no reapuntar dos canciones distintas entre sí por casualidad.
      *
      * @param newSongs Etiquetas de los archivos que [com.untar.ultimusic.data.scan.MusicScanner.scan]
      * encontró SIN catalogar todavía (nuevos o movidos/renombrados). No incluye los ya conocidos:
@@ -861,11 +801,25 @@ abstract class LibraryDao {
      * @param currentPaths Rutas de TODOS los archivos de audio que hay ahora mismo en disco, estén
      * catalogados o no. Sin esto no se podría saber qué canciones ya catalogadas han desaparecido,
      * porque [newSongs] no incluye las que no han cambiado.
+     * @param currentSizes Tamaño en bytes de esos mismos archivos (ver
+     * [com.untar.ultimusic.data.scan.MusicScanner.ScanResult.currentSizes]).
      */
     @Transaction
-    open suspend fun reconcile(newSongs: List<ScannedSong>, currentPaths: Set<String>) {
+    open suspend fun reconcile(
+        newSongs: List<ScannedSong>,
+        currentPaths: Set<String>,
+        currentSizes: Map<String, Long> = emptyMap()
+    ) {
         val existingInfo = allSongPathsAndDurations()
         val existing = existingInfo.mapTo(HashSet(existingInfo.size)) { it.filePath }
+
+        // Relleno del tamaño de lo ya catalogado (todo lo anterior a v32 lo tiene a 0) y puesta al
+        // día si el archivo cambió de tamaño (otra app lo reetiquetó). Solo UPDATE de las filas que
+        // difieren, así que tras la primera vez no cuesta nada.
+        for (row in existingInfo) {
+            val actual = currentSizes[row.filePath] ?: continue
+            if (actual != row.size) updateSongSize(row.filePath, actual)
+        }
 
         // Carpetas actualmente fuera de la lista gris: lo que caiga bajo alguna de ellas entra o se
         // reapunta ya oculto, para no colarse visible hasta que se desactive el switch.
@@ -884,10 +838,10 @@ abstract class LibraryDao {
         // de [currentPaths] aunque el archivo siga ahí mismo, sin más motivo que no vivir bajo una
         // carpeta concedida TODAVÍA (el usuario puede conceder `UltiMusic` primero y Download/Music
         // más tarde, o directamente saltarse ese paso). SIGUE entrando en `gone`, a propósito: así
-        // las fases 2/3 de más abajo (emparejar por nombre/duración) pueden reemparejarla con el
+        // las fases 2-4 de más abajo (emparejar por nombre/tamaño/duración) pueden reemparejarla con el
         // archivo real en cuanto el escaneo lo encuentre con su docPath nuevo, conservando su id,
         // ediciones y carátula -justo lo que las evita duplicarse-. Lo único que no puede pasarle es
-        // acabar borrada si no encuentra pareja (ver la fase 4 bis, más abajo): tratarla como una
+        // acabar borrada si no encuentra pareja (ver la fase 5 bis, más abajo): tratarla como una
         // baja de verdad en ESE punto sí la borraría de la fonoteca sin que el archivo haya
         // desaparecido, así que ahí se excluye explícitamente y sigue "perdida" hasta que algo la
         // re-enlace (relinkAfterGrant, o esta misma función la próxima vez que su carpeta esté
@@ -902,48 +856,73 @@ abstract class LibraryDao {
         val moved = HashSet<String>(gone.size)
         val afterNamePass = ArrayList<ScannedSong>(appeared.size)
 
+        // Reapunta la fila de [match] al archivo recién encontrado [s] (común a las tres fases de
+        // emparejamiento).
+        suspend fun relink(match: SongPathDurationRow, s: ScannedSong) {
+            updateSongPath(match.filePath, s.filePath)
+            // Si el archivo se ha movido dentro o fuera de una carpeta desactivada, su
+            // visibilidad se recalcula con la ruta nueva.
+            setSongHidden(s.filePath, isHidden(s.filePath))
+            // El tamaño del archivo nuevo es el vigente (puede ser 0 = desconocido: se deja el que había).
+            if (s.size > 0L) updateSongSize(s.filePath, s.size)
+            moved.add(match.filePath)
+        }
+
         for (s in appeared) {
             val match = goneByName[s.filePath.substringAfterLast('/')]?.removeFirstOrNull()
             if (match != null) {
-                updateSongPath(match.filePath, s.filePath)
-                // Si el archivo se ha movido dentro o fuera de una carpeta desactivada, su
-                // visibilidad se recalcula con la ruta nueva.
-                setSongHidden(s.filePath, isHidden(s.filePath))
-                moved.add(match.filePath)
+                relink(match, s)
             } else {
                 afterNamePass.add(s)
             }
         }
 
-        // Fase 3: lo que no casó por nombre se prueba por duración exacta, pero solo si es única a
-        // ambos lados entre lo que sigue sin emparejar (no confundir con "gone"/"appeared" enteros,
-        // que ya han perdido lo que la fase 2 haya casado).
-        val goneRemaining = gone.filter { it.filePath !in moved }
-        val goneDurationCounts = goneRemaining.groupingBy { it.duration }.eachCount()
-        val appearedDurationCounts = afterNamePass.groupingBy { it.duration }.eachCount()
-        val goneByDuration = goneRemaining.associateBy { it.duration }
-        val inserted = ArrayList<ScannedSong>(afterNamePass.size)
+        // Fase 3: lo que no casó por nombre se prueba por TAMAÑO exacto, pero solo si es conocido
+        // (> 0) y único a ambos lados entre lo que sigue sin emparejar (no confundir con
+        // "gone"/"appeared" enteros, que ya han perdido lo que la fase 2 haya casado).
+        val goneAfterName = gone.filter { it.filePath !in moved }
+        val goneBySize = goneAfterName.filter { it.size > 0L }.groupBy { it.size }
+        val appearedSizeCounts = afterNamePass.filter { it.size > 0L }.groupingBy { it.size }.eachCount()
+        val afterSizePass = ArrayList<ScannedSong>(afterNamePass.size)
 
         for (s in afterNamePass) {
+            val match = if (s.size > 0L && appearedSizeCounts[s.size] == 1) {
+                goneBySize[s.size]?.singleOrNull()
+            } else {
+                null
+            }
+            if (match != null) {
+                relink(match, s)
+            } else {
+                afterSizePass.add(s)
+            }
+        }
+
+        // Fase 4: lo que sigue sin casar se prueba por duración exacta, con la misma exigencia de
+        // unicidad a ambos lados. Es la red de seguridad para lo catalogado antes de v32 (tamaño
+        // aún a 0) y para archivos cuyo tamaño cambió porque otra app los reetiquetó.
+        val goneRemaining = gone.filter { it.filePath !in moved }
+        val goneDurationCounts = goneRemaining.groupingBy { it.duration }.eachCount()
+        val appearedDurationCounts = afterSizePass.groupingBy { it.duration }.eachCount()
+        val goneByDuration = goneRemaining.associateBy { it.duration }
+        val inserted = ArrayList<ScannedSong>(afterSizePass.size)
+
+        for (s in afterSizePass) {
             val isUnique = goneDurationCounts[s.duration] == 1 && appearedDurationCounts[s.duration] == 1
             val match = if (isUnique) goneByDuration[s.duration] else null
             if (match != null) {
-                updateSongPath(match.filePath, s.filePath)
-                // Si el archivo se ha movido dentro o fuera de una carpeta desactivada, su
-                // visibilidad se recalcula con la ruta nueva.
-                setSongHidden(s.filePath, isHidden(s.filePath))
-                moved.add(match.filePath)
+                relink(match, s)
             } else {
                 inserted.add(s)
             }
         }
 
-        // Fase 4: altas reales.
+        // Fase 5: altas reales.
         // Cachés de la fase: un artista/álbum/productor aparece en muchas canciones (todas las de un
         // álbum comparten álbum y casi siempre artista), y sin esto cada alta repetía las mismas
         // consultas `findXByTag`. Las claves replican exactamente la comparación de esas consultas
         // (igualdad estricta de etiqueta), y es seguro cachear porque dentro de esta transacción
-        // nada borra filas hasta la fase 4 (bis).
+        // nada borra filas hasta la fase 5 (bis).
         val artistCache = HashMap<String, Long>()
         val producerCache = HashMap<String, Long>()
         val albumCache = HashMap<Pair<String, String>, Long>()
@@ -1002,7 +981,7 @@ abstract class LibraryDao {
             }
         }
 
-        // Fase 4 (bis): bajas reales, es decir, las que han desaparecido sin reaparecer con otro
+        // Fase 5 (bis): bajas reales, es decir, las que han desaparecido sin reaparecer con otro
         // nombre, otra carpeta, o ambos. Una fila legacy sin reemparejar (ver el comentario de
         // `gone` más arriba) NUNCA se borra aquí: solo significa que su carpeta todavía no está
         // concedida, no que el archivo haya desaparecido de verdad.
@@ -1014,7 +993,7 @@ abstract class LibraryDao {
             pruneOrphanProducers()
         }
 
-        // Fase 4: fusiona álbumes duplicados. Se ejecuta siempre, no solo cuando ha habido altas o
+        // Fase 6: fusiona álbumes duplicados. Se ejecuta siempre, no solo cuando ha habido altas o
         // bajas, porque también limpia duplicados que ya existieran de antes de este cambio.
         mergeDuplicateAlbums()
     }
@@ -1206,7 +1185,18 @@ abstract class LibraryDao {
             val genres = song.genres.map { if (it == oldName) trimmed else it }.distinct()
             updateSong(song.copy(genres = genres))
         }
+        // Los álbumes también llevan sus propios géneros (editor de álbum), y son los que deciden
+        // en qué ficha de género sale su tarjeta: sin esto, renombrar el género dejaría su carrusel
+        // de álbumes vacío.
+        for (album in allAlbumEntities()) {
+            if (oldName !in album.genres) continue
+            val genres = album.genres.map { if (it == oldName) trimmed else it }.distinct()
+            updateAlbum(album.copy(genres = genres))
+        }
     }
+
+    @Query("SELECT * FROM albums")
+    abstract suspend fun allAlbumEntities(): List<AlbumEntity>
 
     /** Busca el artista por su nombre visible, luego por el de etiqueta; si no existe, lo crea. */
     private suspend fun resolveArtist(name: String): Long {
@@ -1324,5 +1314,6 @@ private fun ScannedSong.toEntity(hidden: Boolean): SongEntity = SongEntity(
     ogTitle = null,
     ogArtist = null,
     ogYear = null,
-    dateAdded = dateAdded
+    dateAdded = dateAdded,
+    size = size
 )

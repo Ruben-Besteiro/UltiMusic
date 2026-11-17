@@ -57,7 +57,6 @@ import com.untar.ultimusic.ui.settings.SettingsDialogFragment
 import com.untar.ultimusic.ui.preview.PreviewSearchDialogFragment
 import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
-import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.CoroutineScope
@@ -67,6 +66,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Calendar
+
+/** Clave del Bundle con la pestaña actual, para restaurarla al recrear la Activity (ver setupPager). */
+private const val STATE_SELECTED_TAB = "selected_tab"
 
 class MainActivity : AppCompatActivity() {
 
@@ -130,6 +132,10 @@ class MainActivity : AppCompatActivity() {
     private val tabPaddingRestDp = 16f
     private val tabPaddingMinDp = 4f
 
+    /** Lo máximo que puede ensancharse la pestaña seleccionada respecto a su ancho en reposo
+     *  (icono + padding) con el nombre en una línea; si haría falta más, se parte en dos. */
+    private val tabMaxGrowthFactor = 1.5f
+
     /**
      * Último acento recibido de [PlayerViewModel.accentColor], usado para pintar la pestaña actual
      * tanto al construirla (setupPager) como al cambiar de canción (setupDynamicColor). Empieza
@@ -148,6 +154,11 @@ class MainActivity : AppCompatActivity() {
         com.untar.ultimusic.ui.common.DialogOpenLock.install(supportFragmentManager)
         setContentView(R.layout.activity_main)
         com.untar.ultimusic.ui.common.DialogOpenLock.wrap(window)
+        // Fondo con desenfoque suave donde no hay tarjetas encima (las tarjetas usan uno más fuerte).
+        lifecycleScope.launch {
+            val soft = withContext(Dispatchers.Default) { BlurredBackground.lightBackground(applicationContext) }
+            findViewById<android.widget.ImageView>(R.id.mainBackground).setImageBitmap(soft)
+        }
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -167,7 +178,7 @@ class MainActivity : AppCompatActivity() {
         tagsViewModel.bindPlaylistFilenames { playlistsViewModel.allFilenamesInPlaylists }
         setupToolbar()
         setupSearch()
-        setupPager()
+        setupPager(savedInstanceState?.getInt(STATE_SELECTED_TAB, 0) ?: 0)
         setupMiniPlayer()
         setupDynamicColor()
         checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
@@ -275,13 +286,16 @@ class MainActivity : AppCompatActivity() {
         else {
             // Primer diálogo: una sola salida (sin "Cancelar"), porque sin UltiMusic no hay
             // fonoteca ni se puede mirar si hay una BD que restaurar (ver grantUltiMusicRoot).
+            // Se intenta crear ~/UltiMusic ya ahora, y el selector se abre dentro de ella (o en ~
+            // si no se pudo crear): al usuario solo le queda pulsar "Usar esta carpeta".
+            val initialUri = SafStorage.initialPickerUri()
             val dialog = AlertDialog.Builder(this)
                 .setTitle(R.string.permission_needed_title)
                 .setMessage(R.string.permission_needed_message)
                 .setCancelable(false)
                 .setPositiveButton(R.string.permission_grant) { _, _ ->
                     permissionDialogPending = false
-                    grantUltiMusicRoot.launch(null)
+                    grantUltiMusicRoot.launch(initialUri)
                 }
                 .show()
             AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
@@ -586,6 +600,8 @@ class MainActivity : AppCompatActivity() {
             searchResultsContainer = findViewById(R.id.searchResultsContainer),
             recycler = findViewById<RecyclerView>(R.id.recyclerSearchResults),
             emptyView = findViewById<TextView>(R.id.searchEmptyView),
+            lyricsRow = findViewById(R.id.searchLyricsRow),
+            lyricsCheck = findViewById(R.id.searchLyricsCheck),
             viewModel = searchViewModel,
             playerViewModel = playerViewModel,
             lifecycleOwner = this
@@ -600,13 +616,22 @@ class MainActivity : AppCompatActivity() {
      * selección; el de la pestaña actual se re-tiñe además cada vez que cambia el acento (ver
      * setupDynamicColor).
      */
-    private fun setupPager() {
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        findViewById<TabLayout>(R.id.tabLayout)?.let { outState.putInt(STATE_SELECTED_TAB, it.selectedTabPosition) }
+    }
+
+    /**
+     * [initialTab]: la pestaña en la que estaba la Activity antes de recrearse (p. ej. al cambiar
+     * de idioma). ViewPager2 restaura él solo su página, pero las pestañas son vistas nuestras: si
+     * se construyesen siempre con Canciones marcada, la barra quedaría a medias (icono de Listas
+     * en acento, Canciones levantada sin nombre). Por eso se construyen ya con la buena marcada.
+     */
+    private fun setupPager(initialTab: Int) {
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
+        val initial = initialTab.coerceIn(0, tabTitles.size - 1)
         viewPager.adapter = MainPagerAdapter(this, tabTitles)
-        // Sin rebote al llegar a la primera/última pestaña (deformaría la imagen de las tarjetas, ver
-        // ItemCardDecoration).
-        viewPager.getChildAt(0).overScrollMode = View.OVER_SCROLL_NEVER
         // Como Phonograph (pager.setOffscreenPageLimit(count - 1)): todas las páginas se crean de
         // entrada, así que al tocar una pestaña lejana no se infla ningún fragmento en mitad del
         // scroll suave. Con saltos > 3 páginas (Canciones -> Etiquetas) ViewPager2 encola un
@@ -622,9 +647,10 @@ class MainActivity : AppCompatActivity() {
             customView.findViewById<ImageView>(R.id.navIcon).setImageResource(tabIcons[position])
             customView.findViewById<TextView>(R.id.navLabel).text = tabTitles[position]
             tab.customView = customView
-            applyTabAppearance(tab, selected = position == 0, currentAccentColor)
-            tabLayout.addTab(tab, position == 0)
+            applyTabAppearance(tab, selected = position == initial, currentAccentColor)
+            tabLayout.addTab(tab, position == initial)
         }
+        viewPager.setCurrentItem(initial, false)
         // Deslizar con el dedo -> marca la pestaña de la página que queda.
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -634,7 +660,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        redistributeTabPadding(tabLayout, selectedPosition = 0)
+        redistributeTabPadding(tabLayout, selectedPosition = initial)
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
@@ -717,8 +743,17 @@ class MainActivity : AppCompatActivity() {
 
         val selectedLabel = tabLayout.getTabAt(selectedPosition)?.customView
             ?.findViewById<TextView>(R.id.navLabel) ?: return
-        val growthPx = (selectedLabel.paint.measureText(selectedLabel.text.toString()) - iconWidthPx)
-            .coerceAtLeast(0f)
+        // Si el nombre en una línea haría la pestaña más de 1.5x su ancho en reposo, se parte en
+        // dos (ver splitTabTitle). El ancho de la etiqueta se fija a mano al medido, en vez de
+        // dejarlo a wrap_content, para que coincida exactamente con el hueco que se le abre.
+        val restTabWidthPx = iconWidthPx + 2 * restPaddingPx
+        val maxSingleLinePx = tabMaxGrowthFactor * restTabWidthPx - 2 * restPaddingPx
+        val title = tabTitles.getOrNull(selectedPosition) ?: selectedLabel.text.toString()
+        val lines = splitTabTitle(title, selectedLabel.paint, maxSingleLinePx)
+        selectedLabel.text = lines.joinToString("\n")
+        val labelWidthPx = Math.ceil(lines.maxOf { selectedLabel.paint.measureText(it) }.toDouble()).toInt()
+        selectedLabel.layoutParams = selectedLabel.layoutParams.apply { width = labelWidthPx }
+        val growthPx = (labelWidthPx - iconWidthPx).coerceAtLeast(0f)
 
         val othersCount = tabLayout.tabCount - 1
         val reductionPerSidePx = if (othersCount > 0) growthPx / othersCount / 2f else 0f
@@ -730,6 +765,91 @@ class MainActivity : AppCompatActivity() {
             val paddingPx = if (i == selectedPosition) restPaddingIntPx else unselectedPaddingPx
             view.setPadding(paddingPx, view.paddingTop, paddingPx, view.paddingBottom)
         }
+    }
+
+    /**
+     * Devuelve [title] en una sola línea si cabe en [maxWidthPx]; si no, en dos. Si el nombre
+     * tiene espacios se corta por el espacio más equilibrado ("Daftar / Putar"); si es una sola
+     * palabra, por sílabas con el separador silábico del sistema para el idioma de la app
+     * ("Eti- / quetas", ver [hyphenateBySyllables]). Si el sistema no tiene datos de separación
+     * para ese idioma, por el punto que deja las dos mitades más parejas, también con guión. Solo
+     * se corta entre grafemas completos (BreakIterator) para no separar un acento o una marca
+     * combinante de su letra, y en escrituras sin guiones (chino, japonés, tailandés...) se parte
+     * sin él.
+     */
+    private fun splitTabTitle(title: String, paint: android.text.TextPaint, maxWidthPx: Float): List<String> {
+        if (paint.measureText(title) <= maxWidthPx) return listOf(title)
+
+        fun cost(a: String, b: String) = maxOf(paint.measureText(a), paint.measureText(b))
+
+        val spaces = title.indices.filter { title[it] == ' ' }
+        if (spaces.isNotEmpty()) {
+            val best = spaces.minBy { cost(title.substring(0, it), title.substring(it + 1)) }
+            return listOf(title.substring(0, best).trimEnd(), title.substring(best + 1).trimStart())
+        }
+
+        if (usesHyphenation(title)) hyphenateBySyllables(title, paint)?.let { return it }
+
+        val boundaries = java.text.BreakIterator.getCharacterInstance().run {
+            setText(title)
+            generateSequence(first()) { next().takeIf { b -> b != java.text.BreakIterator.DONE } }
+                .filter { it in 1 until title.length }
+                .toList()
+        }
+        if (boundaries.isEmpty()) return listOf(title)
+        val hyphen = if (usesHyphenation(title)) "-" else ""
+        val best = boundaries.minBy { cost(title.substring(0, it) + hyphen, title.substring(it)) }
+        return listOf(title.substring(0, best) + hyphen, title.substring(best))
+    }
+
+    /**
+     * Parte una sola palabra en dos líneas por una sílaba, usando el mismo separador silábico
+     * que TextView (patrones por idioma del sistema, según el `textLocale` del [paint], que es el
+     * de la app). Se prueba un StaticLayout cada vez más ancho, desde la mitad de la palabra, y se
+     * queda el primero que la deja en dos líneas con guión: así sale el corte silábico más
+     * equilibrado. Si el sistema corta sin guión (no tiene patrones para el idioma y parte "a la
+     * desesperada" por cualquier letra) se descarta y devuelve null.
+     *
+     * Las líneas se devuelven ya como texto ("Eti-", "quetas") para ponerlas con "\n" en la
+     * etiqueta, en vez de dejar que la etiqueta haga su propia separación: así el corte es
+     * exactamente el medido.
+     */
+    private fun hyphenateBySyllables(word: String, paint: android.text.TextPaint): List<String>? {
+        val fullWidth = paint.measureText(word)
+        val stepPx = resources.displayMetrics.density.coerceAtLeast(1f)
+        var width = fullWidth / 2f
+        while (width < fullWidth) {
+            val layout = android.text.StaticLayout.Builder
+                .obtain(word, 0, word.length, paint, Math.ceil(width.toDouble()).toInt())
+                .setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_FULL)
+                .setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY)
+                .setIncludePad(false)
+                .build()
+            if (layout.lineCount == 2) {
+                val breakAt = layout.getLineEnd(0)
+                val first = word.substring(0, breakAt)
+                // El guión no está en el texto: el layout lo dibuja aparte, así que se nota en
+                // que la línea mide más que su texto.
+                val hyphenated = layout.getLineWidth(0) > paint.measureText(first) + 0.5f
+                if (hyphenated && breakAt in 1 until word.length) {
+                    return listOf("$first-", word.substring(breakAt))
+                }
+            }
+            width += stepPx
+        }
+        return null
+    }
+
+    /** false para escrituras que no parten palabras con guión (CJK, tailandés, etc.). */
+    private fun usesHyphenation(text: String): Boolean {
+        val noHyphen = setOf(
+            Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA,
+            Character.UnicodeScript.KATAKANA, Character.UnicodeScript.HANGUL,
+            Character.UnicodeScript.THAI, Character.UnicodeScript.LAO,
+            Character.UnicodeScript.KHMER, Character.UnicodeScript.MYANMAR
+        )
+        val first = text.firstOrNull { Character.isLetter(it) } ?: return true
+        return Character.UnicodeScript.of(first.code) !in noHyphen
     }
 
     /**
@@ -822,18 +942,9 @@ class MainActivity : AppCompatActivity() {
                     // Sin esto, el ripple al tocar una pestaña se queda con el colorPrimary del
                     // tema (amarillo fijo) en vez de seguir el acento.
                     tabLayout.tabRippleColor = ColorStateList.valueOf(accent)
-                    // Fondos en el color débil (casi negro con el matiz de la canción) y botones y
-                    // texto de la barra superior en el claro. Las listas (fragmentos) no llevan
-                    // fondo propio: se ven sobre el de la raíz.
-                    val faint = DynamicColor.faint(accent)
-                    val light = DynamicColor.light(accent)
-                    val root = findViewById<View>(R.id.main)
-                    // Ni la raíz ni los resultados de búsqueda se pintan: dejan ver la imagen de fondo.
-                    findViewById<View>(R.id.toolbar).setBackgroundColor(faint)
-                    findViewById<View>(R.id.statusBarScrim).setBackgroundColor(faint)
-                    findViewById<View>(R.id.navBarScrim).setBackgroundColor(faint)
-                    tabLayout.setBackgroundColor(faint)
-                    AccentTint.icons(root, light, R.id.btnSettings, R.id.btnHelp, R.id.btnSort)
+                    // La barra superior, la de pestañas y las franjas de las barras del sistema NO
+                    // siguen el acento: se quedan en el gris oscuro (um_surface) y los botones de
+                    // arriba en el gris claro (um_on_background) que traen de activity_main.xml.
                     // Solo repintamos la pestaña actual: las demás ya están en gris y no cambian.
                     tabLayout.getTabAt(tabLayout.selectedTabPosition)?.let { tab ->
                         applyTabAppearance(tab, selected = true, accent)

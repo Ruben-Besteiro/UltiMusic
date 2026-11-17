@@ -36,6 +36,7 @@ import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.CoverRef
 import com.untar.ultimusic.util.LanguageDetector
+import com.untar.ultimusic.util.LyricsCache
 import com.untar.ultimusic.util.SafStorage
 import com.untar.ultimusic.util.YouTubeUrl
 import kotlinx.coroutines.CoroutineScope
@@ -142,9 +143,13 @@ class LibraryRepository private constructor(
             .shareIn(observerScope, sharing, replay = 1)
 
     /** Sin agrupar por "Otros" (ver [artistGrouping]): la lista cruda tal cual la guarda Room, una
-     *  fila por artista real. */
+     *  fila por artista real. El nº de álbumes se recalcula aquí con el string de artistas de cada
+     *  álbum (ver [albumCountsByArtist]), el mismo criterio que el carrusel de su ficha. */
     private val rawArtists: Flow<List<PersonSummary>> =
-        dao.observeArtistSummaries(null).map { rows -> rows.map { it.toDomain() } }
+        combine(dao.observeArtistSummaries(null), albums) { rows, all ->
+            val counts = albumCountsByArtist(all)
+            rows.map { it.toDomain().withAlbumCount(counts) }
+        }
 
     /**
      * Agrupa bajo un perfil "Otros" (ver [ArtistGroupingPreferences]) los artistas con el umbral
@@ -266,6 +271,22 @@ class LibraryRepository private constructor(
      *  necesita [tagsOfSong] para saber si UNA canción concreta la tiene, sin repetir la resolución. */
     private data class ResolvedTag(val summary: TagSummary, val matchedSongIds: Set<Long>)
 
+    /** Las predefinidas se siembran con el nombre del idioma de ese momento (ver `seedDefaultTags`), así
+     *  que el nombre guardado en BD queda congelado; se resuelve al vuelo desde `strings.xml` según
+     *  [TagEntity.systemKey] para que siga el idioma actual. Las personalizadas conservan su nombre. */
+    private fun localizedTagName(tag: TagEntity): String {
+        // Etiqueta de idioma: su nombre es el idioma en español (ver LanguageDetector.detect).
+        if (tag.isAutoAssigned) return LanguageDetector.localizedName(tag.name) ?: tag.name
+        val res = when (tag.systemKey?.let { runCatching { SystemTagKey.valueOf(it) }.getOrNull() }) {
+            SystemTagKey.RECENTLY_ADDED -> R.string.tag_recently_added_name
+            SystemTagKey.NOT_IN_PLAYLIST -> R.string.tag_not_in_playlist_name
+            SystemTagKey.NO_CUSTOM_TAGS -> R.string.tag_no_custom_tags_name
+            SystemTagKey.REMIX_COVER -> R.string.tag_remix_cover_name
+            null -> return tag.name
+        }
+        return appContext.getString(res)
+    }
+
     private fun resolveAllTags(
         tags: List<TagEntity>,
         crossRefs: List<SongTagCrossRef>,
@@ -277,7 +298,7 @@ class LibraryRepository private constructor(
         return tags.map { tag ->
             val resolved = resolveSongsOfTag(tag, allSongs, members[tag.id].orEmpty(), inPlaylist, songsWithCustomTag)
             val summary = TagSummary(
-                tag.id, tag.name, tag.colorArgb, resolved.size, resolved.sumOf { it.duration }, tag.systemKey,
+                tag.id, localizedTagName(tag), tag.colorArgb, resolved.size, resolved.sumOf { it.duration }, tag.systemKey,
                 tag.isAutoAssigned
             )
             ResolvedTag(summary, resolved.mapTo(mutableSetOf()) { it.id })
@@ -403,12 +424,10 @@ class LibraryRepository private constructor(
      * - En ninguna lista: cuyo archivo no está en [inPlaylist] (unión de todas las Listas).
      * - Sin etiquetas personalizadas: todas las canciones EXCEPTO las que ya tengan alguna etiqueta
      *   personalizada ([songsWithCustomTag]).
-     * - Vídeo sincronizado: membresía real, [memberIds] -aquí solo se LEE; quien la mantiene
-     *   sincronizada con [Song.videoOffsetMs] es [syncSyncedVideoTag]-.
-     * - Remix / Cover: membresía real, igual que Vídeo sincronizado -aquí solo se LEE [memberIds];
-     *   quien la mantiene sincronizada con [Song.ogTitle] es [syncRemixCoverTag]-.
-     * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que las dos
-     *   anteriores.
+     * - Remix / Cover: membresía real, [memberIds] -aquí solo se LEE; quien la mantiene
+     *   sincronizada con [Song.ogTitle] es [syncRemixCoverTag]-.
+     * - Una etiqueta personalizada (`systemKey == null`): pura membresía real, igual que la
+     *   anterior.
      */
     private fun resolveSongsOfTag(
         tag: TagEntity,
@@ -426,7 +445,6 @@ class LibraryRepository private constructor(
             }
             SystemTagKey.NOT_IN_PLAYLIST -> allSongs.filter { it.filePath.substringAfterLast('/') !in inPlaylist }
             SystemTagKey.NO_CUSTOM_TAGS -> allSongs.filter { it.id !in songsWithCustomTag }
-            SystemTagKey.SYNCED_VIDEO -> allSongs.filter { it.id in memberIds }
             SystemTagKey.REMIX_COVER -> allSongs.filter { it.id in memberIds }
             null -> allSongs.filter { it.id in memberIds }
         }
@@ -458,7 +476,9 @@ class LibraryRepository private constructor(
 
     fun artist(id: Long): Flow<PersonSummary?> =
         if (id == PersonSummary.OTHERS_ARTIST_ID) othersArtist
-        else dao.observeArtistSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
+        else combine(dao.observeArtistSummaries(id), albums) { rows, all ->
+            rows.firstOrNull()?.toDomain()?.withAlbumCount(albumCountsByArtist(all))
+        }
 
     /** Canciones de un álbum, ya ordenadas por número de pista (y de disco) DENTRO de ese álbum: ver
      * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]. */
@@ -487,11 +507,47 @@ class LibraryRepository private constructor(
             dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
         }
 
-    /** Álbumes de un artista, para el carrusel horizontal de su ficha. Vacío para "Otros": agrupa
-     *  varios artistas reales a la vez, y ese carrusel es el de la discografía de uno solo. */
+    /**
+     * Álbumes de un artista, para el carrusel horizontal de su ficha: solo los que lo llevan en SU
+     * PROPIO string de artistas ([AlbumSummary.artistName], separado por comas como en el resto de
+     * la app; ver [AlbumSummary.hasArtist]), no todos en los que aparece alguna canción suya. Así una
+     * colaboración suelta en el álbum de otro no mete ese álbum en su carrusel. Vacío para "Otros":
+     * agrupa varios artistas reales a la vez, y ese carrusel es el de la discografía de uno solo.
+     */
     fun artistAlbums(id: Long): Flow<List<AlbumSummary>> =
         if (id == PersonSummary.OTHERS_ARTIST_ID) flowOf(emptyList())
-        else dao.observeAlbumsOfArtist(id).map { rows -> rows.map { it.toDomain() } }
+        else combine(dao.observeArtistSummaries(id), albums) { rows, all ->
+            val name = rows.firstOrNull()?.name ?: return@combine emptyList()
+            all.filter { it.hasArtist(name) }.sortedForCarousel()
+        }.flowOn(Dispatchers.Default)
+
+    /** Álbumes cuyos géneros PROPIOS (los del editor de álbum, ver [AlbumSummary.genres]) incluyen
+     *  [genre], para el carrusel de la ficha de género. Comparación exacta, como [songsOfGenre]. */
+    fun genreAlbums(genre: String): Flow<List<AlbumSummary>> =
+        albums.map { all -> all.filter { genre in it.genres }.sortedForCarousel() }.flowOn(Dispatchers.Default)
+
+    /** Orden de los carruseles de álbumes: por año ascendente, los que no tienen año al final, y a
+     *  igualdad por título. */
+    private fun List<AlbumSummary>.sortedForCarousel(): List<AlbumSummary> =
+        sortedWith(compareBy<AlbumSummary> { it.year == null }.thenBy { it.year }.thenBy { it.title.lowercase() })
+
+    /** Cuántos álbumes tiene cada artista con el mismo criterio que [artistAlbums] (su string de
+     *  artistas), por nombre en minúsculas: así la cifra de la pestaña/cabecera cuadra con lo que
+     *  enseña el carrusel. */
+    private fun albumCountsByArtist(all: List<AlbumSummary>): Map<String, Int> {
+        val counts = HashMap<String, Int>()
+        for (album in all) {
+            album.artistName.orEmpty().split(',')
+                .map { it.trim().lowercase() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .forEach { counts[it] = (counts[it] ?: 0) + 1 }
+        }
+        return counts
+    }
+
+    private fun PersonSummary.withAlbumCount(counts: Map<String, Int>): PersonSummary =
+        copy(albumCount = counts[name.trim().lowercase()] ?: 0)
 
     /**
      * Canciones sueltas por id, en el mismo orden que [ids] (la consulta no lo garantiza). Las
@@ -577,7 +633,7 @@ class LibraryRepository private constructor(
                         _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
                         onProgress(current, total)
                     }
-                    dao.reconcile(result.newSongs, result.currentPaths)
+                    dao.reconcile(result.newSongs, result.currentPaths, result.currentSizes)
                 } finally {
                     _reconciling.value = false
                 }
@@ -827,7 +883,9 @@ class LibraryRepository private constructor(
      *
      * Si el archivo no está donde decía la base de datos, se busca por nombre con
      * [MusicScanner.findByFilename] (un recorrido de carpetas, sin leer etiquetas: barato) y, si
-     * aparece, se corrige la fila de paso para no tener que volver a buscarlo nunca más.
+     * no está con ese nombre, con [MusicScanner.findRelocated] (movido Y renombrado: tamaño exacto
+     * primero y duración después). Si aparece, se corrige la fila de paso para no tener que volver
+     * a buscarlo nunca más.
      */
     suspend fun resolvePlayablePath(song: Song): String? = withContext(Dispatchers.IO) {
         refreshSafRegistry()
@@ -839,7 +897,11 @@ class LibraryRepository private constructor(
         }
 
         val filename = song.filePath.substringAfterLast('/')
-        val relocated = MusicScanner.findByFilename(appContext, filename) ?: return@withContext null
+        // Mismo nombre en otra carpeta (archivo movido) o, si no, archivo movido Y renombrado:
+        // por tamaño y luego por duración, entre lo que todavía no está catalogado.
+        val relocated = MusicScanner.findByFilename(appContext, filename)
+            ?: MusicScanner.findRelocated(appContext, song.size, song.duration, dao.allSongPaths().toHashSet())
+            ?: return@withContext null
         // Best-effort: si la reconciliación se nos ha adelantado, la fila antigua ya no existe y el
         // UPDATE no afecta a nadie. La ruta encontrada sigue siendo válida para reproducir.
         runCatching { dao.updateSongPath(song.filePath, relocated) }
@@ -1003,17 +1065,17 @@ class LibraryRepository private constructor(
     }
 
     /**
-     * Guarda la letra elegida en el buscador de lrclib.net que abre el iPod al tocar el recuadro
-     * de letra estando vacío (ver [IPodDialogFragment][com.untar.ultimusic.ui.player.IPodDialogFragment])
-     * y la que mete de golpe [com.untar.ultimusic.data.BulkLyricsAdder] con "Añadir todas las letras".
+     * Guarda la letra elegida en el buscador de lrclib.net que abre el lápiz del recuadro de letra
+     * del iPod (ver [IPodDialogFragment][com.untar.ultimusic.ui.player.IPodDialogFragment]) y la que
+     * encuentra sola [LyricsAutoFetcher] al reproducir una canción sin letra.
      * Al escribir en Room, el flujo [songs] reemite solo y la canción que suena vuelve a llegar al
      * reproductor ya con su `lyrics`, igual que [setVideoUrl] con el enlace del videoclip.
      *
      * A diferencia del editor de metadatos -donde el idioma se deduce en pantalla mientras se escribe
      * la letra y solo se guarda al pulsar "Guardar", ver
      * [com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment.updateLanguageFromLyrics]-, aquí no
-     * hay ningún formulario de por medio: sin esto, una letra añadida desde el iPod o desde "Añadir
-     * todas las letras" se quedaría sin su etiqueta de idioma hasta que alguien abriera el editor y
+     * hay ningún formulario de por medio: sin esto, una letra añadida desde el iPod o por la búsqueda
+     * automática se quedaría sin su etiqueta de idioma hasta que alguien abriera el editor y
      * volviera a guardar esa canción a mano. [LanguageDetector.detectSuspend] deduce el idioma de la
      * letra nueva (o lo deja en null si se ha vaciado, igual que `updateLanguageFromLyrics`) y
      * [syncLanguageTag] se encarga de mover la etiqueta como en [saveSongEdits].
@@ -1026,6 +1088,11 @@ class LibraryRepository private constructor(
         syncLanguageTag(song.id, song.language, newLanguage)
     }
 
+    /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.lyricsSearchedAt]. */
+    suspend fun setLyricsSearchedAt(songId: Long, searchedAt: Long?) = withContext(Dispatchers.IO) {
+        dao.setLyricsSearchedAt(songId = songId, searchedAt = searchedAt)
+    }
+
     /**
      * Guarda el desplazamiento vídeo/audio elegido con la regla del modo vídeo del iPod (ver
      * `IPodDialogFragment`, `ValueRuler.onReleased`). Al escribir en Room, el flujo [songs] reemite
@@ -1035,7 +1102,6 @@ class LibraryRepository private constructor(
     suspend fun setVideoOffsetMs(song: Song, offsetMs: Long) = withContext(Dispatchers.IO) {
         if (offsetMs == song.videoOffsetMs) return@withContext
         dao.setVideoOffsetMs(songId = song.id, offsetMs = offsetMs)
-        syncSyncedVideoTag(song.id, offsetMs)
     }
 
     /**
@@ -1061,44 +1127,21 @@ class LibraryRepository private constructor(
         // por separado eran cuatro oleadas de relecturas de la biblioteca por cada "Guardar" (la
         // edición en sí y luego cada una de las tres etiquetas sincronizadas); juntas, una sola.
         UltiMusicDatabase.get(appContext).withTransaction {
-            dao.saveSongEdits(song, artistNames, albums, producerNames)
-            syncSyncedVideoTag(song.id, song.videoOffsetMs)
+            dao.saveSongEdits(
+                song.copy(language = LanguageDetector.canonicalName(song.language)),
+                artistNames, albums, producerNames
+            )
             syncRemixCoverTag(song.id, song.ogTitle)
             syncLanguageTag(song.id, previousLanguage, song.language)
         }
     }
 
     /**
-     * Mantiene la etiqueta predefinida "Vídeo sincronizado" (ver [SystemTagKey.SYNCED_VIDEO]) en
-     * línea con [offsetMs]: la añade en cuanto deja de ser 0, la quita en cuanto vuelve a serlo.
-     *
-     * Se llama desde los DOS sitios que pueden cambiar `videoOffsetMs` -la regla del iPod
-     * ([setVideoOffsetMs]) y el editor de metadatos ([saveSongEdits])-, así que da igual por dónde se
-     * toque: la membresía real de la etiqueta (fila en `song_tag`, igual que Favoritos) nunca se
-     * desincroniza del valor de verdad. El usuario también puede añadirla/quitarla a mano desde la
-     * ficha de la etiqueta (ver [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]);
-     * esta función solo reacciona a cambios del desplazamiento, no al revés.
-     *
-     * `findTagBySystemKey` puede devolver null en teoría (una instalación que nunca haya pasado por
-     * `migration20To21` ni por el `Callback` de instalación nueva), aunque en la práctica siempre hay
-     * fila: se ignora sin más en vez de reventar, por si acaso.
-     */
-    private suspend fun syncSyncedVideoTag(songId: Long, offsetMs: Long) {
-        val tag = dao.findTagBySystemKey(SystemTagKey.SYNCED_VIDEO.name) ?: return
-        if (offsetMs != 0L) {
-            dao.insertSongTag(SongTagCrossRef(songId, tag.id))
-        } else {
-            dao.deleteSongTag(songId, tag.id)
-        }
-    }
-
-    /**
      * Mantiene la etiqueta predefinida "Remix / Cover" (ver [SystemTagKey.REMIX_COVER]) en línea con
      * [ogTitle] ("Título original" del editor de metadatos): la añade en cuanto deja de estar vacío,
-     * la quita en cuanto vuelve a estarlo. Mismo patrón que [syncSyncedVideoTag] -membresía real, fila
-     * en `song_tag`, el usuario también puede añadirla/quitarla a mano desde la ficha de la etiqueta-,
-     * pero con UN solo sitio que puede cambiar `ogTitle` ([saveSongEdits], el editor de metadatos) en
-     * vez de dos: a diferencia de `videoOffsetMs`, no hay ninguna regla del iPod que lo toque.
+     * la quita en cuanto vuelve a estarlo. Membresía real, fila en `song_tag`; el usuario también puede
+     * añadirla/quitarla a mano desde la ficha de la etiqueta. Solo hay UN sitio que puede cambiar
+     * `ogTitle` ([saveSongEdits], el editor de metadatos).
      *
      * `findTagBySystemKey` puede devolver null en teoría (una instalación que nunca haya pasado por
      * `migration25To26` ni por el `Callback` de instalación nueva), aunque en la práctica siempre hay
@@ -1133,8 +1176,8 @@ class LibraryRepository private constructor(
      * esta función CREA de cero.
      */
     private suspend fun syncLanguageTag(songId: Long, previousLanguage: String?, newLanguage: String?) {
-        val previous = previousLanguage?.trim().orEmpty()
-        val current = newLanguage?.trim().orEmpty()
+        val previous = LanguageDetector.canonicalName(previousLanguage?.trim()).orEmpty()
+        val current = LanguageDetector.canonicalName(newLanguage?.trim()).orEmpty()
         if (previous == current) return
         if (previous.isNotEmpty()) {
             dao.findTagByName(previous)?.let { dao.deleteSongTag(songId, it.id) }
@@ -1282,8 +1325,12 @@ class LibraryRepository private constructor(
         runCatching { SafStorage.deleteRecursively(appContext, song.filePath) }
         song.imageName?.let { deleteCoverImage(it) }
         song.videoThumbnailName?.let { deleteVideoThumbnail(it) }
+        LyricsCache.delete(appContext, CoverArt.imageBaseName(song.artists.map { it.name }, song.title))
         dao.deleteSong(song.id)
     }
+
+    /** Renombra las letras traducidas/romanizadas guardadas de una canción (ver [LyricsCache.rename]). */
+    suspend fun renameLyricsCache(oldBase: String, newBase: String) = LyricsCache.rename(appContext, oldBase, newBase)
 
     /** Borra una carátula importada que ya no usa nadie (best-effort). */
     suspend fun deleteCoverImage(imageName: String) = withContext(Dispatchers.IO) {

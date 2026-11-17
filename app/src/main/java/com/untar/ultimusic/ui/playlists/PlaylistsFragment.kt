@@ -33,7 +33,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Pestaña de listas de reproducción. Muestra las listas (archivos de `~/UltiMusic/Playlists`), deja
+ * Pestaña de listas de reproducción. Muestra las listas (archivos de `~/UltiMusic/playlists`), deja
  * crearlas con el botón "+", renombrarlas/borrarlas desde el menú de 3 puntos de cada fila, y al
  * pinchar una abre su ficha intermedia mostrando su contenido para elegir qué sonará (ver
  * [CollectionDetailDialogFragment.showPlaylist]).

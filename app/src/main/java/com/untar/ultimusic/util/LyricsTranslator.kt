@@ -23,15 +23,16 @@ object LyricsTranslator {
      * hay ninguna línea con contenido que traducir o si la llamada falla entera (la petición
      * caída, algún trozo desalineado...).
      */
-    suspend fun translate(lines: List<String>): List<String>? {
-        if (lines.isEmpty()) return emptyList()
+    suspend fun translate(lines: List<String>): Result<List<String>> {
+        if (lines.isEmpty()) return Result.success(emptyList())
         val nonBlankIndices = lines.indices.filter { lines[it].isNotBlank() }
-        if (nonBlankIndices.isEmpty()) return null
+        if (nonBlankIndices.isEmpty()) return Result.failure(NoContentException())
 
-        val translated = GoogleTranslateApi.translateLines(nonBlankIndices.map { lines[it] }) ?: return null
+        val translated = GoogleTranslateApi.translateLines(nonBlankIndices.map { lines[it] })
+            .getOrElse { return Result.failure(it) }
 
         val result = lines.toMutableList()
         nonBlankIndices.forEachIndexed { i, lineIndex -> result[lineIndex] = translated[i] }
-        return result
+        return Result.success(result)
     }
 }

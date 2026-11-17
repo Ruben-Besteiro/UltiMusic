@@ -24,8 +24,9 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="2dp"
-        android:maxLines="1"
-        android:ellipsize="end"
+        android:maxLines="2"
+        android:gravity="center_horizontal"
+        android:includeFontPadding="false"
         android:textSize="11sp"
         android:visibility="gone"
         tools:text="Canciones" />

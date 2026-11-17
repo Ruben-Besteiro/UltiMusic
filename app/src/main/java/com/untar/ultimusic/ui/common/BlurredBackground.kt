@@ -59,19 +59,33 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
         fun get(context: Context): BlurredBackground = instance ?: create(context).also { instance = it }
 
         private fun create(context: Context): BlurredBackground {
+            // Desenfoque de verdad (no solo reducir y ampliar): las líneas finas, como las órbitas,
+            // se ven pixeladas si se limitan a ampliarse; difuminadas quedan suaves.
+            val result = blurredCopy(context, BLUR_WIDTH_PX, BLUR_RADIUS_PX, BLUR_PASSES)
+            Canvas(result).drawColor(SCRIM)
+            return BlurredBackground(result)
+        }
+
+        private var light: Bitmap? = null
+
+        /**
+         * La imagen de fondo con un desenfoque suave, para la imagen que se ve directamente (donde no
+         * hay tarjetas encima). Sin oscurecer: de eso se encarga la capa de activity_main.xml. Es
+         * pesada de calcular, así que hay que llamarla fuera del hilo principal.
+         */
+        fun lightBackground(context: Context): Bitmap =
+            light ?: blurredCopy(context, LIGHT_WIDTH_PX, LIGHT_RADIUS_PX, LIGHT_PASSES).also { light = it }
+
+        private fun blurredCopy(context: Context, width: Int, radius: Int, passes: Int): Bitmap {
             val options = BitmapFactory.Options().apply { inSampleSize = 2 }
-            val source = BitmapFactory.decodeResource(context.resources, R.drawable.bg_main2, options)
-            val width = BLUR_WIDTH_PX
+            val source = BitmapFactory.decodeResource(context.resources, R.drawable.bg_main, options)
             val height = (width * source.height / source.width.toFloat()).toInt().coerceAtLeast(1)
             val small = Bitmap.createScaledBitmap(source, width, height, true)
             if (small !== source) source.recycle()
             val result = small.copy(Bitmap.Config.ARGB_8888, true)
             if (result !== small) small.recycle()
-            // Desenfoque de verdad (no solo reducir y ampliar): las líneas finas, como las órbitas,
-            // se ven pixeladas si se limitan a ampliarse; difuminadas quedan suaves.
-            boxBlur(result, BLUR_RADIUS_PX, BLUR_PASSES)
-            Canvas(result).drawColor(SCRIM)
-            return BlurredBackground(result)
+            boxBlur(result, radius, passes)
+            return result
         }
 
         /** Desenfoque de caja separable repetido [passes] veces (aproxima un gaussiano). */
@@ -122,6 +136,11 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
         /** Radio y pasadas del desenfoque: más = más borroso. */
         private const val BLUR_RADIUS_PX = 4
         private const val BLUR_PASSES = 3
+
+        /** Desenfoque suave de la imagen visible: más resolución y radio pequeño. Subir el radio = más borrosa. */
+        private const val LIGHT_WIDTH_PX = 1080
+        private const val LIGHT_RADIUS_PX = 2
+        private const val LIGHT_PASSES = 2
 
         /** El mismo `#99000000` de la capa de encima de la imagen en activity_main.xml. */
         private const val SCRIM = 0x99000000.toInt()

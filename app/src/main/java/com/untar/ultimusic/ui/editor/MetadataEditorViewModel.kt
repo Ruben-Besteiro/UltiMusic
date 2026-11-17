@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.LyricsAutoFetcher
 import com.untar.ultimusic.data.db.AlbumEdit
 import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.model.Song
@@ -226,6 +227,13 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
         val titleChanged = form.title != current.title ||
             form.artists != current.artists.map { it.name }
         val videoUrlChanged = form.videoUrl != current.videoUrl
+        // Las letras traducidas/romanizadas guardadas siguen el nombre de la canción igual que las
+        // imágenes (ver LyricsCache).
+        if (titleChanged) {
+            repository.renameLyricsCache(
+                CoverArt.imageBaseName(current.artists.map { it.name }, current.title), imageBase
+            )
+        }
 
         val imageName = when {
             pickedImage != null -> {
@@ -284,7 +292,19 @@ class MetadataEditorViewModel(app: Application) : AndroidViewModel(app) {
             // LibraryRepository.refreshYouTubeStatsIfDue): sin esto, cada edición de metadatos
             // las borraría de vuelta a null hasta el siguiente refresco.
             youtubeViewCount = current.youtubeViewCount,
-            dateAdded = current.dateAdded
+            // Igual que las visitas: el canal lo pone solo el refresco diario (ver
+            // LibraryRepository.refreshYouTubeStatsIfDue) y sin esto cada guardado lo borraría.
+            youtubeChannelId = current.youtubeChannelId,
+            dateAdded = current.dateAdded,
+            // El editor no toca el archivo: su tamaño sigue siendo el que escaneó el escáner.
+            size = current.size,
+            // Vaciar a mano una letra que existía es decir "esta canción no lleva letra": la
+            // búsqueda automática no debe volver a ponérsela (ver LyricsAutoFetcher).
+            lyricsSearchedAt = if (form.lyrics.isNullOrBlank() && !current.lyrics.isNullOrBlank()) {
+                LyricsAutoFetcher.SEARCH_DISABLED
+            } else {
+                current.lyricsSearchedAt
+            }
         )
 
         // El primero es el de los campos fijos del editor (form.album/trackNumber/discNumber); el

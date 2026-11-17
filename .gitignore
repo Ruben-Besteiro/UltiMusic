@@ -13,3 +13,4 @@
 .externalNativeBuild
 .cxx
 local.properties
+tools/last_translate_cost.txt

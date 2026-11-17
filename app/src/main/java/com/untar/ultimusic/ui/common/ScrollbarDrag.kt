@@ -82,7 +82,7 @@ class ScrollbarController internal constructor(
  * ordenados alfabéticamente sino agrupados por secciones (canciones, álbumes, artistas), así que
  * una letra ahí no significaría nada.
  *
- * [hitboxWidthDp] es la franja de la derecha donde se detecta el toque; a propósito bastante más
+ * [hitboxWidthDp] es la franja del lado final (derecha, o izquierda en RTL) donde se detecta el toque; a propósito bastante más
  * ancha que el pulgar visible ([THUMB_WIDTH_DP]), para que sea fácil agarrarla sin apuntar con
  * precisión de píxel.
  *
@@ -260,7 +260,11 @@ fun RecyclerView.attachScrollbarDrag(
     addOnItemTouchListener(object : RecyclerView.OnItemTouchListener {
         override fun onInterceptTouchEvent(rv: RecyclerView, event: MotionEvent): Boolean {
             if (event.actionMasked == MotionEvent.ACTION_DOWN) {
-                val isOnScrollbar = event.x >= width - hitboxWidthPx
+                // La barra va pegada al lado END (Gravity.END): a la izquierda en idiomas RTL, así
+                // que la franja que se escucha tiene que cambiar de lado con ella.
+                val isOnScrollbar =
+                    if (layoutDirection == View.LAYOUT_DIRECTION_RTL) event.x <= hitboxWidthPx
+                    else event.x >= width - hitboxWidthPx
                 if (isOnScrollbar && isScrollable()) {
                     isDraggingScrollbar = true
                     ignoreScrollSync = true

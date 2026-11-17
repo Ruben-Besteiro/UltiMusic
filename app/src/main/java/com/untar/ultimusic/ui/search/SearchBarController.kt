@@ -3,10 +3,13 @@ package com.untar.ultimusic.ui.search
 import android.graphics.drawable.ColorDrawable
 import android.text.TextUtils
 import android.transition.AutoTransition
+import android.transition.Transition
+import android.transition.TransitionListenerAdapter
 import android.transition.TransitionManager
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
 import android.widget.BaseAdapter
@@ -26,6 +29,7 @@ import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.checkbox.MaterialCheckBox
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
@@ -86,6 +90,8 @@ class SearchBarController(
     private val searchResultsContainer: View,
     private val recycler: RecyclerView,
     private val emptyView: TextView,
+    private val lyricsRow: View,
+    private val lyricsCheck: MaterialCheckBox,
     private val viewModel: SearchViewModel,
     private val playerViewModel: PlayerViewModel,
     private val lifecycleOwner: LifecycleOwner
@@ -223,8 +229,18 @@ class SearchBarController(
             searchInput.requestFocus()
         }
 
+        // El estado vive en el ViewModel: se queda como esté hasta que se desmarque o se cierre la app.
+        lyricsCheck.setOnCheckedChangeListener { _, checked -> viewModel.setLyricsMode(checked) }
+        lyricsRow.setOnClickListener { lyricsCheck.toggle() }
+
         lifecycleOwner.lifecycleScope.launch {
             lifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                launch {
+                    viewModel.lyricsMode.collect { on ->
+                        if (lyricsCheck.isChecked != on) lyricsCheck.isChecked = on
+                        if (!sqlMode) showEmptyMessage(viewModel.results.value.isEmpty())
+                    }
+                }
                 launch {
                     viewModel.results.collect { results ->
                         if (sqlMode) return@collect
@@ -247,6 +263,10 @@ class SearchBarController(
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         adapter.setAccent(accent)
+                        lyricsCheck.buttonTintList = android.content.res.ColorStateList(
+                            arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()),
+                            intArrayOf(accent, activity.getColor(R.color.um_on_surface_muted))
+                        )
                         scrollbar.setAccentColor(accent)
                         updateSqlToggleColor()
                     }
@@ -260,7 +280,27 @@ class SearchBarController(
         expanded = true
         backCallback.isEnabled = true
 
-        TransitionManager.beginDelayedTransition(topBar, AutoTransition().setDuration(ANIM_DURATION_MS))
+        // Mientras dura la animación se recoloca el scroll interno del campo en cada fotograma: la
+        // transición le cambia el tamaño sin volver a maquetarlo, así que el EditText no recalcula su
+        // desplazamiento y, en idiomas RTL (cursor a la derecha), el texto de ayuda se iba hacia el
+        // centro a medida que la barra crecía y luego saltaba a su sitio.
+        val keepTextInPlace = ViewTreeObserver.OnPreDrawListener {
+            searchInput.scrollTo(0, 0)
+            searchInput.bringPointIntoView(searchInput.selectionStart.coerceAtLeast(0))
+            true
+        }
+        searchInput.viewTreeObserver.addOnPreDrawListener(keepTextInPlace)
+        val expandTransition = AutoTransition().setDuration(ANIM_DURATION_MS)
+        expandTransition.addListener(object : TransitionListenerAdapter() {
+            override fun onTransitionEnd(transition: Transition) = finish()
+            override fun onTransitionCancel(transition: Transition) = finish()
+            private fun finish() {
+                searchInput.viewTreeObserver.removeOnPreDrawListener(keepTextInPlace)
+                searchInput.scrollTo(0, 0)
+                searchInput.bringPointIntoView(searchInput.selectionStart.coerceAtLeast(0))
+            }
+        })
+        TransitionManager.beginDelayedTransition(topBar, expandTransition)
         btnSettings.visibility = View.GONE
         btnHelp.visibility = View.GONE
         btnSort.visibility = View.GONE
@@ -305,12 +345,16 @@ class SearchBarController(
     /** Mensaje del hueco central: cambia según si aún no se ha escrito nada o si no hay resultados. */
     private fun showEmptyMessage(noResults: Boolean) {
         emptyView.isVisible = noResults
+        // La casilla solo está disponible con la lista vacía (recién abierto o sin resultados).
+        lyricsRow.isVisible = noResults && !sqlMode
         if (!noResults) return
         emptyView.setTextColor(activity.getColor(R.color.um_on_surface_muted))
 
         val query = viewModel.query.value.trim()
         emptyView.text =
-            if (query.isEmpty()) activity.getString(R.string.search_prompt)
+            if (query.isEmpty()) activity.getString(
+                if (viewModel.lyricsMode.value) R.string.search_prompt_lyrics else R.string.search_prompt
+            )
             else activity.getString(R.string.search_no_results, query)
     }
 
@@ -319,6 +363,7 @@ class SearchBarController(
     private fun setSqlMode(on: Boolean) {
         if (sqlMode == on) return
         sqlMode = on
+        if (on) lyricsRow.isVisible = false // al salir, showEmptyMessage decide si se muestra
         suggestionPopup.dismiss()
         lastHandledSql = null
         viewModel.clearSql()

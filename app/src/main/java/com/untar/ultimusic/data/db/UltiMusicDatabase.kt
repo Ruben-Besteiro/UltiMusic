@@ -136,7 +136,16 @@ import java.io.File
     // arreglan en caliente al re-conceder carpetas, no en la migración. El `Callback.onCreate` de más
     // abajo deja de sembrar `library_roots` para una instalación nueva por el mismo motivo: con SAF no
     // hay forma de "sembrar" un permiso de árbol sin que el usuario pase por el selector del sistema.
-    version = 30,
+    // v31: columna nueva `songs.lyricsSearchedAt` para la búsqueda automática de letras en lrclib.net
+    // (ver LyricsAutoFetcher), con migración escrita a mano (MIGRATION_30_31) por el mismo motivo que
+    // todas las anteriores.
+    // v32: columna nueva `songs.size` (tamaño del archivo en bytes) para reencontrar canciones
+    // movidas Y renombradas: tamaño primero, duración después (ver LibraryDao.reconcile y
+    // LibraryRepository.resolvePlayablePath). Migración escrita a mano (MIGRATION_31_32): las filas
+    // existentes quedan a 0 y el siguiente escaneo las rellena.
+    // v33: sin cambio de esquema. Se retira la etiqueta "Vídeo sincronizado" y `videoOffsetMs` pasa a
+    // significar "adelantar la letra respecto del vídeo" (signo invertido); MIGRATION_32_33.
+    version = 33,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -198,7 +207,10 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             MIGRATION_26_27,
                             MIGRATION_27_28,
                             MIGRATION_28_29,
-                            MIGRATION_29_30
+                            MIGRATION_29_30,
+                            MIGRATION_30_31,
+                            MIGRATION_31_32,
+                            MIGRATION_32_33
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true)
                         // Instalación nueva: `onCreate` es el único momento en el que se sabe que es
@@ -214,6 +226,15 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             override fun onCreate(db: SupportSQLiteDatabase) {
                                 super.onCreate(db)
                                 seedDefaultTags(db, context.applicationContext)
+                            }
+
+                            // Reparación: las instalaciones nuevas desde v23 hasta este arreglo se
+                            // quedaron sin ninguna predefinida (el INSERT omitía isAutoAssigned, ver
+                            // seedDefaultTags). `INSERT OR IGNORE` sobre systemKey lo hace inocuo para
+                            // todos los demás.
+                            override fun onOpen(db: SupportSQLiteDatabase) {
+                                super.onOpen(db)
+                                if (!db.isReadOnly) seedDefaultTags(db, context.applicationContext)
                             }
                         })
                         .build()

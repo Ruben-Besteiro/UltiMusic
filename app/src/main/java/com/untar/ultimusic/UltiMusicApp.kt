@@ -12,6 +12,7 @@ import com.untar.ultimusic.data.remote.YouTubeStatsRefresh
 import com.untar.ultimusic.recount.RecountReminder
 import com.untar.ultimusic.recount.RecountReminderWorker
 import com.untar.ultimusic.util.AppLocale
+import com.untar.ultimusic.util.CrashLogger
 import com.untar.ultimusic.util.NetworkImage
 import com.untar.ultimusic.util.PlaylistHistoryStore
 import com.untar.ultimusic.util.PlaylistResumeStore
@@ -42,6 +43,8 @@ class UltiMusicApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Lo primero de todo, para cubrir también los cierres durante el resto del arranque.
+        CrashLogger.install(this)
         // Antes que cualquier otra cosa: si es la primera vez que arranca la aplicación, fija el
         // idioma según el del sistema (ver la cabecera de AppLocale.applyDefaultIfUnset).
         AppLocale.applyDefaultIfUnset()

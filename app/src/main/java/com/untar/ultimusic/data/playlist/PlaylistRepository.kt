@@ -8,7 +8,7 @@ import kotlinx.coroutines.withContext
 
 /**
  * Almacén de listas de reproducción. A diferencia del resto de la biblioteca —que vive en una base
- * de datos Room— las listas son **archivos de texto** en `UltiMusic/Playlists` (carpeta concedida
+ * de datos Room— las listas son **archivos de texto** en `UltiMusic/playlists` (carpeta concedida
  * por Storage Access Framework, ver [SafStorage]), uno por lista:
  *
  *   - El **nombre del archivo** (sin la extensión `.txt`) es el nombre de la lista.
@@ -29,7 +29,7 @@ import kotlinx.coroutines.withContext
 class PlaylistRepository private constructor(private val appContext: Context) {
 
     /**
-     * docPath de `UltiMusic/Playlists`. Con [createIfMissing] la crea si hace falta (para escribir);
+     * docPath de `UltiMusic/playlists`. Con [createIfMissing] la crea si hace falta (para escribir);
      * si es `false` (para leer) y todavía no existe, devuelve null en vez de crearla solo para
      * comprobar que está vacía. Null también si `UltiMusic` no se ha concedido todavía.
      */
@@ -38,9 +38,10 @@ class PlaylistRepository private constructor(private val appContext: Context) {
         val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return null
         val root = SafStorage.ultiMusicDocPath(appContext) ?: return null
         return if (createIfMissing) {
-            SafStorage.getOrCreateSubfolder(appContext, treeUri, root, "Playlists")
+            SafStorage.getOrCreateSubfolder(appContext, treeUri, root, "playlists")
         } else {
-            "$root/Playlists".takeIf { SafStorage.exists(appContext, it) }
+            // Sin distinguir mayúsculas: una carpeta "Playlists" de versiones anteriores sigue valiendo.
+            SafStorage.findSubfolder(appContext, treeUri, root, "playlists")
         }
     }
 
@@ -182,7 +183,7 @@ class PlaylistRepository private constructor(private val appContext: Context) {
     /**
      * Rechaza nombres con caracteres que ningún sistema de archivos admite: separadores de ruta y el
      * resto de los que rechaza FAT32/exFAT, el sistema típico de la tarjeta donde vive
-     * `UltiMusic/Playlists`. Si se dejaran pasar, la creación del documento SAF fallaría en
+     * `UltiMusic/playlists`. Si se dejaran pasar, la creación del documento SAF fallaría en
      * silencio más abajo (ver [createPlaylist]/[renamePlaylist]).
      *
      * Público (no `private`) para que la UI valide ANTES de tocar disco y pueda avisar con un toast

@@ -20,6 +20,18 @@ import androidx.fragment.app.FragmentManager
  * Se excluye el iPod abierto arrastrando el mini-reproductor: se crea a mitad de un gesto y
  * bloquearlo lo rompería.
  */
+/**
+ * Guarda anti-duplicado que solo cuenta el diálogo con [tag] si es el de más arriba. Un simple
+ * `findFragmentByTag(tag) != null` fallaba cuando el diálogo seguía vivo pero tapado por otro
+ * (iPod → "ir al artista" abre la ficha encima del iPod; tocar entonces el mini-reproductor de la
+ * ficha no abría nada porque el iPod de debajo ya tenía el tag). `findFragmentByTag` devuelve el
+ * añadido más recientemente, así que abrir otro con el mismo tag encima es seguro.
+ */
+fun FragmentManager.hasTopDialog(tag: String): Boolean {
+    val existing = findFragmentByTag(tag) ?: return false
+    return fragments.lastOrNull { it is DialogFragment } === existing
+}
+
 object DialogOpenLock {
     private const val EXTRA_MS = 250L
     private const val MAX_MS = 1500L // red de seguridad por si un diálogo nunca llega a RESUMED

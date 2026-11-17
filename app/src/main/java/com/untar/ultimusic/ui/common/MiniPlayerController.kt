@@ -100,7 +100,7 @@ class MiniPlayerController(
         // primer show() llegue a registrar el fragmento) abra varias copias apiladas del iPod; es el
         // mismo guard que ya usan GenresFragment y PlaylistsFragment al abrirlo en modo navegación.
         val openIPod = View.OnClickListener {
-            if (fragmentManager.findFragmentByTag(IPOD_TAG) == null) {
+            if (!fragmentManager.hasTopDialog(IPOD_TAG)) {
                 IPodDialogFragment().show(fragmentManager, IPOD_TAG)
             }
         }
@@ -239,7 +239,7 @@ class MiniPlayerController(
                         horizontalHandled = true
                         v.parent?.requestDisallowInterceptTouchEvent(true)
                     } else if (!dragging && !horizontalHandled && dy < 0 && abs(dy) > touchSlop && abs(dy) > abs(dx) &&
-                        fragmentManager.findFragmentByTag(IPOD_TAG) == null
+                        !fragmentManager.hasTopDialog(IPOD_TAG)
                     ) {
                         dragging = true
                         v.parent?.requestDisallowInterceptTouchEvent(true)

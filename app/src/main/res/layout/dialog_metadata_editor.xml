@@ -28,6 +28,7 @@
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
+        android:id="@+id/editorScroll"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:fillViewport="true"
@@ -95,6 +96,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputTitle"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -126,6 +128,7 @@
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/inputArtists"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -145,6 +148,7 @@
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/inputProducers"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -179,6 +183,7 @@
 
                             <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/inputAlbum"
+                                android:textAlignment="viewStart"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:imeOptions="actionNext"
@@ -195,6 +200,7 @@
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/inputDiscNumber"
+                                android:textAlignment="viewStart"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:inputType="number"
@@ -209,6 +215,7 @@
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/inputTrackNumber"
+                                android:textAlignment="viewStart"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:inputType="number"
@@ -262,6 +269,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputYear"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="number"
@@ -278,6 +286,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputGenres"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
@@ -300,6 +309,7 @@
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/inputLyrics"
+                                android:textAlignment="viewStart"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:gravity="top|start"
@@ -310,29 +320,29 @@
                         </com.google.android.material.textfield.TextInputLayout>
 
                         <ImageButton
-                            android:id="@+id/btnSearchLyrics"
+                            android:id="@+id/btnClearLyrics"
                             android:layout_width="32dp"
                             android:layout_height="32dp"
                             android:layout_gravity="top|end"
                             android:layout_marginTop="8dp"
                             android:layout_marginEnd="36dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/editor_search_lyrics"
+                            android:contentDescription="@string/editor_clear_lyrics"
                             android:padding="4dp"
-                            android:src="@drawable/ic_search"
+                            android:src="@drawable/ic_delete"
                             android:tint="@color/um_on_surface_muted" />
 
                         <ImageButton
-                            android:id="@+id/btnClearLyrics"
+                            android:id="@+id/btnSearchLyrics"
                             android:layout_width="32dp"
                             android:layout_height="32dp"
                             android:layout_gravity="top|end"
                             android:layout_marginTop="8dp"
                             android:layout_marginEnd="4dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/editor_clear_lyrics"
+                            android:contentDescription="@string/editor_search_lyrics"
                             android:padding="4dp"
-                            android:src="@drawable/ic_delete"
+                            android:src="@drawable/ic_search"
                             android:tint="@color/um_on_surface_muted" />
                     </FrameLayout>
 
@@ -374,6 +384,7 @@
 
                         <EditText
                             android:id="@+id/lyricsOffsetValue"
+                            android:textDirection="ltr"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="12dp"
@@ -404,6 +415,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputLanguage"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="text"
@@ -418,6 +430,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputComment"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textMultiLine|textCapSentences"
@@ -440,6 +453,7 @@
 
                             <com.google.android.material.textfield.TextInputEditText
                                 android:id="@+id/inputVideoUrl"
+                                android:textAlignment="viewStart"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:inputType="textUri"
@@ -448,29 +462,29 @@
                         </com.google.android.material.textfield.TextInputLayout>
 
                         <ImageButton
-                            android:id="@+id/btnSearchVideoUrl"
+                            android:id="@+id/btnClearVideoUrl"
                             android:layout_width="32dp"
                             android:layout_height="32dp"
                             android:layout_gravity="top|end"
                             android:layout_marginTop="8dp"
                             android:layout_marginEnd="36dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/editor_search_video"
+                            android:contentDescription="@string/editor_clear_video_url"
                             android:padding="4dp"
-                            android:src="@drawable/ic_search"
+                            android:src="@drawable/ic_delete"
                             android:tint="@color/um_on_surface_muted" />
 
                         <ImageButton
-                            android:id="@+id/btnClearVideoUrl"
+                            android:id="@+id/btnSearchVideoUrl"
                             android:layout_width="32dp"
                             android:layout_height="32dp"
                             android:layout_gravity="top|end"
                             android:layout_marginTop="8dp"
                             android:layout_marginEnd="4dp"
                             android:background="?attr/selectableItemBackgroundBorderless"
-                            android:contentDescription="@string/editor_clear_video_url"
+                            android:contentDescription="@string/editor_search_video"
                             android:padding="4dp"
-                            android:src="@drawable/ic_delete"
+                            android:src="@drawable/ic_search"
                             android:tint="@color/um_on_surface_muted" />
                     </FrameLayout>
 
@@ -538,6 +552,7 @@
 
                         <EditText
                             android:id="@+id/offsetValue"
+                            android:textDirection="ltr"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="12dp"
@@ -590,6 +605,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputOgTitle"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
@@ -604,6 +620,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputOgArtist"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="textCapWords"
@@ -618,6 +635,7 @@
 
                         <com.google.android.material.textfield.TextInputEditText
                             android:id="@+id/inputOgYear"
+                            android:textAlignment="viewStart"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:inputType="number"

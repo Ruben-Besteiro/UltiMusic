@@ -80,10 +80,15 @@ class FlowLayout @JvmOverloads constructor(
     }
 
     /** Segunda pasada: mismo recorrido de [onMeasure], pero colocando de verdad cada hijo en vez de
-     *  solo sumar tamaños. */
+     *  solo sumar tamaños.
+     *
+     *  [x] se mide desde el borde START (izquierda, o derecha en idiomas RTL) y solo al colocar se
+     *  traduce a coordenada real: así en RTL las etiquetas empiezan por la derecha y fluyen hacia la
+     *  izquierda, como el texto. */
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
+        val isRtl = layoutDirection == LAYOUT_DIRECTION_RTL
         val availableWidth = width - paddingLeft - paddingRight
-        var x = paddingLeft
+        var x = paddingStart
         var y = paddingTop
         var rowHeight = 0
 
@@ -93,13 +98,14 @@ class FlowLayout @JvmOverloads constructor(
             val lp = child.layoutParams as MarginLayoutParams
             val childWidth = child.measuredWidth + lp.leftMargin + lp.rightMargin
 
-            if (x > paddingLeft && x - paddingLeft + childWidth > availableWidth) {
-                x = paddingLeft
+            if (x > paddingStart && x - paddingStart + childWidth > availableWidth) {
+                x = paddingStart
                 y += rowHeight
                 rowHeight = 0
             }
 
-            val childLeft = x + lp.leftMargin
+            val offsetFromStart = x + lp.marginStart
+            val childLeft = if (isRtl) width - offsetFromStart - child.measuredWidth else offsetFromStart
             val childTop = y + lp.topMargin
             child.layout(childLeft, childTop, childLeft + child.measuredWidth, childTop + child.measuredHeight)
 

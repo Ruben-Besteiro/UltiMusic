@@ -62,6 +62,61 @@ object LanguageDetector {
             .addOnFailureListener { onResult(null) }
     }
 
+    /** [detectTag] suspendida: la usa [LyricsRomanizer.resolveSourceLanguage]. */
+    suspend fun detectTagSuspend(text: String): String? = suspendCancellableCoroutine { cont ->
+        detectTag(text) { cont.resume(it) }
+    }
+
+    /**
+     * Operación inversa de [displayName]: el valor de [com.untar.ultimusic.model.Song.language]
+     * ("japonés") -> etiqueta ("ja"), o `null` si no corresponde a ningún idioma. El campo es de
+     * texto libre: lo rellena [detect] siempre en español, pero el usuario puede escribirlo a mano
+     * en el idioma de la app ("Japanese") o en el propio idioma ("日本語"), así que se aceptan
+     * los cuatro: español, inglés, idioma actual de la app y nombre nativo.
+     */
+    fun tagFromName(name: String): String? {
+        val key = name.trim().lowercase(SPANISH)
+        if (key.isEmpty()) return null
+        return namesToTags(Locale.getDefault())[key]
+    }
+
+    /** Nombre del idioma [stored] (el guardado en BD, en español) en el idioma actual de la app, para
+     *  mostrarlo ("Inglés" -> "English"). Si no corresponde a ningún idioma (texto libre), se devuelve
+     *  tal cual. */
+    fun localizedName(stored: String?): String? {
+        if (stored.isNullOrBlank()) return stored
+        val code = tagFromName(stored) ?: return stored
+        val name = Locale.forLanguageTag(code).getDisplayLanguage(Locale.getDefault())
+        if (name.isEmpty() || name == code) return stored
+        return name.replaceFirstChar { it.uppercase(Locale.getDefault()) }
+    }
+
+    /** Forma guardada (nombre en español, la misma que produce [detect]) de lo que haya escrito el
+     *  usuario en el campo Idioma: "English" -> "Inglés". Texto libre desconocido se devuelve tal cual.
+     *  Así la etiqueta de idioma es siempre una sola, escriba como escriba el usuario. */
+    fun canonicalName(input: String?): String? {
+        if (input.isNullOrBlank()) return input
+        val code = tagFromName(input) ?: return input
+        return displayName(code).ifEmpty { input }
+    }
+
+    private var cachedNames: Pair<Locale, Map<String, String>>? = null
+
+    /** Se reconstruye solo si cambia el idioma de la app (unos 190 idiomas x 4 nombres: es barato). */
+    private fun namesToTags(appLocale: Locale): Map<String, String> {
+        cachedNames?.takeIf { it.first == appLocale }?.let { return it.second }
+        val map = HashMap<String, String>()
+        for (code in Locale.getISOLanguages()) {
+            val language = Locale.forLanguageTag(code)
+            for (inLocale in listOf(SPANISH, Locale.ENGLISH, appLocale, language)) {
+                val display = language.getDisplayLanguage(inLocale).lowercase(SPANISH)
+                if (display.isNotEmpty() && display != code) map.putIfAbsent(display, code)
+            }
+        }
+        cachedNames = appLocale to map
+        return map
+    }
+
     /** [code] llega como una etiqueta BCP-47 ("es", "en", "ja"...), ya sin
      * [LanguageIdentifier.UNDETERMINED_LANGUAGE_TAG] (lo filtra [detectTag]). */
     private fun displayName(code: String): String {

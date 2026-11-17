@@ -1,8 +1,10 @@
 package com.untar.ultimusic.util
 
+import android.content.Context
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.core.view.isVisible
+import com.untar.ultimusic.R
 import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 
@@ -14,11 +16,17 @@ fun joinNonBlank(vararg parts: String?, separator: String = " | "): String =
     parts.filter { !it.isNullOrBlank() }.joinToString(separator)
 
 /**
- * Nombre(s) de artista para mostrar, o el placeholder [MusicScanner.UNKNOWN_ARTIST] si la canción
- * no tiene ninguno etiquetado.
+ * Placeholder "Artista desconocido" en el idioma activo. Es un recurso y no una constante para que
+ * cambie al cambiar de idioma: [context] debe ser el de la vista/pantalla que lo pinta.
  */
-fun Song.artistDisplay(): String =
-    artists.joinToString(", ") { it.name }.ifBlank { MusicScanner.UNKNOWN_ARTIST }
+fun unknownArtist(context: Context): String = context.getString(R.string.unknown_artist)
+
+/**
+ * Nombre(s) de artista para mostrar, o el placeholder [unknownArtist] si la canción no tiene
+ * ninguno etiquetado.
+ */
+fun Song.artistDisplay(context: Context): String =
+    artists.joinToString(", ") { it.name }.ifBlank { unknownArtist(context) }
 
 /**
  * Título(s) de álbum para mostrar -todos los de [Song.albums], no solo el principal ([Song.album])-
@@ -44,7 +52,7 @@ fun bindSongSubtitle(
     youtubeIcon: ImageView,
     youtubeViews: TextView
 ) {
-    subtitleArtist.text = song.artistDisplay()
+    subtitleArtist.text = song.artistDisplay(subtitleArtist.context)
     subtitleArtist.isVisible = true
 
     val rest = joinNonBlank(song.albumDisplay(), song.year?.toString())

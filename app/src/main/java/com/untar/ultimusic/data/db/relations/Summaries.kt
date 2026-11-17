@@ -24,6 +24,9 @@ data class AlbumSummaryRow(
     val imageName: String?,
     val year: Int?,
     val artistName: String?,
+    /** Géneros PROPIOS del álbum ([com.untar.ultimusic.data.db.entities.AlbumEntity.genres]), los
+     *  del editor de álbum; Room los deserializa con el mismo `Converters` que la entidad. */
+    val genres: List<String>,
     val songCount: Int,
     val totalDuration: Long
 )
@@ -77,11 +80,14 @@ data class SongVideoRow(
  * Ruta y duración (ms) de una canción ya guardada, para el emparejamiento por contenido de
  * `LibraryDao.reconcile`: cuando un archivo se mueve Y se renombra a la vez, ni la ruta ni el
  * nombre sirven de ancla, pero la duración exacta del audio no cambia por mover o renombrar el
- * archivo (a diferencia del título, que el usuario puede haber sobrescrito desde el editor).
+ * archivo (a diferencia del título, que el usuario puede haber sobrescrito desde el editor). El
+ * [size] (bytes, `0` = desconocido) es la primera pista que se prueba, antes que la duración: sale
+ * gratis del listado de la carpeta.
  */
 data class SongPathDurationRow(
     val filePath: String,
-    val duration: Long
+    val duration: Long,
+    val size: Long
 )
 
 /** Un canal candidato a "el canal de este artista", con cuántas de sus canciones principales lo

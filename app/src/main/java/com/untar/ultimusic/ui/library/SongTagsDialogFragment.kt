@@ -168,7 +168,7 @@ class SongTagsDialogFragment : DialogFragment() {
      *  ETIQUETA (ficha de una etiqueta) y este sobre las etiquetas DE UNA CANCIÓN. */
     private fun isRemovable(tag: TagSummary) =
         (tag.systemKey == null && !tag.isAutoAssigned) ||
-            tag.systemKey == SystemTagKey.SYNCED_VIDEO.name || tag.systemKey == SystemTagKey.REMIX_COVER.name
+            tag.systemKey == SystemTagKey.REMIX_COVER.name
 
     private fun renderSingle(tags: List<TagSummary>) {
         renderRows(tags, isRemovable = ::isRemovable) { tag ->
