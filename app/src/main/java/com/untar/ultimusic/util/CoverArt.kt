@@ -130,9 +130,24 @@ object CoverArt {
         } else {
             SafStorage.findSubfolder(context, treeUri, root, "images")
         }
-        imagesDirCache = treeKey to dir
+        // Solo se recuerda un resultado POSITIVO. Un null puede significar "no existe" pero también
+        // "existe y aún no se ha podido leer" (primer arranque tras reinstalar, proveedor sin
+        // indexar...): cachearlo dejaba todas las carátulas propias sin resolver hasta reiniciar la
+        // app. Costaría un listado por fila si la carpeta no existiera, pero solo se llega aquí con
+        // una fila que SÍ tiene nombre de imagen (ver [imageUri]), lo que implica que la carpeta existe.
+        if (dir != null) imagesDirCache = treeKey to dir
+        else if (!createIfMissing) SafStorage.watchUltiMusicRoot(context, onRootRecovered)
         return dir
     }
+
+    /** Al recuperarse la lectura de `UltiMusic` (ver [SafStorage.watchUltiMusicRoot]): limpia la
+     *  caché y repinta todas las listas, así las carátulas propias vuelven solas. Es una única
+     *  instancia a propósito: el registro de oyentes la deduplica. */
+    private val onRootRecovered: () -> Unit = { touch() }
+
+    /** Lo llama `MainActivity.onResume`: si `UltiMusic` no se puede leer, reactiva la vigilancia
+     *  (ver [SafStorage.watchUltiMusicRoot]); si se puede, no hace nada. */
+    fun watchRoot(context: Context) = SafStorage.watchUltiMusicRoot(context, onRootRecovered)
 
     /** URI abrible de una imagen ya guardada en `UltiMusic/images` por su nombre, o null si no existe
      *  (imagen sin poner, o `UltiMusic` sin conceder todavía). */

@@ -110,14 +110,115 @@ class LibraryRepository private constructor(
      */
     private val sharing = SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0)
 
+    /**
+     * Reenlaza, UNA sola vez por instalación, las imágenes de `UltiMusic/images` que ninguna fila
+     * tiene asignadas, a las canciones y álbumes SIN imagen cuyo nombre esperado
+     * (`<artistas> - <título>.img`, ver [CoverArt.imageBaseName]) coincide exactamente con un archivo.
+     * Recupera las carátulas de filas que se borraron y volvieron a catalogarse de cero (ver
+     * [com.untar.ultimusic.data.db.entities.SongEntity.missingSince]); el archivo seguía en disco y
+     * solo faltaba el enlace.
+     *
+     * Conservador a propósito: solo nombre EXACTO con extensión `img`; nunca pisa una imagen ya
+     * asignada; un nombre que reclamarían dos canciones distintas se salta (no se sabe de cuál es);
+     * y un archivo solo se da a UN dueño (primero canciones, luego álbumes) porque renombrar o borrar
+     * la imagen de uno afectaría al otro. Devuelve cuántas filas ha reenlazado.
+     */
+    suspend fun relinkOrphanImages(): Int = withContext(Dispatchers.IO) {
+        if (SafStorage.isOrphanImageRelinkDone(appContext)) return@withContext 0
+        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@withContext 0
+        val dir = CoverArt.imagesDocPath(appContext) ?: return@withContext 0
+        val files = SafStorage.listChildren(appContext, treeUri, dir)
+            .filter { !it.isDirectory }.mapTo(HashSet()) { it.name }
+        // Carpeta aún sin indexar (ver imagesDocPath): no se da por hecho, se reintenta otra vez.
+        if (files.isEmpty()) return@withContext 0
+
+        val taken = dao.allUsedImageNames().toHashSet()
+        var relinked = 0
+
+        suspend fun relink(
+            rows: List<com.untar.ultimusic.data.db.relations.TitledRow>,
+            artistRows: List<com.untar.ultimusic.data.db.relations.OwnerNameRow>,
+            assign: suspend (Long, String) -> Unit
+        ) {
+            val artistsByOwner = artistRows.groupBy({ it.ownerId }, { it.name })
+            val wanted = rows.map { it to "${CoverArt.imageBaseName(artistsByOwner[it.id].orEmpty(), it.title)}.img" }
+            val claims = wanted.groupingBy { it.second }.eachCount()
+            for ((row, name) in wanted) {
+                if (name !in files || name in taken || claims[name] != 1) continue
+                assign(row.id, name)
+                taken.add(name)
+                relinked++
+            }
+        }
+        relink(dao.songsWithoutImage(), dao.songArtistNames()) { id, name -> dao.setSongImageIfEmpty(id, name) }
+        relink(dao.albumsWithoutImage(), dao.albumArtistNames()) { id, name -> dao.setAlbumImageIfEmpty(id, name) }
+
+        SafStorage.markOrphanImageRelinkDone(appContext)
+        relinked
+    }
+
+    /** Se incrementa al conceder la carpeta `UltiMusic` para que [songs] se recalcule (esa raíz no
+     *  vive en `library_roots`, así que ninguna escritura en Room avisaría del cambio). Debe
+     *  declararse ANTES de [songs]: su inicializador la lee al construir la clase. */
+    private val grantEpoch = MutableStateFlow(0)
+
     /** Canciones persistidas, reactivas: cualquier edición reemite la lista. `distinctUntilChanged`
      *  porque Room reemite ante CUALQUIER escritura en las tablas que lee (aunque el resultado sea el
      *  mismo, p. ej. al registrar una reproducción): así nadie aguas abajo recalcula ni repinta nada
      *  si la lista no ha cambiado de verdad. */
     val songs: Flow<List<Song>> =
-        dao.observeSongs().map { list -> list.map { it.toDomain() } }
+        // Solo se listan las canciones que SE PUEDEN REPRODUCIR: las que cuelgan de una carpeta
+        // concedida y legible ahora mismo. Tras reinstalar (la BD vuelve de la copia con filas de
+        // Download/Music, pero solo se ha concedido UltiMusic) o con una fila antigua de ruta
+        // absoluta aún sin re-enlazar, la fila existe pero no hay forma de abrir su archivo: mostrarla
+        // sería prometer algo que luego falla en silencio. Se repinta sola al cambiar las raíces
+        // (tabla library_roots) o al conceder UltiMusic ([grantEpoch]).
+        combine(dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch) { list, _, _ ->
+            refreshSafRegistry()
+            val prefixes = readableRootPrefixes()
+            lastReadablePrefixes = prefixes.toSet()
+            list.filter { isUnderRoots(it.song.filePath, prefixes) }.map { it.toDomain() }
+        }
             .distinctUntilChanged()
             .shareIn(observerScope, sharing, replay = 1)
+
+    /** Las raíces legibles con las que se calculó por última vez [songs] (null = aún no se ha calculado). */
+    @Volatile
+    private var lastReadablePrefixes: Set<String>? = null
+
+    /**
+     * Vuelve a mirar qué raíces se pueden leer y, si han cambiado desde el último cálculo de
+     * [songs] (permiso revocado o concedido desde fuera de la app, p. ej. en los ajustes del
+     * sistema), la recalcula: las canciones que ya no se pueden abrir dejan de listarse, y vuelven
+     * si el permiso vuelve. NO borra nada de la BD (eso es cosa de [reconcile], que además se salta
+     * si alguna carpeta no se puede leer). La llama `MainActivity.onResume`.
+     */
+    suspend fun recheckRootPermissions() {
+        val before = lastReadablePrefixes ?: return
+        refreshSafRegistry()
+        if (readableRootPrefixes().toSet() != before) grantEpoch.value++
+    }
+
+    /** Prefijos de docPath de las raíces concedidas que el sistema aún deja leer. */
+    private fun readableRootPrefixes(): List<String> =
+        SafStorage.grantedRoots()
+            .filter { (_, treeUri) -> SafStorage.isRootReadable(appContext, treeUri) }
+            .map { it.first }
+
+    /** ¿Cuelga [filePath] de alguna de [prefixes]? Una ruta absoluta (empieza por "/") es una fila
+     *  de antes de SAF sin re-enlazar: nunca se puede abrir, así que nunca cuelga de nada. */
+    private fun isUnderRoots(filePath: String, prefixes: List<String>): Boolean {
+        if (filePath.startsWith("/")) return false
+        return prefixes.any { it.isEmpty() || filePath == it || filePath.startsWith("$it/") }
+    }
+
+    /** Filtra [songs] a las que se pueden reproducir ahora mismo (ver [songs]). La usa el servicio
+     *  al restaurar la cola guardada: una canción que ya no se lista no debe reaparecer ahí. */
+    suspend fun playableOnly(songs: List<Song>): List<Song> {
+        refreshSafRegistry()
+        val prefixes = readableRootPrefixes()
+        return songs.filter { isUnderRoots(it.filePath, prefixes) }
+    }
 
     /** Nombres ya existentes, para el autocompletado del editor de metadatos. */
     val artistNames: Flow<List<String>> = dao.observeArtistNames()
@@ -935,6 +1036,7 @@ class LibraryRepository private constructor(
         try {
             SafStorage.setUltiMusicTreeUri(appContext, treeUri)
             refreshSafRegistry()
+            grantEpoch.value++
             // Reinstalación: la BD interna nació vacía antes de poder leer la copia (el permiso de
             // la carpeta se revoca al desinstalar). Si la copia es más rica, se prepara para entrar
             // en el próximo arranque y se pide reiniciar; el reenlazado ya lo hará la BD buena.
@@ -942,6 +1044,9 @@ class LibraryRepository private constructor(
             SafStorage.markBackupChecked(appContext)
             if (restartNeeded) return@withContext true
             relinkAfterGrant(treeUri)
+            // El reescaneo NO se hace aquí: esperarlo dejaba la pantalla en negro hasta que
+            // terminaba. Lo lanza MainActivity justo después con SongsViewModel.reload(), que sí
+            // enseña la pestaña de Canciones con "Actualizando la base de datos local...".
             false
         } finally {
             decisionInProgress = false

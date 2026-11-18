@@ -19,6 +19,8 @@ import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 import com.untar.ultimusic.data.db.entities.SongTagCrossRef
 import com.untar.ultimusic.data.db.entities.TagEntity
+import com.untar.ultimusic.data.db.relations.OwnerNameRow
+import com.untar.ultimusic.data.db.relations.TitledRow
 import com.untar.ultimusic.data.db.relations.AlbumGroupRow
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
@@ -43,7 +45,7 @@ abstract class LibraryDao {
     // --- Lectura reactiva (lo que observa la UI) ---
 
     @Transaction
-    @Query("SELECT * FROM songs WHERE hiddenByGreylist = 0 ORDER BY LOWER(title)")
+    @Query("SELECT * FROM songs WHERE hiddenByGreylist = 0 AND missingSince = 0 ORDER BY LOWER(title)")
     abstract fun observeSongs(): Flow<List<SongWithRelations>>
 
     // --- Resúmenes de las pestañas Álbumes / Artistas ---
@@ -66,7 +68,7 @@ abstract class LibraryDao {
             -- pintar (y ordenar), nunca se escribe en la fila del álbum.
             COALESCE(a.year, (SELECT s.year FROM songs s
                 JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0
                 ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
                 LIMIT 1)) AS year,
             -- Si el álbum tiene artistas propios enlazados (filas en album_artist) se listan TODOS,
@@ -91,23 +93,23 @@ abstract class LibraryDao {
                     JOIN songs s ON s.id = x.songId
                     JOIN song_album sa ON sa.songId = s.id
                     JOIN artists ar ON ar.id = x.artistId
-                    WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+                    WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0
                     GROUP BY x.artistId
                     ORDER BY COUNT(*) DESC, LENGTH(ar.name), x.artistId
                     LIMIT 1)
             ) AS artistName,
             (SELECT COUNT(*) FROM songs s
                 JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS songCount,
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0) AS songCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM songs s
                 JOIN song_album sa ON sa.songId = s.id
-                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0) AS totalDuration
+                WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0) AS totalDuration
         FROM albums a
         WHERE (:id IS NULL OR a.id = :id)
           AND EXISTS (
               SELECT 1 FROM songs s
               JOIN song_album sa ON sa.songId = s.id
-              WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0
+              WHERE sa.albumId = a.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0
           )
         ORDER BY LOWER(a.title)
         """
@@ -143,14 +145,14 @@ abstract class LibraryDao {
             ar.imageName AS imageName,
             (SELECT COUNT(*) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS songCount,
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0) AS songCount,
             (SELECT COUNT(DISTINCT sa.albumId) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
                 JOIN song_album sa ON sa.songId = s.id
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS albumCount,
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0) AS albumCount,
             (SELECT COALESCE(SUM(s.duration), 0) FROM song_artist x
                 JOIN songs s ON s.id = x.songId
-                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0) AS totalDuration,
+                WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0) AS totalDuration,
             -- Popularidad: número de suscriptores del canal de YouTube que más se repite entre las
             -- canciones donde este artista es el PRINCIPAL, ya resueltos y guardados en la propia
             -- fila del artista (ver ArtistEntity.youtubeChannelSubscriberCount y
@@ -161,7 +163,7 @@ abstract class LibraryDao {
         WHERE (:id IS NULL OR ar.id = :id)
           AND EXISTS (
               SELECT 1 FROM song_artist x JOIN songs s ON s.id = x.songId
-              WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0
+              WHERE x.artistId = ar.id AND s.hiddenByGreylist = 0 AND s.missingSince = 0
           )
         ORDER BY LOWER(ar.name)
         """
@@ -187,7 +189,7 @@ abstract class LibraryDao {
         """
         SELECT s.* FROM songs s
         JOIN song_album sa ON sa.songId = s.id
-        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0
+        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0 AND s.missingSince = 0
         ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
         """
     )
@@ -203,7 +205,7 @@ abstract class LibraryDao {
         """
         SELECT s.* FROM songs s
         JOIN song_artist x ON x.songId = s.id
-        WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
+        WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0 AND s.missingSince = 0
         ORDER BY LOWER(s.title)
         """
     )
@@ -225,7 +227,7 @@ abstract class LibraryDao {
             s.videoThumbnailName AS videoThumbnailName
         FROM songs s
         JOIN song_album sa ON sa.songId = s.id
-        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0
+        WHERE sa.albumId = :albumId AND s.hiddenByGreylist = 0 AND s.missingSince = 0
         ORDER BY COALESCE(sa.discNumber, 1), sa.trackNumber IS NULL, sa.trackNumber, LOWER(s.title)
         """
     )
@@ -237,7 +239,7 @@ abstract class LibraryDao {
             s.videoThumbnailName AS videoThumbnailName
         FROM songs s
         JOIN song_artist x ON x.songId = s.id
-        WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0
+        WHERE x.artistId = :artistId AND s.hiddenByGreylist = 0 AND s.missingSince = 0
         -- Mismo orden que observeSongsOfArtist (ver su comentario): así el collage se forma con
         -- las mismas primeras canciones que ve el usuario en la ficha.
         ORDER BY LOWER(s.title)
@@ -251,7 +253,7 @@ abstract class LibraryDao {
      * al restaurar el estado guardado, ya que solo se persisten los ids, no las canciones enteras.
      */
     @Transaction
-    @Query("SELECT * FROM songs WHERE id IN (:ids) AND hiddenByGreylist = 0")
+    @Query("SELECT * FROM songs WHERE id IN (:ids) AND hiddenByGreylist = 0 AND missingSince = 0")
     abstract suspend fun findSongsByIds(ids: List<Long>): List<SongWithRelations>
 
     /**
@@ -344,7 +346,7 @@ abstract class LibraryDao {
     open suspend fun setSongsHiddenUnderFolder(folderPath: String, hidden: Boolean) {
         val prefix = "$folderPath/"
         for (path in allSongPaths()) {
-            if (path.startsWith(prefix)) setSongHidden(path, hidden)
+            if (path.startsWith(prefix, ignoreCase = true)) setSongHidden(path, hidden)
         }
     }
 
@@ -604,7 +606,7 @@ abstract class LibraryDao {
      *  la lista de ids de vídeo que pedir a [com.untar.ultimusic.data.remote.YouTubeStatsApi] en el
      *  refresco diario de visitas (ver `LibraryRepository.refreshYouTubeStatsIfDue`). Una canción
      *  oculta no se enseña en ningún sitio, así que pedir sus visitas sería cuota tirada. */
-    @Query("SELECT id, videoUrl FROM songs WHERE videoUrl IS NOT NULL AND hiddenByGreylist = 0")
+    @Query("SELECT id, videoUrl FROM songs WHERE videoUrl IS NOT NULL AND hiddenByGreylist = 0 AND missingSince = 0")
     abstract suspend fun songsWithVideoUrl(): List<SongVideoRow>
 
     /** Guarda las visitas y el canal ya consultados a YouTube, mismo motivo que [setVideoUrl] para
@@ -636,7 +638,7 @@ abstract class LibraryDao {
         SELECT x.artistId AS artistId, s.youtubeChannelId AS channelId, COUNT(*) AS cnt
         FROM song_artist x
         JOIN songs s ON s.id = x.songId
-        WHERE x.position = 0 AND s.hiddenByGreylist = 0 AND s.youtubeChannelId IS NOT NULL
+        WHERE x.position = 0 AND s.hiddenByGreylist = 0 AND s.missingSince = 0 AND s.youtubeChannelId IS NOT NULL
         GROUP BY x.artistId, s.youtubeChannelId
         """
     )
@@ -670,6 +672,46 @@ abstract class LibraryDao {
     /** Reapunta una canción a su nueva ruta cuando el usuario ha movido el archivo (ver [reconcile]). */
     @Query("UPDATE songs SET filePath = :newPath WHERE filePath = :oldPath")
     abstract suspend fun updateSongPath(oldPath: String, newPath: String)
+
+    // --- Reenlazado de imágenes huérfanas (ver LibraryRepository.relinkOrphanImages) ---
+
+    @Query("SELECT id, title FROM songs WHERE imageName IS NULL")
+    abstract suspend fun songsWithoutImage(): List<TitledRow>
+
+    @Query("SELECT sa.songId AS ownerId, a.name AS name FROM song_artist sa JOIN artists a ON a.id = sa.artistId ORDER BY sa.songId, sa.position")
+    abstract suspend fun songArtistNames(): List<OwnerNameRow>
+
+    @Query("SELECT id, title FROM albums WHERE imageName IS NULL")
+    abstract suspend fun albumsWithoutImage(): List<TitledRow>
+
+    @Query("SELECT aa.albumId AS ownerId, a.name AS name FROM album_artist aa JOIN artists a ON a.id = aa.artistId ORDER BY aa.albumId, aa.position")
+    abstract suspend fun albumArtistNames(): List<OwnerNameRow>
+
+    /** Todos los nombres de imagen que ya tiene algún dueño (canción, álbum, artista o productor). */
+    @Query("SELECT imageName FROM songs WHERE imageName IS NOT NULL UNION SELECT imageName FROM albums WHERE imageName IS NOT NULL UNION SELECT imageName FROM artists WHERE imageName IS NOT NULL")
+    abstract suspend fun allUsedImageNames(): List<String>
+
+    @Query("UPDATE songs SET imageName = :imageName WHERE id = :id AND imageName IS NULL")
+    abstract suspend fun setSongImageIfEmpty(id: Long, imageName: String)
+
+    @Query("UPDATE albums SET imageName = :imageName WHERE id = :id AND imageName IS NULL")
+    abstract suspend fun setAlbumImageIfEmpty(id: Long, imageName: String)
+
+    // --- Canciones perdidas (ver [com.untar.ultimusic.data.db.entities.SongEntity.missingSince]) ---
+
+    @Query("SELECT filePath FROM songs WHERE missingSince > 0")
+    abstract suspend fun missingSongPaths(): List<String>
+
+    /** Marca como perdidas las que aún no lo estaban (las ya perdidas conservan su fecha original). */
+    @Query("UPDATE songs SET missingSince = :now WHERE missingSince = 0 AND filePath IN (:paths)")
+    abstract suspend fun markSongsMissing(now: Long, paths: List<String>)
+
+    @Query("UPDATE songs SET missingSince = 0 WHERE filePath = :path")
+    abstract suspend fun clearSongMissing(path: String)
+
+    /** Perdidas desde antes de [before]: ya pasó el plazo de gracia y se borran de verdad. */
+    @Query("SELECT filePath FROM songs WHERE missingSince > 0 AND missingSince < :before")
+    abstract suspend fun expiredMissingSongPaths(before: Long): List<String>
 
     /** Ver [com.untar.ultimusic.data.db.entities.SongEntity.size]. */
     @Query("UPDATE songs SET size = :size WHERE filePath = :path")
@@ -824,7 +866,9 @@ abstract class LibraryDao {
         // Carpetas actualmente fuera de la lista gris: lo que caiga bajo alguna de ellas entra o se
         // reapunta ya oculto, para no colarse visible hasta que se desactive el switch.
         val excludedPrefixes = excludedGreylistFolderPaths().map { "$it/" }
-        fun isHidden(path: String) = excludedPrefixes.any { path.startsWith(it) }
+        // Sin distinguir mayúsculas: la carpeta real puede llamarse "music" y la lista gris haberla
+        // guardado como "Music" (el sistema de archivos de Android no las distingue en la práctica).
+        fun isHidden(path: String) = excludedPrefixes.any { path.startsWith(it, ignoreCase = true) }
 
         // Fase 1: bajas y altas candidatas. El filtro `!in existing` sobre newSongs es la misma
         // comprobación que ya hizo el escaneo contra sus rutas conocidas: se repite aquí, barata
@@ -860,6 +904,8 @@ abstract class LibraryDao {
         // emparejamiento).
         suspend fun relink(match: SongPathDurationRow, s: ScannedSong) {
             updateSongPath(match.filePath, s.filePath)
+            // Si estaba marcada como perdida, vuelve a estar en su sitio con todo lo que tenía.
+            clearSongMissing(s.filePath)
             // Si el archivo se ha movido dentro o fuera de una carpeta desactivada, su
             // visibilidad se recalcula con la ruta nueva.
             setSongHidden(s.filePath, isHidden(s.filePath))
@@ -985,9 +1031,22 @@ abstract class LibraryDao {
         // nombre, otra carpeta, o ambos. Una fila legacy sin reemparejar (ver el comentario de
         // `gone` más arriba) NUNCA se borra aquí: solo significa que su carpeta todavía no está
         // concedida, no que el archivo haya desaparecido de verdad.
+        //
+        // NUNCA se borra en el acto (ya no): una canción que desaparece, p. ej. porque se movió a
+        // una carpeta que todavía no se ha concedido, se MARCA como perdida y se oculta, con su
+        // imagen, etiquetas y ediciones intactas. Si el archivo reaparece (con su ruta, o con otro
+        // nombre/carpeta: las fases 2-4 de arriba también consideran las ya perdidas), recupera todo.
+        // Solo se borra de verdad pasado [SongEntity.MISSING_GRACE_MS].
+        val now = System.currentTimeMillis()
         val removed = gone.mapNotNull { it.filePath.takeIf { path -> path !in moved && !path.startsWith("/") } }
-        if (removed.isNotEmpty()) {
-            deleteSongsByPath(removed)
+        for (chunk in removed.chunked(500)) markSongsMissing(now, chunk)
+
+        // El archivo ha vuelto a su ruta de siempre: deja de estar perdida.
+        for (path in missingSongPaths()) if (path in currentPaths) clearSongMissing(path)
+
+        val expired = expiredMissingSongPaths(now - SongEntity.MISSING_GRACE_MS)
+        if (expired.isNotEmpty()) {
+            for (chunk in expired.chunked(500)) deleteSongsByPath(chunk)
             pruneOrphanArtists()
             pruneOrphanAlbums()
             pruneOrphanProducers()
@@ -996,6 +1055,11 @@ abstract class LibraryDao {
         // Fase 6: fusiona álbumes duplicados. Se ejecuta siempre, no solo cuando ha habido altas o
         // bajas, porque también limpia duplicados que ya existieran de antes de este cambio.
         mergeDuplicateAlbums()
+
+        // Fase 7: reaplica la lista gris a TODO lo catalogado, no solo a lo que entra o se mueve en
+        // este escaneo. Sin esto, una BD restaurada cuyas filas ya estaban visibles (o cuya carpeta
+        // gris se guardó con otra capitalización: "Music" vs "music") nunca se corregía sola.
+        for (folder in excludedGreylistFolderPaths()) setSongsHiddenUnderFolder(folder, hidden = true)
     }
 
     /**

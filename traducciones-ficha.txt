@@ -1,0 +1,299 @@
+==================== Español (es) ====================
+Eslogan: El reproductor de música definitivo para Android
+
+UltiMusic es el reproductor de música definitivo para Android
+Con funciones destacadas como:
+- Disponible totalmente en español
+- Cero (0) anuncios o contenido de pago
+- Foco puesto en la interfaz y experiencia del usuario
+- Facilitación del proceso de adquisición de música
+- Rellenado automático de metadatos para las canciones
+- Canciones con letra sincronizada y traducción
+- Sistema de etiquetas personalizadas para categorizar la música
+- Ver vídeos de YouTube dentro de la aplicación
+- Y un largo etcétera
+
+==================== English (en) ====================
+Slogan: The ultimate music player for Android
+
+UltiMusic is the ultimate music player for Android
+With standout features like:
+- Fully available in English
+- Zero (0) ads or paid content
+- Focus on the interface and user experience
+- Easier process for getting new music
+- Automatic metadata filling for songs
+- Songs with synchronized lyrics and translation
+- Custom tag system to categorize your music
+- Watch YouTube videos inside the app
+- And a long list of more
+
+==================== Português (pt) ====================
+Slogan: O reprodutor de música definitivo para Android
+
+O UltiMusic é o reprodutor de música definitivo para Android
+Com recursos de destaque como:
+- Disponível totalmente em português
+- Zero (0) anúncios ou conteúdo pago
+- Foco na interface e na experiência do usuário
+- Facilidade no processo de aquisição de músicas
+- Preenchimento automático de metadados das músicas
+- Músicas com letra sincronizada e tradução
+- Sistema de etiquetas personalizadas para categorizar a música
+- Assista a vídeos do YouTube dentro do aplicativo
+- E muito mais
+
+==================== Français (fr) ====================
+Slogan : Le lecteur de musique ultime pour Android
+
+UltiMusic est le lecteur de musique ultime pour Android
+Avec des fonctionnalités phares telles que :
+- Entièrement disponible en français
+- Zéro (0) publicité ou contenu payant
+- Accent mis sur l'interface et l'expérience utilisateur
+- Processus d'acquisition de musique simplifié
+- Remplissage automatique des métadonnées des chansons
+- Chansons avec paroles synchronisées et traduction
+- Système d'étiquettes personnalisées pour catégoriser la musique
+- Regarder des vidéos YouTube dans l'application
+- Et bien d'autres encore
+
+==================== Deutsch (de) ====================
+Slogan: Der ultimative Musikplayer für Android
+
+UltiMusic ist der ultimative Musikplayer für Android
+Mit herausragenden Funktionen wie:
+- Vollständig auf Deutsch verfügbar
+- Null (0) Werbung oder kostenpflichtige Inhalte
+- Fokus auf Oberfläche und Benutzererlebnis
+- Einfachere Beschaffung von Musik
+- Automatisches Ausfüllen von Metadaten für Songs
+- Songs mit synchronisiertem Liedtext und Übersetzung
+- System benutzerdefinierter Tags zur Kategorisierung der Musik
+- YouTube-Videos direkt in der App ansehen
+- Und vieles mehr
+
+==================== Italiano (it) ====================
+Slogan: Il lettore musicale definitivo per Android
+
+UltiMusic è il lettore musicale definitivo per Android
+Con funzionalità di spicco come:
+- Disponibile completamente in italiano
+- Zero (0) pubblicità o contenuti a pagamento
+- Attenzione all'interfaccia e all'esperienza utente
+- Processo di acquisizione della musica semplificato
+- Compilazione automatica dei metadati dei brani
+- Brani con testo sincronizzato e traduzione
+- Sistema di etichette personalizzate per categorizzare la musica
+- Guarda i video di YouTube all'interno dell'app
+- E molto altro ancora
+
+==================== Русский (ru) ====================
+Слоган: Совершенный музыкальный плеер для Android
+
+UltiMusic — совершенный музыкальный плеер для Android
+Ключевые возможности:
+- Полностью доступен на русском языке
+- Ноль (0) рекламы и платного контента
+- Упор на интерфейс и удобство использования
+- Упрощённый процесс получения музыки
+- Автоматическое заполнение метаданных песен
+- Песни с синхронизированным текстом и переводом
+- Система пользовательских меток для категоризации музыки
+- Просмотр видео YouTube прямо в приложении
+- И многое другое
+
+==================== Türkçe (tr) ====================
+Slogan: Android için nihai müzik çalar
+
+UltiMusic, Android için nihai müzik çalardır
+Öne çıkan özellikler:
+- Tamamen Türkçe olarak kullanılabilir
+- Sıfır (0) reklam veya ücretli içerik
+- Arayüze ve kullanıcı deneyimine odaklanma
+- Müzik edinme sürecinin kolaylaştırılması
+- Şarkılar için otomatik üst veri doldurma
+- Senkronize söz ve çeviri içeren şarkılar
+- Müziği kategorilere ayırmak için özel etiket sistemi
+- YouTube videolarını uygulama içinde izleme
+- Ve çok daha fazlası
+
+==================== العربية (ar) ====================
+الشعار: مشغّل الموسيقى المثالي لنظام أندرويد
+
+UltiMusic هو مشغّل الموسيقى المثالي لنظام أندرويد
+مع ميزات بارزة مثل:
+- متوفر بالكامل باللغة العربية
+- صفر (0) إعلانات أو محتوى مدفوع
+- التركيز على الواجهة وتجربة المستخدم
+- تسهيل عملية الحصول على الموسيقى
+- تعبئة تلقائية للبيانات الوصفية للأغاني
+- أغانٍ بكلمات متزامنة وترجمة
+- نظام وسوم مخصّصة لتصنيف الموسيقى
+- مشاهدة مقاطع يوتيوب داخل التطبيق
+- والكثير غير ذلك
+
+==================== فارسی (fa) ====================
+شعار: پخش‌کننده نهایی موسیقی برای اندروید
+
+UltiMusic پخش‌کننده نهایی موسیقی برای اندروید است
+با ویژگی‌های برجسته‌ای مانند:
+- کاملاً در دسترس به زبان فارسی
+- صفر (0) تبلیغ یا محتوای پولی
+- تمرکز بر رابط کاربری و تجربه کاربر
+- آسان‌تر شدن فرایند تهیه موسیقی
+- تکمیل خودکار فراداده‌های آهنگ‌ها
+- آهنگ‌هایی با متن همگام‌شده و ترجمه
+- سیستم برچسب‌های سفارشی برای دسته‌بندی موسیقی
+- تماشای ویدیوهای یوتیوب درون برنامه
+- و بسیاری موارد دیگر
+
+==================== اردو (ur) ====================
+نعرہ: اینڈرائیڈ کے لیے حتمی میوزک پلیئر
+
+UltiMusic اینڈرائیڈ کے لیے حتمی میوزک پلیئر ہے
+نمایاں خصوصیات کے ساتھ جیسے:
+- مکمل طور پر اردو زبان میں دستیاب
+- صفر (0) اشتہارات یا ادائیگی والا مواد
+- انٹرفیس اور صارف کے تجربے پر توجہ
+- موسیقی حاصل کرنے کے عمل میں آسانی
+- گانوں کے میٹا ڈیٹا کی خودکار پُر کاری
+- ہم وقت ساز بولوں اور ترجمے والے گانے
+- موسیقی کی درجہ بندی کے لیے حسبِ ضرورت ٹیگز کا نظام
+- ایپ کے اندر یوٹیوب ویڈیوز دیکھیں
+- اور بہت کچھ
+
+==================== हिन्दी (hi) ====================
+स्लोगन: Android के लिए सर्वश्रेष्ठ म्यूज़िक प्लेयर
+
+UltiMusic Android के लिए सर्वश्रेष्ठ म्यूज़िक प्लेयर है
+इन प्रमुख सुविधाओं के साथ:
+- पूरी तरह हिन्दी में उपलब्ध
+- शून्य (0) विज्ञापन या सशुल्क सामग्री
+- इंटरफ़ेस और उपयोगकर्ता अनुभव पर ध्यान
+- संगीत प्राप्त करने की प्रक्रिया को आसान बनाना
+- गानों के मेटाडेटा का स्वचालित भरण
+- सिंक्रनाइज़्ड बोल और अनुवाद वाले गाने
+- संगीत को वर्गीकृत करने के लिए कस्टम टैग सिस्टम
+- ऐप के भीतर ही YouTube वीडियो देखें
+- और भी बहुत कुछ
+
+==================== বাংলা (bn) ====================
+স্লোগান: অ্যান্ড্রয়েডের জন্য সেরা মিউজিক প্লেয়ার
+
+UltiMusic অ্যান্ড্রয়েডের জন্য সেরা মিউজিক প্লেয়ার
+উল্লেখযোগ্য বৈশিষ্ট্য সহ:
+- সম্পূর্ণ বাংলা ভাষায় উপলব্ধ
+- শূন্য (0) বিজ্ঞাপন বা পেইড কন্টেন্ট
+- ইন্টারফেস ও ব্যবহারকারীর অভিজ্ঞতার ওপর জোর
+- গান সংগ্রহের প্রক্রিয়া সহজ করা
+- গানের মেটাডেটা স্বয়ংক্রিয়ভাবে পূরণ
+- সিঙ্ক্রোনাইজড লিরিক্স ও অনুবাদসহ গান
+- সঙ্গীত শ্রেণিবদ্ধ করার জন্য কাস্টম ট্যাগ সিস্টেম
+- অ্যাপের ভেতরেই ইউটিউব ভিডিও দেখুন
+- আরও অনেক কিছু
+
+==================== 中文 (zh) ====================
+标语：Android 终极音乐播放器
+
+UltiMusic 是 Android 终极音乐播放器
+主要功能包括：
+- 完整提供中文版本
+- 零（0）广告，无付费内容
+- 专注于界面与用户体验
+- 简化获取音乐的流程
+- 自动填充歌曲元数据
+- 支持同步歌词和翻译的歌曲
+- 自定义标签系统，用于对音乐分类
+- 在应用内观看 YouTube 视频
+- 还有更多功能
+
+==================== 日本語 (ja) ====================
+スローガン：Android向け究極の音楽プレーヤー
+
+UltiMusicはAndroid向け究極の音楽プレーヤーです
+主な機能：
+- 日本語に完全対応
+- 広告も有料コンテンツも一切なし（0）
+- インターフェースとユーザー体験を重視
+- 音楽の入手プロセスをスムーズに
+- 曲のメタデータを自動入力
+- 同期歌詞と翻訳付きの楽曲
+- 音楽を分類できるカスタムタグ機能
+- アプリ内でYouTube動画を視聴
+- そのほかにも多数
+
+==================== 한국어 (ko) ====================
+슬로건: 안드로이드를 위한 궁극의 음악 플레이어
+
+UltiMusic은 안드로이드를 위한 궁극의 음악 플레이어입니다
+주요 기능:
+- 한국어 완벽 지원
+- 광고 및 유료 콘텐츠 제로(0)
+- 인터페이스와 사용자 경험에 집중
+- 음악을 더 쉽게 구하는 과정
+- 노래 메타데이터 자동 채우기
+- 동기화된 가사와 번역이 있는 노래
+- 음악을 분류하는 사용자 지정 태그 시스템
+- 앱 안에서 YouTube 동영상 시청
+- 그 외 다양한 기능
+
+==================== Tiếng Việt (vi) ====================
+Khẩu hiệu: Trình phát nhạc tối thượng dành cho Android
+
+UltiMusic là trình phát nhạc tối thượng dành cho Android
+Với các tính năng nổi bật như:
+- Hỗ trợ đầy đủ tiếng Việt
+- Không (0) quảng cáo hay nội dung trả phí
+- Tập trung vào giao diện và trải nghiệm người dùng
+- Đơn giản hóa quy trình có được nhạc
+- Tự động điền siêu dữ liệu cho bài hát
+- Bài hát có lời đồng bộ và bản dịch
+- Hệ thống nhãn tùy chỉnh để phân loại nhạc
+- Xem video YouTube ngay trong ứng dụng
+- Và còn nhiều hơn nữa
+
+==================== ภาษาไทย (th) ====================
+สโลแกน: เครื่องเล่นเพลงที่ดีที่สุดสำหรับ Android
+
+UltiMusic คือเครื่องเล่นเพลงที่ดีที่สุดสำหรับ Android
+พร้อมฟีเจอร์เด่น เช่น:
+- รองรับภาษาไทยอย่างเต็มรูปแบบ
+- ไม่มีโฆษณาหรือเนื้อหาแบบเสียเงินเลย (0)
+- เน้นที่หน้าอินเทอร์เฟซและประสบการณ์ผู้ใช้
+- ทำให้การหาเพลงง่ายขึ้น
+- กรอกข้อมูลเมทาดาทาของเพลงอัตโนมัติ
+- เพลงพร้อมเนื้อเพลงซิงก์และคำแปล
+- ระบบแท็กแบบกำหนดเองสำหรับจัดหมวดหมู่เพลง
+- ดูวิดีโอ YouTube ภายในแอป
+- และอีกมากมาย
+
+==================== Bahasa Indonesia (in) ====================
+Slogan: Pemutar musik terbaik untuk Android
+
+UltiMusic adalah pemutar musik terbaik untuk Android
+Dengan fitur unggulan seperti:
+- Tersedia sepenuhnya dalam bahasa Indonesia
+- Nol (0) iklan atau konten berbayar
+- Fokus pada antarmuka dan pengalaman pengguna
+- Memudahkan proses memperoleh musik
+- Pengisian otomatis metadata lagu
+- Lagu dengan lirik tersinkronisasi dan terjemahan
+- Sistem label khusus untuk mengategorikan musik
+- Tonton video YouTube di dalam aplikasi
+- Dan masih banyak lagi
+
+==================== Filipino (fil) ====================
+Slogan: Ang pinakamahusay na music player para sa Android
+
+Ang UltiMusic ay ang pinakamahusay na music player para sa Android
+May mga natatanging tampok tulad ng:
+- Ganap na available sa Filipino
+- Zero (0) ad o bayad na nilalaman
+- Nakatuon sa interface at karanasan ng user
+- Mas madaling pagkuha ng musika
+- Awtomatikong pagpuno ng metadata ng mga kanta
+- Mga kantang may naka-sync na lyrics at salin
+- Sistema ng custom na tag para pangkategorya ng musika
+- Manood ng mga video sa YouTube sa loob ng app
+- At marami pang iba

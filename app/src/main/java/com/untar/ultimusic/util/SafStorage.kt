@@ -8,7 +8,14 @@ import android.provider.DocumentsContract
 import android.provider.DocumentsContract.Document
 import java.io.InputStream
 import java.io.OutputStream
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArraySet
 
 /**
  * Acceso a almacenamiento vía Storage Access Framework (SAF), que sustituye a
@@ -41,6 +48,7 @@ object SafStorage {
     private const val KEY_ULTIMUSIC_TREE_URI = "ultimusic_tree_uri"
     private const val KEY_OFFERED_LEGACY_RELINK = "offered_legacy_relink"
     private const val KEY_BACKUP_CHECKED = "backup_checked"
+    private const val KEY_ORPHAN_IMAGES_RELINKED = "orphan_images_relinked"
     private const val KEY_MUSIC_FOLDER_PROMPT = "music_folder_prompt_pending"
     private const val VOLUME_PRIMARY = "primary"
     private const val AUTHORITY_EXTERNAL = "com.android.externalstorage.documents"
@@ -87,6 +95,11 @@ object SafStorage {
      * la propia carpeta `UltiMusic` si existe (así el usuario solo tiene que pulsar "Usar esta
      * carpeta"), o si no, la raíz del almacenamiento interno (`~`).
      */
+    /** Raíz del almacenamiento interno ("Internal Storage"), para abrir en ella el selector de
+     *  carpetas extra: con `null` Android lo abriría en la última carpeta usada (`UltiMusic`). */
+    fun internalStorageRootUri(): Uri =
+        DocumentsContract.buildDocumentUri(AUTHORITY_EXTERNAL, "$VOLUME_PRIMARY:")
+
     fun initialPickerUri(): Uri {
         val folder = java.io.File(android.os.Environment.getExternalStorageDirectory(), "UltiMusic")
         val exists = runCatching { folder.isDirectory || folder.mkdirs() }.getOrDefault(false)
@@ -105,6 +118,15 @@ object SafStorage {
 
     fun markBackupChecked(context: Context) {
         prefs(context).edit().putBoolean(KEY_BACKUP_CHECKED, true).apply()
+    }
+
+    /** ¿Ya se reenlazaron las imágenes huérfanas de `images/` (ver `LibraryRepository.relinkOrphanImages`)?
+     *  Se hace una sola vez por instalación: repetirlo resucitaría una carátula que el usuario quitó. */
+    fun isOrphanImageRelinkDone(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ORPHAN_IMAGES_RELINKED, false)
+
+    fun markOrphanImageRelinkDone(context: Context) {
+        prefs(context).edit().putBoolean(KEY_ORPHAN_IMAGES_RELINKED, true).apply()
     }
 
     /** Segundo diálogo del primer arranque ("Ahora elige tu carpeta de música"): pendiente desde que
@@ -336,6 +358,57 @@ object SafStorage {
             DocumentsContract.renameDocument(context.contentResolver, uri, newName)
         }.getOrNull() ?: return null
         return (docPathOf(newUri) ?: docPath).also { bumpVersion(it) }
+    }
+
+    /** ¿Responde el proveedor a un listado de [docPath]? (carpeta vacía incluida). `false` si la
+     *  consulta falla o no devuelve cursor: es lo que pasa cuando el permiso está concedido pero la
+     *  carpeta aún no se puede leer (primer arranque tras reinstalar, proveedor sin indexar...). */
+    fun isDirectoryListable(context: Context, treeUri: Uri, docPath: String): Boolean = runCatching {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, "$VOLUME_PRIMARY:$docPath")
+        context.contentResolver.query(childrenUri, arrayOf(Document.COLUMN_DOCUMENT_ID), null, null, null)
+            ?.use { true } ?: false
+    }.getOrDefault(false)
+
+    private val rootWatchScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val rootRecoveryListeners = CopyOnWriteArraySet<() -> Unit>()
+
+    @Volatile
+    private var rootWatchJob: Job? = null
+
+    private const val ROOT_WATCH_MAX_ATTEMPTS = 60
+
+    /**
+     * Si la carpeta `UltiMusic` concedida no se puede leer, la vuelve a intentar cada segundo
+     * durante [ROOT_WATCH_MAX_ATTEMPTS] segundos (1 minuto); después para, y solo se reactiva
+     * cuando alguien vuelve a llamar (`MainActivity.onResume`). En cuanto responde, entonces avisa a todos los [onRecovered] registrados (una vez cada
+     * uno por recuperación). Si ya se podía leer al llamar, no hace nada ni avisa: así no hay bucle
+     * si el fallo era otro (p. ej. una subcarpeta que de verdad no existe). Solo hay una vigilancia
+     * en marcha a la vez; llamar de nuevo solo añade el oyente (dedupe por instancia).
+     */
+    fun watchUltiMusicRoot(context: Context, onRecovered: () -> Unit) {
+        rootRecoveryListeners.add(onRecovered)
+        val appContext = context.applicationContext
+        synchronized(this) {
+            if (rootWatchJob?.isActive == true) return
+            rootWatchJob = rootWatchScope.launch {
+                fun listable(): Boolean? {
+                    val treeUri = ultiMusicTreeUri(appContext) ?: return null   // sin conceder: nada que vigilar
+                    val root = treeDocPath(treeUri)
+                    return isDirectoryListable(appContext, treeUri, root)
+                }
+                if (listable() != false) return@launch   // ya legible (o sin conceder): no hay nada que esperar
+                // Un minuto a razón de un intento por segundo; pasado eso, se rinde hasta que la
+                // actividad vuelva a llamar a esta función (onResume). "No existe" y "existe pero no
+                // se puede leer" no se distinguen, así que no se insiste para siempre.
+                repeat(ROOT_WATCH_MAX_ATTEMPTS) {
+                    delay(1_000L)
+                    if (listable() == true) {
+                        rootRecoveryListeners.forEach { it() }
+                        return@launch
+                    }
+                }
+            }
+        }
     }
 
     fun exists(context: Context, docPath: String): Boolean {

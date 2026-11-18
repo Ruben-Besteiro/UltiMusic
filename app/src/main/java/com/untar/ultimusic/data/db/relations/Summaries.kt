@@ -84,6 +84,12 @@ data class SongVideoRow(
  * [size] (bytes, `0` = desconocido) es la primera pista que se prueba, antes que la duración: sale
  * gratis del listado de la carpeta.
  */
+/** Fila mínima (id + título) para reenlazar imágenes huérfanas, ver `LibraryRepository.relinkOrphanImages`. */
+data class TitledRow(val id: Long, val title: String)
+
+/** Un nombre de artista de la canción/álbum [ownerId], ya ordenado por posición. */
+data class OwnerNameRow(val ownerId: Long, val name: String)
+
 data class SongPathDurationRow(
     val filePath: String,
     val duration: Long,
