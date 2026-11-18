@@ -423,6 +423,7 @@
     <string name="permission_grant">Buka pengelola file</string>
     <string name="music_folder_prompt_message">Sekarang pilih folder musik Anda. Jika itu UltiMusic, Anda dapat mengetuk Batal.</string>
     <string name="music_folder_prompt_cancel">Batal</string>
+    <string name="restoring_database">Memulihkan database...</string>
     <string name="permission_denied">Tanpa folder UltiMusic, lagu tidak dapat ditampilkan</string>
     <string name="relink_legacy_roots_title">Tambahkan folder lain?</string>
     <string name="relink_legacy_roots_message">Beberapa lagu di pustaka Anda berada di folder lain (seperti Unduhan atau Musik). Pilih salah satu untuk memulihkannya; Anda selalu dapat menambahkan lebih banyak nanti dari Setelan.</string>

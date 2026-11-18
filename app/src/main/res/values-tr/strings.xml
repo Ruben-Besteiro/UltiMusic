@@ -431,6 +431,7 @@
     <string name="permission_grant">Dosya yöneticisini aç</string>
     <string name="music_folder_prompt_message">Şimdi müzik klasörünü seç. UltiMusic ise İptal\'e dokunabilirsin.</string>
     <string name="music_folder_prompt_cancel">İptal</string>
+    <string name="restoring_database">Veritabanı geri yükleniyor...</string>
     <string name="permission_denied">UltiMusic klasörü olmadan şarkılar gösterilemez</string>
     <string name="relink_legacy_roots_title">Başka klasör eklensin mi?</string>
     <string name="relink_legacy_roots_message">Kitaplığındaki bazı şarkılar başka klasörlerdeydi (İndirilenler veya Müzik gibi). Onları geri getirmek için birini seç; daha sonra Ayarlar\'dan istediğin zaman daha fazlasını ekleyebilirsin.</string>

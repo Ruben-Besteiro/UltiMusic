@@ -439,6 +439,7 @@
     <string name="permission_grant">Apri file manager</string>
     <string name="music_folder_prompt_message">Ora scegli la tua cartella della musica. Se è UltiMusic, puoi toccare Annulla.</string>
     <string name="music_folder_prompt_cancel">Annulla</string>
+    <string name="restoring_database">Ripristino del database...</string>
     <string name="permission_denied">Senza la cartella UltiMusic non è possibile mostrare i brani</string>
     <string name="relink_legacy_roots_title">Aggiungere altre cartelle?</string>
     <string name="relink_legacy_roots_message">Alcuni brani della tua libreria erano in altre cartelle (come Download o Musica). Scegline una per recuperarli; potrai sempre aggiungerne altre in seguito dalle Impostazioni.</string>

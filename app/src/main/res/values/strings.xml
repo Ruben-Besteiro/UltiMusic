@@ -667,6 +667,7 @@
     <string name="permission_grant">Abrir explorador</string>
     <string name="music_folder_prompt_message">Ahora elige tu carpeta de música. Si es UltiMusic, puedes darle a Cancelar.</string>
     <string name="music_folder_prompt_cancel">Cancelar</string>
+    <string name="restoring_database">Restaurando base de datos...</string>
     <string name="permission_denied">Sin la carpeta UltiMusic no se pueden mostrar las canciones</string>
 
     <!-- Re-concesión de Download/Music/raíces propias tras la migración a Storage Access Framework

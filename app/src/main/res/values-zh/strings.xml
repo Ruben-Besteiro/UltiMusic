@@ -423,6 +423,7 @@
     <string name="permission_grant">打开文件管理器</string>
     <string name="music_folder_prompt_message">现在请选择你的音乐文件夹。如果就是 UltiMusic，可以点按“取消”。</string>
     <string name="music_folder_prompt_cancel">取消</string>
+    <string name="restoring_database">正在恢复数据库...</string>
     <string name="permission_denied">没有 UltiMusic 文件夹就无法显示歌曲</string>
     <string name="relink_legacy_roots_title">要添加更多文件夹吗？</string>
     <string name="relink_legacy_roots_message">你的音乐库中有些歌曲位于其他文件夹（例如“下载”或“音乐”）中。选择一个以恢复它们；之后随时可以在“设置”中添加更多。</string>

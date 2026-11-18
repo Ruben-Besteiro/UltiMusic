@@ -17,13 +17,13 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.widget.ImageViewCompat
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -57,6 +57,7 @@ import com.untar.ultimusic.ui.settings.SettingsDialogFragment
 import com.untar.ultimusic.ui.preview.PreviewSearchDialogFragment
 import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.CoroutineScope
@@ -150,7 +151,9 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Extremo a extremo sin enableEdgeToEdge(): usa APIs obsoletas en Android 15 (ver Android
+        // vitals). Barras transparentes y recorte de pantalla van en el tema (Base.Theme.UltiMusic).
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         com.untar.ultimusic.ui.common.DialogOpenLock.install(supportFragmentManager)
         setContentView(R.layout.activity_main)
         com.untar.ultimusic.ui.common.DialogOpenLock.wrap(window)
@@ -294,7 +297,10 @@ class MainActivity : AppCompatActivity() {
                 .setMessage(R.string.permission_needed_message)
                 .setCancelable(false)
                 .setPositiveButton(R.string.permission_grant) { _, _ ->
-                    permissionDialogPending = false
+                    // permissionDialogPending sigue en true mientras el selector está abierto y se
+                    // persiste la concesión: el onResume de la vuelta se ejecuta ANTES de que
+                    // grantUltiMusicRoot termine, y con el flag en false sacaba el toast de
+                    // "Sin la carpeta..." aunque el usuario hubiera concedido.
                     grantUltiMusicRoot.launch(initialUri)
                 }
                 .show()
@@ -320,7 +326,9 @@ class MainActivity : AppCompatActivity() {
             .setTitle(R.string.permission_needed_title)
             .setMessage(R.string.music_folder_prompt_message)
             .setCancelable(false)
-            .setPositiveButton(R.string.permission_grant) { _, _ -> grantExtraLibraryRoot.launch(null) }
+            .setPositiveButton(R.string.permission_grant) { _, _ ->
+                grantExtraLibraryRoot.launch(SafStorage.internalStorageRootUri())
+            }
             .setNegativeButton(R.string.music_folder_prompt_cancel, null)
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
@@ -341,12 +349,19 @@ class MainActivity : AppCompatActivity() {
                 if (restartNeeded) {
                     // Se encontró una copia de la BD más completa que la recién creada: entra en
                     // su lugar al arrancar (ver UltiMusicDatabase.restoreFromBackupIfNeeded).
+                    Toast.makeText(this@MainActivity, R.string.restoring_database, Toast.LENGTH_LONG).show()
+                    kotlinx.coroutines.delay(1000)   // que dé tiempo a verse antes de que muera el proceso
                     packageManager.getLaunchIntentForPackage(packageName)?.let {
                         startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
                     }
                     android.os.Process.killProcess(android.os.Process.myPid())
                     return@launch
                 }
+                permissionDialogPending = false
+                // Conceder la carpeta siempre reescanea (reload() fuerza el escaneo aunque ya
+                // hubiera uno hecho); la pestaña de Canciones ya está visible, con el recycler
+                // vacío y el aviso de actualización, mientras tanto.
+                songsViewModel.reload()
                 loadIfPermitted()
                 offerExtraFolderStep()
             }
@@ -368,7 +383,9 @@ class MainActivity : AppCompatActivity() {
             val dialog = AlertDialog.Builder(this@MainActivity)
                 .setTitle(R.string.relink_legacy_roots_title)
                 .setMessage(R.string.relink_legacy_roots_message)
-                .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ -> grantExtraLibraryRoot.launch(null) }
+                .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ ->
+                    grantExtraLibraryRoot.launch(SafStorage.internalStorageRootUri())
+                }
                 .setNegativeButton(R.string.relink_legacy_roots_skip, null)
                 .show()
             AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
@@ -386,6 +403,11 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         loadIfPermitted()
+        // Si un permiso se ha revocado/concedido fuera de la app, la lista se ajusta ya: nada que no
+        // se pueda abrir se queda listado.
+        lifecycleScope.launch { LibraryRepository.get(this@MainActivity).recheckRootPermissions() }
+        // Si UltiMusic no se podía leer y la vigilancia ya se rindió (pasado 1 minuto), la reactiva.
+        CoverArt.watchRoot(this)
         // Estando la aplicación en segundo plano, el sistema puede haber matado el PlaybackService
         // (no está en primer plano mientras no suene nada). Lo revivimos aquí, al volver, en vez de
         // esperar a que el usuario toque una canción: así la cola y el mini-reproductor ya están de

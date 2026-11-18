@@ -431,6 +431,7 @@
     <string name="permission_grant">এক্সপ্লোরার খুলুন</string>
     <string name="music_folder_prompt_message">এবার আপনার গানের ফোল্ডার বাছুন। সেটি UltiMusic হলে বাতিল চাপতে পারেন।</string>
     <string name="music_folder_prompt_cancel">বাতিল</string>
+    <string name="restoring_database">ডেটাবেস পুনরুদ্ধার হচ্ছে...</string>
     <string name="permission_denied">UltiMusic ফোল্ডার ছাড়া গান দেখানো যাবে না</string>
     <string name="relink_legacy_roots_title">আরও ফোল্ডার যোগ করবেন?</string>
     <string name="relink_legacy_roots_message">আপনার লাইব্রেরির কিছু গান অন্য ফোল্ডারে ছিল (যেমন ডাউনলোড বা সংগীত)। সেগুলো ফিরিয়ে আনতে একটি বাছুন; পরে সেটিংস থেকে যেকোনো সময় আরও যোগ করতে পারবেন।</string>

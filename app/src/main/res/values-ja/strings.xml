@@ -423,6 +423,7 @@
     <string name="permission_grant">ファイルマネージャーを開く</string>
     <string name="music_folder_prompt_message">次に音楽フォルダを選択してください。UltiMusicの場合は「キャンセル」をタップしてかまいません。</string>
     <string name="music_folder_prompt_cancel">キャンセル</string>
+    <string name="restoring_database">データベースを復元中...</string>
     <string name="permission_denied">UltiMusicフォルダがないと曲を表示できません</string>
     <string name="relink_legacy_roots_title">フォルダを追加しますか？</string>
     <string name="relink_legacy_roots_message">ライブラリの一部の曲は他のフォルダ（ダウンロードやミュージックなど）にありました。復元するフォルダを1つ選んでください。後からいつでも設定で追加できます。</string>

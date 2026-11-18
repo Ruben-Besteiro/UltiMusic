@@ -727,6 +727,18 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
 }
 
 /**
+ * v33 → v34: columna nueva `songs.missingSince` (ver
+ * [com.untar.ultimusic.data.db.entities.SongEntity.missingSince]): las canciones cuyo archivo
+ * desaparece se marcan en vez de borrarse, para no perder imagen, etiquetas ni ediciones al mover o
+ * renombrar archivos. `NOT NULL DEFAULT 0` ("en su sitio"): basta un `ALTER TABLE` y no se pierde nada.
+ */
+val MIGRATION_33_34 = object : Migration(33, 34) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE songs ADD COLUMN missingSince INTEGER NOT NULL DEFAULT 0")
+    }
+}
+
+/**
  * v25 → v26: sin cambio de esquema — recolorea 4 de las etiquetas predefinidas y siembra la 6ª,
  * "Remix / Cover" (ver [SystemTagKey.REMIX_COVER]):
  *

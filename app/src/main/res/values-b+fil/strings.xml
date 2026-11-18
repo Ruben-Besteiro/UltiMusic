@@ -431,6 +431,7 @@
     <string name="permission_grant">Buksan ang explorer</string>
     <string name="music_folder_prompt_message">Ngayon, piliin ang iyong folder ng musika. Kung UltiMusic ito, puwede mong i-tap ang Kanselahin.</string>
     <string name="music_folder_prompt_cancel">Kanselahin</string>
+    <string name="restoring_database">Ibinabalik ang database...</string>
     <string name="permission_denied">Kung walang folder na UltiMusic, hindi maipapakita ang mga kanta</string>
     <string name="relink_legacy_roots_title">Magdagdag ng higit pang folder?</string>
     <string name="relink_legacy_roots_message">Ang ilang kanta sa iyong library ay nasa ibang folder (tulad ng Mga Download o Musika). Pumili ng isa para mabawi ang mga ito; puwede ka pa ring magdagdag ng iba mamaya sa Mga Setting.</string>

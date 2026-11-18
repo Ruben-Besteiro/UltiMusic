@@ -27,8 +27,12 @@
         <item name="colorSurfaceVariant">@color/um_surface_variant</item>
         <item name="colorOnBackground">#404040</item>
         <item name="colorOnSurface">@color/um_on_background</item>
-        <item name="android:statusBarColor">#404040</item>
-        <item name="android:navigationBarColor">#404040</item>
+        <!-- Ver el comentario equivalente en values/themes.xml. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
         <!-- En Android < 10 el cursor de texto (rayita y gota) no se puede recolorear en tiempo
              real (ver MetadataEditorDialogFragment), así que se fijan en blanco en vez de en el
              amarillo que les daría colorPrimary por defecto. -->
@@ -39,7 +43,10 @@
         <item name="recyclerViewStyle">@style/Widget.UltiMusic.RecyclerView</item>
     </style>
 
-    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />
+    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic">
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/um_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ultimusic_logo</item>
+    </style>
 
     <!--
       Tema del diálogo del iPod: pantalla completa y fondo transparente. Sin

@@ -439,6 +439,7 @@
     <string name="permission_grant">Ouvrir l\'explorateur</string>
     <string name="music_folder_prompt_message">Choisis maintenant ton dossier de musique. Si c\'est UltiMusic, tu peux appuyer sur Annuler.</string>
     <string name="music_folder_prompt_cancel">Annuler</string>
+    <string name="restoring_database">Restauration de la base de données...</string>
     <string name="permission_denied">Sans le dossier UltiMusic, impossible d\'afficher les titres</string>
     <string name="relink_legacy_roots_title">Ajouter d\'autres dossiers ?</string>
     <string name="relink_legacy_roots_message">Certains titres de ta bibliothèque se trouvaient dans d\'autres dossiers (comme Téléchargements ou Musique). Choisis-en un pour les récupérer ; tu pourras toujours en ajouter d\'autres plus tard dans les Paramètres.</string>

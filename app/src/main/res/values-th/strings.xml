@@ -423,6 +423,7 @@
     <string name="permission_grant">เปิดตัวจัดการไฟล์</string>
     <string name="music_folder_prompt_message">ตอนนี้เลือกโฟลเดอร์เพลงของคุณ หากเป็น UltiMusic คุณกดยกเลิกได้</string>
     <string name="music_folder_prompt_cancel">ยกเลิก</string>
+    <string name="restoring_database">กำลังกู้คืนฐานข้อมูล...</string>
     <string name="permission_denied">หากไม่มีโฟลเดอร์ UltiMusic จะแสดงเพลงไม่ได้</string>
     <string name="relink_legacy_roots_title">เพิ่มโฟลเดอร์อื่นไหม</string>
     <string name="relink_legacy_roots_message">เพลงบางส่วนในคลังเพลงของคุณอยู่ในโฟลเดอร์อื่น (เช่น ดาวน์โหลด หรือ เพลง) เลือกหนึ่งโฟลเดอร์เพื่อกู้คืน คุณเพิ่มโฟลเดอร์อื่นได้เสมอในภายหลังที่การตั้งค่า</string>

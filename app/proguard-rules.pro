@@ -12,6 +12,12 @@
 #   public *;
 #}
 
+# ML Kit (identificador de idioma): los ComponentRegistrar se instancian por reflexión desde el
+# manifest (MlKitInitProvider). Sin conservar su constructor vacío, R8 lo elimina y
+# LanguageIdentification.getClient() revienta en release con un NPE.
+-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }
+-keep class com.google.mlkit.** { <init>(); }
+
 # Conserva números de línea para poder desofuscar trazas (el mapping.txt va en el AAB).
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile

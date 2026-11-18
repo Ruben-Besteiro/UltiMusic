@@ -423,6 +423,7 @@
     <string name="permission_grant">Mở trình quản lý tệp</string>
     <string name="music_folder_prompt_message">Bây giờ hãy chọn thư mục nhạc của bạn. Nếu đó là UltiMusic, bạn có thể nhấn Hủy.</string>
     <string name="music_folder_prompt_cancel">Hủy</string>
+    <string name="restoring_database">Đang khôi phục cơ sở dữ liệu...</string>
     <string name="permission_denied">Không có thư mục UltiMusic thì không thể hiển thị bài hát</string>
     <string name="relink_legacy_roots_title">Thêm thư mục khác?</string>
     <string name="relink_legacy_roots_message">Một số bài hát trong thư viện của bạn nằm ở thư mục khác (như Tải xuống hoặc Nhạc). Hãy chọn một thư mục để khôi phục chúng; bạn luôn có thể thêm thư mục khác sau trong Cài đặt.</string>

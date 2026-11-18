@@ -431,6 +431,7 @@
     <string name="permission_grant">باز کردن مدیر فایل</string>
     <string name="music_folder_prompt_message">حالا پوشه موسیقی خود را انتخاب کنید. اگر UltiMusic است، می‌توانید لغو را بزنید.</string>
     <string name="music_folder_prompt_cancel">لغو</string>
+    <string name="restoring_database">در حال بازیابی پایگاه داده...</string>
     <string name="permission_denied">بدون پوشه UltiMusic نمی‌توان آهنگ‌ها را نمایش داد</string>
     <string name="relink_legacy_roots_title">پوشه‌های بیشتری اضافه شود؟</string>
     <string name="relink_legacy_roots_message">برخی آهنگ‌های کتابخانه‌تان در پوشه‌های دیگری بودند (مانند دانلودها یا موسیقی). یکی را برای بازیابی آن‌ها انتخاب کنید؛ همیشه می‌توانید بعداً از تنظیمات موارد بیشتری اضافه کنید.</string>

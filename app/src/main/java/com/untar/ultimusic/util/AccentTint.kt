@@ -2,10 +2,12 @@ package com.untar.ultimusic.util
 
 import android.content.Context
 import android.content.res.ColorStateList
+import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
 import android.util.TypedValue
 import android.view.View
 import android.widget.ImageView
+import android.widget.TextView
 import androidx.annotation.ColorInt
 import androidx.annotation.DimenRes
 import androidx.annotation.IdRes
@@ -148,12 +150,27 @@ object AccentTint {
      * de fábrica (`ripple_material_dark`, ese mismo 20%).
      */
     fun buttons(dialog: AlertDialog, @ColorInt accent: Int) {
+        // Los diálogos que tiñen sus botones a mano (los de nombre, con botón deshabilitado) llaman
+        // solo a [title].
+        title(dialog, accent)
         val tint = ColorStateList.valueOf(accent)
         val whiteRipple = ColorStateList.valueOf(ContextCompat.getColor(dialog.context, R.color.um_ripple_white))
         for (which in intArrayOf(AlertDialog.BUTTON_POSITIVE, AlertDialog.BUTTON_NEGATIVE, AlertDialog.BUTTON_NEUTRAL)) {
             val button = dialog.getButton(which) ?: continue
             button.setTextColor(tint)
             (button as? MaterialButton)?.rippleColor = whiteRipple
+        }
+    }
+
+    /**
+     * El título del diálogo (si lo tiene) en negrita y con el acento, como los títulos de sección de
+     * la app. Hay que llamarlo con el diálogo ya mostrado (o en su `OnShowListener`): hasta entonces
+     * la vista del título no existe.
+     */
+    fun title(dialog: AlertDialog, @ColorInt accent: Int) {
+        dialog.findViewById<TextView>(androidx.appcompat.R.id.alertTitle)?.let { title ->
+            title.setTextColor(accent)
+            title.setTypeface(title.typeface, Typeface.BOLD)
         }
     }
 

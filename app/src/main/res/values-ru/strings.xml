@@ -447,6 +447,7 @@
     <string name="permission_grant">Открыть файловый менеджер</string>
     <string name="music_folder_prompt_message">Теперь выберите папку с музыкой. Если это UltiMusic, можно нажать «Отмена».</string>
     <string name="music_folder_prompt_cancel">Отмена</string>
+    <string name="restoring_database">Восстановление базы данных...</string>
     <string name="permission_denied">Без папки UltiMusic треки показать невозможно</string>
     <string name="relink_legacy_roots_title">Добавить другие папки?</string>
     <string name="relink_legacy_roots_message">Некоторые треки вашей медиатеки находились в других папках (например, «Загрузки» или «Музыка»). Выберите одну, чтобы восстановить их; позже всегда можно добавить ещё в настройках.</string>

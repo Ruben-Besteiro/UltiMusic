@@ -463,6 +463,7 @@
     <string name="permission_grant">فتح المستكشف</string>
     <string name="music_folder_prompt_message">اختر الآن مجلد الموسيقى. إن كان UltiMusic، يمكنك الضغط على إلغاء.</string>
     <string name="music_folder_prompt_cancel">إلغاء</string>
+    <string name="restoring_database">جارٍ استعادة قاعدة البيانات...</string>
     <string name="permission_denied">لا يمكن عرض الأغاني دون مجلد UltiMusic</string>
     <string name="relink_legacy_roots_title">إضافة مزيد من المجلدات؟</string>
     <string name="relink_legacy_roots_message">كانت بعض أغاني مكتبتك في مجلدات أخرى (مثل التنزيلات أو الموسيقى). اختر واحدًا لاستعادتها؛ يمكنك دائمًا إضافة المزيد لاحقًا من الإعدادات.</string>

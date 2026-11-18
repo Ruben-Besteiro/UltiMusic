@@ -431,6 +431,7 @@
     <string name="permission_grant">एक्सप्लोरर खोलें</string>
     <string name="music_folder_prompt_message">अब अपना संगीत फ़ोल्डर चुनें। अगर वह UltiMusic है, तो आप रद्द करें दबा सकते हैं।</string>
     <string name="music_folder_prompt_cancel">रद्द करें</string>
+    <string name="restoring_database">डेटाबेस रीस्टोर हो रहा है...</string>
     <string name="permission_denied">UltiMusic फ़ोल्डर के बिना गाने नहीं दिखाए जा सकते</string>
     <string name="relink_legacy_roots_title">और फ़ोल्डर जोड़ें?</string>
     <string name="relink_legacy_roots_message">आपकी लाइब्रेरी के कुछ गाने अन्य फ़ोल्डरों (जैसे डाउनलोड या संगीत) में थे। उन्हें वापस लाने के लिए एक चुनें; आप बाद में सेटिंग्स से कभी भी और जोड़ सकते हैं।</string>

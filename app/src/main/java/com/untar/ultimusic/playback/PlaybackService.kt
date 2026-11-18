@@ -589,7 +589,8 @@ class PlaybackService : MediaSessionService() {
         val wasRandomContinuation = playbackPrefs.getBoolean(KEY_RANDOM_CONTINUATION, false)
 
         restoreJob = serviceScope.launch {
-            val restoredQueue = library.songsByIds(queueIds)
+            // Solo lo reproducible, igual que la lista de Canciones: nada que no se pueda abrir.
+            val restoredQueue = library.playableOnly(library.songsByIds(queueIds))
             if (restoredQueue.isEmpty()) return@launch
 
             // Resolver la cola guardada contra la base de datos es una llamada suspend: tarda lo
@@ -1110,7 +1111,16 @@ class PlaybackService : MediaSessionService() {
             val path = library.resolvePlayablePath(song)
             if (path == null) {
                 player.stop()
-                _missingFile.emit(song)
+                // Si aún no hay carpeta concedida (instalación limpia: la cola guardada se restaura
+                // al arrancar, antes de que el usuario conceda UltiMusic) TODOS los archivos
+                // "faltan", y avisar de uno en concreto sería mentira: es solo falta de permiso.
+                if (library.libraryFolderReadable()) {
+                    _missingFile.emit(song)
+                    // Y se reconcilia la fonoteca con el disco: la fila de este archivo (y cualquier
+                    // otra que haya desaparecido igual) se da de baja y los flujos de Room repintan
+                    // todos los recyclers, así que la canción no vuelve a salir en ninguna lista.
+                    library.reconcile()
+                }
                 return@launch
             }
             rewritePath(index, song, path)

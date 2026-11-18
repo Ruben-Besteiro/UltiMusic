@@ -188,6 +188,7 @@ class PlaylistsFragment : Fragment(R.layout.fragment_playlists) {
                 )
             )
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ColorStateList.valueOf(accent))
+            AccentTint.title(dialog, accent)
         }
         dialog.show()
     }

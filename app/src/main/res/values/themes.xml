@@ -27,8 +27,15 @@
         <item name="colorSurfaceVariant">@color/um_surface_variant</item>
         <item name="colorOnBackground">@color/um_on_background</item>
         <item name="colorOnSurface">@color/um_on_background</item>
-        <item name="android:statusBarColor">@color/um_background</item>
-        <item name="android:navigationBarColor">@color/um_background</item>
+        <!-- Extremo a extremo SIN enableEdgeToEdge() (que llama a las APIs obsoletas de Android 15):
+             barras transparentes, sin contraste forzado y el contenido bajo el recorte de pantalla.
+             Los colores de las barras los pintan los scrims de activity_main. En Android 15+ el
+             sistema ignora estos atributos y ya fuerza el extremo a extremo. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
         <!-- En Android < 10 el cursor de texto (rayita y gota) no se puede recolorear en tiempo
              real (ver MetadataEditorDialogFragment), así que se fijan en blanco en vez de en el
              amarillo que les daría colorPrimary por defecto. -->
@@ -39,7 +46,13 @@
         <item name="recyclerViewStyle">@style/Widget.UltiMusic.RecyclerView</item>
     </style>
 
-    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />
+    <!-- Splash de Android 12+ (ignorado antes): fondo de la app + logo, que es lo que se ve en el
+         arranque en frío, incluido el reinicio de la restauración de la BD (ver MainActivity), en
+         vez de una pantalla negra. -->
+    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic">
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/um_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ultimusic_logo</item>
+    </style>
 
     <!--
       Tema del diálogo del iPod: pantalla completa y fondo transparente. Sin

@@ -145,5 +145,22 @@ data class SongEntity(
      * ningún archivo. Lo usan `LibraryDao.reconcile` (primero tamaño, después duración) y
      * `LibraryRepository.resolvePlayablePath`.
      */
-    val size: Long = 0L
-)
+    val size: Long = 0L,
+
+    /**
+     * Cuándo (epoch ms) se detectó que el archivo ya no estaba en ninguna carpeta concedida, o `0`
+     * si la canción está en su sitio. Una canción perdida NO se borra: se oculta de las listas (como
+     * la lista gris, ver [hiddenByGreylist]) pero conserva su fila entera -imagen, etiquetas,
+     * ediciones, artistas, álbumes, historial-, y sigue siendo candidata a emparejarse por nombre,
+     * tamaño o duración con cualquier archivo que aparezca después (ver `LibraryDao.reconcile`).
+     * Así mover o renombrar archivos a una carpeta todavía no concedida, o quitar una carpeta y
+     * volver a añadirla, no pierde nada. Solo pasados [MISSING_GRACE_MS] se borra de verdad.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val missingSince: Long = 0L
+) {
+    companion object {
+        /** Cuánto se conserva una canción perdida antes de borrarla definitivamente: 30 días. */
+        const val MISSING_GRACE_MS = 30L * 24 * 60 * 60 * 1000
+    }
+}

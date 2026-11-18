@@ -145,7 +145,9 @@ import java.io.File
     // existentes quedan a 0 y el siguiente escaneo las rellena.
     // v33: sin cambio de esquema. Se retira la etiqueta "Vídeo sincronizado" y `videoOffsetMs` pasa a
     // significar "adelantar la letra respecto del vídeo" (signo invertido); MIGRATION_32_33.
-    version = 33,
+    // v34: `songs.missingSince` (MIGRATION_33_34): las canciones cuyo archivo desaparece se marcan
+    // como perdidas en vez de borrarse, para que mover/renombrar archivos no pierda nada.
+    version = 34,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -210,7 +212,8 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             MIGRATION_29_30,
                             MIGRATION_30_31,
                             MIGRATION_31_32,
-                            MIGRATION_32_33
+                            MIGRATION_32_33,
+                            MIGRATION_33_34
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true)
                         // Instalación nueva: `onCreate` es el único momento en el que se sabe que es

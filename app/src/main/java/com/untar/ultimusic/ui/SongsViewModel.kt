@@ -108,6 +108,8 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
         reconcileJob?.cancel()
         reconcileJob = viewModelScope.launch {
             runCatching { repository.reconcile() }
+            // Una sola vez: recupera carátulas cuyo enlace se perdió pero cuyo archivo sigue en images/.
+            runCatching { repository.relinkOrphanImages() }
             // Al terminar cada reconciliación, no solo la primera: es la señal más parecida a
             // "abrir la aplicación" que hay, y refreshYouTubeStatsIfDue ya se encarga de no repetir
             // el refresco más de una vez al día por su cuenta.

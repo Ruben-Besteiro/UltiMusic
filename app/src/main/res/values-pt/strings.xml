@@ -439,6 +439,7 @@
     <string name="permission_grant">Abrir explorador</string>
     <string name="music_folder_prompt_message">Agora escolhe a tua pasta de música. Se for a UltiMusic, podes carregar em Cancelar.</string>
     <string name="music_folder_prompt_cancel">Cancelar</string>
+    <string name="restoring_database">A restaurar a base de dados...</string>
     <string name="permission_denied">Sem a pasta UltiMusic não é possível mostrar as músicas</string>
     <string name="relink_legacy_roots_title">Adicionar mais pastas?</string>
     <string name="relink_legacy_roots_message">Algumas músicas da tua biblioteca estavam noutras pastas (como Transferências ou Música). Escolhe uma para as recuperar; podes sempre adicionar mais depois nas Definições.</string>

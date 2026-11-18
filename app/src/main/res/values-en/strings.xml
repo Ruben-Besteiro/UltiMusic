@@ -431,6 +431,7 @@
     <string name="permission_grant">Open explorer</string>
     <string name="music_folder_prompt_message">Now choose your music folder. If it\'s UltiMusic, you can tap Cancel.</string>
     <string name="music_folder_prompt_cancel">Cancel</string>
+    <string name="restoring_database">Restoring database...</string>
     <string name="permission_denied">Songs can\'t be shown without the UltiMusic folder</string>
     <string name="relink_legacy_roots_title">Add more folders?</string>
     <string name="relink_legacy_roots_message">Some of your songs were in other folders (like Downloads or Music). Pick one to get them back; you can always add more later from Settings.</string>

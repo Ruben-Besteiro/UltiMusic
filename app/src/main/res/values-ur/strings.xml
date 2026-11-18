@@ -431,6 +431,7 @@
     <string name="permission_grant">ایکسپلورر کھولیں</string>
     <string name="music_folder_prompt_message">اب اپنا موسیقی کا فولڈر چنیں۔ اگر وہ UltiMusic ہے تو آپ منسوخ کریں دبا سکتے ہیں۔</string>
     <string name="music_folder_prompt_cancel">منسوخ کریں</string>
+    <string name="restoring_database">ڈیٹابیس بحال ہو رہا ہے...</string>
     <string name="permission_denied">UltiMusic فولڈر کے بغیر گانے نہیں دکھائے جا سکتے</string>
     <string name="relink_legacy_roots_title">مزید فولڈرز شامل کریں؟</string>
     <string name="relink_legacy_roots_message">آپ کی لائبریری کے کچھ گانے دوسرے فولڈرز میں تھے (جیسے ڈاؤن لوڈز یا موسیقی)۔ انہیں واپس لانے کے لیے ایک چنیں؛ آپ بعد میں ترتیبات سے ہمیشہ مزید شامل کر سکتے ہیں۔</string>

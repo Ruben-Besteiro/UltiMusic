@@ -431,6 +431,7 @@
     <string name="permission_grant">Dateimanager öffnen</string>
     <string name="music_folder_prompt_message">Wähle jetzt deinen Musikordner. Wenn es UltiMusic ist, kannst du auf Abbrechen tippen.</string>
     <string name="music_folder_prompt_cancel">Abbrechen</string>
+    <string name="restoring_database">Datenbank wird wiederhergestellt...</string>
     <string name="permission_denied">Ohne den Ordner UltiMusic können keine Titel angezeigt werden</string>
     <string name="relink_legacy_roots_title">Weitere Ordner hinzufügen?</string>
     <string name="relink_legacy_roots_message">Einige Titel deiner Mediathek lagen in anderen Ordnern (z. B. Downloads oder Musik). Wähle einen aus, um sie wiederherzustellen; du kannst später jederzeit weitere in den Einstellungen hinzufügen.</string>

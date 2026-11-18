@@ -454,8 +454,10 @@ class IPodDialogFragment : DialogFragment() {
             if (lyricLines.isEmpty()) return
             val index = LrcParser.currentIndex(lyricLines, positionMs + lyricsOffsetMs)
             if (lyricsAdapter.setCurrentLine(index) && index >= 0) {
-                // Con este offset la línea actual se pone en la posición 2 de 7 (o 5)
-                lyricsLayoutManager.scrollToPositionWithOffset(index, lyricsBox.height / 12)
+                // Caben 5 filas: la actual va en la posición 2 (una fila encima, tres debajo). El
+                // offset es la altura de una fila (la de un hijo ya medido; si aún no hay, 1/5 de la caja).
+                val rowHeight = lyricsBox.getChildAt(0)?.height?.takeIf { it > 0 } ?: (lyricsBox.height / 5)
+                lyricsLayoutManager.scrollToPositionWithOffset(index, rowHeight)
             }
         }
 
