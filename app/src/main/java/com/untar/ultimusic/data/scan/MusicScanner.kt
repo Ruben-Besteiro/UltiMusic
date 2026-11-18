@@ -70,6 +70,9 @@ object MusicScanner {            // OBJECT = SINGLETON
     ): ScanResult = withContext(Dispatchers.IO) {
         val entries = LinkedHashMap<String, SafStorage.SafEntry>()
         for ((rootDocPath, treeUri) in SafStorage.grantedRoots()) {
+            // Una raíz registrada pero sin permiso (típico tras reinstalar con la BD restaurada, que
+            // trae sus `library_roots`) no se puede recorrer: se salta en vez de verla vacía.
+            if (!SafStorage.isRootReadable(context, treeUri)) continue
             collectAudioFiles(context, treeUri, rootDocPath, entries)
         }
         val currentPaths = entries.keys.toHashSet()
@@ -109,6 +112,18 @@ object MusicScanner {            // OBJECT = SINGLETON
     suspend fun libraryFolderReadable(context: Context): Boolean = withContext(Dispatchers.IO) {
         val roots = SafStorage.grantedRoots()
         roots.isNotEmpty() && roots.all { (_, treeUri) -> SafStorage.isRootReadable(context, treeUri) }
+    }
+
+    /**
+     * Prefijos de docPath de las raíces registradas que NO se pueden leer ahora mismo, o null si no
+     * hay ninguna legible (en cuyo caso no se debe escanear nada: todo parecería haber desaparecido).
+     * [com.untar.ultimusic.data.LibraryRepository.reconcile] escanea las legibles y deja intactas las
+     * filas de estas otras (ver su `unreadablePrefixes`).
+     */
+    suspend fun unreadableRootPrefixes(context: Context): List<String>? = withContext(Dispatchers.IO) {
+        val roots = SafStorage.grantedRoots()
+        val unreadable = roots.filter { (_, treeUri) -> !SafStorage.isRootReadable(context, treeUri) }
+        if (roots.isEmpty() || unreadable.size == roots.size) null else unreadable.map { it.first }
     }
 
     /**

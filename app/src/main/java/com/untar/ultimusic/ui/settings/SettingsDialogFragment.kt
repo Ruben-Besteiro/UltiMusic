@@ -363,7 +363,11 @@ class SettingsDialogFragment : DialogFragment() {
     private fun setupLibraryRoots(container: android.widget.LinearLayout, addFolderButton: View) {
         libraryRootAdapter = LibraryRootAdapter(container, onDelete = { root -> showRemoveLibraryRootDialog(root) })
 
-        addFolderButton.setOnClickListener { addLibraryRootLauncher.launch(null) }
+        // Con null Android abriría el selector en la última carpeta usada (`UltiMusic`): se pide que
+        // empiece en la raíz del almacenamiento interno, igual que los diálogos de MainActivity.
+        addFolderButton.setOnClickListener {
+            addLibraryRootLauncher.launch(com.untar.ultimusic.util.SafStorage.internalStorageRootUri())
+        }
     }
 
     private val addLibraryRootLauncher =

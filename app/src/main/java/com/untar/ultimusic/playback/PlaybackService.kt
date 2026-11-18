@@ -446,12 +446,6 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             library.songs.collect { librarySongsPool.value = it }
         }
-        // El vigilante de cambios del filesystem también nos interesa a nosotros, no solo a
-        // MainActivity: mientras haya sesión de reproducción activa (sonando o en pausa) el proceso
-        // sigue vivo aunque la Activity esté en segundo plano, así que aprovechamos para detectar
-        // canciones nuevas sin depender de que el usuario reabra la app. Recuento de referencias en
-        // [LibraryRepository.startWatchingLibraryChanges]: no pisa lo que ya tuviera pedido la Activity.
-        library.startWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
         restorePlaybackState()
 
         mediaSession = MediaSession.Builder(this, QueueAwarePlayer(player))
@@ -481,7 +475,6 @@ class PlaybackService : MediaSessionService() {
         // si ya pasaba del 50% se anota aquí mismo. [PlayTracker] escribe desde un scope propio justo
         // para que la cancelación de más abajo no se la lleve por delante a mitad.
         playTracker.flush()
-        library.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         loudnessEnhancer?.release(); loudnessEnhancer = null

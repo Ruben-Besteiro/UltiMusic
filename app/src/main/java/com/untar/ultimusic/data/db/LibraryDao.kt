@@ -334,6 +334,10 @@ abstract class LibraryDao {
     @Query("SELECT path FROM greylist_folders WHERE excluded = 1")
     abstract suspend fun excludedGreylistFolderPaths(): List<String>
 
+    /** Todas las filas de la lista gris (con el switch encendido o apagado), para [reconcile]. */
+    @Query("SELECT * FROM greylist_folders")
+    abstract suspend fun allGreylistFolders(): List<GreylistFolderEntity>
+
     @Query("UPDATE songs SET hiddenByGreylist = :hidden WHERE filePath = :path")
     abstract suspend fun setSongHidden(path: String, hidden: Boolean)
 
@@ -850,7 +854,8 @@ abstract class LibraryDao {
     open suspend fun reconcile(
         newSongs: List<ScannedSong>,
         currentPaths: Set<String>,
-        currentSizes: Map<String, Long> = emptyMap()
+        currentSizes: Map<String, Long> = emptyMap(),
+        unreadablePrefixes: List<String> = emptyList()
     ) {
         val existingInfo = allSongPathsAndDurations()
         val existing = existingInfo.mapTo(HashSet(existingInfo.size)) { it.filePath }
@@ -865,7 +870,8 @@ abstract class LibraryDao {
 
         // Carpetas actualmente fuera de la lista gris: lo que caiga bajo alguna de ellas entra o se
         // reapunta ya oculto, para no colarse visible hasta que se desactive el switch.
-        val excludedPrefixes = excludedGreylistFolderPaths().map { "$it/" }
+        // `var`: [migrateMovedGreylistFolders] puede reescribirlas si una carpeta gris se ha movido.
+        var excludedPrefixes = excludedGreylistFolderPaths().map { "$it/" }
         // Sin distinguir mayúsculas: la carpeta real puede llamarse "music" y la lista gris haberla
         // guardado como "Music" (el sistema de archivos de Android no las distingue en la práctica).
         fun isHidden(path: String) = excludedPrefixes.any { path.startsWith(it, ignoreCase = true) }
@@ -902,13 +908,14 @@ abstract class LibraryDao {
 
         // Reapunta la fila de [match] al archivo recién encontrado [s] (común a las tres fases de
         // emparejamiento).
+        val relinkedPairs = ArrayList<Pair<String, String>>()   // (ruta vieja, ruta nueva)
         suspend fun relink(match: SongPathDurationRow, s: ScannedSong) {
             updateSongPath(match.filePath, s.filePath)
+            relinkedPairs.add(match.filePath to s.filePath)
             // Si estaba marcada como perdida, vuelve a estar en su sitio con todo lo que tenía.
             clearSongMissing(s.filePath)
-            // Si el archivo se ha movido dentro o fuera de una carpeta desactivada, su
-            // visibilidad se recalcula con la ruta nueva.
-            setSongHidden(s.filePath, isHidden(s.filePath))
+            // La visibilidad (lista gris) se recalcula DESPUÉS de las tres fases, cuando ya se sabe
+            // si una carpeta gris entera se ha movido (ver [migrateMovedGreylistFolders]).
             // El tamaño del archivo nuevo es el vigente (puede ser 0 = desconocido: se deja el que había).
             if (s.size > 0L) updateSongSize(s.filePath, s.size)
             moved.add(match.filePath)
@@ -961,6 +968,16 @@ abstract class LibraryDao {
             } else {
                 inserted.add(s)
             }
+        }
+
+        // Visibilidad de lo reenlazado, con la lista gris ya puesta al día: si la carpeta gris se
+        // movió entera, sus canciones siguen ocultas en la ruta nueva; si un archivo se movió suelto
+        // fuera de una carpeta gris (o dentro de una), su visibilidad cambia con él.
+        if (relinkedPairs.isNotEmpty()) {
+            if (migrateMovedGreylistFolders(relinkedPairs, existingInfo.map { it.filePath }, currentPaths)) {
+                excludedPrefixes = excludedGreylistFolderPaths().map { "$it/" }
+            }
+            for ((_, newPath) in relinkedPairs) setSongHidden(newPath, isHidden(newPath))
         }
 
         // Fase 5: altas reales.
@@ -1038,13 +1055,23 @@ abstract class LibraryDao {
         // nombre/carpeta: las fases 2-4 de arriba también consideran las ya perdidas), recupera todo.
         // Solo se borra de verdad pasado [SongEntity.MISSING_GRACE_MS].
         val now = System.currentTimeMillis()
-        val removed = gone.mapNotNull { it.filePath.takeIf { path -> path !in moved && !path.startsWith("/") } }
+        //
+        // Las filas que cuelgan de una raíz ILEGIBLE ahora mismo ([unreadablePrefixes]) ni se marcan
+        // ni se borran: que su carpeta no se pueda leer no significa que el archivo no esté. Sí han
+        // podido reenlazarse arriba si apareció en una carpeta legible.
+        fun isUnderUnreadable(path: String) = unreadablePrefixes.any {
+            it.isEmpty() || path.equals(it, ignoreCase = true) || path.startsWith("$it/", ignoreCase = true)
+        }
+        val removed = gone.mapNotNull {
+            it.filePath.takeIf { path -> path !in moved && !path.startsWith("/") && !isUnderUnreadable(path) }
+        }
         for (chunk in removed.chunked(500)) markSongsMissing(now, chunk)
 
         // El archivo ha vuelto a su ruta de siempre: deja de estar perdida.
         for (path in missingSongPaths()) if (path in currentPaths) clearSongMissing(path)
 
         val expired = expiredMissingSongPaths(now - SongEntity.MISSING_GRACE_MS)
+            .filterNot { isUnderUnreadable(it) }
         if (expired.isNotEmpty()) {
             for (chunk in expired.chunked(500)) deleteSongsByPath(chunk)
             pruneOrphanArtists()
@@ -1060,6 +1087,55 @@ abstract class LibraryDao {
         // este escaneo. Sin esto, una BD restaurada cuyas filas ya estaban visibles (o cuya carpeta
         // gris se guardó con otra capitalización: "Music" vs "music") nunca se corregía sola.
         for (folder in excludedGreylistFolderPaths()) setSongsHiddenUnderFolder(folder, hidden = true)
+    }
+
+    /**
+     * Si una carpeta de la lista gris se ha MOVIDO entera, hace que su fila siga a la carpeta nueva
+     * (conservando el switch): sin esto, las canciones reenlazadas a la ruta nueva dejaban de colgar
+     * de la carpeta gris y reaparecían, y la fila quedaba apuntando a una carpeta que ya no existe.
+     *
+     * Una carpeta gris F se considera movida a N solo si: al menos 2 canciones catalogadas colgaban
+     * de ella, [moved] reenlazó al menos el 80% de ellas, TODAS a rutas que conservan su subruta
+     * relativa bajo la misma N, y ninguna fila de F sigue existiendo en F. Así un archivo suelto
+     * movido fuera de una carpeta gris NO arrastra a la carpeta (ese caso sí desoculta la canción).
+     *
+     * @param moved pares (ruta vieja, ruta nueva) de las filas reenlazadas por [reconcile].
+     * @param existingPaths rutas de todas las filas catalogadas antes de este escaneo.
+     * @param currentPaths archivos que hay ahora mismo en las carpetas legibles.
+     * @return true si cambió alguna fila de la lista gris.
+     */
+    private suspend fun migrateMovedGreylistFolders(
+        moved: List<Pair<String, String>>,
+        existingPaths: List<String>,
+        currentPaths: Set<String>
+    ): Boolean {
+        var changed = false
+        val folders = allGreylistFolders()
+        for (folder in folders) {
+            val prefix = "${folder.path}/"
+            val rowsUnder = existingPaths.filter { it.startsWith(prefix, ignoreCase = true) }
+            if (rowsUnder.size < 2 || rowsUnder.any { it in currentPaths }) continue
+            val pairsUnder = moved.filter { (old, _) -> old.startsWith(prefix, ignoreCase = true) }
+            if (pairsUnder.size * 5 < rowsUnder.size * 4) continue
+
+            val newFolders = pairsUnder.map { (old, new) ->
+                val rel = old.substring(prefix.length)
+                if (new.endsWith("/$rel", ignoreCase = true)) new.dropLast(rel.length + 1) else null
+            }.distinct()
+            val target = newFolders.singleOrNull() ?: continue
+            if (target.isEmpty() || target.equals(folder.path, ignoreCase = true)) continue
+
+            val existing = folders.firstOrNull { it.path.equals(target, ignoreCase = true) }
+            deleteGreylistFolder(folder.path)
+            insertGreylistFolder(
+                GreylistFolderEntity(
+                    path = existing?.path ?: target,
+                    excluded = folder.excluded || existing?.excluded == true
+                )
+            )
+            changed = true
+        }
+        return changed
     }
 
     /**

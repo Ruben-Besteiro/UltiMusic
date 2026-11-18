@@ -329,7 +329,10 @@ class MainActivity : AppCompatActivity() {
             .setPositiveButton(R.string.permission_grant) { _, _ ->
                 grantExtraLibraryRoot.launch(SafStorage.internalStorageRootUri())
             }
-            .setNegativeButton(R.string.music_folder_prompt_cancel, null)
+            .setNegativeButton(R.string.music_folder_prompt_cancel) { _, _ ->
+                // "Ahora no": ya no queda nada que decidir, las listas pueden llenarse.
+                lifecycleScope.launch { LibraryRepository.get(this@MainActivity).releaseFirstRunGate() }
+            }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentColor.value)
     }
@@ -394,8 +397,12 @@ class MainActivity : AppCompatActivity() {
 
     private val grantExtraLibraryRoot =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri == null) return@registerForActivityResult
-            lifecycleScope.launch { LibraryRepository.get(this@MainActivity).addLibraryRoot(uri) }
+            lifecycleScope.launch {
+                val repository = LibraryRepository.get(this@MainActivity)
+                // addLibraryRoot ya reconcilia; solo DESPUÉS se abren las listas (ver releaseFirstRunGate).
+                if (uri != null) repository.addLibraryRoot(uri)
+                repository.releaseFirstRunGate()
+            }
         }
 
 
@@ -418,20 +425,15 @@ class MainActivity : AppCompatActivity() {
     /**
      * Al pasar a segundo plano, exportamos una copia visible de la base de datos a
      * ~/UltiMusic/databases (best-effort, prioridad baja). El scope de la app garantiza que
-     * termine aunque la Activity se destruya. También retiramos nuestro interés en el monitor de
-     * cambios del filesystem (ver el recuento de referencias en
-     * [LibraryRepository.startWatchingLibraryChanges]) y guardamos qué estaba sonando: si Android
+     * termine aunque la Activity se destruya. También guardamos qué estaba sonando: si Android
      * mata el proceso mientras la app está en segundo plano (frecuente pasado un rato), sin esto
      * `PlayerViewModel` se recrearía en blanco y la app "olvidaría" la canción, aunque la base de
-     * datos siga intacta. El monitor en sí puede seguir vivo pese a esto: si hay una sesión de
-     * reproducción activa, [com.untar.ultimusic.playback.PlaybackService] también lo tiene pedido, y
-     * no se para hasta que él también lo suelte.
+     * datos siga intacta.
      */
     override fun onStop() {
         super.onStop()
         playerViewModel.savePlaybackState()
         val repository = LibraryRepository.get(this)
-        repository.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.ACTIVITY)
         appScope.launch { repository.exportDatabaseCopy() }
     }
 
@@ -987,7 +989,6 @@ class MainActivity : AppCompatActivity() {
     private fun loadIfPermitted() {
         if (hasStoragePermission()) {
             songsViewModel.loadIfNeeded()
-            LibraryRepository.get(this).startWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.ACTIVITY)
         } else if (!permissionDialogPending) {
             Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
         }

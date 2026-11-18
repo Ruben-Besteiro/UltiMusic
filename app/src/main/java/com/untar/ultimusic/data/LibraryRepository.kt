@@ -72,28 +72,6 @@ class LibraryRepository private constructor(
 ) {
     private val observerScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-    /** Job del reescaneo periódico (ver [startWatchingLibraryChanges]); reemplaza al viejo
-     *  `MusicLibraryObserver` basado en `FileObserver`, que no tiene equivalente sobre un árbol SAF
-     *  (ver [com.untar.ultimusic.util.SafStorage]): SAF no ofrece vigilancia recursiva de cambios, así
-     *  que en vez de enterarse al instante de una canción nueva, se reconcilia sola cada
-     *  [WATCH_INTERVAL_MS] mientras alguien la quiera vigilada. */
-    private var watchJob: Job? = null
-
-    /** Quién puede pedir que el vigilante de la fonoteca esté vivo (ver [startWatchingLibraryChanges]). */
-    enum class LibraryWatchRequester { ACTIVITY, PLAYBACK_SERVICE }
-
-    /**
-     * Qué interesados quieren el vigilante vivo ahora mismo. Un SET, no un contador: `MainActivity`
-     * puede llamar a [startWatchingLibraryChanges] varias veces seguidas con [LibraryWatchRequester.ACTIVITY]
-     * sin haber soltado antes (p. ej. `onResume` y, en la misma ventana `onStart`/`onStop`, el callback
-     * de permisos de almacenamiento), y solo suelta una vez desde `onStop`. Con un contador puro esas
-     * llamadas de más dejarían el vigilante encendido para siempre; con un set, pedirlo dos veces
-     * seguidas con el mismo interesado no hace nada la segunda vez, tal como pasaba con el flag
-     * booleano de antes de que [LibraryWatchRequester.PLAYBACK_SERVICE] necesitara pedirlo también por
-     * su lado.
-     */
-    private val activeWatchRequesters = mutableSetOf<LibraryWatchRequester>()
-
     /**
      * Cómo se comparten los flujos de biblioteca de abajo entre TODOS sus consumidores.
      *
@@ -163,6 +141,19 @@ class LibraryRepository private constructor(
      *  declararse ANTES de [songs]: su inicializador la lee al construir la clase. */
     private val grantEpoch = MutableStateFlow(0)
 
+    /**
+     * "Puerta" del primer arranque: mientras está cerrada, [songs], [albums] y los artistas salen
+     * VACÍOS (y con ellos todo lo que se deriva: géneros, etiquetas...). Se cierra al conceder la
+     * carpeta `UltiMusic` ([grantUltiMusicRoot]) y se abre cuando el usuario termina el segundo
+     * diálogo ("elige tu carpeta de música", ver [releaseFirstRunGate]). Sin esto, una base de datos
+     * restaurada de una copia enseñaba al instante filas de carpetas que aún no se han concedido
+     * (o de archivos que ya no están donde decían) hasta que acababa el primer escaneo.
+     *
+     * Arranca cerrada si el segundo diálogo sigue pendiente (la restauración de la copia reinicia
+     * el proceso entre medias). Debe declararse ANTES de [songs].
+     */
+    private val firstRunGate = MutableStateFlow(SafStorage.isMusicFolderPromptPending(appContext))
+
     /** Canciones persistidas, reactivas: cualquier edición reemite la lista. `distinctUntilChanged`
      *  porque Room reemite ante CUALQUIER escritura en las tablas que lee (aunque el resultado sea el
      *  mismo, p. ej. al registrar una reproducción): así nadie aguas abajo recalcula ni repinta nada
@@ -174,11 +165,12 @@ class LibraryRepository private constructor(
         // absoluta aún sin re-enlazar, la fila existe pero no hay forma de abrir su archivo: mostrarla
         // sería prometer algo que luego falla en silencio. Se repinta sola al cambiar las raíces
         // (tabla library_roots) o al conceder UltiMusic ([grantEpoch]).
-        combine(dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch) { list, _, _ ->
+        combine(dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch, firstRunGate) { list, _, _, gated ->
             refreshSafRegistry()
             val prefixes = readableRootPrefixes()
             lastReadablePrefixes = prefixes.toSet()
-            list.filter { isUnderRoots(it.song.filePath, prefixes) }.map { it.toDomain() }
+            if (gated) emptyList()
+            else list.filter { isUnderRoots(it.song.filePath, prefixes) }.map { it.toDomain() }
         }
             .distinctUntilChanged()
             .shareIn(observerScope, sharing, replay = 1)
@@ -239,18 +231,60 @@ class LibraryRepository private constructor(
     // El `null` de estas llamadas significa "sin filtrar por id": devuelve la lista entera. Con un
     // id concreto, la misma consulta sirve para la ficha de detalle (ver los métodos de abajo).
 
+    // Álbumes, artistas y sus fichas SOLO cuentan canciones que se pueden reproducir (las de [songs]:
+    // bajo una carpeta concedida y legible, ni ocultas por la lista gris ni perdidas). Las consultas
+    // de Room no saben de permisos, así que aquí se descarta lo que no tiene ninguna canción
+    // accesible y se recalculan sus cifras con las que sí. [songs] sale vacía mientras la puerta
+    // del primer arranque ([firstRunGate]) está cerrada, y con ella todo lo de aquí.
+
     val albums: Flow<List<AlbumSummary>> =
-        dao.observeAlbumSummaries(null).map { rows -> rows.map { it.toDomain() } }
+        combine(dao.observeAlbumSummaries(null), songs) { rows, playable ->
+            rows.map { it.toDomain() }.restrictToPlayable(playable)
+        }
             .distinctUntilChanged()
             .shareIn(observerScope, sharing, replay = 1)
+
+    /** Deja solo los álbumes con alguna canción de [playable], con su nº de canciones y duración
+     *  recalculados sobre esas. */
+    private fun List<AlbumSummary>.restrictToPlayable(playable: List<Song>): List<AlbumSummary> {
+        val count = HashMap<Long, Int>()
+        val duration = HashMap<Long, Long>()
+        for (song in playable) {
+            for (albumId in song.albums.map { it.album.id }.distinct()) {
+                count[albumId] = (count[albumId] ?: 0) + 1
+                duration[albumId] = (duration[albumId] ?: 0L) + song.duration
+            }
+        }
+        return mapNotNull { album ->
+            val n = count[album.id] ?: return@mapNotNull null
+            album.copy(songCount = n, totalDuration = duration[album.id] ?: 0L)
+        }
+    }
+
+    /** Gemela de [restrictToPlayable] para artistas (`albumCount` se recalcula aparte, con
+     *  [withAlbumCount], sobre los álbumes ya restringidos). */
+    private fun List<PersonSummary>.restrictArtistsToPlayable(playable: List<Song>): List<PersonSummary> {
+        val count = HashMap<Long, Int>()
+        val duration = HashMap<Long, Long>()
+        for (song in playable) {
+            for (artistId in song.artists.map { it.id }.distinct()) {
+                count[artistId] = (count[artistId] ?: 0) + 1
+                duration[artistId] = (duration[artistId] ?: 0L) + song.duration
+            }
+        }
+        return mapNotNull { artist ->
+            val n = count[artist.id] ?: return@mapNotNull null
+            artist.copy(songCount = n, totalDuration = duration[artist.id] ?: 0L)
+        }
+    }
 
     /** Sin agrupar por "Otros" (ver [artistGrouping]): la lista cruda tal cual la guarda Room, una
      *  fila por artista real. El nº de álbumes se recalcula aquí con el string de artistas de cada
      *  álbum (ver [albumCountsByArtist]), el mismo criterio que el carrusel de su ficha. */
     private val rawArtists: Flow<List<PersonSummary>> =
-        combine(dao.observeArtistSummaries(null), albums) { rows, all ->
+        combine(dao.observeArtistSummaries(null), albums, songs) { rows, all, playable ->
             val counts = albumCountsByArtist(all)
-            rows.map { it.toDomain().withAlbumCount(counts) }
+            rows.map { it.toDomain() }.restrictArtistsToPlayable(playable).map { it.withAlbumCount(counts) }
         }
 
     /**
@@ -554,7 +588,9 @@ class LibraryRepository private constructor(
     // --- Fichas de detalle ---
 
     fun album(id: Long): Flow<AlbumSummary?> =
-        dao.observeAlbumSummaries(id).map { rows -> rows.firstOrNull()?.toDomain() }
+        combine(dao.observeAlbumSummaries(id), songs) { rows, playable ->
+            rows.map { it.toDomain() }.restrictToPlayable(playable).firstOrNull()
+        }
 
     /**
      * Nombres de TODOS los artistas enlazados al álbum, en el orden en que se enlazaron: a
@@ -578,14 +614,19 @@ class LibraryRepository private constructor(
 
     fun artist(id: Long): Flow<PersonSummary?> =
         if (id == PersonSummary.OTHERS_ARTIST_ID) othersArtist
-        else combine(dao.observeArtistSummaries(id), albums) { rows, all ->
-            rows.firstOrNull()?.toDomain()?.withAlbumCount(albumCountsByArtist(all))
+        else combine(dao.observeArtistSummaries(id), albums, songs) { rows, all, playable ->
+            val counts = albumCountsByArtist(all)
+            rows.map { it.toDomain() }.restrictArtistsToPlayable(playable).firstOrNull()?.withAlbumCount(counts)
         }
 
     /** Canciones de un álbum, ya ordenadas por número de pista (y de disco) DENTRO de ese álbum: ver
-     * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]. */
+     * [com.untar.ultimusic.data.db.entities.SongAlbumCrossRef]. Solo las que se pueden reproducir
+     * (ver [songs]). */
     fun albumTracks(albumId: Long): Flow<List<Song>> =
-        dao.observeSongsOfAlbum(albumId).map { list -> list.map { it.toDomain() } }
+        combine(dao.observeSongsOfAlbum(albumId), songs) { list, playable ->
+            val ids = playable.mapTo(HashSet(playable.size)) { it.id }
+            list.map { it.toDomain() }.filter { it.id in ids }
+        }
 
     /**
      * Canciones de un artista. Para "Otros" ([PersonSummary.OTHERS_ARTIST_ID]) no hay ninguna
@@ -606,7 +647,10 @@ class LibraryRepository private constructor(
                     .sortedBy { it.title.lowercase() }
             }.flowOn(Dispatchers.Default)
         } else {
-            dao.observeSongsOfArtist(id).map { list -> list.map { it.toDomain() } }
+            combine(dao.observeSongsOfArtist(id), songs) { list, playable ->
+                val ids = playable.mapTo(HashSet(playable.size)) { it.id }
+                list.map { it.toDomain() }.filter { it.id in ids }
+            }
         }
 
     /**
@@ -678,7 +722,7 @@ class LibraryRepository private constructor(
     }
 
     /** Solo una reconciliación de verdad a la vez: [reconcile] la puede disparar
-     *  [startWatchingLibraryChanges] (el vigilante periódico), [SongsViewModel][com.untar.ultimusic.ui.SongsViewModel]
+     *  [SongsViewModel][com.untar.ultimusic.ui.SongsViewModel]
      *  (al abrir/reintentar), o añadir/quitar/conceder una carpeta raíz, todos ellos de forma
      *  independiente: sin serializarlos, dos reconciliaciones a la vez leerían y escribirían la misma
      *  foto de "qué hay catalogado" y podrían pisarse (una da por buena una baja que la otra ya había
@@ -720,13 +764,15 @@ class LibraryRepository private constructor(
         observerScope.launch {
             reconcileMutex.withLock {
                 refreshSafRegistry()
-                // Si alguna carpeta concedida no se puede leer ahora mismo (permiso revocado desde
-                // Ajustes del sistema, tarjeta desmontada...), el escaneo la vería vacía y sus
-                // canciones catalogadas parecerían haber desaparecido. En vez de arriesgarse a que
-                // LibraryDao.reconcile las dé de baja por un problema pasajero de la carpeta, se
-                // salta esta reconciliación entera: la fonoteca se queda tal cual hasta que vuelva a
-                // ser legible. Ver MusicScanner.libraryFolderReadable.
-                if (!MusicScanner.libraryFolderReadable(appContext)) return@withLock
+                // Una carpeta registrada que no se puede leer ahora mismo (permiso revocado desde
+                // Ajustes del sistema, tarjeta desmontada, BD restaurada tras reinstalar...) se vería
+                // vacía y sus canciones parecerían haber desaparecido. Por eso el escaneo se salta
+                // esas carpetas y LibraryDao.reconcile no da de baja ninguna fila que cuelgue de
+                // ellas ([unreadable]); pero las carpetas LEGIBLES sí se escanean, para que un
+                // archivo movido a una de ellas se reenlace aunque la carpeta de origen ya no sea
+                // accesible. Solo si no hay NINGUNA legible no se hace nada. Ver
+                // MusicScanner.unreadableRootPrefixes.
+                val unreadable = MusicScanner.unreadableRootPrefixes(appContext) ?: return@withLock
                 _reconciling.value = true
                 _reconcileProgress.value = 0
                 try {
@@ -735,7 +781,7 @@ class LibraryRepository private constructor(
                         _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
                         onProgress(current, total)
                     }
-                    dao.reconcile(result.newSongs, result.currentPaths, result.currentSizes)
+                    dao.reconcile(result.newSongs, result.currentPaths, result.currentSizes, unreadable)
                 } finally {
                     _reconciling.value = false
                 }
@@ -888,48 +934,6 @@ class LibraryRepository private constructor(
         dao.setArtistYoutubeChannels(resolved)
     }
 
-    /**
-     * Arranca el reescaneo periódico si aún no lo estaba para [requester]. `MainActivity` (mientras
-     * está en primer plano) y [com.untar.ultimusic.playback.PlaybackService] (mientras hay sesión de
-     * reproducción activa) lo piden cada uno por su lado, y ninguno sabe si el otro también lo quiere
-     * vivo. Cada [requester] que llame aquí debe soltar luego con [stopWatchingLibraryChanges]: solo
-     * se para de verdad cuando el último interesado se da de baja, para no perder cambios de la
-     * fonoteca mientras a alguien todavía le importan (p. ej. la Activity pasa a segundo plano pero
-     * sigue sonando música).
-     *
-     * A diferencia del viejo `MusicLibraryObserver` (`FileObserver`, instantáneo), esto reconcilia
-     * cada [WATCH_INTERVAL_MS] sin más: SAF no tiene forma de avisar de cambios en un árbol concedido,
-     * así que una canción nueva puede tardar hasta ese intervalo en aparecer en vez de al instante
-     * (decisión ya aceptada al migrar a Storage Access Framework).
-     *
-     * La primera vuelta NO reconcilia al momento: quien llama a esto (`MainActivity.loadIfPermitted`)
-     * también llama a `SongsViewModel.loadIfNeeded` casi a la vez, que ya hace su propia
-     * reconciliación de arranque con progreso visible en la pantalla de Canciones (ver
-     * `SongsFragment`/`updating_database_percent`). Si esta reconciliación en segundo plano
-     * arrancara YA, correría en paralelo con esa -duplicando el escaneo completo de la fonoteca, y
-     * de paso dejando la pantalla sin el aviso de progreso mientras la de aquí seguía trabajando sin
-     * que nadie la viera-, así que espera a [WATCH_INTERVAL_MS] antes de su primera pasada.
-     */
-    fun startWatchingLibraryChanges(requester: LibraryWatchRequester) {
-        if (!activeWatchRequesters.add(requester)) return // este interesado ya lo tenía pedido
-        if (activeWatchRequesters.size > 1) return // ya lo tenía pedido algún otro interesado
-
-        watchJob = observerScope.launch {
-            while (true) {
-                delay(WATCH_INTERVAL_MS)
-                reconcile()
-            }
-        }
-    }
-
-    /** Contraparte de [startWatchingLibraryChanges]: ver su doc para el reparto entre interesados. */
-    fun stopWatchingLibraryChanges(requester: LibraryWatchRequester) {
-        if (!activeWatchRequesters.remove(requester)) return
-        if (activeWatchRequesters.isNotEmpty()) return
-        watchJob?.cancel()
-        watchJob = null
-    }
-
     // --- Lista gris ---
     //
     // Ninguno de estos tres llama a [reconcile]: activar/desactivar/quitar una subcarpeta es un
@@ -1038,6 +1042,7 @@ class LibraryRepository private constructor(
      */
     suspend fun grantUltiMusicRoot(treeUri: Uri): Boolean = observerScope.async {
         decisionInProgress = true
+        firstRunGate.value = true   // ver [firstRunGate]; la abre [releaseFirstRunGate]
         try {
             SafStorage.setUltiMusicTreeUri(appContext, treeUri)
             refreshSafRegistry()
@@ -1056,6 +1061,21 @@ class LibraryRepository private constructor(
             decisionInProgress = false
         }
     }.await()
+
+    /**
+     * Abre la puerta del primer arranque (ver [firstRunGate]): el usuario ha cerrado el segundo
+     * diálogo (carpeta concedida, o "ahora no"). Espera antes a que termine el escaneo en curso, si
+     * lo hay, para que las listas se llenen ya con filas verificadas contra el disco. Idempotente.
+     */
+    suspend fun releaseFirstRunGate() {
+        if (!firstRunGate.value) return
+        // Todo en observerScope: si la Activity se destruye al volver del selector de carpeta, la
+        // puerta no puede quedarse cerrada por una cancelación.
+        observerScope.async {
+            reconcileMutex.withLock { }
+            firstRunGate.value = false
+        }.await()
+    }
 
     /**
      * ¿Es la copia de `UltiMusic/databases/` más rica (más filas en total) que la BD interna? Si
@@ -1554,10 +1574,6 @@ class LibraryRepository private constructor(
     companion object {
         /** Mínimo de canciones de "Descargada recientemente", aunque sean de hace más de un mes. */
         private const val RECENTLY_ADDED_MIN = 20
-
-        /** Cada cuánto reconcilia [startWatchingLibraryChanges] mientras la app está en primer plano
-         *  (ver su doc: sustituye al `FileObserver` instantáneo de antes de la migración a SAF). */
-        private const val WATCH_INTERVAL_MS = 3 * 60 * 1000L
 
         /** true mientras [grantUltiMusicRoot] decide entre BD interna y copia: no se exporta. */
         @Volatile
