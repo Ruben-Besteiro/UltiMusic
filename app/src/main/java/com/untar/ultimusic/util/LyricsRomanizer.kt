@@ -29,7 +29,7 @@ object LyricsRomanizer {
     // V3: añadir KATAKANA y BOPOMOFO (y descomentar el resto de bloques marcados con "V3").
     enum class Target { LATIN /*, KATAKANA, BOPOMOFO*/ }
 
-    private val LATIN_LANGUAGES = setOf("es", "en", "fr", "de", "it", "pt", "tr", "vi", "in", "id", "fil", "tl")
+    private val LATIN_LANGUAGES = setOf("es", "en", "fr", "de", "it", "pt", "tr", "vi", "in", "id", "fil", "tl", "nl", "pl", "sr", "sw")
 
     /** Destino según el idioma de la app, o null si en ese idioma el botón no tiene sentido. */
     fun targetFor(language: String = Locale.getDefault().language): Target? = when (language) {

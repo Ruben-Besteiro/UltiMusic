@@ -7,7 +7,7 @@ import com.untar.ultimusic.R
 import java.util.Locale
 
 /**
- * Idioma de la aplicación: uno de los 20 de [LANGUAGES], elegido a mano desde Ajustes (ver
+ * Idioma de la aplicación: uno de los 25 de [LANGUAGES], elegido a mano desde Ajustes (ver
  * [com.untar.ultimusic.ui.settings.SettingsDialogFragment]) con la cuadrícula de banderas, o -la
  * primera vez que se abre la aplicación- deducido del idioma del sistema.
  *
@@ -36,16 +36,25 @@ object AppLocale {
         fun matches(language: String?): Boolean = language == tag || language in aliases
     }
 
-    /** En este orden se pintan en la cuadrícula de Ajustes (5 columnas x 4 filas). */
+    /**
+     * En este orden se pintan en la cuadrícula de Ajustes (5 columnas x 5 filas). El serbocroata va
+     * en alfabeto latino: su carpeta es `values-b+sr+Latn` y el idioma que devuelve Java es "sr". El
+     * hebreo es "he" para BCP-47 pero Java/Android pueden devolver el antiguo "iw".
+     */
     val LANGUAGES: List<Language> = listOf(
         Language("es", "Español", R.drawable.flag_spain),
         Language("pt", "Português", R.drawable.flag_portugal),
-        Language("en", "English", R.drawable.flag_britain),
         Language("fr", "Français", R.drawable.flag_france),
-        Language("de", "Deutsch", R.drawable.flag_germany),
         Language("it", "Italiano", R.drawable.flag_italy),
+        Language("en", "English", R.drawable.flag_britain),
+        Language("de", "Deutsch", R.drawable.flag_germany),
+        Language("nl", "Nederlands", R.drawable.flag_netherlands),
+        Language("pl", "Polski", R.drawable.flag_poland),
+        Language("sr-Latn", "Srpskohrvatski", R.drawable.flag_yugoslavia, aliases = setOf("sr", "sh", "hr", "bs")),
         Language("ru", "Русский", R.drawable.flag_russia),
         Language("tr", "Türkçe", R.drawable.flag_turkey),
+        Language("sw", "Kiswahili", R.drawable.flag_tanzania),
+        Language("he", "עברית", R.drawable.flag_israel, aliases = setOf("iw")),
         Language("ar", "العربية", R.drawable.flag_arabia),
         Language("fa", "فارسی", R.drawable.flag_iran),
         Language("ur", "اردو", R.drawable.flag_pakistan),

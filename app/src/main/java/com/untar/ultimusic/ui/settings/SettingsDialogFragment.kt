@@ -315,7 +315,7 @@ class SettingsDialogFragment : DialogFragment() {
     }
 
     /**
-     * La cuadrícula de banderas del selector de idioma (ver [AppLocale]): 5 columnas x 4 filas, en el
+     * La cuadrícula de banderas del selector de idioma (ver [AppLocale]): 5 columnas x 5 filas, en el
      * orden de [AppLocale.LANGUAGES]. Tocar una cambia el idioma de toda la aplicación al instante
      * -[AppLocale.select] recrea sola cualquier Activity viva- y mueve el borde marcado a la bandera
      * recién elegida. Tocar la que ya está seleccionada no hace nada.

@@ -535,7 +535,7 @@
                 android:textColor="@color/um_on_surface_muted"
                 android:textSize="14sp" />
 
-            <!-- Cuadrícula de 5 columnas x 4 filas con las 20 banderas, en el orden de
+            <!-- Cuadrícula de 5 columnas x 5 filas con las 25 banderas, en el orden de
                  AppLocale.LANGUAGES. Se rellena desde SettingsDialogFragment.setupLanguage con
                  item_language_flag.xml. -->
             <GridLayout

@@ -556,7 +556,7 @@
     <string name="settings_boost_device_unknown">No se puede saber si el dispositivo conectado es un altavoz o unos auriculares, así que el límite se mantiene</string>
     <string name="settings_boost_bluetooth_denied">Sin ese permiso, UltiMusic no puede distinguir un altavoz Bluetooth de unos auriculares, así que mantiene el límite</string>
 
-    <!-- Idioma (primer ajuste del grupo "Ajustes visuales"): cuadrícula de 20 banderas que cambian
+    <!-- Idioma (primer ajuste del grupo "Ajustes visuales"): cuadrícula de 25 banderas que cambian
          el idioma de toda la aplicación al instante (ver AppLocale y
          SettingsDialogFragment.setupLanguage). Por defecto se elige el idioma del sistema si está
          soportado, e inglés si no. El nombre de cada idioma (contentDescription de su bandera) va

@@ -1,5 +1,5 @@
 """
-Traduce automáticamente los strings de UltiMusic a los 19 idiomas que no son el español.
+Traduce automáticamente los strings de UltiMusic a los 24 idiomas que no son el español.
 
 La fuente de verdad es `app/src/main/res/values/strings.xml` (español). Este script compara ese
 archivo con la copia que guardó la última vez (`tools/strings_snapshot.xml`) y:
@@ -64,6 +64,12 @@ LOCALES: dict[str, tuple[str, list[str]]] = {
     "fr": ("francés", ["one", "many", "other"]),
     "de": ("alemán", ["one", "other"]),
     "it": ("italiano", ["one", "many", "other"]),
+    "nl": ("holandés (neerlandés)", ["one", "other"]),
+    "pl": ("polaco", ["one", "few", "many", "other"]),
+    "b+sr+Latn": ("serbocroata (variedad común serbio/croata), escrito SOLO en alfabeto latino, "
+                  "nunca en cirílico", ["one", "few", "other"]),
+    "sw": ("suajili", ["one", "other"]),
+    "iw": ("hebreo", ["one", "two", "other"]),
     "ru": ("ruso", ["one", "few", "many", "other"]),
     "tr": ("turco", ["one", "other"]),
     "ar": ("árabe estándar moderno", ["zero", "one", "two", "few", "many", "other"]),
