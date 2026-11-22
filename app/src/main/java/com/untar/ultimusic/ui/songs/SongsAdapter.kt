@@ -95,7 +95,7 @@ class SongsAdapter(
     /** Ids de las canciones marcadas; no vacío = selección múltiple activa (ver [SongsFragment]). */
     private var selectedIds: Set<Long> = emptySet()
 
-    private var accentColor: Int = 0xFFFFD000.toInt()
+    private var accentColor: Int = 0xFFFBC10E.toInt()
 
     /** Ver [setTags]: de dónde sacar las etiquetas de la tercera línea de cada fila. */
     private var tagsById: Map<Long, List<TagSummary>> = emptyMap()
