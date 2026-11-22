@@ -137,7 +137,7 @@ class MainActivity : AppCompatActivity() {
      * no suena nada) sin llamar a `ContextCompat` aquí porque este campo se inicializa antes de que
      * la Activity tenga Context (a diferencia de [mutedTabColor], que usa `by lazy`).
      */
-    private var currentAccentColor: Int = 0xFFFFD000.toInt()
+    private var currentAccentColor: Int = 0xFFFBC10E.toInt()
 
     /** Scope de proceso para tareas best-effort que deben sobrevivir a la Activity (exportar la BD). */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

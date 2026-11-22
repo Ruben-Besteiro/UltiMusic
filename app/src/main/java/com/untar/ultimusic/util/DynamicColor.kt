@@ -47,7 +47,7 @@ object DynamicColor {
      * tienen un `Context` a mano (los campos `accent` de los adaptadores, por ejemplo). Si se cambia
      * el amarillo de la app hay que cambiarlo en los dos sitios.
      */
-    const val DEFAULT = 0xFFFFD000.toInt()
+    const val DEFAULT = 0xFFFBC10E.toInt()
 
     /**
      * Para una carátula sin color real (blanco y negro o casi): más claro que el fondo negro de la

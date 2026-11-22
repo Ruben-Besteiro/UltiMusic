@@ -72,7 +72,7 @@ class CollectionSongsAdapter(
     /** Ids de las canciones marcadas; no vacío = selección múltiple activa. */
     private var selectedIds: Set<Long> = emptySet()
 
-    private var accentColor: Int = 0xFFFFD000.toInt()
+    private var accentColor: Int = 0xFFFBC10E.toInt()
 
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>) {
