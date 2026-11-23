@@ -47,6 +47,7 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.SuggestionKind
 import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.ArtistSplitter
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.CoverRef
@@ -139,6 +140,7 @@ class AlbumEditorDialogFragment : DialogFragment() {
 
         val textFields = mutableListOf<TextInputLayout>()
         collectTextInputLayouts(view, textFields)
+        ArtistSplitter.fillHelperTexts(requireContext(), textFields)
         val editTexts = mutableListOf<EditText>()
         collectEditTexts(view, editTexts)
         editTexts.forEach { field ->
@@ -320,9 +322,9 @@ class AlbumEditorDialogFragment : DialogFragment() {
         }
 
         inputTitle.setText(album.title)
-        inputArtists.setText(artistNames.joinToString(SEPARATOR), false)
+        inputArtists.setText(ArtistSplitter.join(artistNames), false)
         inputYear.setText(album.year?.toString().orEmpty())
-        inputGenres.setText(album.genres.joinToString(SEPARATOR))
+        inputGenres.setText(ArtistSplitter.join(album.genres))
 
         isFillingForm = false
     }
@@ -360,9 +362,10 @@ class AlbumEditorDialogFragment : DialogFragment() {
         val title = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_TITLE).orEmpty()
         if (title.isNotEmpty()) inputTitle.setText(title)
 
+        // Llega unida por comas (formato interno), no con los separadores del usuario.
         val artists = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_ARTIST).orEmpty()
-            .split(SEPARATOR_CHAR).map { it.trim() }.filter { it.isNotEmpty() }
-        if (artists.isNotEmpty()) inputArtists.setText(artists.joinToString(SEPARATOR), false)
+            .split(',').map { it.trim() }.filter { it.isNotEmpty() }
+        if (artists.isNotEmpty()) inputArtists.setText(ArtistSplitter.join(artists), false)
 
         val genres = bundle.getString(MetadataSuggestionsDialogFragment.RESULT_GENRES).orEmpty()
         if (genres.isNotEmpty()) inputGenres.setText(genres)
@@ -433,8 +436,8 @@ class AlbumEditorDialogFragment : DialogFragment() {
         field.setSimpleItems(names.toTypedArray())
         field.setOnItemClickListener { parent, _, position, _ ->
             val chosen = parent.getItemAtPosition(position).toString()
-            val prefix = (field.tag as? String).orEmpty().substringBeforeLast(SEPARATOR_CHAR, "")
-            val merged = if (prefix.isBlank()) chosen else "${prefix.trim()}$SEPARATOR$chosen"
+            val prefix = ArtistSplitter.prefixBeforeLast((field.tag as? String).orEmpty())
+            val merged = if (prefix.isBlank()) chosen else "${prefix.trim()}${ArtistSplitter.joiner()}$chosen"
             field.setText(merged, false)
             field.setSelection(merged.length)
         }
@@ -444,8 +447,6 @@ class AlbumEditorDialogFragment : DialogFragment() {
     companion object {
         private const val ARG_ALBUM_ID = "albumId"
         private const val TAG_SUGGESTIONS = "metadata_suggestions"
-        private const val SEPARATOR = ", "
-        private const val SEPARATOR_CHAR = ','
 
         fun newInstance(albumId: Long): AlbumEditorDialogFragment =
             AlbumEditorDialogFragment().apply {
@@ -456,8 +457,7 @@ class AlbumEditorDialogFragment : DialogFragment() {
 
 private fun EditText.intOrNull(): Int? = text.toString().trim().toIntOrNull()
 
-private fun EditText.splitValues(): List<String> =
-    text.toString().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+private fun EditText.splitValues(): List<String> = ArtistSplitter.split(text.toString())
 
 /** Avisa con el texto que había JUSTO ANTES de cada cambio (`beforeTextChanged`). Ver
  * [MetadataEditorDialogFragment.addPreviousTextTracker]: mismo truco, mismo motivo. */

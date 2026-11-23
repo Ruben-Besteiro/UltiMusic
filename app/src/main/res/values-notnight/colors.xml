@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tema claro (Ajustes > Tema > Claro, o "Sistema" con el móvil en modo claro). Solo se sobrescriben
+  los colores neutros del esquema: fondos, superficies, texto y divisores. El acento (um_yellow y
+  sus tonos) es el mismo en los dos temas. Primer pase: pendiente de revisar en el móvil.
+-->
+<resources>
+    <color name="um_ripple_white">#1F000000</color>
+    <color name="um_background">#FFF2F2F2</color>
+    <color name="um_surface">#FFFFFFFF</color>
+    <color name="um_surface_variant">#FFE6E6E6</color>
+    <color name="um_sql_toggle_bg">#FFD6D6D6</color>
+    <color name="um_on_background">#FF141414</color>
+    <color name="um_on_surface_muted">#FF5C5C5C</color>
+    <color name="um_divider">#FFCCCCCC</color>
+</resources>

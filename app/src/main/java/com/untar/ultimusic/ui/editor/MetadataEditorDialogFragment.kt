@@ -60,6 +60,7 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.player.VideoPickerDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.ArtistSplitter
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
@@ -301,6 +302,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         setupOffsetControls(lyricsOffsetRuler, lyricsOffsetValue)
 
         collectTextInputLayouts(view, textFields)
+        ArtistSplitter.fillHelperTexts(requireContext(), textFields)
         collectEditTexts(view, editTexts)
         editTexts.forEach { field -> wireFieldDirtyTracking(field) }
 
@@ -889,10 +891,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputTitle.setText(song.title)
         // El segundo parámetro (`filter = false`) evita que rellenar el campo abra el desplegable.
         inputAlbum.setText(song.album?.title.orEmpty(), false)
-        inputArtists.setText(song.artists.joinToString(SEPARATOR) { it.name }, false)
-        inputProducers.setText(song.producers.joinToString(SEPARATOR) { it.name }, false)
+        inputArtists.setText(song.artists.joinToString(ArtistSplitter.joiner()) { it.name }, false)
+        inputProducers.setText(song.producers.joinToString(ArtistSplitter.joiner()) { it.name }, false)
         inputYear.setText(song.year?.toString().orEmpty())
-        inputGenres.setText(song.genres.joinToString(SEPARATOR))
+        inputGenres.setText(song.genres.joinToString(ArtistSplitter.joiner()))
         inputTrackNumber.setText(song.trackNumber?.toString().orEmpty())
         inputDiscNumber.setText(song.discNumber?.toString().orEmpty())
         // El primero de song.albums ya está en los campos fijos de arriba (song.album/trackNumber/
@@ -954,10 +956,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
         fillMultiField(inputTitle, songs.map { it.title })
         fillMultiField(inputAlbum, songs.map { it.album?.title.orEmpty() })
-        fillMultiField(inputArtists, songs.map { it.artists.joinToString(SEPARATOR) { a -> a.name } })
-        fillMultiField(inputProducers, songs.map { it.producers.joinToString(SEPARATOR) { p -> p.name } })
+        fillMultiField(inputArtists, songs.map { it.artists.joinToString(ArtistSplitter.joiner()) { a -> a.name } })
+        fillMultiField(inputProducers, songs.map { it.producers.joinToString(ArtistSplitter.joiner()) { p -> p.name } })
         fillMultiField(inputYear, songs.map { it.year?.toString().orEmpty() })
-        fillMultiField(inputGenres, songs.map { it.genres.joinToString(SEPARATOR) })
+        fillMultiField(inputGenres, songs.map { it.genres.joinToString(ArtistSplitter.joiner()) })
         fillMultiField(inputTrackNumber, songs.map { it.trackNumber?.toString().orEmpty() })
         fillMultiField(inputDiscNumber, songs.map { it.discNumber?.toString().orEmpty() })
         fillMultiField(inputLyrics, songs.map { it.lyrics.orEmpty() })
@@ -1207,9 +1209,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
      * fuente no sabía de ese campo, que no es lo mismo que decir que está vacío. Es el mismo
      * criterio para los dos porque, como dice el proyecto, artistas y productores se tratan igual. */
     private fun replaceValues(field: MaterialAutoCompleteTextView, incoming: String) {
-        val values = incoming.split(SEPARATOR_CHAR).map { it.trim() }.filter { it.isNotEmpty() }
+        // La sugerencia llega unida por comas (formato interno), no con los separadores del usuario.
+        val values = incoming.split(',').map { it.trim() }.filter { it.isNotEmpty() }
         if (values.isEmpty()) return
-        field.setText(values.joinToString(SEPARATOR), false)
+        field.setText(ArtistSplitter.join(values), false)
     }
 
     private fun save() {
@@ -1276,8 +1279,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
         field.setSimpleItems(names.toTypedArray())
         field.setOnItemClickListener { parent, _, position, _ ->
             val chosen = parent.getItemAtPosition(position).toString()
-            val prefix = (field.tag as? String).orEmpty().substringBeforeLast(SEPARATOR_CHAR, "")
-            val merged = if (prefix.isBlank()) chosen else "${prefix.trim()}$SEPARATOR$chosen"
+            val prefix = ArtistSplitter.prefixBeforeLast((field.tag as? String).orEmpty())
+            val merged = if (prefix.isBlank()) chosen else "${prefix.trim()}${ArtistSplitter.joiner()}$chosen"
             field.setText(merged, false)
             field.setSelection(merged.length)
         }
@@ -1291,8 +1294,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         private const val TAG_VIDEO_PICKER = "video_picker"
         private const val TAG_SUGGESTIONS = "metadata_suggestions"
         private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
-        private const val SEPARATOR = ", "
-        private const val SEPARATOR_CHAR = ','
 
         /**
          * Tope del desplazamiento (vídeo/audio o letra/audio), en cada sentido. Como el del
@@ -1328,9 +1329,8 @@ private fun EditText.textOrNull(): String? = text.toString().trim().takeIf { it.
 
 private fun EditText.intOrNull(): Int? = text.toString().trim().toIntOrNull()
 
-/** Parte un campo multivalor por comas, quitando espacios y trozos vacíos. */
-private fun EditText.splitValues(): List<String> =
-    text.toString().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+/** Parte un campo multivalor por los separadores de Ajustes (ver [ArtistSplitter]). */
+private fun EditText.splitValues(): List<String> = ArtistSplitter.split(text.toString())
 
 /**
  * Avisa con el texto que había JUSTO ANTES de cada cambio (`beforeTextChanged`). Un [TextWatcher]

@@ -329,7 +329,7 @@
 
     <string name="section_details">Detalles</string>
     <string name="section_original">Grabación original (remix)</string>
-    <string name="multi_value_hint">Separa varios valores con comas</string>
+    <string name="multi_value_hint">Separa varios valores con %1$s</string>
 
     <!-- Mini-reproductor -->
     <string name="expand_player">Expandir reproductor</string>
@@ -585,6 +585,40 @@
 
     <!-- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) -->
     <string name="settings_artist_grouping_title">Agrupar artistas con N canciones o menos</string>
+
+    <!-- Actualizar fonoteca (Ajustes auditivos, bajo las carpetas) -->
+    <string name="settings_refresh_library">Actualizar fonoteca</string>
+    <string name="settings_refresh_library_progress">Actualizando fonoteca… %1$d %%</string>
+
+    <!-- Temporizador de apagado (ver SleepTimerPreferences) -->
+    <string name="settings_sleep_timer_title">Temporizador de apagado</string>
+    <string name="settings_sleep_timer_subtitle">Pausa automáticamente tras N minutos si el valor es distinto de 0. Ideal si escuchas música para dormir</string>
+    <string name="settings_sleep_timer_unit">min</string>
+
+    <!-- Imagen de fondo -->
+    <string name="settings_background_title">Imagen de fondo</string>
+    <string name="settings_background_option_desc">Imagen de fondo %1$d</string>
+    <string name="settings_background_placeholder_desc">Próximamente</string>
+
+    <!-- Tema (ver ThemePreferences) -->
+    <string name="settings_theme_title">Tema</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Oscuro</string>
+
+    <!-- Color dinámico (ver DynamicColorPreferences) -->
+    <string name="settings_dynamic_color_title">Color dinámico</string>
+    <string name="settings_dynamic_color_subtitle">No recomendado para dispositivos de gama baja. Si lo desactivas, el dorado de UltiMusic se usará siempre</string>
+
+    <!-- Ajustes adicionales -->
+    <string name="settings_keep_screen_on_title">Mantener dispositivo encendido en el UltiMusicPod</string>
+    <string name="settings_min_duration_title">Duración mínima de canción (segundos)</string>
+    <string name="settings_artist_separators_title">Separadores de artistas</string>
+    <string name="settings_artist_separators_add_hint">Nuevo separador</string>
+    <string name="settings_artist_separators_add">Añadir</string>
+    <string name="settings_artist_separators_invalid">El separador no puede estar vacío, contener espacios ni estar repetido</string>
+    <string name="settings_artist_separators_last">Tiene que quedar al menos un separador</string>
+    <string name="settings_artist_separators_remove_desc">Quitar separador %1$s</string>
 
     <!-- Ecualizador -->
     <string name="settings_eq_title">Ecualizador</string>

@@ -1070,6 +1070,11 @@ class IPodDialogFragment : DialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Ajustes > Mantener pantalla encendida en el UltiMusicPod. keepScreenOn de la vista
+                // (y no un flag de ventana) se apaga solo en cuanto el iPod deja de verse.
+                launch {
+                    com.untar.ultimusic.data.KeepScreenOnPreferences.enabled.collect { requireView().keepScreenOn = it }
+                }
                 launch {
                     // El título, la carátula y el resto de info reflejan siempre lo que suena de
                     // verdad, esté o no la ventana en modo navegación de una lista: nunca se debe

@@ -17,6 +17,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
@@ -28,8 +29,10 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.DynamicColorPreferences
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.LyricsAutoFetcher
+import com.untar.ultimusic.data.SleepTimerPreferences
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.EqBand
@@ -58,6 +61,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -446,6 +451,11 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             library.songs.collect { librarySongsPool.value = it }
         }
+        // Al encender/apagar el color dinámico en Ajustes, el acento de lo que suena cambia ya.
+        serviceScope.launch {
+            DynamicColorPreferences.enabled.drop(1).collect { _currentSong.value?.let(::updateAccent) }
+        }
+        startSleepTimerWatcher()
         restorePlaybackState()
 
         mediaSession = MediaSession.Builder(this, QueueAwarePlayer(player))
@@ -1238,6 +1248,37 @@ class PlaybackService : MediaSessionService() {
             player.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong())
         }
     }
+
+    /**
+     * Temporizador de apagado (ver [SleepTimerPreferences]): con un valor distinto de 0, la cuenta
+     * empieza al ponerse a sonar y, al acabar, pausa. Una pausa manual NO la cancela (si se reanuda
+     * de madrugada, sigue queriendo apagarse); al vencer se reinicia y vuelve a empezar con la
+     * siguiente reproducción. Cambiar el número en Ajustes la reinicia, y 0 la cancela.
+     *
+     * `collectLatest` sobre (minutos, sonando) hace todo eso solo: un cambio de minutos cancela la
+     * cuenta en curso, y `sleepTimerDeadline` conserva el plazo entre pausas y reanudaciones.
+     */
+    private fun startSleepTimerWatcher() {
+        serviceScope.launch {
+            SleepTimerPreferences.minutes.collectLatest { minutes ->
+                sleepTimerDeadline = 0L
+                if (minutes <= 0) return@collectLatest
+                _isPlaying.collectLatest inner@{ playing ->
+                    if (!playing && sleepTimerDeadline == 0L) return@inner
+                    if (sleepTimerDeadline == 0L) {
+                        sleepTimerDeadline = SystemClock.elapsedRealtime() + minutes * 60_000L
+                    }
+                    val remaining = sleepTimerDeadline - SystemClock.elapsedRealtime()
+                    if (remaining > 0) delay(remaining)
+                    sleepTimerDeadline = 0L
+                    if (player.isPlaying) player.pause()
+                }
+            }
+        }
+    }
+
+    /** Momento (`elapsedRealtime`) en que vence el temporizador de apagado, o 0 si no hay cuenta. */
+    private var sleepTimerDeadline = 0L
 
     fun togglePlayPause() = withQueue {
         if (_currentSong.value == null) return@withQueue

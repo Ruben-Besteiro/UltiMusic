@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Una miniatura del selector de imagen de fondo de Ajustes (ver BackgroundPickerAdapter): relación
+  de aspecto 1:2 (vertical, como la pantalla). El borde de selección lo tiñe el fragmento con el
+  color dinámico, igual que el de las banderas del idioma.
+-->
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="@dimen/background_option_width"
+    android:layout_height="wrap_content"
+    android:layout_marginEnd="12dp">
+
+    <FrameLayout
+        android:id="@+id/backgroundOptionFrame"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:background="@color/um_divider"
+        android:padding="3dp"
+        app:layout_constraintDimensionRatio="1:2"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <ImageView
+            android:id="@+id/backgroundOptionImage"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@color/um_divider"
+            android:importantForAccessibility="no"
+            android:scaleType="centerCrop" />
+
+    </FrameLayout>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

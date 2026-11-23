@@ -10,6 +10,7 @@ import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.untar.ultimusic.data.DynamicColorPreferences
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -65,6 +66,8 @@ object DynamicColor {
      * puede ir en el hilo principal; se llama desde el `viewModelScope`.
      */
     suspend fun fromCover(context: Context, data: Any): Int = withContext(Dispatchers.IO) {
+        // Color dinámico apagado en Ajustes: amarillo fijo y ni se decodifica la carátula.
+        if (!DynamicColorPreferences.enabled.value) return@withContext DEFAULT
         val key = cacheKey(context, data)
         key?.let { cache[it] }?.let { return@withContext it }
 

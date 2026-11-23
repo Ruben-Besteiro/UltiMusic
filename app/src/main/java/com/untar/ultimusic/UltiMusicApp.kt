@@ -3,6 +3,7 @@ package com.untar.ultimusic
 import android.app.Application
 import com.untar.ultimusic.data.ArtistGroupingPreferences
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.SettingsPreferences
 import com.untar.ultimusic.data.SortPreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.data.remote.ApiCache
@@ -54,6 +55,8 @@ class UltiMusicApp : Application() {
         YouTubeStatsRefresh.init(this)
         SortPreferences.init(this)
         ArtistGroupingPreferences.init(this)
+        // Aplica también el tema claro/oscuro guardado (ver ThemePreferences) antes de la primera Activity.
+        SettingsPreferences.init(this)
         PlaylistResumeStore.init(this)
         PlaylistHistoryStore.init(this)
         PlaylistShuffleStore.init(this)

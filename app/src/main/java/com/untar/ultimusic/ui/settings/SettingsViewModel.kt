@@ -11,6 +11,7 @@ import com.untar.ultimusic.model.LibraryRoot
 import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -108,5 +109,23 @@ class SettingsViewModel(app: Application) : AndroidViewModel(app) {
      *  es el mismo `StateFlow` que consulta, no hace falta recargar nada aquí. */
     fun setArtistGroupingThreshold(value: Int) {
         ArtistGroupingPreferences.set(value)
+    }
+
+    // --- Actualizar fonoteca ---
+
+    /** Progreso 0-100 mientras hay una reconciliación en marcha (la dispare quien la dispare), o
+     *  null si no hay ninguna. */
+    val refreshProgress: StateFlow<Int?> =
+        combine(repository.reconciling, repository.reconcileProgress) { running, progress ->
+            if (running) progress else null
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    /** Reescanea las carpetas y actualiza la BD, igual que al abrir la app (ver
+     *  `SongsViewModel.reload`). [LibraryRepository.reconcile] ya sigue aunque se cierre Ajustes. */
+    fun refreshLibrary() {
+        viewModelScope.launch {
+            runCatching { repository.reconcile() }
+            runCatching { repository.relinkOrphanImages() }
+        }
     }
 }

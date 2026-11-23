@@ -20,6 +20,7 @@ import android.widget.FrameLayout
 import android.widget.GridLayout
 import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.RadioGroup
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -41,9 +42,18 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.Slider
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.ArtistSeparatorPreferences
+import com.untar.ultimusic.data.DynamicColorPreferences
+import com.untar.ultimusic.data.KeepScreenOnPreferences
+import com.untar.ultimusic.data.MinDurationPreferences
+import com.untar.ultimusic.data.SleepTimerPreferences
+import com.untar.ultimusic.data.ThemePreferences
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
@@ -216,6 +226,25 @@ class SettingsDialogFragment : DialogFragment() {
     /** Misma bandera que [updatingUi] pero para [artistGroupingValue], independiente de ella. */
     private var updatingArtistGroupingUi = false
 
+    private lateinit var btnRefreshLibrary: TextView
+    private lateinit var sleepTimerTitle: TextView
+    private lateinit var sleepTimerValue: EditText
+    private lateinit var backgroundTitle: TextView
+    private lateinit var backgroundAdapter: BackgroundPickerAdapter
+    private lateinit var themeTitle: TextView
+    private lateinit var themeGroup: RadioGroup
+    private lateinit var dynamicColorTitle: TextView
+    private lateinit var dynamicColorSwitch: MaterialSwitch
+    private var dynamicColorSwitchDefaultTrackTint: ColorStateList? = null
+    private lateinit var keepScreenOnSwitch: MaterialSwitch
+    private var keepScreenOnSwitchDefaultTrackTint: ColorStateList? = null
+    private lateinit var minDurationValue: EditText
+    private lateinit var artistSeparatorsGroup: ChipGroup
+    private lateinit var artistSeparatorInput: EditText
+
+    /** Para no reaccionar a los cambios que se hacen por código en los controles nuevos. */
+    private var updatingExtraUi = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
@@ -285,6 +314,20 @@ class SettingsDialogFragment : DialogFragment() {
         btnConfigureYoutube = view.findViewById(R.id.btnConfigureYoutube)
         recountSectionTitle = view.findViewById(R.id.recountSectionTitle)
         val openRecountButton = view.findViewById<TextView>(R.id.btnOpenRecount)
+        btnRefreshLibrary = view.findViewById(R.id.btnRefreshLibrary)
+        sleepTimerTitle = view.findViewById(R.id.sleepTimerTitle)
+        sleepTimerValue = view.findViewById(R.id.sleepTimerValue)
+        backgroundTitle = view.findViewById(R.id.backgroundTitle)
+        themeTitle = view.findViewById(R.id.themeTitle)
+        themeGroup = view.findViewById(R.id.themeGroup)
+        dynamicColorTitle = view.findViewById(R.id.dynamicColorTitle)
+        dynamicColorSwitch = view.findViewById(R.id.dynamicColorSwitch)
+        dynamicColorSwitchDefaultTrackTint = dynamicColorSwitch.trackTintList
+        keepScreenOnSwitch = view.findViewById(R.id.keepScreenOnSwitch)
+        keepScreenOnSwitchDefaultTrackTint = keepScreenOnSwitch.trackTintList
+        minDurationValue = view.findViewById(R.id.minDurationValue)
+        artistSeparatorsGroup = view.findViewById(R.id.artistSeparatorsGroup)
+        artistSeparatorInput = view.findViewById(R.id.artistSeparatorInput)
 
         // La barra de estado es transparente en este tema, así que la toolbar se aparta ella sola
         // de la hora y la batería con un padding del tamaño de ese hueco.
@@ -311,7 +354,130 @@ class SettingsDialogFragment : DialogFragment() {
         setupEqualizer(eqBandsContainer)
         setupServices()
         setupRecount(openRecountButton)
+        setupRefreshLibrary()
+        setupSleepTimer()
+        setupBackground(view.findViewById(R.id.backgroundRecycler))
+        setupTheme()
+        setupDynamicColor()
+        setupKeepScreenOn()
+        setupMinDuration()
+        setupArtistSeparators(view.findViewById(R.id.btnAddArtistSeparator))
         observeState()
+    }
+
+    private fun setupRefreshLibrary() {
+        btnRefreshLibrary.setOnClickListener { settingsViewModel.refreshLibrary() }
+    }
+
+    private fun showRefreshProgress(progress: Int?) {
+        btnRefreshLibrary.isEnabled = progress == null
+        btnRefreshLibrary.alpha = if (progress == null) 1f else 0.6f
+        btnRefreshLibrary.text =
+            if (progress == null) getString(R.string.settings_refresh_library)
+            else getString(R.string.settings_refresh_library_progress, progress)
+    }
+
+    /**
+     * Caja numérica de un ajuste entero (temporizador, duración mínima): mismo patrón que
+     * [setupArtistGrouping]. Se guarda en caliente mientras lo escrito es un número, y al terminar
+     * (tecla "hecho" o perder el foco) se cuadra con lo que de verdad quedó guardado.
+     */
+    private fun setupIntField(field: EditText, current: () -> Int, save: (Int) -> Unit) {
+        fun normalize() = showIntValue(field, current())
+        field.doAfterTextChanged { text ->
+            if (updatingExtraUi) return@doAfterTextChanged
+            text?.toString()?.toIntOrNull()?.let(save)
+        }
+        field.setOnEditorActionListener { _, _, _ ->
+            normalize()
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(field.windowToken, 0)
+            field.clearFocus()
+            true
+        }
+        field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) normalize() }
+    }
+
+    private fun showIntValue(field: EditText, value: Int) {
+        if (field.text.toString() == value.toString()) return
+        updatingExtraUi = true
+        field.setText(value.toString())
+        updatingExtraUi = false
+    }
+
+    private fun setupSleepTimer() {
+        setupIntField(sleepTimerValue, { SleepTimerPreferences.minutes.value }, SleepTimerPreferences::set)
+    }
+
+    private fun setupMinDuration() {
+        setupIntField(minDurationValue, { MinDurationPreferences.seconds.value }, MinDurationPreferences::set)
+    }
+
+    private fun setupBackground(recycler: RecyclerView) {
+        backgroundAdapter = BackgroundPickerAdapter()
+        recycler.adapter = backgroundAdapter
+    }
+
+    private fun setupTheme() {
+        val ids = mapOf(
+            ThemePreferences.Mode.SYSTEM to R.id.themeSystem,
+            ThemePreferences.Mode.LIGHT to R.id.themeLight,
+            ThemePreferences.Mode.DARK to R.id.themeDark,
+        )
+        themeGroup.check(ids.getValue(ThemePreferences.mode.value))
+        themeGroup.setOnCheckedChangeListener { _, checkedId ->
+            ids.entries.firstOrNull { it.value == checkedId }?.key?.let(ThemePreferences::set)
+        }
+    }
+
+    private fun setupDynamicColor() {
+        dynamicColorSwitch.setOnCheckedChangeListener { _, checked ->
+            if (!updatingExtraUi) DynamicColorPreferences.set(checked)
+        }
+    }
+
+    private fun setupKeepScreenOn() {
+        keepScreenOnSwitch.setOnCheckedChangeListener { _, checked ->
+            if (!updatingExtraUi) KeepScreenOnPreferences.set(checked)
+        }
+    }
+
+    private fun setupArtistSeparators(addButton: View) {
+        fun add() {
+            val typed = artistSeparatorInput.text.toString()
+            if (ArtistSeparatorPreferences.add(typed)) {
+                artistSeparatorInput.setText("")
+            } else {
+                toast(R.string.settings_artist_separators_invalid)
+            }
+        }
+        addButton.setOnClickListener { add() }
+        artistSeparatorInput.setOnEditorActionListener { _, _, _ -> add(); true }
+    }
+
+    private fun showArtistSeparators(separators: List<String>) {
+        artistSeparatorsGroup.removeAllViews()
+        val accent = playerViewModel.accentTarget.value
+        separators.forEach { separator ->
+            val chip = Chip(requireContext()).apply {
+                text = separator
+                isCloseIconVisible = true
+                closeIconContentDescription = getString(R.string.settings_artist_separators_remove_desc, separator)
+                chipStrokeColor = ColorStateList.valueOf(accent)
+                chipStrokeWidth = resources.displayMetrics.density
+                setOnCloseIconClickListener {
+                    if (!ArtistSeparatorPreferences.remove(separator)) toast(R.string.settings_artist_separators_last)
+                }
+            }
+            artistSeparatorsGroup.addView(chip)
+        }
+    }
+
+    private fun showSwitch(switch: MaterialSwitch, checked: Boolean) {
+        if (switch.isChecked == checked) return
+        updatingExtraUi = true
+        switch.isChecked = checked
+        updatingExtraUi = false
     }
 
     /**
@@ -910,6 +1076,12 @@ class SettingsDialogFragment : DialogFragment() {
                 launch {
                     settingsViewModel.artistGroupingThreshold.collect { value -> showArtistGroupingValue(value) }
                 }
+                launch { settingsViewModel.refreshProgress.collect(::showRefreshProgress) }
+                launch { SleepTimerPreferences.minutes.collect { showIntValue(sleepTimerValue, it) } }
+                launch { MinDurationPreferences.seconds.collect { showIntValue(minDurationValue, it) } }
+                launch { DynamicColorPreferences.enabled.collect { showSwitch(dynamicColorSwitch, it) } }
+                launch { KeepScreenOnPreferences.enabled.collect { showSwitch(keepScreenOnSwitch, it) } }
+                launch { ArtistSeparatorPreferences.separators.collect(::showArtistSeparators) }
                 launch {
                     playerViewModel.limitDisabled.collect { disabled ->
                         showMode(disabled)
@@ -1035,6 +1207,21 @@ class SettingsDialogFragment : DialogFragment() {
                         geniusTitle.setTextColor(accent)
                         youtubeTitle.setTextColor(accent)
                         recountSectionTitle.setTextColor(accent)
+                        sleepTimerTitle.setTextColor(accent)
+                        backgroundTitle.setTextColor(accent)
+                        themeTitle.setTextColor(accent)
+                        dynamicColorTitle.setTextColor(accent)
+                        for (i in 0 until themeGroup.childCount) {
+                            (themeGroup.getChildAt(i) as? MaterialRadioButton)?.buttonTintList = tint
+                        }
+                        dynamicColorSwitch.trackTintList = DynamicColor.switchTrackTint(accent, dynamicColorSwitchDefaultTrackTint)
+                        keepScreenOnSwitch.trackTintList = DynamicColor.switchTrackTint(accent, keepScreenOnSwitchDefaultTrackTint)
+                        if (accent == playerViewModel.accentTarget.value) {
+                            backgroundAdapter.setAccent(accent)
+                            for (i in 0 until artistSeparatorsGroup.childCount) {
+                                (artistSeparatorsGroup.getChildAt(i) as? Chip)?.chipStrokeColor = tint
+                            }
+                        }
                     }
                 }
                 // Si se conectan auriculares con el límite quitado, el ViewModel lo repone solo; aquí

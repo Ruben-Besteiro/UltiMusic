@@ -1,6 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Tema base de UltiMusic: siempre oscuro (negro) con acento amarillo. -->
-    <style name="Base.Theme.UltiMusic" parent="Theme.Material3.Dark.NoActionBar">
+    <!-- Tema base de UltiMusic con acento amarillo. DayNight: claro u oscuro según Ajustes > Tema
+         (ver ThemePreferences). En modo noche manda values-night/themes.xml; los colores claros
+         están en values-notnight/colors.xml. -->
+    <style name="Base.Theme.UltiMusic" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:fontFamily">@font/app_font</item>
         <item name="fontFamily">@font/app_font</item>
         <item name="textAppearanceDisplayLarge">@style/TextAppearance.UltiMusic.DisplayLarge</item>
@@ -46,11 +48,12 @@
         <item name="recyclerViewStyle">@style/Widget.UltiMusic.RecyclerView</item>
     </style>
 
-    <!-- Splash de Android 12+ (ignorado antes): fondo de la app + logo, que es lo que se ve en el
+    <!-- Splash de Android 12+ (ignorado antes): fondo negro (el mismo que el del icono, para que el
+         logo no quede como un círculo negro sobre gris) + logo, que es lo que se ve en el
          arranque en frío, incluido el reinicio de la restauración de la BD (ver MainActivity), en
          vez de una pantalla negra. -->
     <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic">
-        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/um_background</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/black</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ultimusic_logo</item>
     </style>
 

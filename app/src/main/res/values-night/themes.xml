@@ -44,7 +44,7 @@
     </style>
 
     <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic">
-        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/um_background</item>
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/black</item>
         <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ultimusic_logo</item>
     </style>
 

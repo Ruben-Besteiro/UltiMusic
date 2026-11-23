@@ -165,12 +165,18 @@ class LibraryRepository private constructor(
         // absoluta aún sin re-enlazar, la fila existe pero no hay forma de abrir su archivo: mostrarla
         // sería prometer algo que luego falla en silencio. Se repinta sola al cambiar las raíces
         // (tabla library_roots) o al conceder UltiMusic ([grantEpoch]).
-        combine(dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch, firstRunGate) { list, _, _, gated ->
+        // También se ocultan (sin borrarlas de la BD) las más cortas que la duración mínima de
+        // Ajustes (ver [MinDurationPreferences]); como todo lo demás sale de aquí, álbumes,
+        // artistas y fichas las dejan de contar solas.
+        combine(
+            dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch, firstRunGate, MinDurationPreferences.seconds
+        ) { list, _, _, gated, minSeconds ->
             refreshSafRegistry()
             val prefixes = readableRootPrefixes()
             lastReadablePrefixes = prefixes.toSet()
             if (gated) emptyList()
-            else list.filter { isUnderRoots(it.song.filePath, prefixes) }.map { it.toDomain() }
+            else list.filter { isUnderRoots(it.song.filePath, prefixes) && isLongEnough(it.song.duration, minSeconds) }
+                .map { it.toDomain() }
         }
             .distinctUntilChanged()
             .shareIn(observerScope, sharing, replay = 1)
@@ -210,8 +216,13 @@ class LibraryRepository private constructor(
     suspend fun playableOnly(songs: List<Song>): List<Song> {
         refreshSafRegistry()
         val prefixes = readableRootPrefixes()
-        return songs.filter { isUnderRoots(it.filePath, prefixes) }
+        val minSeconds = MinDurationPreferences.seconds.value
+        return songs.filter { isUnderRoots(it.filePath, prefixes) && isLongEnough(it.duration, minSeconds) }
     }
+
+    /** Duración (ms) desconocida (0) cuenta como suficiente: mejor listarla que perderla. */
+    private fun isLongEnough(durationMs: Long, minSeconds: Int): Boolean =
+        durationMs <= 0L || durationMs >= minSeconds * 1000L
 
     /** Nombres ya existentes, para el autocompletado del editor de metadatos. */
     val artistNames: Flow<List<String>> = dao.observeArtistNames()

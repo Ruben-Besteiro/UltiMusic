@@ -118,7 +118,7 @@ Z wyjątkowymi funkcjami, takimi jak:
 - Oglądanie filmów z YouTube w aplikacji
 - I wiele więcej
 
-==================== Srpskohrvatski (sh) ====================
+==================== Srpski (sr) ====================
 Slogan: Vrhunski muzički plejer za Android
 
 Ti ćeš biti taj koji će procijeniti je li slogan istinit ili lažan
@@ -372,3 +372,18 @@ May mga natatanging tampok tulad ng:
 - Sistema ng custom na tag para pangkategorya ng musika
 - Manood ng mga video sa YouTube sa loob ng app
 - At marami pang iba
+
+==================== Hrvatski (hr) ====================
+Slogan: Vrhunski glazbeni player za Android
+
+Ti ćeš biti taj koji će procijeniti je li slogan istinit ili lažan
+S istaknutim funkcijama kao što su:
+- Potpuno dostupan na srpskohrvatskom
+- Nula (0) reklama ili plaćenog sadržaja
+- Fokus na sučelje i korisničko iskustvo
+- Jednostavnije nabavljanje glazbe
+- Automatsko popunjavanje metapodataka pjesama
+- Pjesme sa sinkroniziranim tekstom i prijevodom
+- Sustav vlastitih oznaka za kategorizaciju glazbe
+- Gledanje YouTube videa unutar aplikacije
+- I još mnogo toga
