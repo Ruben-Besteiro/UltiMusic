@@ -1,5 +1,9 @@
 package com.untar.ultimusic.util
 
+import android.content.Context
+import android.content.SharedPreferences
+import android.content.res.Resources
+import android.telephony.TelephonyManager
 import androidx.annotation.DrawableRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
@@ -37,11 +41,84 @@ object AppLocale {
     }
 
     /**
-     * En este orden se pintan en la cuadrícula de Ajustes (5 columnas x 5 filas). El serbocroata va
-     * en alfabeto latino: su carpeta es `values-b+sr+Latn` y el idioma que devuelve Java es "sr". El
-     * hebreo es "he" para BCP-47 pero Java/Android pueden devolver el antiguo "iw".
+     * País del usuario (ISO 3166, mayúsculas; vacío si no se sabe), fijado por [init] al arrancar.
+     * Decide el alfabeto por defecto del serbocroata (ver [serbocroatianScript]).
      */
-    val LANGUAGES: List<Language> = listOf(
+    private var region: String = ""
+
+    private lateinit var prefs: SharedPreferences
+
+    /**
+     * Hay que llamarlo lo primero de todo en `Application.onCreate`, antes de tocar [LANGUAGES]: sin
+     * el país, el serbocroata saldría siempre con el alfabeto por defecto. El país se saca, por este
+     * orden, de la SIM, de la red móvil y de la región del sistema. NO se usa `Locale.getDefault()`:
+     * tras un `setApplicationLocales` previo devuelve el locale de la propia app (sin país) y la
+     * detección fallaría a partir del segundo arranque. No necesita ningún permiso.
+     */
+    fun init(context: Context) {
+        prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val telephony = context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
+        region = listOf(
+            telephony?.simCountryIso,
+            telephony?.networkCountryIso,
+            Resources.getSystem().configuration.locales.takeUnless { it.isEmpty }?.get(0)?.country,
+        ).firstOrNull { !it.isNullOrBlank() }.orEmpty().uppercase(Locale.ROOT)
+    }
+
+    private const val PREFS_NAME = "app_locale"
+    private const val KEY_SERBOCROATIAN_SCRIPT = "serbocroatian_script"
+
+    const val SCRIPT_LATIN = "Latn"
+    const val SCRIPT_CYRILLIC = "Cyrl"
+
+    /**
+     * El alfabeto del serbocroata: el que el usuario haya elegido en Ajustes y, si todavía no ha
+     * elegido, el que le toca por su país (cirílico en Serbia, latín en cualquier otro sitio).
+     */
+    fun serbocroatianScript(): String =
+        prefs.getString(KEY_SERBOCROATIAN_SCRIPT, null)
+            ?: if (region == "RS") SCRIPT_CYRILLIC else SCRIPT_LATIN
+
+    /**
+     * Elige el alfabeto del serbocroata ([SCRIPT_LATIN] o [SCRIPT_CYRILLIC]) y lo recuerda. Si el
+     * serbocroata es el idioma activo, lo vuelve a aplicar con el alfabeto nuevo (eso recrea sola
+     * cualquier Activity viva).
+     */
+    fun setSerbocroatianScript(script: String) {
+        if (script == serbocroatianScript()) return
+        prefs.edit().putString(KEY_SERBOCROATIAN_SCRIPT, script).apply()
+        languages = null
+        if (current().matches("sr")) AppCompatDelegate.setApplicationLocales(localesFor(current()))
+    }
+
+    /**
+     * El serbocroata. Lo único que varía es el alfabeto ([serbocroatianScript]: el elegido en
+     * Ajustes o, por defecto, el del país del usuario). El cirílico es `values-b+sr+Cyrl`, que genera
+     * `tools/translate_strings.py` por transliteración del latino. La bandera es siempre la de
+     * Yugoslavia y el nombre el neutro, a propósito: el idioma de la app es una variedad común, no la
+     * de un país concreto, y una bandera nacional haría creer al usuario que lo es. En todos los
+     * casos el idioma que devuelve Java es "sr".
+     */
+    private fun serbocroatian(): Language {
+        val aliases = setOf("sr", "sh", "hr", "bs", "cnr")
+        return if (serbocroatianScript() == SCRIPT_CYRILLIC) {
+            Language("sr-Cyrl", "Српскохрватски", R.drawable.flag_yugoslavia, aliases)
+        } else {
+            Language("sr-Latn", "Srpskohrvatski", R.drawable.flag_yugoslavia, aliases)
+        }
+    }
+
+    /**
+     * En este orden se pintan en la cuadrícula de Ajustes (5 columnas x 5 filas). El serbocroata es
+     * una sola celda cuya variante depende del país (ver [serbocroatian]). El hebreo es "he" para
+     * BCP-47 pero Java/Android pueden devolver el antiguo "iw".
+     */
+    val LANGUAGES: List<Language>
+        get() = languages ?: buildLanguages().also { languages = it }
+
+    private var languages: List<Language>? = null
+
+    private fun buildLanguages(): List<Language> = listOf(
         Language("es", "Español", R.drawable.flag_spain),
         Language("pt", "Português", R.drawable.flag_portugal),
         Language("fr", "Français", R.drawable.flag_france),
@@ -50,7 +127,7 @@ object AppLocale {
         Language("de", "Deutsch", R.drawable.flag_germany),
         Language("nl", "Nederlands", R.drawable.flag_netherlands),
         Language("pl", "Polski", R.drawable.flag_poland),
-        Language("sr-Latn", "Srpskohrvatski", R.drawable.flag_yugoslavia, aliases = setOf("sr", "sh", "hr", "bs", "cnr")),
+        serbocroatian(),
         Language("ru", "Русский", R.drawable.flag_russia),
         Language("tr", "Türkçe", R.drawable.flag_turkey),
         Language("sw", "Kiswahili", R.drawable.flag_tanzania),
@@ -69,7 +146,8 @@ object AppLocale {
         Language("fil", "Filipino", R.drawable.flag_philippines, aliases = setOf("tl")),
     )
 
-    private val ENGLISH = LANGUAGES.first { it.tag == "en" }
+    // Perezoso a propósito: [LANGUAGES] no se puede construir hasta que [init] haya fijado el país.
+    private val ENGLISH by lazy { LANGUAGES.first { it.tag == "en" } }
 
     private fun find(language: String?): Language? = LANGUAGES.firstOrNull { it.matches(language) }
 
@@ -89,9 +167,14 @@ object AppLocale {
         if (!locales.isEmpty) {
             // Elecciones guardadas antes de forzar las cifras occidentales (ver [localesFor]):
             // se vuelven a aplicar con la extensión para que no sigan mezclando sistemas numéricos.
+            // Lo mismo si lo guardado es el serbocroata en otro alfabeto que el de hoy (elegido antes
+            // de que existiera el cirílico, o con el país cambiado): se vuelve a aplicar su variante.
             val stored = locales[0]
-            if (stored != null && stored.getUnicodeLocaleType("nu") != LATIN_DIGITS) {
-                AppCompatDelegate.setApplicationLocales(localesFor(find(stored.language) ?: ENGLISH))
+            if (stored != null) {
+                val language = find(stored.language) ?: ENGLISH
+                val staleDigits = stored.getUnicodeLocaleType("nu") != LATIN_DIGITS
+                val staleScript = language.matches("sr") && stored.script != Locale.forLanguageTag(language.tag).script
+                if (staleDigits || staleScript) AppCompatDelegate.setApplicationLocales(localesFor(language))
             }
             return
         }

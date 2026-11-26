@@ -72,7 +72,7 @@ class CollectionSongsAdapter(
     /** Ids de las canciones marcadas; no vacío = selección múltiple activa. */
     private var selectedIds: Set<Long> = emptySet()
 
-    private var accentColor: Int = 0xFFFBC10E.toInt()
+    private var accentColor: Int = com.untar.ultimusic.util.DynamicColor.DEFAULT
 
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>) {

@@ -12,7 +12,7 @@
     - Los tres tops del año actual: canciones, artistas y géneros.
     - La tarta con el reparto de géneros, y su leyenda.
 
-  Todos los títulos van en @color/um_yellow y se repintan con el acento dinámico en
+  Todos los títulos van en @color/um_gold y se repintan con el acento dinámico en
   RecountDialogFragment.observeState(), igual que en el resto de la app.
 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
@@ -59,7 +59,7 @@
                 android:layout_height="wrap_content"
                 android:paddingHorizontal="20dp"
                 android:text="@string/recount_histogram_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -144,7 +144,7 @@
                     android:layout_marginTop="28dp"
                     android:paddingHorizontal="20dp"
                     android:text="@string/recount_top_songs_title"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -163,7 +163,7 @@
                     android:layout_marginTop="28dp"
                     android:paddingHorizontal="20dp"
                     android:text="@string/recount_top_artists_title"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -182,7 +182,7 @@
                     android:layout_marginTop="28dp"
                     android:paddingHorizontal="20dp"
                     android:text="@string/recount_top_genres_title"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 

@@ -149,6 +149,7 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var visualSectionTitle: TextView
     private lateinit var languageTitle: TextView
     private lateinit var languageGrid: GridLayout
+    private lateinit var scriptSpinner: Spinner
     /** Una celda por idioma, en el orden de [AppLocale.LANGUAGES] (ver [setupLanguage]). */
     private val languageCells = mutableListOf<Pair<AppLocale.Language, View>>()
     private lateinit var boostTitle: TextView
@@ -270,6 +271,7 @@ class SettingsDialogFragment : DialogFragment() {
         visualSectionTitle = view.findViewById(R.id.visualSectionTitle)
         languageTitle = view.findViewById(R.id.languageTitle)
         languageGrid = view.findViewById(R.id.languageGrid)
+        scriptSpinner = view.findViewById(R.id.scriptSpinner)
         boostTitle = view.findViewById(R.id.boostTitle)
         slider = view.findViewById(R.id.boostSlider)
         ruler = view.findViewById(R.id.boostRuler)
@@ -348,6 +350,7 @@ class SettingsDialogFragment : DialogFragment() {
 
         setupBoostControls()
         setupLanguage()
+        setupScriptSpinner()
         setupLibraryRoots(libraryRootsRecycler, addLibraryRootButton)
         setupGreylist(greylistRecycler, addGreylistFolderButton)
         setupArtistGrouping()
@@ -513,8 +516,45 @@ class SettingsDialogFragment : DialogFragment() {
         updateLanguageSelection()
     }
 
+    /**
+     * Desplegable del alfabeto del serbocroata (latín / cirílico). Solo se ve mientras ese es el
+     * idioma activo (ver [updateLanguageSelection]). El valor inicial es el elegido antes o, si no
+     * hay, el que toca por el país del usuario ([AppLocale.serbocroatianScript]).
+     */
+    private fun setupScriptSpinner() {
+        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, SCRIPT_LABELS)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        scriptSpinner.adapter = adapter
+        scriptSpinner.setSelection(scriptPosition())
+        scriptSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                // El Spinner dispara esto al montarse con lo que ya había: no hay nada que cambiar.
+                if (position == scriptPosition()) return
+                AppLocale.setSerbocroatianScript(if (position == 1) AppLocale.SCRIPT_CYRILLIC else AppLocale.SCRIPT_LATIN)
+                rebuildLanguageGrid()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
+    private fun scriptPosition(): Int = if (AppLocale.serbocroatianScript() == AppLocale.SCRIPT_CYRILLIC) 1 else 0
+
+    /**
+     * Reconstruye la cuadrícula de banderas: la celda del serbocroata pasa a ser otro objeto al
+     * cambiar su alfabeto y la selección se decide por igualdad. Se le vuelve a poner el acento,
+     * que de otro modo solo se aplica al llegar un color nuevo.
+     */
+    private fun rebuildLanguageGrid() {
+        setupLanguage()
+        val accent = playerViewModel.accentColor.value
+        languageCells.forEach { (_, cell) ->
+            AccentTint.stroke(cell, R.id.flagSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
+        }
+    }
+
     private fun updateLanguageSelection() {
         val current = AppLocale.current()
+        scriptSpinner.isVisible = current.matches("sr")
         languageCells.forEach { (language, cell) ->
             cell.findViewById<View>(R.id.flagSelectedBorder).isVisible = language == current
         }
@@ -1272,5 +1312,8 @@ class SettingsDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "settings"
+
+        /** Opciones del desplegable del alfabeto del serbocroata: cada una en su propia escritura. */
+        private val SCRIPT_LABELS = listOf("Latinica", "Ћирилица")
     }
 }

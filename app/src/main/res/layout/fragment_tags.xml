@@ -37,7 +37,7 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/tag_create"
         android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="@color/um_yellow"
+        app:backgroundTint="@color/um_gold"
         app:tint="@color/um_background" />
 
 </FrameLayout>

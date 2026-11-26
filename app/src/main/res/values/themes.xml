@@ -20,9 +20,9 @@
         <item name="textAppearanceLabelLarge">@style/TextAppearance.UltiMusic.LabelLarge</item>
         <item name="textAppearanceLabelMedium">@style/TextAppearance.UltiMusic.LabelMedium</item>
         <item name="textAppearanceLabelSmall">@style/TextAppearance.UltiMusic.LabelSmall</item>
-        <item name="colorPrimary">@color/um_yellow</item>
+        <item name="colorPrimary">@color/um_gold</item>
         <item name="colorOnPrimary">@color/black</item>
-        <item name="colorSecondary">@color/um_yellow</item>
+        <item name="colorSecondary">@color/um_gold</item>
         <item name="colorOnSecondary">@color/black</item>
         <item name="android:colorBackground">@color/um_background</item>
         <item name="colorSurface">@color/um_surface</item>

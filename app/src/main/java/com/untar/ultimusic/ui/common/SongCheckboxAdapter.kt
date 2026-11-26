@@ -41,7 +41,7 @@ class SongCheckboxAdapter(
 
     /** Ver [setAccentColor]: el amarillo dinámico de cada casilla (ver CLAUDE.md), igual que
      *  [com.untar.ultimusic.ui.songs.SongsAdapter.setAccentColor]. */
-    private var accentColor: Int = 0xFFFBC10E.toInt()
+    private var accentColor: Int = com.untar.ultimusic.util.DynamicColor.DEFAULT
 
     @SuppressLint("NotifyDataSetChanged")
     fun submit(list: List<Song>) {

@@ -9,5 +9,5 @@
     <solid android:color="@android:color/transparent" />
     <stroke
         android:width="@dimen/flag_selected_stroke_width"
-        android:color="@color/um_yellow" />
+        android:color="@color/um_gold" />
 </shape>

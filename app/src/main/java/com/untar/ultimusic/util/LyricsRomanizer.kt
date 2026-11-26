@@ -31,12 +31,17 @@ object LyricsRomanizer {
 
     private val LATIN_LANGUAGES = setOf("es", "en", "fr", "de", "it", "pt", "tr", "vi", "in", "id", "fil", "tl", "nl", "pl", "sr", "sw")
 
-    /** Destino según el idioma de la app, o null si en ese idioma el botón no tiene sentido. */
-    fun targetFor(language: String = Locale.getDefault().language): Target? = when (language) {
+    /**
+     * Destino según el idioma de la app, o null si en ese idioma el botón no tiene sentido. El
+     * serbocroata en cirílico (la variante de Serbia, ver [AppLocale]) cuenta como escritura no
+     * latina: convertir la letra a latín iría en contra de lo que espera ese usuario.
+     */
+    fun targetFor(locale: Locale = Locale.getDefault()): Target? = when {
         // V3:
-        // "ja" -> Target.KATAKANA
-        // "zh" -> Target.BOPOMOFO
-        in LATIN_LANGUAGES -> Target.LATIN
+        // locale.language == "ja" -> Target.KATAKANA
+        // locale.language == "zh" -> Target.BOPOMOFO
+        locale.language == "sr" && locale.script == "Cyrl" -> null
+        locale.language in LATIN_LANGUAGES -> Target.LATIN
         else -> null
     }
 

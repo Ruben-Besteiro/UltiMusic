@@ -118,20 +118,20 @@ Z wyjątkowymi funkcjami, takimi jak:
 - Oglądanie filmów z YouTube w aplikacji
 - I wiele więcej
 
-==================== Srpski (sr) ====================
-Slogan: Vrhunski muzički plejer za Android
+==================== Српски (sr) ====================
+Слоган: Врхунски музички плејер за Android
 
-Ti ćeš biti taj koji će procijeniti je li slogan istinit ili lažan
-Sa istaknutim funkcijama kao što su:
-- Potpuno dostupan na srpskohrvatskom
-- Nula (0) reklama ili plaćenog sadržaja
-- Fokus na sučelje i korisničko iskustvo
-- Jednostavnije nabavljanje muzike
-- Automatsko popunjavanje metapodataka pjesama
-- Pjesme sa sinhronizovanim tekstom i prijevodom
-- Sistem vlastitih oznaka za kategorizaciju muzike
-- Gledanje YouTube videa unutar aplikacije
-- I još mnogo toga
+Ти ћеш бити тај који ће проценити да ли је слоган истинит или лажан
+Са истакнутим функцијама као што су:
+- Потпуно доступан на српскохрватском
+- Нула (0) реклама или плаћеног садржаја
+- Фокус на интерфејс и корисничко искуство
+- Једноставније набављање музике
+- Аутоматско попуњавање метаподатака песама
+- Песме са синхронизованим текстом и преводом
+- Систем сопствених ознака за категоризацију музике
+- Гледање YouTube видео-снимака унутар апликације
+- И још много тога
 
 ==================== Русский (ru) ====================
 Слоган: Совершенный музыкальный плеер для Android
@@ -378,7 +378,7 @@ Slogan: Vrhunski glazbeni player za Android
 
 Ti ćeš biti taj koji će procijeniti je li slogan istinit ili lažan
 S istaknutim funkcijama kao što su:
-- Potpuno dostupan na srpskohrvatskom
+- Potpuno dostupan na hrvatskosrpskom
 - Nula (0) reklama ili plaćenog sadržaja
 - Fokus na sučelje i korisničko iskustvo
 - Jednostavnije nabavljanje glazbe

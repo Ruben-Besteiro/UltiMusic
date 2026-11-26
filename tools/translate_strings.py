@@ -7,7 +7,9 @@ archivo con la copia que guardó la última vez (`tools/strings_snapshot.xml`) y
   - traduce los strings nuevos o cambiados a cada idioma,
   - traduce también los que le falten a un idioma (así, añadir un idioma nuevo a LOCALES basta para
     que se rellene entero en la siguiente ejecución),
-  - quita de todos los idiomas los strings que se hayan borrado del español.
+  - quita de todos los idiomas los strings que se hayan borrado del español,
+  - regenera `values-b+sr+Cyrl` (serbocroata en cirílico, el de Serbia) transliterando el latino
+    (`sync_cyrillic`): no usa la API ni cuesta nada.
 
 Un string que no se ha tocado en español conserva su traducción actual, así que las correcciones
 hechas a mano en un idioma sobreviven hasta que se cambie ese mismo string en español.
@@ -66,6 +68,7 @@ LOCALES: dict[str, tuple[str, list[str]]] = {
     "it": ("italiano", ["one", "many", "other"]),
     "nl": ("holandés (neerlandés)", ["one", "other"]),
     "pl": ("polaco", ["one", "few", "many", "other"]),
+    # El cirílico (values-b+sr+Cyrl) NO se traduce: lo genera sync_cyrillic() a partir de este.
     "b+sr+Latn": ("serbocroata (variedad común serbio/croata), escrito SOLO en alfabeto latino, "
                   "nunca en cirílico", ["one", "few", "other"]),
     "sw": ("suajili", ["one", "other"]),
@@ -180,18 +183,145 @@ def text_parts(element: ET.Element) -> list[str]:
     return ["".join(item.itertext()) for item in element]
 
 
+HAND_EDITABLE_NOTE = (
+    "    <!-- Generado por tools/translate_strings.py a partir de values/strings.xml. Se puede\n"
+    "         corregir a mano: la corrección se mantiene hasta que cambie ese string en español. -->\n"
+)
+
+
+def locale_content(elements: list[ET.Element], note: str = HAND_EDITABLE_NOTE) -> str:
+    body = "\n".join(render(element) for element in elements)
+    return f"<resources>\n{note}\n{body}\n</resources>\n"
+
+
 def write_locale(folder: str, elements: list[ET.Element]) -> None:
     path = RES / f"values-{folder}" / "strings.xml"
     path.parent.mkdir(parents=True, exist_ok=True)
-    body = "\n".join(render(element) for element in elements)
-    content = (
-        "<resources>\n"
-        "    <!-- Generado por tools/translate_strings.py a partir de values/strings.xml. Se puede\n"
-        "         corregir a mano: la corrección se mantiene hasta que cambie ese string en español. -->\n\n"
-        f"{body}\n"
-        "</resources>\n"
-    )
+    path.write_text(locale_content(elements), encoding="utf-8", newline="\n")
+
+
+# ---------------------------------------------------------------------------------------------
+# Serbocroata en cirílico (derivado del latino, sin API)
+# ---------------------------------------------------------------------------------------------
+
+SERBIAN_LATIN_FOLDER = "b+sr+Latn"
+SERBIAN_CYRILLIC_FOLDER = "b+sr+Cyrl"
+CYRILLIC_NOTE = (
+    "    <!-- Generado por tools/translate_strings.py transliterando values-b+sr+Latn al cirílico.\n"
+    "         NO editar a mano: se sobrescribe entero cada vez que cambia el latino. -->\n"
+)
+CYRILLIC_LETTERS = {
+    "a": "а", "b": "б", "c": "ц", "č": "ч", "ć": "ћ", "d": "д", "đ": "ђ", "e": "е", "f": "ф",
+    "g": "г", "h": "х", "i": "и", "j": "ј", "k": "к", "l": "л", "m": "м", "n": "н", "o": "о",
+    "p": "п", "r": "р", "s": "с", "š": "ш", "t": "т", "u": "у", "v": "в", "z": "з", "ž": "ж",
+}
+# Letras que se escriben con UNA sola cirílica. Solo importa el primer carácter para las mayúsculas.
+CYRILLIC_DIGRAPHS = {"lj": "љ", "nj": "њ", "dž": "џ"}
+# Palabras (por prefijo, en minúsculas) donde lj/nj/dž son DOS letras (kon-jug-, in-jek-, nad-ž-...).
+DIGRAPH_EXCEPTIONS = ("konjug", "konjunk", "injek", "nadž", "podž", "odž", "predž", "izdž")
+# Nombres que se quedan en latino aunque no los detecte la heurística de [is_foreign_token].
+FOREIGN_WORDS = {
+    "Android", "Bluetooth", "Genius", "Google", "Spotify", "Recount", "Pod", "Technologies",
+    "Untar", "Amazon", "Music", "Store", "Data", "API", "New", "Client", "Generate", "Access",
+    "Token", "Secret", "App", "Name", "Website", "URL", "Hz", "kHz", "dB",
+}
+SQL_KEYWORDS = {"ALTER", "CREATE", "DELETE", "DROP", "INSERT", "PRAGMA", "SELECT", "UPDATE"}
+# Palabras inglesas que el latino usa tal cual y que en cirílico se escriben a la serbia.
+LOANWORDS = {"equalizer": "еквилајзер", "player": "плејер", "remix": "ремикс"}
+# Lo que no se toca: marcadores de formato, escapes de Android (\n \' \") y URLs.
+CYRILLIC_PROTECTED = re.compile(r"%(?:\d+\$)?[sd]|%%|\^\d|\\.|https?://\S+|<[^>]+>")
+LATIN_WORD = re.compile(r"[A-Za-zČčĆćĐđŠšŽž0-9][A-Za-zČčĆćĐđŠšŽž0-9.]*")
+
+
+def is_foreign_token(word: str) -> bool:
+    """Palabra que NO es serbocroata y debe quedarse en latino (marcas, siglas, unidades)."""
+    letters = word.strip(".")
+    if letters in FOREIGN_WORDS or letters in SQL_KEYWORDS or any(ch.isdigit() for ch in word):
+        return True
+    if letters.lower() in LOANWORDS:
+        return False
+    if any(ch in "qwxyQWXY" for ch in word):
+        return True
+    # Sigla de hasta 3 letras (ID, URL, SQL). Las mayúsculas más largas (NASTAVI) son serbocroata.
+    if 2 <= len(letters) <= 3 and letters.isupper():
+        return True
+    # camelCase (YouTube, iTunes, MusicBrainz, UltiMusic, kHz) o dominio (lrclib.net).
+    return (any(ch.isupper() for ch in word[1:]) and not word.isupper()) or "." in letters
+
+
+def to_cyrillic_word(word: str, flagged: set[str]) -> str:
+    lower = word.lower()
+    stem = lower.rstrip(".")
+    if stem in LOANWORDS:
+        loan = LOANWORDS[stem] + word[len(stem):]
+        return loan.upper() if word.rstrip(".").isupper() else (loan[0].upper() + loan[1:] if word[0].isupper() else loan)
+    plain = lower.startswith(DIGRAPH_EXCEPTIONS)
+    out = []
+    i = 0
+    while i < len(word):
+        pair = lower[i:i + 2]
+        if pair in CYRILLIC_DIGRAPHS and not plain:
+            flagged.add(word)
+            letter = CYRILLIC_DIGRAPHS[pair]
+            out.append(letter.upper() if word[i].isupper() else letter)
+            i += 2
+            continue
+        letter = CYRILLIC_LETTERS.get(lower[i], word[i])
+        out.append(letter.upper() if word[i].isupper() else letter)
+        i += 1
+    return "".join(out)
+
+
+def to_cyrillic(text: str | None, flagged: set[str], foreign: set[str]) -> str | None:
+    """`text` en cirílico. `flagged` recoge las palabras con lj/nj/dž tratadas como dígrafo y
+    `foreign` las que se han dejado en latino por parecer ajenas al serbocroata (para revisarlas)."""
+    if not text:
+        return text
+
+    def word(match: re.Match) -> str:
+        token = match.group(0)
+        if is_foreign_token(token):
+            foreign.add(token)
+            return token
+        return to_cyrillic_word(token, flagged)
+
+    result = []
+    position = 0
+    for protected in CYRILLIC_PROTECTED.finditer(text):
+        result.append(LATIN_WORD.sub(word, text[position:protected.start()]))
+        result.append(protected.group(0))
+        position = protected.end()
+    result.append(LATIN_WORD.sub(word, text[position:]))
+    return "".join(result)
+
+
+def sync_cyrillic() -> None:
+    """Regenera values-b+sr+Cyrl/strings.xml entero a partir del latino. Solo escribe si cambia."""
+    latin = RES / f"values-{SERBIAN_LATIN_FOLDER}" / "strings.xml"
+    if not latin.exists():
+        return
+    flagged: set[str] = set()
+    foreign: set[str] = set()
+    elements = []
+    for element, _ in parse_resources(latin):
+        element = copy.deepcopy(element)
+        for node in element.iter():
+            node.text = to_cyrillic(node.text, flagged, foreign)
+            node.tail = to_cyrillic(node.tail, flagged, foreign)
+        elements.append(element)
+    content = locale_content(elements, CYRILLIC_NOTE)
+    path = RES / f"values-{SERBIAN_CYRILLIC_FOLDER}" / "strings.xml"
+    if path.exists() and path.read_text(encoding="utf-8") == content:
+        return
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8", newline="\n")
+    print(f"[translateStrings] values-{SERBIAN_CYRILLIC_FOLDER}: regenerado a partir del latino")
+    if flagged:
+        print("[translateStrings]   con lj/nj/dž como UNA letra (revisar si alguna son dos): "
+              + ", ".join(sorted(flagged)))
+    if foreign:
+        print("[translateStrings]   dejadas en latino por parecer ajenas al serbocroata: "
+              + ", ".join(sorted(foreign)))
 
 
 # ---------------------------------------------------------------------------------------------
@@ -451,8 +581,10 @@ def main() -> int:
             plans[folder] = (existing, to_translate, removed)
 
     if not plans:
-        if changed and not args.dry_run:
-            SNAPSHOT_FILE.write_bytes(BASE_FILE.read_bytes())
+        if not args.dry_run:
+            sync_cyrillic()
+            if changed:
+                SNAPSHOT_FILE.write_bytes(BASE_FILE.read_bytes())
         return 0
 
     for folder, (_, to_translate, removed) in plans.items():
@@ -519,6 +651,7 @@ def main() -> int:
             elif name in existing:
                 elements.append(existing[name])
         write_locale(folder, elements)
+    sync_cyrillic()
 
     if any(usage):
         cost = (usage[0] * PRICE_PER_MTOK[0] + usage[1] * PRICE_PER_MTOK[1]

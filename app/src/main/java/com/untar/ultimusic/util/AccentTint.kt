@@ -24,8 +24,8 @@ import com.untar.ultimusic.R
  *
  * La regla de la app es esta, y vale para todo:
  *
- * - Lo que en el XML sea **`@color/um_yellow`** se repinta con el **acento** de la canción que suena.
- * - Lo que sea **`@color/um_yellow_dark`** se repinta con ese mismo acento **a un N-ésimo**, es decir
+ * - Lo que en el XML sea **`@color/um_gold`** se repinta con el **acento** de la canción que suena.
+ * - Lo que sea **`@color/um_gold_dark`** se repinta con ese mismo acento **a un N-ésimo**, es decir
  *   con [DynamicColor.dark]. (Los dos amarillos fijos cumplen esa misma relación, así que mientras no
  *   suena nada la app se ve igual que siempre.)
  *
@@ -106,7 +106,7 @@ object AccentTint {
      * hay que usar su propia propiedad (`backgroundTintList`, `strokeColor`...), porque gestionan su
      * fondo por su cuenta.
      *
-     * Quien llama decide el color: para un `um_yellow_dark` hay que pasar `DynamicColor.dim(accent)`.
+     * Quien llama decide el color: para un `um_gold_dark` hay que pasar `DynamicColor.dim(accent)`.
      */
     fun background(root: View, @IdRes id: Int, @ColorInt color: Int) {
         val view = root.findViewById<View>(id) ?: return

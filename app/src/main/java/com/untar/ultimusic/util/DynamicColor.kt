@@ -11,6 +11,7 @@ import androidx.palette.graphics.Palette
 import coil.request.ImageRequest
 import coil.request.SuccessResult
 import com.untar.ultimusic.data.DynamicColorPreferences
+import com.untar.ultimusic.data.ThemePreferences
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -43,19 +44,28 @@ object DynamicColor {
     /**
      * El amarillo de siempre: se usa mientras no hay carátula de la que sacar nada.
      *
-     * Tiene que valer lo mismo que `@color/um_yellow` (res/values/colors.xml). Está repetido aquí
+     * Tiene que valer lo mismo que `@color/um_gold` (res/values/colors.xml). Está repetido aquí
      * como constante, y no leído del recurso, porque hace falta como valor inicial en sitios que no
      * tienen un `Context` a mano (los campos `accent` de los adaptadores, por ejemplo). Si se cambia
      * el amarillo de la app hay que cambiarlo en los dos sitios.
      */
-    const val DEFAULT = 0xFFFBC10E.toInt()
+    val DEFAULT: Int
+        get() = if (ThemePreferences.isLight()) DEFAULT_LIGHT else DEFAULT_DARK
+
+    /** El dorado del tema oscuro. Igual que `@color/um_gold` de values/colors.xml. */
+    const val DEFAULT_DARK = 0xFFFBC10E.toInt()
+
+    /** El dorado del tema claro (mismo matiz, más oscuro para leerse sobre fondo claro). Igual que
+     *  `@color/um_gold` de values-notnight/colors.xml. */
+    const val DEFAULT_LIGHT = 0xFFA67E03.toInt()
 
     /**
      * Para una carátula sin color real (blanco y negro o casi): más claro que el fondo negro de la
      * app, pero sin inventar un matiz que no está en la imagen (ver el porqué en [pickSwatch], que
      * es quien de verdad decide cuándo hace falta este recurso en vez de [DEFAULT]).
      */
-    private const val GRAYSCALE_FALLBACK = 0xFFA0A0A0.toInt()
+    private val GRAYSCALE_FALLBACK: Int
+        get() = if (ThemePreferences.isLight()) 0xFF606060.toInt() else 0xFFA0A0A0.toInt()
 
     /**
      * Carga la imagen indicada (cualquier dato que entienda Coil: un [Uri], un
@@ -68,7 +78,7 @@ object DynamicColor {
     suspend fun fromCover(context: Context, data: Any): Int = withContext(Dispatchers.IO) {
         // Color dinámico apagado en Ajustes: amarillo fijo y ni se decodifica la carátula.
         if (!DynamicColorPreferences.enabled.value) return@withContext DEFAULT
-        val key = cacheKey(context, data)
+        val key = cacheKey(context, data)?.let { if (ThemePreferences.isLight()) "$it:L" else it }
         key?.let { cache[it] }?.let { return@withContext it }
 
         val bitmap = loadBitmap(context, data) ?: return@withContext DEFAULT
@@ -192,34 +202,43 @@ object DynamicColor {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(color, hsl)
         hsl[1] = hsl[1].coerceAtLeast(MIN_SATURATION)
-        hsl[2] = hsl[2].coerceIn(MIN_LIGHTNESS, MAX_LIGHTNESS)
+        hsl[2] = hsl[2].coerceIn(minLightness(), maxLightness())
         return ColorUtils.HSLToColor(hsl)
     }
 
     /**
      * El color **oscuro**: el matiz y la saturación del color dado con una luminosidad FIJA
-     * ([DARK_LIGHTNESS]), y la opacidad intacta. Es lo que sustituye a `@color/um_yellow_dark`.
+     * ([DARK_LIGHTNESS]), y la opacidad intacta. Es lo que sustituye a `@color/um_gold_dark`.
      *
      * Antes dividía los canales RGB entre 5, que en HSL equivale a dividir la luminosidad entre 5:
      * como el acento llega con luminosidad 0.45–0.72, el oscuro variaba de 0.09 a 0.14 según la
      * canción. Con luminosidad fija todas las canciones tienen el mismo "peso" de fondo y solo cambia
      * el matiz. Cuidado con no confundirlo con [asBackground], que además desatura (ver ahí).
      */
-    fun dark(color: Int): Int = withLightness(color, DARK_LIGHTNESS)
+    fun dark(color: Int): Int = withLightness(color, themed(DARK_LIGHTNESS))
 
     /**
      * El color **débil** (faint): el [dark] con la mitad de su luminosidad ([FAINT_LIGHTNESS]).
      * Casi negro, pero con el matiz y la saturación del color dado para que al cambiar de canción
      * se siga notando. Pensado para fondos donde las filas coloreadas no deben desentonar.
      */
-    fun faint(color: Int): Int = withLightness(color, FAINT_LIGHTNESS)
+    fun faint(color: Int): Int = withLightness(color, themed(FAINT_LIGHTNESS))
 
     /**
      * El color **claro**: el inverso del [dark], es decir, el mismo matiz y saturación con una
      * luminosidad FIJA alta ([LIGHT_LIGHTNESS]). Cercano al blanco pero todavía reconocible como
      * del color de la canción. Para textos y botones que antes eran grises claros o blancos.
      */
-    fun light(color: Int): Int = withLightness(color, LIGHT_LIGHTNESS)
+    fun light(color: Int): Int = withLightness(color, themed(LIGHT_LIGHTNESS))
+
+    /**
+     * En el tema claro los tonos [dark], [faint] y [light] son "el opuesto" en luminosidad (1 - L):
+     * el oscuro pasa a ser un tono muy claro para los fondos y el claro uno oscuro para los textos.
+     * El color base del acento no cambia. Los equivalentes estáticos están en
+     * `values-notnight/colors.xml`.
+     */
+    private fun themed(lightness: Float): Float =
+        if (ThemePreferences.isLight()) 1f - lightness else lightness
 
     /** Mismo matiz y saturación que [color], con luminosidad [lightness] y la opacidad original. */
     private fun withLightness(color: Int, lightness: Float): Int {
@@ -266,7 +285,7 @@ object DynamicColor {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(accent, hsl)
         val saturation = hsl[1].coerceAtLeast(MIN_SATURATION)
-        val lightness = hsl[2].coerceIn(MIN_LIGHTNESS, MAX_LIGHTNESS)
+        val lightness = hsl[2].coerceIn(minLightness(), maxLightness())
         val step = 360f / count
         return List(count) { index ->
             ColorUtils.HSLToColor(
@@ -313,6 +332,12 @@ object DynamicColor {
         )
     }
 
+    /** Franja de luminosidad del acento: en el tema claro, más oscura para leerse sobre fondo claro. */
+    private fun minLightness() = if (ThemePreferences.isLight()) MIN_LIGHTNESS_LIGHT else MIN_LIGHTNESS
+    private fun maxLightness() = if (ThemePreferences.isLight()) MAX_LIGHTNESS_LIGHT else MAX_LIGHTNESS
+
+    private const val MIN_LIGHTNESS_LIGHT = 0.25f
+    private const val MAX_LIGHTNESS_LIGHT = 0.40f
     private const val SAMPLE_SIZE = 128
     private const val MIN_POPULATION_FRACTION = 0.08f
     private const val MIN_SOURCE_SATURATION = 0.12f

@@ -9,5 +9,5 @@
     <corners android:radius="100dp" />
     <stroke
         android:width="@dimen/ipod_stroke_info_box"
-        android:color="@color/um_yellow" />
+        android:color="@color/um_gold" />
 </shape>

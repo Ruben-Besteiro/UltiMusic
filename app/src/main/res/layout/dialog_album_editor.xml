@@ -173,6 +173,6 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/editor_autofill"
         android:src="@drawable/ic_wand"
-        app:backgroundTint="@color/um_yellow"
+        app:backgroundTint="@color/um_gold"
         app:tint="@color/um_background" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

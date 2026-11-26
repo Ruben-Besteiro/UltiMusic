@@ -232,7 +232,7 @@
                 android:progress="0"
                 android:progressBackgroundTint="@color/um_divider"
                 android:progressDrawable="@drawable/seekbar_line"
-                android:progressTint="@color/um_yellow"
+                android:progressTint="@color/um_gold"
                 android:splitTrack="false"
                 android:thumb="@null" />
 
@@ -277,7 +277,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_skip_previous"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <FrameLayout
@@ -295,7 +295,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_menu"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <!-- En modo vídeo se oculta la celda ENTERA (ver IPodDialogFragment.startVideo/exitVideo),
@@ -319,7 +319,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_play"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <FrameLayout
@@ -337,7 +337,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_more_vert"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <FrameLayout
@@ -355,7 +355,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_skip_next"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
         </LinearLayout>
 

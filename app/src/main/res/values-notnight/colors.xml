@@ -1,16 +1,35 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  Tema claro (Ajustes > Tema > Claro, o "Sistema" con el móvil en modo claro). Solo se sobrescriben
-  los colores neutros del esquema: fondos, superficies, texto y divisores. El acento (um_yellow y
-  sus tonos) es el mismo en los dos temas. Primer pase: pendiente de revisar en el móvil.
+  Tema claro (Ajustes > Tema > Claro, o "Sistema" con el móvil en modo claro). Cada color de
+  values/colors.xml que depende del tema tiene aquí su "opuesto" en luminosidad (L -> 1 - L); el
+  color base del acento (um_gold) es el mismo en los dos temas. En código, DynamicColor.dark/
+  faint/light hacen lo mismo con el acento dinámico (ver DynamicColor.themed).
 -->
 <resources>
     <color name="um_ripple_white">#1F000000</color>
-    <color name="um_background">#FFF2F2F2</color>
-    <color name="um_surface">#FFFFFFFF</color>
-    <color name="um_surface_variant">#FFE6E6E6</color>
-    <color name="um_sql_toggle_bg">#FFD6D6D6</color>
-    <color name="um_on_background">#FF141414</color>
-    <color name="um_on_surface_muted">#FF5C5C5C</color>
-    <color name="um_divider">#FFCCCCCC</color>
+
+    <!-- Neutros: fondo 0x20 -> 0xDF, superficie 0x14 -> 0xEB, etc. -->
+    <color name="um_background">#FFDFDFDF</color>
+    <color name="um_surface">#FFEBEBEB</color>
+    <color name="um_surface_variant">#FFE0E0E0</color>
+    <color name="um_sql_toggle_bg">#FFC7C7C7</color>
+    <color name="um_on_background">#FF0D0D0D</color>
+    <color name="um_on_surface_muted">#FF4F4F4F</color>
+    <color name="um_divider">#FFBFBFBF</color>
+    <color name="um_error">#FFB3261E</color>
+
+    <!-- Dorado base más oscuro para leerse sobre fondo claro (mismo matiz, L 0.33). -->
+    <color name="um_gold">#FFA67E03</color>
+
+    <!-- Tonos del acento (L 0.115 -> 0.885, 0.0575 -> 0.9425, 0.82 -> 0.18) -->
+    <color name="um_gold_dark">#FFFEF0C5</color>
+    <color name="um_gold_faint">#FFFFF8E2</color>
+    <color name="um_gold_light">#FF5A4501</color>
+
+    <!-- Etiquetas predefinidas: blancos -> negro, grises casi negros -> grises casi blancos -->
+    <color name="um_tag_recently_added">#FF000000</color>
+    <color name="um_tag_not_in_playlist">#FFCCCCCC</color>
+    <color name="um_tag_no_custom_tags">#FFCCCCCC</color>
+    <color name="um_tag_remix_cover">#FF000000</color>
+    <color name="um_tag_language">#FF000000</color>
 </resources>

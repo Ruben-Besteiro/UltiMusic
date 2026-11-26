@@ -80,6 +80,14 @@ object ThemePreferences {
         AppCompatDelegate.setDefaultNightMode(_mode.value.nightMode)
     }
 
+    /** `true` si ahora mismo se está mostrando el tema claro (el de Ajustes, o el del sistema). */
+    fun isLight(): Boolean = when (_mode.value) {
+        Mode.LIGHT -> true
+        Mode.DARK -> false
+        Mode.SYSTEM -> (android.content.res.Resources.getSystem().configuration.uiMode and
+            android.content.res.Configuration.UI_MODE_NIGHT_MASK) != android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }
+
     /** Guarda y aplica: `setDefaultNightMode` recrea solo las Activity vivas si el modo cambia. */
     fun set(value: Mode) {
         if (_mode.value == value) return

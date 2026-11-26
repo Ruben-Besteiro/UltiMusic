@@ -455,6 +455,10 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             DynamicColorPreferences.enabled.drop(1).collect { _currentSong.value?.let(::updateAccent) }
         }
+        // Ídem al cambiar el tema: el acento tiene una franja de luminosidad distinta en el claro.
+        serviceScope.launch {
+            com.untar.ultimusic.data.ThemePreferences.mode.drop(1).collect { _currentSong.value?.let(::updateAccent) }
+        }
         startSleepTimerWatcher()
         restorePlaybackState()
 

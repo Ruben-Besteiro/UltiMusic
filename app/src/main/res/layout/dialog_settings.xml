@@ -55,7 +55,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/settings_audio_section_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -67,7 +67,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_library_roots_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -121,7 +121,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_greylist_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -162,7 +162,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_boost_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -270,7 +270,7 @@
                     android:layout_weight="1"
                     android:gravity="center_vertical"
                     android:text="@string/settings_eq_title"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -603,7 +603,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="24dp"
                 android:text="@string/settings_sleep_timer_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -664,7 +664,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
                 android:text="@string/settings_visual_section_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -676,7 +676,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_background_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -697,7 +697,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_theme_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -745,7 +745,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_language_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -768,6 +768,22 @@
                 android:columnCount="5"
                 android:useDefaultMargins="false" />
 
+            <!-- Alfabeto del serbocroata (latín o cirílico): solo se ve mientras ese es el idioma
+                 activo (SettingsDialogFragment.setupScriptSpinner). Sin etiqueta, a propósito: las
+                 dos opciones van en su propia escritura y no hay texto que traducir.
+                 saveEnabled="false": la Activity se recrea al cambiar de alfabeto y Android
+                 restauraría la posición que tenía el Spinner, pisando la que calcula el código (un
+                 Spinner con la posición restaurada dispara onItemSelected y puede provocar un bucle
+                 de recreaciones). -->
+            <Spinner
+                android:id="@+id/scriptSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:contentDescription="@string/settings_script_desc"
+                android:saveEnabled="false"
+                android:visibility="gone" />
+
             <!-- ===== Ajuste: color dinámico (ver DynamicColorPreferences) ===== -->
 
             <LinearLayout
@@ -783,7 +799,7 @@
                     android:layout_weight="1"
                     android:gravity="center_vertical"
                     android:text="@string/settings_dynamic_color_title"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
@@ -813,7 +829,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_add_all_lyrics_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -1008,7 +1024,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="20dp"
                 android:text="@string/settings_services_section_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -1021,7 +1037,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_genius_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -1061,7 +1077,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 android:text="@string/settings_youtube_title"
-                android:textColor="@color/um_yellow"
+                android:textColor="@color/um_gold"
                 android:textSize="18sp"
                 android:textStyle="bold" />
 
@@ -1124,7 +1140,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="20dp"
                     android:text="@string/settings_recount_title"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="20sp"
                     android:textStyle="bold" />
 

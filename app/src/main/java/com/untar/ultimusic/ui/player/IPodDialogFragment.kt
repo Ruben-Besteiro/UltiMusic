@@ -1277,7 +1277,7 @@ class IPodDialogFragment : DialogFragment() {
      * el relleno del cuerpo, y el icono de altavoz de la fila "sonando ahora" de la cola.
      *
      * Es el sitio donde se ve mejor la regla de los dos amarillos (ver [AccentTint]): todo lo que en
-     * el XML era `um_yellow` lleva el acento tal cual, y lo que era `um_yellow_dark` lo lleva
+     * el XML era `um_gold` lleva el acento tal cual, y lo que era `um_gold_dark` lo lleva
      * atenuado ([DynamicColor.dark]).
      */
     private fun tintIPod(view: View, accent: Int) {
@@ -1297,7 +1297,7 @@ class IPodDialogFragment : DialogFragment() {
         // acento) solo se actualizan los colores. El relleno y la geometría replican los
         // drawable/ipod_*.xml, que quedan como fondo inicial hasta este primer paso.
         //
-        // El cuerpo es el único sitio de la app pintado con `@color/um_yellow_dark`, así que es el
+        // El cuerpo es el único sitio de la app pintado con `@color/um_gold_dark`, así que es el
         // único que lleva el acento atenuado (relleno = DynamicColor.dark(accent)).
         val ctx = requireContext()
         val density = resources.displayMetrics.density

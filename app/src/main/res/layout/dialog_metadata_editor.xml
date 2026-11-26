@@ -236,7 +236,7 @@
                     android:paddingHorizontal="4dp"
                     android:paddingVertical="4dp"
                     android:text="@string/editor_add_another_album"
-                    android:textColor="@color/um_yellow"
+                    android:textColor="@color/um_gold"
                     android:textSize="14sp"
                     android:textStyle="bold" />
 
@@ -657,6 +657,6 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/editor_autofill"
         android:src="@drawable/ic_wand"
-        app:backgroundTint="@color/um_yellow"
+        app:backgroundTint="@color/um_gold"
         app:tint="@color/um_background" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

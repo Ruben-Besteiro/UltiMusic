@@ -48,6 +48,8 @@ class UltiMusicApp : Application() {
         CrashLogger.install(this)
         // Antes que cualquier otra cosa: si es la primera vez que arranca la aplicación, fija el
         // idioma según el del sistema (ver la cabecera de AppLocale.applyDefaultIfUnset).
+        // Primero el país del usuario (decide la variante del serbocroata), luego el idioma.
+        AppLocale.init(this)
         AppLocale.applyDefaultIfUnset()
         ApiCache.init(this)
         GeniusTokenStore.init(this)

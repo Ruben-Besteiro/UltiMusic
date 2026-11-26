@@ -175,7 +175,7 @@
             android:contentDescription="@string/add_songs_desc"
             android:src="@android:drawable/ic_input_add"
             android:visibility="gone"
-            app:backgroundTint="@color/um_yellow"
+            app:backgroundTint="@color/um_gold"
             app:tint="@color/um_background"
             tools:visibility="visible" />
 
@@ -196,7 +196,7 @@
         android:progress="0"
         android:progressDrawable="@drawable/seekbar_line_square"
         android:progressBackgroundTint="@color/um_divider"
-        android:progressTint="@color/um_yellow"
+        android:progressTint="@color/um_gold"
         android:thumb="@null"
         android:splitTrack="false"
         android:background="@null"

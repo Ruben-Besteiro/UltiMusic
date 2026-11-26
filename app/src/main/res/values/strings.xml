@@ -563,6 +563,9 @@
          en AppLocale.LANGUAGES, en el propio idioma, así que no se traduce. -->
     <string name="settings_language_title">Idioma</string>
     <string name="settings_language_subtitle">Elige el idioma de la aplicación</string>
+    <!-- Descripción del desplegable del alfabeto del serbocroata: va en su propio idioma, como el
+         nombre de cada bandera, así que no se traduce. -->
+    <string name="settings_script_desc" translatable="false">Latinica / Ћирилица</string>
 
     <!-- Carpetas de la fonoteca -->
     <string name="settings_library_roots_title">Carpetas de la fonoteca</string>
