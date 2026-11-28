@@ -64,8 +64,10 @@ import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.ui.sort.SortDialogFragment
+import com.untar.ultimusic.util.CollectionShuffleStore
+import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.PlaylistResumeStore
-import com.untar.ultimusic.util.PlaylistShuffleStore
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.joinNonBlank
 import kotlinx.coroutines.flow.combine
@@ -189,13 +191,11 @@ class CollectionDetailDialogFragment : DialogFragment() {
                 val songs = adapter.currentSongs()
                 if (viewModel.selectedIds.value.isNotEmpty()) {
                     songs.getOrNull(position)?.let { viewModel.toggleSelection(it.id) }
-                } else if (viewModel.currentKind == CollectionKind.GENRE) {
-                    // Un género no fija la cola de golpe: empieza con solo la canción tocada y se va
-                    // alargando sola con canciones del mismo género (ver
-                    // PlaybackService.playFromGenre), igual que tocar una canción en la pestaña
-                    // Canciones pero sin salirse del género.
-                    playerViewModel.playFromGenre(songs[position], viewModel.currentKey!!)
                 } else {
+                    // Un género o una etiqueta no llenan la cola de golpe: empieza con la canción
+                    // tocada y se va alargando de una en una siguiendo el orden del ojo, o al azar con
+                    // su aleatorio puesto (ver PlaybackService.startGrowing). Una lista sí la llena
+                    // entera (ver PlaybackService.playCollection).
                     playerViewModel.playCollection(songs, position, viewModel.currentKey, viewModel.currentKind)
                 }
             },
@@ -330,21 +330,24 @@ class CollectionDetailDialogFragment : DialogFragment() {
         // ofrece su fila en TagsAdapter, para no obligar a salir de la ficha para poder tocarla.
         toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible =
             viewModel.currentKind == CollectionKind.GENRE
+        toolbar.menu.findItem(R.id.action_sort_collection_songs)?.isVisible = hasSortEye()
         toolbar.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 R.id.action_shuffle -> {
-                    // Para una Lista este icono ya no es un disparo único: es un toggle persistido
-                    // (ver ShuffleToggleIcon/PlaylistShuffleStore). Género/Etiqueta conservan el
-                    // "barajar y ya" de siempre.
-                    val key = viewModel.currentKey
-                    if (viewModel.currentKind == CollectionKind.LISTA && key != null) {
-                        val newState = !PlaylistShuffleStore.isShuffleOn(key)
-                        playerViewModel.setListaShuffle(key, adapter.currentSongs(), newState)
-                        // Repintado inmediato: no hay ningún StateFlow que avise de este cambio, así
-                        // que se hace aquí mismo para que se vea al instante (regla del CLAUDE.md).
-                        refreshShuffleIcon(toolbar, playerViewModel.accentTarget.value)
-                    } else {
-                        playerViewModel.shuffleCollection(adapter.currentSongs(), viewModel.currentKey, viewModel.currentKind)
+                    // Interruptor del aleatorio de ESTE tipo de ficha (todas las listas, todos los
+                    // géneros o todas las etiquetas, ver CollectionShuffleStore): no reproduce nada.
+                    // El icono se repinta solo con el `launch` que observa el interruptor.
+                    viewModel.currentKind?.let { CollectionShuffleStore.toggle(requireContext(), it) }
+                    true
+                }
+                R.id.action_sort_collection_songs -> {
+                    val tab = when (viewModel.currentKind) {
+                        CollectionKind.GENRE -> LibraryTab.GENRE_SONGS
+                        CollectionKind.TAG -> LibraryTab.TAG_SONGS
+                        else -> null
+                    }
+                    if (tab != null && parentFragmentManager.findFragmentByTag(SortDialogFragment.TAG) == null) {
+                        SortDialogFragment.newInstance(tab).show(parentFragmentManager, SortDialogFragment.TAG)
                     }
                     true
                 }
@@ -470,6 +473,13 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         }
                 }
                 launch {
+                    // Repinta el interruptor del aleatorio al tocarlo, sin esperar a que cambie el acento.
+                    val kind = viewModel.currentKind ?: return@launch
+                    CollectionShuffleStore.flow(kind).collect {
+                        refreshShuffleIcon(toolbar, playerViewModel.accentColor.value)
+                    }
+                }
+                launch {
                     playerViewModel.accentColor.collect { accent ->
                         // Mismo acento que el resto de la app: el de lo que suena, no hay carátula
                         // propia de la que sacar uno (ver el comentario equivalente en
@@ -494,6 +504,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
                         adapter.setSelection(ids)
                         val selecting = ids.isNotEmpty()
                         toolbar.menu.findItem(R.id.action_shuffle)?.isVisible = !selecting
+                        toolbar.menu.findItem(R.id.action_sort_collection_songs)?.isVisible = !selecting && hasSortEye()
                         toolbar.menu.findItem(R.id.action_collection_menu)?.isVisible = selecting || when (viewModel.currentKind) {
                             CollectionKind.GENRE -> true
                             CollectionKind.TAG -> currentEditableTag != null
@@ -532,6 +543,7 @@ class CollectionDetailDialogFragment : DialogFragment() {
         toolbar.setTitleTextColor(onBackground)
         toolbar.setNavigationIconTint(onBackground)
         refreshShuffleIcon(toolbar, accent, onBackground)
+        toolbar.menu.findItem(R.id.action_sort_collection_songs)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_collection_menu)?.icon?.setTint(onBackground)
         summaryIcon.setColorFilter(onBackground)
         summaryText.setTextColor(onBackground)
@@ -543,14 +555,17 @@ class CollectionDetailDialogFragment : DialogFragment() {
         btnResume.iconTint = ColorStateList.valueOf(onBackground)
     }
 
+    /** Si esta ficha lleva ojo de ordenar: solo género y etiqueta (una lista tiene su orden manual). */
+    private fun hasSortEye(): Boolean =
+        viewModel.currentKind == CollectionKind.GENRE || viewModel.currentKind == CollectionKind.TAG
+
     /**
-     * Repinta `R.id.action_shuffle`: para una Lista, el icono de [ShuffleToggleIcon] según el
-     * estado persistido en [PlaylistShuffleStore] (toggle); para Género/Etiqueta, el icono de
-     * siempre teñido de [onBackground] (disparo único, sin estado propio que reflejar).
+     * Repinta `R.id.action_shuffle` con [ShuffleToggleIcon] según el interruptor de este tipo de
+     * ficha (ver [CollectionShuffleStore]).
      *
      * [onBackground] se puede omitir -se recalcula a partir de [accent], igual que hace
-     * [applyAccent]- para los sitios que no lo tienen ya calculado a mano (el `setOnMenuItemClickListener`
-     * de más arriba, que repinta al instante tras tocar el toggle).
+     * [applyAccent]- para los sitios que no lo tienen ya calculado a mano (el `launch` que observa
+     * el interruptor).
      */
     private fun refreshShuffleIcon(
         toolbar: MaterialToolbar,
@@ -558,12 +573,10 @@ class CollectionDetailDialogFragment : DialogFragment() {
         onBackground: Int = DynamicColor.onColor(DynamicColor.asBackground(accent))
     ) {
         val item = toolbar.menu.findItem(R.id.action_shuffle) ?: return
-        val key = viewModel.currentKey
-        if (viewModel.currentKind == CollectionKind.LISTA && key != null) {
-            item.icon = ShuffleToggleIcon.build(requireContext(), PlaylistShuffleStore.isShuffleOn(key), accent, onBackground)
-        } else {
-            item.icon?.setTint(onBackground)
-        }
+        val kind = viewModel.currentKind ?: return
+        item.icon = ShuffleToggleIcon.build(
+            requireContext(), CollectionShuffleStore.isOn(kind), DynamicColor.asBackground(accent), onBackground
+        )
     }
 
     /** Menú de 3 puntos: añadir la colección entera a la cola o a otra lista (ver

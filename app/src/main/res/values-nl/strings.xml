@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">Afbeelding van de artiest</string>
     <string name="shuffle_collection">Willekeurig afspelen</string>
+    <string name="shuffle_mode_on">Willekeurig afspelen aan</string>
+    <string name="shuffle_mode_off">Willekeurig afspelen uit</string>
     <string name="no_albums">Nog geen albums</string>
     <string name="no_artists">Nog geen artiesten</string>
     <string name="artist_others">Overige</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">Je kunt meer muziek aan de wachtrij toevoegen via de drie puntjes en \"Aan wachtrij toevoegen\"</string>
     <string name="queue_expand_hint">De afspeelwachtrij wordt automatisch uitgebreid. Om nummers aan de wachtrij toe te voegen, kun je naar rechts vegen of op de drie puntjes en \"Aan wachtrij toevoegen\" tikken</string>
-    <string name="queue_expand_hint_genre">De afspeelwachtrij wordt automatisch uitgebreid met nummers van het genre dat je hebt gekozen. Om nummers aan de wachtrij toe te voegen, kun je naar rechts vegen of op de drie puntjes en \"Aan wachtrij toevoegen\" tikken</string>
     <string name="queue_hint_playlist">Je kunt meer muziek aan de afspeellijst toevoegen via de drie puntjes en \"Aan afspeellijst toevoegen\"</string>
     <string name="queue_end">Je bent aan het einde</string>
     <string name="queue_empty">Geen afspeelwachtrij</string>

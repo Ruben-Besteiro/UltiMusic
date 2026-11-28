@@ -11,7 +11,6 @@ import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.PlaylistHistoryStore
 import com.untar.ultimusic.util.PlaylistResumeStore
-import com.untar.ultimusic.util.PlaylistShuffleStore
 import com.untar.ultimusic.util.SortOption
 import com.untar.ultimusic.util.TextSearch
 import com.untar.ultimusic.util.sortedByOption
@@ -130,25 +129,23 @@ class PlaylistsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun create(name: String) = mutate { repository.createPlaylist(name) }
 
-    /** Si el renombrado tiene éxito, el "Posición actual" guardado (ver [PlaylistResumeStore]), el
-     *  historial de "ya reproducidas" (ver [PlaylistHistoryStore]) y el modo de barajado (ver
-     *  [PlaylistShuffleStore]) siguen a la lista con su nuevo nombre en vez de quedarse huérfanos bajo
-     *  el antiguo. */
+    /** Si el renombrado tiene éxito, el "Posición actual" guardado (ver [PlaylistResumeStore]) y el
+     *  historial de "ya reproducidas" (ver [PlaylistHistoryStore]) siguen a la lista con su nuevo
+     *  nombre en vez de quedarse huérfanos bajo el antiguo. (El aleatorio ya no es de cada lista sino
+     *  de todas a la vez, ver [com.untar.ultimusic.util.CollectionShuffleStore].) */
     fun rename(oldName: String, newName: String) = mutate {
         if (repository.renamePlaylist(oldName, newName)) {
             PlaylistResumeStore.rename(oldName, newName)
             PlaylistHistoryStore.rename(oldName, newName)
-            PlaylistShuffleStore.rename(oldName, newName)
         }
     }
 
-    /** Borra también el "Posición actual" guardado, el historial de "ya reproducidas" y el modo de
-     *  barajado: sin esto, un nombre reciclado para una lista nueva heredaría los de la borrada. */
+    /** Borra también el "Posición actual" guardado y el historial de "ya reproducidas": sin esto, un
+     *  nombre reciclado para una lista nueva heredaría los de la borrada. */
     fun delete(name: String) = mutate {
         repository.deletePlaylist(name)
         PlaylistResumeStore.clear(name)
         PlaylistHistoryStore.clear(name)
-        PlaylistShuffleStore.clear(name)
     }
 
     fun addSongs(name: String, filenames: List<String>) = mutate { repository.addSongs(name, filenames) }

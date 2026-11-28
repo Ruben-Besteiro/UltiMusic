@@ -12,6 +12,8 @@ import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.common.SongSelection
 import com.untar.ultimusic.util.CoverRef
+import com.untar.ultimusic.util.FichaSort
+import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SortOption
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.formatCompactCount
@@ -95,18 +97,11 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     /**
-     * Cómo resolver el criterio de orden compartido con la pestaña Canciones. Lo fija el fragmento
-     * con [bindSongsSort] apuntando al [com.untar.ultimusic.ui.SongsViewModel] COMPARTIDO de la
-     * actividad (no uno propio de esta ficha, que se destruye con ella): así el ojo de la ficha de
-     * artista (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]) abre el MISMO diálogo que
-     * la pestaña Canciones y escribe en la MISMA preferencia -elegir un orden en un sitio también lo
-     * cambia en el otro-, mismo patrón de "bind" externo que
-     * [com.untar.ultimusic.ui.collection.CollectionDetailViewModel.playlistSongsSource].
+     * El orden de las canciones de las fichas de artista: el de su propio ojo (ver
+     * [com.untar.ultimusic.ui.library.DetailDialogFragment]), común a todos los artistas pero
+     * independiente del de la pestaña Canciones (ver [FichaSort]).
      */
-    private val songsSortSource = MutableStateFlow<(() -> StateFlow<SortOption>)?>(null)
-
-    private val songsSort: Flow<SortOption> =
-        songsSortSource.flatMapLatest { it?.invoke() ?: flowOf(SortOption.DEFAULT) }
+    private val songsSort: Flow<SortOption> = FichaSort.flow(LibraryTab.ARTIST_SONGS)
 
     /**
      * Cabecera. `flatMapLatest` es lo que permite que un flujo cambie de fuente: cuando
@@ -132,8 +127,8 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
      * trae cada [Song], ver [Song.trackNumber]); para un artista ese número no se enseña
      * ([DetailSongsAdapter] solo lo pinta en la ficha de álbum), aunque la canción lo lleve
      * consigo igualmente (es del álbum al que pertenece, no de esta ficha): en su lugar se ordenan
-     * con [songsSort], el mismo criterio -y el mismo ojo para cambiarlo- que la pestaña Canciones
-     * (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
+     * con [songsSort], el del ojo de la ficha de artista (ver
+     * [com.untar.ultimusic.ui.library.DetailDialogFragment]).
      */
     val tracks: StateFlow<List<Song>> = resolvedTarget
         .flatMapLatest { t ->
@@ -236,11 +231,6 @@ class DetailViewModel(app: Application) : AndroidViewModel(app) {
             val survivingId = repository.renameArtist(id, newName)
             if (survivingId != id) target.value = DetailKind.ARTIST to survivingId
         }
-    }
-
-    /** Ver [songsSortSource]. Se fija una sola vez, antes de que [tracks] se observe. */
-    fun bindSongsSort(source: () -> StateFlow<SortOption>) {
-        songsSortSource.value = source
     }
 
     // --- Construcción de la cabecera ---

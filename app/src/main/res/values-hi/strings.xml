@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">कलाकार की तस्वीर</string>
     <string name="shuffle_collection">यादृच्छिक क्रम में चलाएँ</string>
+    <string name="shuffle_mode_on">शफ़ल मोड चालू</string>
+    <string name="shuffle_mode_off">शफ़ल मोड बंद</string>
     <string name="no_albums">अभी कोई एल्बम नहीं है</string>
     <string name="no_artists">अभी कोई कलाकार नहीं है</string>
     <string name="artist_others">अन्य</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">आप तीन बिंदुओं और \"कतार में जोड़ें\" पर टैप करके कतार में और संगीत जोड़ सकते हैं</string>
     <string name="queue_expand_hint">प्लेबैक कतार अपने आप बढ़ती जाएगी। कतार में गाने जोड़ने के लिए आप दाईं ओर खींच सकते हैं या तीन बिंदुओं और \"कतार में जोड़ें\" पर टैप कर सकते हैं</string>
-    <string name="queue_expand_hint_genre">प्लेबैक कतार आपकी चुनी हुई शैली के गानों से अपने आप बढ़ती जाएगी। कतार में गाने जोड़ने के लिए आप दाईं ओर खींच सकते हैं या तीन बिंदुओं और \"कतार में जोड़ें\" पर टैप कर सकते हैं</string>
     <string name="queue_hint_playlist">आप तीन बिंदुओं और \"सूची में जोड़ें\" पर टैप करके सूची में और संगीत जोड़ सकते हैं</string>
     <string name="queue_end">आप अंत तक पहुँच गए</string>
     <string name="queue_empty">कोई प्लेबैक कतार नहीं है</string>

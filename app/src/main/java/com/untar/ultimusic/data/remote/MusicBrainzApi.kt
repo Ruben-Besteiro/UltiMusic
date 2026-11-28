@@ -64,6 +64,19 @@ object MusicBrainzApi {
     private const val FREE_DOWNLOAD_TYPE = "download for free"
     private val STORE_RELATION_TYPES = setOf("purchase for download", FREE_DOWNLOAD_TYPE)
 
+    /** Status de release cuyos enlaces nunca se enseñan: los recopilatorios piratas que la comunidad
+     *  da de alta como "Bootleg" traen "download for free" a webs de piratería (p. ej. rsload.net). */
+    private const val BOOTLEG_STATUS = "bootleg"
+
+    /** Dominios de descarga gratuita legítima. Si la canción ya está en alguna tienda de pago, un
+     *  enlace gratis a cualquier OTRO sitio es casi seguro piratería y se descarta (ver
+     *  [downloadStores]). Sin tiendas de pago se respetan todos: ahí lo normal es que el propio
+     *  artista la regale en su web. */
+    private val TRUSTED_FREE_HOSTS = setOf(
+        "bandcamp.com", "newgrounds.com", "soundcloud.com", "archive.org",
+        "jamendo.com", "freemusicarchive.org"
+    )
+
     private val rateLimitGuard = RateLimitGuard("MusicBrainz")
 
     /** Instante de la última petición mandada a este servicio, para el freno de [paced]. Todas las
@@ -250,7 +263,8 @@ object MusicBrainzApi {
      *
      * Una fila por tienda (la primera que aparezca, con las de la grabación por delante de las de
      * los lanzamientos). Se descartan las de Apple: no se puede comprar ni descargar desde Android
-     * ni desde su web. Vacía —sin lanzar— si no hay ninguna; los fallos de red o del servicio se
+     * ni desde su web; también los releases Bootleg y, si hay alguna tienda de pago, las descargas
+     * gratis fuera de [TRUSTED_FREE_HOSTS] (webs de piratería). Vacía —sin lanzar— si no hay ninguna; los fallos de red o del servicio se
      * dejan subir para distinguir "no hay tiendas" de "no se ha podido comprobar".
      */
     suspend fun downloadStores(title: String, artist: String, isrc: String?): List<StoreLink> =
@@ -263,10 +277,22 @@ object MusicBrainzApi {
                 // Una sola petición trae los enlaces de TODAS las ediciones de esta grabación.
                 val releasesUrl = "$BASE_URL/release?recording=$recordingId&inc=url-rels&fmt=json&limit=100"
                 val releases = JSONObject(paced(releasesUrl)).optJSONArray("releases") ?: JSONArray()
-                releases.asList().forEach { collectStoreLinks(it.optJSONArray("relations"), links) }
+                releases.asList()
+                    .filter { !it.optString("status").equals(BOOTLEG_STATUS, ignoreCase = true) }
+                    .forEach { collectStoreLinks(it.optJSONArray("relations"), links) }
             }
-            links.values.toList()
+            val all = links.values.toList()
+            if (all.none { !it.free }) {
+                all
+            } else {
+                all.filter { !it.free || isTrustedFreeHost(it.url) }
+            }
         }
+
+    private fun isTrustedFreeHost(url: String): Boolean {
+        val host = Uri.parse(url).host?.lowercase()?.removePrefix("www.") ?: return false
+        return TRUSTED_FREE_HOSTS.any { host == it || host.endsWith(".$it") }
+    }
 
     /**
      * Las grabaciones de MusicBrainz que corresponden a la canción, como mucho [MAX_RECORDINGS].

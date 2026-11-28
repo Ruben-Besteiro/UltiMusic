@@ -50,7 +50,7 @@ import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.Headphones
 import com.untar.ultimusic.util.PlaylistHistoryStore
 import com.untar.ultimusic.util.PlaylistResumeStore
-import com.untar.ultimusic.util.PlaylistShuffleStore
+import com.untar.ultimusic.util.CollectionShuffleStore
 import com.untar.ultimusic.util.SafStorage
 import com.untar.ultimusic.util.artistDisplay
 import kotlinx.coroutines.CoroutineScope
@@ -152,6 +152,41 @@ class PlaybackService : MediaSessionService() {
     val isLooseQueue = _isLooseQueue.asStateFlow()
 
     private val librarySongsPool = MutableStateFlow<List<Song>>(emptyList())
+
+    /**
+     * Cola que CRECE de una en una: la de un artista, un género o una etiqueta (ver [startGrowing]).
+     * En vez de meter todas sus canciones de golpe, la cola empieza con la tocada y, cada vez que
+     * se acaba, se elige la siguiente en ese momento (ver [growAndAdvance]). Nunca se repite ninguna,
+     * y cuando se acaban la cola se para.
+     *
+     * @property kind de qué tipo de ficha viene (decide qué aleatorio mira, ver [CollectionShuffleStore]).
+     * @property pool todas sus canciones, en el orden del ojo de la ficha en el momento de tocarla.
+     * @property used las que ya han entrado en la cola en esta sesión (la tocada incluida).
+     * @property cursor posición en [pool] de la última que entró: sin aleatorio se sigue desde ahí.
+     */
+    private data class Growing(
+        val kind: CollectionKind,
+        val pool: List<Song>,
+        val used: Set<Long>,
+        val cursor: Int
+    )
+
+    private var growing: Growing? = null
+
+    /**
+     * Si la cola que crece todavía tiene canciones por sonar al acabarse lo que hay en la cola. La
+     * usan el iPod (para avisar de que la cola seguirá sola en vez de decir que se ha acabado) y
+     * "siguiente" de la notificación (ver [QueueAwarePlayer.hasNextMediaItem]).
+     */
+    private val _canGrow = MutableStateFlow(false)
+    val canGrow = _canGrow.asStateFlow()
+
+    /**
+     * Las canciones de un álbum o una lista en su orden de verdad, tal como llegaron a
+     * [playCollection]: si su aleatorio se quita a mitad de reproducción, lo que queda por sonar
+     * vuelve a este orden (ver [onShuffleChanged]). Null si la cola no es de un álbum ni de una lista.
+     */
+    private var collectionBase: List<Song>? = null
 
     private val _currentSong = MutableStateFlow<Song?>(null)
     val currentSong = _currentSong.asStateFlow()
@@ -462,6 +497,16 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             DynamicColorPreferences.enabled.drop(1).collect { _currentSong.value?.let(::updateAccent) }
         }
+        // Lo que hay en la cola cambia qué puede elegir la cola que crece (no elige nada que ya
+        // esté en ella, ver pickGrowingNext), así que [canGrow] se recalcula con cada cambio.
+        serviceScope.launch { _queue.collect { refreshCanGrow() } }
+        // Aleatorio de cada tipo de ficha (ver CollectionShuffleStore): si cambia el del tipo que
+        // suena, lo que queda por sonar se recoloca ya.
+        for (kind in CollectionKind.entries) {
+            serviceScope.launch {
+                CollectionShuffleStore.flow(kind).drop(1).collect { onShuffleChanged(kind) }
+            }
+        }
         startSleepTimerWatcher()
         restorePlaybackState()
 
@@ -533,7 +578,7 @@ class PlaybackService : MediaSessionService() {
     private inner class QueueAwarePlayer(player: Player) : ForwardingPlayer(player) {
 
         override fun hasNextMediaItem(): Boolean =
-            _currentIndex.value < _queue.value.lastIndex || _isLooseQueue.value
+            _currentIndex.value < _queue.value.lastIndex || _isLooseQueue.value || _canGrow.value
 
         override fun hasPreviousMediaItem(): Boolean = _currentIndex.value > 0
 
@@ -578,6 +623,7 @@ class PlaybackService : MediaSessionService() {
             return
         }
         val currentSongId = queue.getOrNull(_currentIndex.value)?.id ?: return
+        val g = growing
         playbackPrefs.edit()
             .putString(KEY_QUEUE, queue.joinToString(",") { it.id.toString() })
             .putLong(KEY_CURRENT_SONG_ID, currentSongId)
@@ -585,7 +631,23 @@ class PlaybackService : MediaSessionService() {
             .putString(KEY_PLAYLIST_NAME, _currentPlaylistName.value)
             .putString(KEY_COLLECTION_KIND, _currentCollectionKind.value?.name)
             .putBoolean(KEY_RANDOM_CONTINUATION, _isLooseQueue.value)
+            // La cola que crece (ver [Growing]): sin esto, al volver a abrir la aplicación la cola de
+            // un artista se quedaría en lo que ya había y no seguiría alargándose.
+            .putString(KEY_GROWING_POOL, g?.pool?.joinToString(",") { it.id.toString() })
+            .putString(KEY_GROWING_USED, g?.used?.joinToString(","))
+            .putInt(KEY_GROWING_CURSOR, g?.cursor ?: -1)
+            .putString(KEY_COLLECTION_BASE, collectionBase?.joinToString(",") { it.id.toString() })
             .apply()
+    }
+
+    private fun idList(raw: String?): List<Long> =
+        raw?.split(",")?.mapNotNull { it.toLongOrNull() }.orEmpty()
+
+    /** [LibraryRepository.songsByIds] en el orden de [ids] (la consulta no promete ninguno). */
+    private suspend fun songsInOrder(ids: List<Long>): List<Song> {
+        if (ids.isEmpty()) return emptyList()
+        val byId = library.songsByIds(ids).associateBy { it.id }
+        return ids.mapNotNull { byId[it] }
     }
 
     private fun restorePlaybackState() {
@@ -597,11 +659,17 @@ class PlaybackService : MediaSessionService() {
         val playlistName = playbackPrefs.getString(KEY_PLAYLIST_NAME, null)
         val collectionKindName = playbackPrefs.getString(KEY_COLLECTION_KIND, null)
         val wasRandomContinuation = playbackPrefs.getBoolean(KEY_RANDOM_CONTINUATION, false)
+        val growingPoolIds = idList(playbackPrefs.getString(KEY_GROWING_POOL, null))
+        val growingUsed = idList(playbackPrefs.getString(KEY_GROWING_USED, null)).toSet()
+        val growingCursor = playbackPrefs.getInt(KEY_GROWING_CURSOR, -1)
+        val baseIds = idList(playbackPrefs.getString(KEY_COLLECTION_BASE, null))
 
         restoreJob = serviceScope.launch {
             // Solo lo reproducible, igual que la lista de Canciones: nada que no se pueda abrir.
             val restoredQueue = library.playableOnly(library.songsByIds(queueIds))
             if (restoredQueue.isEmpty()) return@launch
+            val restoredPool = library.playableOnly(songsInOrder(growingPoolIds))
+            val restoredBase = library.playableOnly(songsInOrder(baseIds))
 
             // Resolver la cola guardada contra la base de datos es una llamada suspend: tarda lo
             // suyo, y en ese hueco el usuario ya puede haber tocado una canción (una orden que
@@ -616,9 +684,18 @@ class PlaybackService : MediaSessionService() {
             _currentIndex.value = restoredQueue.indexOfFirst { it.id == currentSongId }
                 .let { if (it >= 0) it else 0 }
             _currentPlaylistName.value = playlistName
-            _currentCollectionKind.value = collectionKindName?.let {
+            val kind = collectionKindName?.let {
                 runCatching { CollectionKind.valueOf(it) }.getOrNull()
             }
+            _currentCollectionKind.value = kind
+            setGrowing(
+                if (kind != null && kind.grows && restoredPool.isNotEmpty()) {
+                    Growing(kind, restoredPool, growingUsed, growingCursor)
+                } else {
+                    null
+                }
+            )
+            collectionBase = restoredBase.takeIf { it.isNotEmpty() && kind?.grows == false }
             loadCurrent(shouldPlay = false, seekToMs = positionMs)
         }
     }
@@ -628,31 +705,13 @@ class PlaybackService : MediaSessionService() {
     // ===================================================================================
 
     fun play(song: Song) {
+        setGrowing(null)
+        collectionBase = null
         _queue.value = listOf(song)
         _currentIndex.value = 0
         _isLooseQueue.value = true
         _currentPlaylistName.value = null
         _currentCollectionKind.value = null
-        playCurrent()
-    }
-
-    /**
-     * Igual que [play] (cola suelta de una sola canción), pero anclada a un género: al agotarse la
-     * cola, [continueWithRandomSong] la alarga con una canción al azar de [genreName], no de toda la
-     * biblioteca. La usa [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment] al tocar
-     * una canción con la ficha abierta en un género, igual que [play] con la pestaña Canciones.
-     *
-     * Reutiliza [_currentCollectionKind]/[_currentPlaylistName] (mismos campos que [playCollection])
-     * para guardar a qué género está anclada: [continueWithRandomSong] y [queueEndText] en
-     * [com.untar.ultimusic.ui.player.IPodDialogFragment] los leen para saber de dónde sacar la
-     * siguiente canción y qué aviso mostrar.
-     */
-    fun playFromGenre(song: Song, genreName: String) {
-        _queue.value = listOf(song)
-        _currentIndex.value = 0
-        _isLooseQueue.value = true
-        _currentPlaylistName.value = genreName
-        _currentCollectionKind.value = CollectionKind.GENRE
         playCurrent()
     }
 
@@ -766,11 +825,13 @@ class PlaybackService : MediaSessionService() {
     // ---------------------------------------------------------------------------------------------
 
     /**
-     * Para una Lista ([CollectionKind.LISTA] con [playlistName]), tocar una canción de su ficha
-     * construye la cola con el sistema "sin repeticiones" (ver [buildListaQueue]) en vez de empezar
-     * sin más en [startIndex]. Para cualquier otro tipo de colección (álbum, artista, género,
-     * etiqueta) el comportamiento es el de siempre: la cola pasa a ser [collection] tal cual,
-     * empezando en [startIndex].
+     * Reproduce [collection] empezando por la de [startIndex]. Según de dónde venga:
+     * - **Artista, género o etiqueta**: la cola crece de una en una (ver [startGrowing]).
+     * - **Lista** (con [playlistName]): la cola entera con el sistema "sin repeticiones" (ver
+     *   [buildListaQueue]), barajada si el aleatorio de las listas está puesto.
+     * - **Álbum**: la cola entera; con el aleatorio de los álbumes, la tocada primero y el resto
+     *   barajado detrás (ver [albumQueue]).
+     * - **Sin tipo** (p. ej. resultados del buscador): [collection] tal cual, en [startIndex].
      */
     fun playCollection(
         collection: List<Song>,
@@ -779,18 +840,154 @@ class PlaybackService : MediaSessionService() {
         collectionKind: CollectionKind? = null
     ) {
         if (collection.isEmpty() || startIndex !in collection.indices) return
-        if (collectionKind == CollectionKind.LISTA && playlistName != null) {
-            val (queue, index) = buildListaQueue(collection, playlistName, collection[startIndex])
-            _queue.value = queue
-            _currentIndex.value = index
-        } else {
-            _queue.value = collection
-            _currentIndex.value = startIndex
+        if (collectionKind != null && collectionKind.grows) {
+            startGrowing(collection, startIndex, playlistName, collectionKind)
+            return
+        }
+        setGrowing(null)
+        collectionBase = collection.takeIf { collectionKind != null }
+        when {
+            collectionKind == CollectionKind.LISTA && playlistName != null -> {
+                val (queue, index) = buildListaQueue(collection, playlistName, collection[startIndex])
+                _queue.value = queue
+                _currentIndex.value = index
+            }
+            collectionKind == CollectionKind.ALBUM -> {
+                val (queue, index) = albumQueue(collection, collection[startIndex])
+                _queue.value = queue
+                _currentIndex.value = index
+            }
+            else -> {
+                _queue.value = collection
+                _currentIndex.value = startIndex
+            }
         }
         _isLooseQueue.value = false
         _currentPlaylistName.value = playlistName
         _currentCollectionKind.value = collectionKind
         playCurrent()
+    }
+
+    /**
+     * La cola de un álbum que empieza por [current]: el álbum en su orden (con [current] en su
+     * sitio, así que las de antes quedan detrás en la cola por si se le da a "anterior"), o, con el
+     * aleatorio de los álbumes puesto, [current] primero y todas las demás barajadas detrás.
+     * Devuelve la cola y la posición de [current] en ella.
+     */
+    private fun albumQueue(base: List<Song>, current: Song): Pair<List<Song>, Int> =
+        if (CollectionShuffleStore.isOn(CollectionKind.ALBUM)) {
+            (listOf(current) + base.filter { it.id != current.id }.shuffled()) to 0
+        } else {
+            base to base.indexOfFirst { it.id == current.id }.coerceAtLeast(0)
+        }
+
+    // ---------------------------------------------------------------------------------------------
+    // Cola que CRECE (artista, género, etiqueta) — ver [Growing].
+    // ---------------------------------------------------------------------------------------------
+
+    /**
+     * Empieza a reproducir la canción [startIndex] de [pool] (las canciones de un artista, un género
+     * o una etiqueta, en el orden del ojo de su ficha) con una cola que se va alargando sola de una
+     * en una (ver [growAndAdvance]): sin repetir ninguna y parando al acabarse.
+     */
+    private fun startGrowing(pool: List<Song>, startIndex: Int, key: String?, kind: CollectionKind) {
+        val start = pool[startIndex]
+        collectionBase = null
+        setGrowing(Growing(kind = kind, pool = pool, used = setOf(start.id), cursor = startIndex))
+        _queue.value = listOf(start)
+        _currentIndex.value = 0
+        _isLooseQueue.value = false
+        _currentPlaylistName.value = key
+        _currentCollectionKind.value = kind
+        playCurrent()
+    }
+
+    /** Fija [growing] y recalcula [canGrow] a la vez, para que nunca se desincronicen. */
+    private fun setGrowing(g: Growing?) {
+        growing = g
+        refreshCanGrow()
+    }
+
+    private fun refreshCanGrow() {
+        _canGrow.value = growing?.let { pickGrowingNext(it, peek = true) != null } ?: false
+    }
+
+    /**
+     * Al acabarse la cola de un artista/género/etiqueta: elige la siguiente (ver [pickGrowingNext]),
+     * la añade al final y la pone a sonar. Se elige justo en ese momento y no antes, a propósito: si
+     * hubiera ya una elegida esperando al final de la cola, lo que el usuario añadiera con "Añadir a
+     * cola" quedaría detrás de ella en vez de justo después de la actual. Devuelve false si ya no
+     * quedan canciones sin sonar (la cola se acaba ahí).
+     */
+    private fun growAndAdvance(shouldPlay: Boolean): Boolean {
+        val g = growing ?: return false
+        val (index, song) = pickGrowingNext(g) ?: return false
+        setGrowing(g.copy(used = g.used + song.id, cursor = index))
+        _queue.value = _queue.value + freshCopy(song)
+        _currentIndex.value = _queue.value.lastIndex
+        loadCurrent(shouldPlay = shouldPlay)
+        return true
+    }
+
+    /**
+     * La próxima canción de [g] que aún no ha sonado, con su posición en [Growing.pool]: al azar
+     * con el aleatorio de su tipo puesto; si no, la primera que venga DESPUÉS de [Growing.cursor] en
+     * el orden del ojo. Sin aleatorio nunca se vuelve atrás: si se tocó la 5 de 20, suenan de la 5
+     * a la 20 y ahí se acaba. Null si no queda ninguna.
+     *
+     * Tampoco elige ninguna que ya esté en la cola (p. ej. añadida a mano): sonaría dos veces.
+     * Con [peek] solo se pregunta si queda alguna (ver [canGrow]): devuelve la primera sin sortear.
+     */
+    private fun pickGrowingNext(g: Growing, peek: Boolean = false): Pair<Int, Song>? {
+        val inQueue = _queue.value.mapTo(HashSet()) { it.id }
+        val shuffle = CollectionShuffleStore.isOn(g.kind)
+        val candidates = g.pool.withIndex().filter { (index, song) ->
+            song.id !in g.used && song.id !in inQueue && (shuffle || index > g.cursor)
+        }
+        if (candidates.isEmpty()) return null
+        val chosen = if (shuffle && !peek) candidates.random() else candidates.first()
+        return chosen.index to chosen.value
+    }
+
+    /**
+     * La versión más reciente de [song] que haya en la biblioteca: [Growing.pool] es una foto de
+     * cuando se tocó la ficha, y si la canción se ha editado desde entonces, lo editado es lo que
+     * tiene que salir al entrar en la cola.
+     */
+    private fun freshCopy(song: Song): Song =
+        librarySongsPool.value.firstOrNull { it.id == song.id } ?: song
+
+    /**
+     * Ha cambiado el aleatorio de [kind] (ver [CollectionShuffleStore]). Si lo que suena no es de
+     * ese tipo, no se toca nada: se notará la próxima vez que se reproduzca desde una ficha de ese
+     * tipo. Si lo es, se recoloca lo que queda por sonar sin cortar la canción actual:
+     * - Artista/género/etiqueta: nada que recolocar (la siguiente aún no está elegida, ver
+     *   [growAndAdvance]); solo puede cambiar si quedan canciones por sonar, ver [canGrow].
+     * - Lista: se reconstruye con [buildListaQueue], igual que al tocar una canción.
+     * - Álbum: lo que ya ha sonado se queda; lo que falta se baraja, o vuelve al orden del álbum.
+     */
+    private fun onShuffleChanged(kind: CollectionKind) {
+        if (_currentCollectionKind.value != kind) return
+        val current = _currentSong.value ?: return
+        when (kind) {
+            CollectionKind.ARTIST, CollectionKind.GENRE, CollectionKind.TAG -> refreshCanGrow()
+            CollectionKind.LISTA -> {
+                val name = _currentPlaylistName.value ?: return
+                reorderActiveListaQueue(name, collectionBase ?: return)
+            }
+            CollectionKind.ALBUM -> {
+                val base = collectionBase ?: return
+                if (base.none { it.id == current.id }) return
+                if (CollectionShuffleStore.isOn(kind)) {
+                    val played = _queue.value.take(_currentIndex.value + 1)
+                    val playedIds = played.mapTo(HashSet()) { it.id }
+                    _queue.value = played + base.filter { it.id !in playedIds }.shuffled()
+                } else {
+                    _queue.value = base
+                    _currentIndex.value = base.indexOfFirst { it.id == current.id }
+                }
+            }
+        }
     }
 
     /**
@@ -814,25 +1011,13 @@ class PlaybackService : MediaSessionService() {
     private fun buildListaQueue(songs: List<Song>, playlistName: String, current: Song): Pair<List<Song>, Int> {
         // [songs] ya llega en el orden normal de la lista (manual/de archivo, ver PlaylistRepository)
         // -no hay que ordenarlo aparte-, así que el único caso que toca tocarlo es el barajado.
-        val base = if (PlaylistShuffleStore.isShuffleOn(playlistName)) songs.shuffled() else songs
+        val base = if (CollectionShuffleStore.isOn(CollectionKind.LISTA)) songs.shuffled() else songs
         val byId = base.associateBy { it.id }
         val historyIds = PlaylistHistoryStore.getHistory(playlistName)
         val already = historyIds.mapNotNull { id -> if (id != current.id) byId[id] else null }
         val historySet = historyIds.toSet()
         val upcoming = base.filter { it.id != current.id && it.id !in historySet }
         return (already + current + upcoming) to already.size
-    }
-
-    /**
-     * Activa/desactiva el modo aleatorio de [playlistName] (botón nuevo de la barra de
-     * `CollectionDetailDialogFragment`), persistiéndolo en [PlaylistShuffleStore]. Si esa Lista es la
-     * que está sonando ahora mismo, reordena de inmediato lo que queda por sonar -sin cortar la
-     * canción actual, mismo criterio que [shuffleCollection]-; si no, el cambio se aplicará solo la
-     * próxima vez que se toque una canción de [playlistName] (ver [playCollection]).
-     */
-    fun setListaShuffle(playlistName: String, songs: List<Song>, enabled: Boolean) {
-        PlaylistShuffleStore.setShuffleOn(playlistName, enabled)
-        reorderActiveListaQueue(playlistName, songs)
     }
 
     /**
@@ -864,59 +1049,30 @@ class PlaybackService : MediaSessionService() {
         _currentIndex.value = index
     }
 
-    /**
-     * Si la canción que suena ahora mismo pertenece a [collection] (p. ej. el usuario ya la estaba
-     * escuchando y entra a mezclar ese mismo género o lista), solo se reordena la cola —igual que
-     * [reorderQueue]— para no cortar la reproducción en curso, dejando la canción actual en la
-     * posición 0 y barajando el resto detrás. Si no, es una mezcla normal: se arranca desde el
-     * principio de la colección ya barajada.
-     */
-    fun shuffleCollection(
-        collection: List<Song>,
-        playlistName: String? = null,
-        collectionKind: CollectionKind? = null
-    ) {
-        if (collection.isEmpty()) return
-        val currentId = _currentSong.value?.id
-        if (currentId != null && collection.any { it.id == currentId }) {
-            _isLooseQueue.value = false
-            _currentPlaylistName.value = playlistName
-            _currentCollectionKind.value = collectionKind
-            val rest = collection.filterNot { it.id == currentId }.shuffled()
-            val current = collection.first { it.id == currentId }
-            reorderQueue(listOf(current) + rest)
-        } else {
-            playCollection(collection.shuffled(), 0, playlistName, collectionKind)
-        }
-    }
-
     fun next() {
         if (_currentIndex.value < _queue.value.lastIndex) {
             _currentIndex.value += 1
             loadCurrent(shouldPlay = player.playWhenReady)
         } else if (_isLooseQueue.value) {
             continueWithRandomSong(shouldPlay = player.playWhenReady)
+        } else {
+            // Artista/género/etiqueta: se elige la siguiente ahora (si no queda ninguna, se para).
+            growAndAdvance(shouldPlay = player.playWhenReady)
         }
     }
 
     /**
-     * Alarga la cola suelta con una canción al azar y la reproduce: de [genreSongsPoolName] si la
-     * cola suelta está anclada a un género (ver [playFromGenre]), o de toda la biblioteca si no.
+     * Alarga la cola suelta (la de tocar una canción en la pestaña Canciones) con una canción al
+     * azar de toda la biblioteca y la reproduce. Los géneros ya no pasan por aquí: crecen con su
+     * propio sistema (ver [startGrowing]).
      *
      * [librarySongsPool] lo rellena un `Flow` de Room que se empieza a recoger en [onCreate], así
      * que en un Service **recién creado** —el que revive `MainActivity.onResume` al volver de
      * segundo plano— puede estar todavía vacío. Antes eso era un `return` a secas: la cola se
      * acababa, el "siguiente" no hacía nada y no había forma de enterarse. Ahora se espera a la
-     * primera lista de verdad y se sigue donde se había quedado. Anclada a un género no hace falta
-     * ese mismo cuidado: se pide directo a Room (ver [continueWithRandomGenreSong]), sin pool propio
-     * que precargar.
+     * primera lista de verdad y se sigue donde se había quedado.
      */
     private fun continueWithRandomSong(shouldPlay: Boolean) {
-        val genreName = genreSongsPoolName()
-        if (genreName != null) {
-            continueWithRandomGenreSong(genreName, shouldPlay)
-            return
-        }
         val pool = librarySongsPool.value
         if (pool.isNotEmpty()) {
             appendRandomSong(pool, shouldPlay)
@@ -925,21 +1081,6 @@ class PlaybackService : MediaSessionService() {
         randomContinuationJob?.cancel()
         randomContinuationJob = serviceScope.launch {
             appendRandomSong(librarySongsPool.first { it.isNotEmpty() }, shouldPlay)
-        }
-    }
-
-    /** Nombre del género si [continueWithRandomSong] debe alargar la cola solo con canciones de ESE
-     *  género (ver [playFromGenre]); null en cola suelta normal, de toda la biblioteca. */
-    private fun genreSongsPoolName(): String? =
-        _currentPlaylistName.value?.takeIf { _currentCollectionKind.value == CollectionKind.GENRE }
-
-    private fun continueWithRandomGenreSong(genreName: String, shouldPlay: Boolean) {
-        randomContinuationJob?.cancel()
-        randomContinuationJob = serviceScope.launch {
-            val pool = library.songsOfGenre(genreName).first()
-            // Si el género se ha quedado sin canciones (todas borradas/reeditadas mientras sonaba),
-            // la cola simplemente deja de alargarse en vez de reventar contra una lista vacía.
-            if (pool.isNotEmpty()) appendRandomSong(pool, shouldPlay)
         }
     }
 
@@ -991,7 +1132,11 @@ class PlaybackService : MediaSessionService() {
     fun skipToNext() = withQueue {
         val idx = _currentIndex.value
         if (idx >= _queue.value.lastIndex) {
-            if (_isLooseQueue.value) continueWithRandomSong(shouldPlay = player.playWhenReady)
+            if (_isLooseQueue.value) {
+                continueWithRandomSong(shouldPlay = player.playWhenReady)
+            } else {
+                growAndAdvance(shouldPlay = player.playWhenReady)
+            }
             return@withQueue
         }
         jumpTo(idx + 1, forcePlay = false)
@@ -1780,6 +1925,10 @@ class PlaybackService : MediaSessionService() {
         private const val KEY_PLAYLIST_NAME = "playlist_name"
         private const val KEY_COLLECTION_KIND = "collection_kind"
         private const val KEY_RANDOM_CONTINUATION = "random_continuation"
+        private const val KEY_GROWING_POOL = "growing_pool"
+        private const val KEY_GROWING_USED = "growing_used"
+        private const val KEY_GROWING_CURSOR = "growing_cursor"
+        private const val KEY_COLLECTION_BASE = "collection_base"
         private const val KEY_VOLUME_BOOST = "volume_boost"
         private const val KEY_LIMIT_DISABLED = "limit_disabled"
         private const val KEY_EQ_ENABLED = "eq_enabled"

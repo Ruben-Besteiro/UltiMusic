@@ -84,6 +84,8 @@
     </plurals>
     <string name="person_image_desc">Imagem do artista</string>
     <string name="shuffle_collection">Reproduzir em ordem aleatória</string>
+    <string name="shuffle_mode_on">Modo aleatório ativado</string>
+    <string name="shuffle_mode_off">Modo aleatório desativado</string>
     <string name="no_albums">Ainda não há nenhum álbum</string>
     <string name="no_artists">Ainda não há nenhum artista</string>
     <string name="artist_others">Outros</string>
@@ -270,7 +272,6 @@
     </plurals>
     <string name="queue_hint_loose">Podes adicionar mais música à fila carregando nos três pontos e em \"Adicionar à fila\"</string>
     <string name="queue_expand_hint">A fila de reprodução vai expandir-se automaticamente. Para adicionar músicas à fila, podes arrastar para a direita ou carregar nos três pontos e em \"Adicionar à fila\"</string>
-    <string name="queue_expand_hint_genre">A fila de reprodução vai expandir-se automaticamente com músicas do género que escolheste. Para adicionar músicas à fila, podes arrastar para a direita ou carregar nos três pontos e em \"Adicionar à fila\"</string>
     <string name="queue_hint_playlist">Podes adicionar mais música à lista carregando nos três pontos e em \"Adicionar a lista\"</string>
     <string name="queue_end">Chegaste ao fim</string>
     <string name="queue_empty">Não há fila de reprodução</string>

@@ -80,6 +80,8 @@
     </plurals>
     <string name="person_image_desc">Ảnh nghệ sĩ</string>
     <string name="shuffle_collection">Phát theo thứ tự ngẫu nhiên</string>
+    <string name="shuffle_mode_on">Đã bật phát ngẫu nhiên</string>
+    <string name="shuffle_mode_off">Đã tắt phát ngẫu nhiên</string>
     <string name="no_albums">Chưa có album nào</string>
     <string name="no_artists">Chưa có nghệ sĩ nào</string>
     <string name="artist_others">Khác</string>
@@ -256,7 +258,6 @@
     </plurals>
     <string name="queue_hint_loose">Bạn có thể thêm nhạc vào hàng đợi bằng cách nhấn vào ba chấm rồi \"Thêm vào hàng đợi\"</string>
     <string name="queue_expand_hint">Hàng đợi phát sẽ tự động kéo dài. Để thêm bài hát vào hàng đợi, bạn có thể vuốt sang phải hoặc nhấn vào ba chấm rồi \"Thêm vào hàng đợi\"</string>
-    <string name="queue_expand_hint_genre">Hàng đợi phát sẽ tự động kéo dài bằng các bài hát thuộc thể loại bạn đã chọn. Để thêm bài hát vào hàng đợi, bạn có thể vuốt sang phải hoặc nhấn vào ba chấm rồi \"Thêm vào hàng đợi\"</string>
     <string name="queue_hint_playlist">Bạn có thể thêm nhạc vào danh sách bằng cách nhấn vào ba chấm rồi \"Thêm vào danh sách\"</string>
     <string name="queue_end">Bạn đã đến cuối</string>
     <string name="queue_empty">Không có hàng đợi phát</string>

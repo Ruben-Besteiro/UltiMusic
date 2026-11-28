@@ -9,7 +9,13 @@ import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.common.SongSelection
+import com.untar.ultimusic.util.FichaSort
+import com.untar.ultimusic.util.LibraryTab
+import com.untar.ultimusic.util.SortOption
+import com.untar.ultimusic.util.sortedByOption
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -79,13 +85,19 @@ class CollectionDetailViewModel(app: Application) : AndroidViewModel(app) {
                 when (t?.first) {
                     null -> flowOf(emptyList())
                     CollectionKind.GENRE -> repository.songsOfGenre(t.second)
+                        .sortedBy(FichaSort.flow(LibraryTab.GENRE_SONGS))
                     CollectionKind.LISTA -> playlistSource?.invoke(t.second) ?: flowOf(emptyList())
                     CollectionKind.TAG -> t.second.toLongOrNull()?.let { id -> tagSource?.invoke(id) }
+                        ?.sortedBy(FichaSort.flow(LibraryTab.TAG_SONGS))
                         ?: flowOf(emptyList())
                     else -> flowOf(emptyList())
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /** Ordena con el ojo de la ficha (género o etiqueta, ver [FichaSort]); se reordena sola al cambiarlo. */
+    private fun Flow<List<Song>>.sortedBy(sort: Flow<SortOption>): Flow<List<Song>> =
+        combine(this, sort) { list, option -> list.sortedByOption(option) }.flowOn(Dispatchers.Default)
 
     /**
      * Carrusel horizontal de álbumes, solo para un género (igual que el de la ficha de artista, ver

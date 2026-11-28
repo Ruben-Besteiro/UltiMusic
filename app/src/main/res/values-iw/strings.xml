@@ -84,6 +84,8 @@
     </plurals>
     <string name="person_image_desc">תמונת האמן</string>
     <string name="shuffle_collection">הפעלה בסדר אקראי</string>
+    <string name="shuffle_mode_on">מצב אקראי מופעל</string>
+    <string name="shuffle_mode_off">מצב אקראי כבוי</string>
     <string name="no_albums">עדיין אין אלבומים</string>
     <string name="no_artists">עדיין אין אמנים</string>
     <string name="artist_others">אחרים</string>
@@ -270,7 +272,6 @@
     </plurals>
     <string name="queue_hint_loose">אפשר להוסיף עוד מוזיקה לתור בלחיצה על שלוש הנקודות ואז על \"הוספה לתור\"</string>
     <string name="queue_expand_hint">תור ההשמעה יתרחב אוטומטית. כדי להוסיף שירים לתור, אפשר לגרור ימינה או ללחוץ על שלוש הנקודות ואז על \"הוספה לתור\"</string>
-    <string name="queue_expand_hint_genre">תור ההשמעה יתרחב אוטומטית עם שירים מהז\'אנר שבחרת. כדי להוסיף שירים לתור, אפשר לגרור ימינה או ללחוץ על שלוש הנקודות ואז על \"הוספה לתור\"</string>
     <string name="queue_hint_playlist">אפשר להוסיף עוד מוזיקה לרשימה בלחיצה על שלוש הנקודות ואז על \"הוספה לרשימה\"</string>
     <string name="queue_end">הגעת לסוף</string>
     <string name="queue_empty">אין תור השמעה</string>

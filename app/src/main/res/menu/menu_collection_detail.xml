@@ -4,9 +4,19 @@
   que menu_library_detail.xml (aleatorio + 3 puntos), pero el de 3 puntos aquí sale SIEMPRE — a
   diferencia de álbum/artista, tanto una lista como un género tienen algo que ofrecer en
   ese menú (ver menu_collection_actions.xml).
+
+  El ojo de ordenar solo sale en un género o una etiqueta (una lista tiene su propio orden manual,
+  de arrastrar): cada uno de los dos tipos guarda su propio orden (ver util/LibrarySort.kt, FichaSort),
+  y es el que sigue la cola al reproducir desde la ficha.
 -->
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <item
+        android:id="@+id/action_sort_collection_songs"
+        android:icon="@drawable/ic_eye"
+        android:title="@string/action_sort"
+        app:showAsAction="always" />
 
     <item
         android:id="@+id/action_shuffle"

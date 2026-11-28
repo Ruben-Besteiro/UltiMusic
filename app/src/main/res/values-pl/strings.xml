@@ -86,6 +86,8 @@
     </plurals>
     <string name="person_image_desc">Zdjęcie wykonawcy</string>
     <string name="shuffle_collection">Odtwarzaj losowo</string>
+    <string name="shuffle_mode_on">Tryb losowy włączony</string>
+    <string name="shuffle_mode_off">Tryb losowy wyłączony</string>
     <string name="no_albums">Nie ma jeszcze żadnych albumów</string>
     <string name="no_artists">Nie ma jeszcze żadnych wykonawców</string>
     <string name="artist_others">Inni</string>
@@ -277,7 +279,6 @@
     </plurals>
     <string name="queue_hint_loose">Możesz dodać więcej muzyki do kolejki, dotykając trzech kropek i „Dodaj do kolejki”</string>
     <string name="queue_expand_hint">Kolejka odtwarzania rozszerzy się automatycznie. Aby dodać utwory do kolejki, przeciągnij w prawo albo dotknij trzech kropek i „Dodaj do kolejki”</string>
-    <string name="queue_expand_hint_genre">Kolejka odtwarzania rozszerzy się automatycznie o utwory z wybranego gatunku. Aby dodać utwory do kolejki, przeciągnij w prawo albo dotknij trzech kropek i „Dodaj do kolejki”</string>
     <string name="queue_hint_playlist">Możesz dodać więcej muzyki do playlisty, dotykając trzech kropek i „Dodaj do playlisty”</string>
     <string name="queue_end">To już koniec</string>
     <string name="queue_empty">Brak kolejki odtwarzania</string>

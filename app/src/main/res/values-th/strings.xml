@@ -80,6 +80,8 @@
     </plurals>
     <string name="person_image_desc">รูปศิลปิน</string>
     <string name="shuffle_collection">เล่นแบบสุ่ม</string>
+    <string name="shuffle_mode_on">เปิดโหมดสุ่มแล้ว</string>
+    <string name="shuffle_mode_off">ปิดโหมดสุ่มแล้ว</string>
     <string name="no_albums">ยังไม่มีอัลบั้ม</string>
     <string name="no_artists">ยังไม่มีศิลปิน</string>
     <string name="artist_others">อื่นๆ</string>
@@ -256,7 +258,6 @@
     </plurals>
     <string name="queue_hint_loose">คุณเพิ่มเพลงลงคิวได้โดยแตะจุดสามจุดแล้วเลือก \"เพิ่มลงคิว\"</string>
     <string name="queue_expand_hint">คิวการเล่นจะขยายเองโดยอัตโนมัติ หากต้องการเพิ่มเพลงลงคิว ให้ปัดไปทางขวาหรือแตะจุดสามจุดแล้วเลือก \"เพิ่มลงคิว\"</string>
-    <string name="queue_expand_hint_genre">คิวการเล่นจะขยายเองโดยอัตโนมัติด้วยเพลงในแนวเพลงที่คุณเลือก หากต้องการเพิ่มเพลงลงคิว ให้ปัดไปทางขวาหรือแตะจุดสามจุดแล้วเลือก \"เพิ่มลงคิว\"</string>
     <string name="queue_hint_playlist">คุณเพิ่มเพลงลงเพลย์ลิสต์ได้โดยแตะจุดสามจุดแล้วเลือก \"เพิ่มลงเพลย์ลิสต์\"</string>
     <string name="queue_end">คุณมาถึงตอนท้ายแล้ว</string>
     <string name="queue_empty">ไม่มีคิวการเล่น</string>

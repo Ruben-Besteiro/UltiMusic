@@ -1225,6 +1225,11 @@ class IPodDialogFragment : DialogFragment() {
                 // PlayerViewModel.queueSelectedIds): mientras dure, btnMenu cambia del icono de las 3
                 // rayas al de los 3 puntos (ver su listener más arriba, que abre showQueueSelectionMenu
                 // en vez de mostrar/ocultar la cola) e infoBox enseña la cuenta (ver updateInfoBox).
+                // Si la cola de un artista/género/etiqueta pasa a poder o no seguir creciendo (p. ej. al
+                // cambiar su aleatorio estando en la última), el aviso del final tiene que cambiar.
+                launch {
+                    playerViewModel.canGrow.collect { updateInfoBox(queueList, tvTitle, tvMeta, queueExpandHint) }
+                }
                 launch {
                     playerViewModel.queueSelectedIds.collect { ids ->
                         queueAdapter.setSelection(ids)
@@ -1363,6 +1368,8 @@ class IPodDialogFragment : DialogFragment() {
     private fun queueEndText(): String {
         if (playerViewModel.queue.value.isEmpty()) return getString(R.string.queue_empty)
         if (playerViewModel.isLooseQueue.value) return getString(R.string.queue_hint_loose)
+        // Artista/género/etiqueta con canciones aún por sonar: la siguiente se elige al acabar esta.
+        if (playerViewModel.canGrow.value) return getString(R.string.queue_expand_hint)
         return if (playerViewModel.currentCollectionKind.value == CollectionKind.LISTA) {
             getString(R.string.queue_hint_playlist)
         } else {
@@ -1439,16 +1446,10 @@ class IPodDialogFragment : DialogFragment() {
         }
 
         val showExpandHint = queueList.isVisible &&
-            playerViewModel.isLooseQueue.value &&
+            (playerViewModel.isLooseQueue.value || playerViewModel.canGrow.value) &&
             playerViewModel.queue.value.size <= 1
         queueExpandHint.isVisible = showExpandHint
-        if (showExpandHint) {
-            queueExpandHint.text = if (playerViewModel.currentCollectionKind.value == CollectionKind.GENRE) {
-                getString(R.string.queue_expand_hint_genre)
-            } else {
-                getString(R.string.queue_expand_hint)
-            }
-        }
+        if (showExpandHint) queueExpandHint.text = getString(R.string.queue_expand_hint)
     }
 
     /**

@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">تصویر هنرمند</string>
     <string name="shuffle_collection">پخش به ترتیب تصادفی</string>
+    <string name="shuffle_mode_on">پخش تصادفی روشن شد</string>
+    <string name="shuffle_mode_off">پخش تصادفی خاموش شد</string>
     <string name="no_albums">هنوز هیچ آلبومی نیست</string>
     <string name="no_artists">هنوز هیچ هنرمندی نیست</string>
     <string name="artist_others">سایرین</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">می‌توانید با زدن سه نقطه و \"افزودن به صف\" موسیقی بیشتری به صف اضافه کنید</string>
     <string name="queue_expand_hint">صف پخش به‌طور خودکار گسترش می‌یابد. برای افزودن آهنگ به صف، می‌توانید به راست بکشید یا سه نقطه و \"افزودن به صف\" را بزنید</string>
-    <string name="queue_expand_hint_genre">صف پخش به‌طور خودکار با آهنگ‌هایی از سبکی که انتخاب کردید گسترش می‌یابد. برای افزودن آهنگ به صف، می‌توانید به راست بکشید یا سه نقطه و \"افزودن به صف\" را بزنید</string>
     <string name="queue_hint_playlist">می‌توانید با زدن سه نقطه و \"افزودن به فهرست\" موسیقی بیشتری به فهرست اضافه کنید</string>
     <string name="queue_end">به پایان رسیدید</string>
     <string name="queue_empty">صف پخشی وجود ندارد</string>

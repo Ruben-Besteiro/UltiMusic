@@ -80,6 +80,8 @@
     </plurals>
     <string name="person_image_desc">艺人图片</string>
     <string name="shuffle_collection">随机播放</string>
+    <string name="shuffle_mode_on">随机播放已开启</string>
+    <string name="shuffle_mode_off">随机播放已关闭</string>
     <string name="no_albums">还没有任何专辑</string>
     <string name="no_artists">还没有任何艺人</string>
     <string name="artist_others">其他</string>
@@ -256,7 +258,6 @@
     </plurals>
     <string name="queue_hint_loose">点按三个点并选择“添加到队列”，即可向队列中添加更多音乐</string>
     <string name="queue_expand_hint">播放队列会自动延长。要向队列中添加歌曲，可以向右滑动，或点按三个点并选择“添加到队列”</string>
-    <string name="queue_expand_hint_genre">播放队列会自动用你所选流派的歌曲延长。要向队列中添加歌曲，可以向右滑动，或点按三个点并选择“添加到队列”</string>
     <string name="queue_hint_playlist">点按三个点并选择“添加到歌单”，即可向歌单中添加更多音乐</string>
     <string name="queue_end">已经到底了</string>
     <string name="queue_empty">没有播放队列</string>

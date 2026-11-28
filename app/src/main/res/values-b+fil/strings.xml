@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">Larawan ng artist</string>
     <string name="shuffle_collection">I-play nang random</string>
+    <string name="shuffle_mode_on">Naka-on ang shuffle</string>
+    <string name="shuffle_mode_off">Naka-off ang shuffle</string>
     <string name="no_albums">Wala pang album</string>
     <string name="no_artists">Wala pang artist</string>
     <string name="artist_others">Iba pa</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">Puwede kang magdagdag ng higit pang musika sa pila sa pag-tap sa tatlong tuldok at sa \"Idagdag sa pila\"</string>
     <string name="queue_expand_hint">Awtomatikong hahaba ang pila ng pag-playback. Para magdagdag ng mga kanta sa pila, puwede kang mag-swipe pakanan o i-tap ang tatlong tuldok at ang \"Idagdag sa pila\"</string>
-    <string name="queue_expand_hint_genre">Awtomatikong hahaba ang pila ng pag-playback gamit ang mga kanta ng genre na pinili mo. Para magdagdag ng mga kanta sa pila, puwede kang mag-swipe pakanan o i-tap ang tatlong tuldok at ang \"Idagdag sa pila\"</string>
     <string name="queue_hint_playlist">Puwede kang magdagdag ng higit pang musika sa playlist sa pag-tap sa tatlong tuldok at sa \"Idagdag sa playlist\"</string>
     <string name="queue_end">Nakarating ka na sa dulo</string>
     <string name="queue_empty">Walang pila ng pag-playback</string>
