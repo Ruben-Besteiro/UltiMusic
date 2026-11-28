@@ -87,6 +87,10 @@ class VideoScreenController(
      */
     private var offsetMs: Long = 0
 
+    // Los parámetros públicos ([load], [setOffset]) hablan en términos del desplazamiento de la LETRA
+    // respecto del vídeo (ver `Song.videoOffsetMs`: positivo la adelanta), que es el signo contrario de
+    // [offsetMs] (positivo adelanta el vídeo respecto del audio local, que es el tiempo de la letra).
+
     /** True en cuanto se ha pedido la inicialización, para no pedirla dos veces. */
     private var initializing = false
 
@@ -209,12 +213,12 @@ class VideoScreenController(
      * llamarlas en ese momento, y no ahora, es lo único que evita que el vídeo nazca en un punto
      * distinto al que se congeló el audio local.
      *
-     * [offsetMs] es el desplazamiento guardado de la canción (ver `Song.videoOffsetMs`); se aplica
+     * [offsetMs] es el desplazamiento de la letra guardado de la canción (ver `Song.videoOffsetMs`); se aplica
      * aquí y queda recordado para que [seekTo] y [localPositionMs] lo sigan aplicando mientras dure
      * este vídeo.
      */
     fun load(videoId: String, positionMs: () -> Long, isPlaying: () -> Boolean, offsetMs: Long = 0) {
-        this.offsetMs = offsetMs
+        this.offsetMs = -offsetMs
         lastKnownPositionMs = withOffset(positionMs())
         // Se adelanta aquí, y no se deja solo a [onStateChange], para que [wasPlaying] conteste lo
         // pedido incluso si el vídeo falla antes de llegar a ningún estado (ver [onError] en
@@ -267,7 +271,7 @@ class VideoScreenController(
      * real mientras se edita en los ajustes del reproductor de vídeo.
      */
     fun setOffset(newOffsetMs: Long, currentAudioPositionMs: Long) {
-        offsetMs = newOffsetMs
+        offsetMs = -newOffsetMs
         seekTo(currentAudioPositionMs)
     }
 

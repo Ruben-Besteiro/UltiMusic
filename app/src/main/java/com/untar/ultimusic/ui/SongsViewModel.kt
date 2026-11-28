@@ -75,19 +75,16 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
 
     fun clearSelection() = selection.clear()
 
-    private var reconciled = false
-
     /**
      * Reconciliación en curso, si la hay. `onCreate` y `onResume` llaman a [loadIfNeeded] casi a la
-     * vez en el arranque en frío; sin este job, las dos llamadas pasan el check de [reconciled]
-     * (que no se pone a `true` hasta que termina, y eso tarda segundos) y se lanzan dos escaneos
+     * vez en el arranque en frío; sin este job, las dos llamadas lanzarían dos escaneos
      * completos en paralelo.
      */
     private var reconcileJob: Job? = null
 
-    /** Reconcilia solo la primera vez (p. ej. al conceder el permiso), y nunca si ya hay una en curso. */
+    /** Reconcilia cada vez que se llama (arranque y cada vuelta a primer plano), salvo si ya hay una en curso. */
     fun loadIfNeeded() {
-        if (reconciled || reconcileJob != null) return
+        if (reconcileJob != null) return
         reload()
     }
 
@@ -108,11 +105,12 @@ class SongsViewModel(app: Application) : AndroidViewModel(app) {
         reconcileJob?.cancel()
         reconcileJob = viewModelScope.launch {
             runCatching { repository.reconcile() }
+            // Una sola vez: recupera carátulas cuyo enlace se perdió pero cuyo archivo sigue en images/.
+            runCatching { repository.relinkOrphanImages() }
             // Al terminar cada reconciliación, no solo la primera: es la señal más parecida a
             // "abrir la aplicación" que hay, y refreshYouTubeStatsIfDue ya se encarga de no repetir
             // el refresco más de una vez al día por su cuenta.
             repository.refreshYouTubeStatsIfDue()
-            reconciled = true
             reconcileJob = null
         }
     }

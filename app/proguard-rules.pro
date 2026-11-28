@@ -12,10 +12,12 @@
 #   public *;
 #}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# ML Kit (identificador de idioma): los ComponentRegistrar se instancian por reflexión desde el
+# manifest (MlKitInitProvider). Sin conservar su constructor vacío, R8 lo elimina y
+# LanguageIdentification.getClient() revienta en release con un NPE.
+-keep class * implements com.google.firebase.components.ComponentRegistrar { <init>(); }
+-keep class com.google.mlkit.** { <init>(); }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Conserva números de línea para poder desofuscar trazas (el mapping.txt va en el AAB).
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

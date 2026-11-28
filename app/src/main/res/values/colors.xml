@@ -18,13 +18,13 @@
     <color name="um_surface_variant">#FF1F1F1F</color>
     <color name="um_sql_toggle_bg">#FF383838</color>
     <!-- Los cuatro tonos del acento, que en código salen de DynamicColor (mismo matiz y saturación
-         que um_yellow, luminosidad fija): um_yellow_dark = DynamicColor.dark (0.115),
-         um_yellow_faint = DynamicColor.faint (la mitad del oscuro) y um_yellow_light =
-         DynamicColor.light (0.82). Si se cambia um_yellow hay que recalcular los otros tres. -->
-    <color name="um_yellow">#FFFBC10E</color>
-    <color name="um_yellow_dark">#FF3A2C01</color>
-    <color name="um_yellow_faint">#FF1D1600</color>
-    <color name="um_yellow_light">#FFFEE8A5</color>
+         que um_gold, luminosidad fija): um_gold_dark = DynamicColor.dark (0.115),
+         um_gold_faint = DynamicColor.faint (la mitad del oscuro) y um_gold_light =
+         DynamicColor.light (0.82). Si se cambia um_gold hay que recalcular los otros tres. -->
+    <color name="um_gold">#FFFBC10E</color>
+    <color name="um_gold_dark">#FF3A2C01</color>
+    <color name="um_gold_faint">#FF1D1600</color>
+    <color name="um_gold_light">#FFFEE8A5</color>
     <color name="um_on_background">#FFF2F2F2</color>
     <color name="um_on_surface_muted">#FFB0B0B0</color>
     <color name="um_divider">#FF404040</color>
@@ -32,8 +32,12 @@
     <!-- Velo semitransparente sobre la carátula cuando el iPod muestra la cola encima de ella
          (ver IPodDialogFragment): la carátula se ve de fondo, atenuada, en vez de desaparecer. -->
     <color name="um_queue_scrim">#D9000000</color>
-    <!-- Fondo de los dos botones flotantes del contenedor de la letra del iPod ("Ver más/menos" y
-         el de traducir, ver ipod_lyrics_overlay_button.xml): semitransparente para no tapar del
+    <!-- Velo sobre la imagen de fondo de la pantalla principal (activity_main.xml y la copia
+         borrosa de las tarjetas, ver BlurredBackground.SCRIM): la oscurece para que se lea el texto
+         claro. En el tema claro es el opuesto, blanco, y la aclara (ver values-notnight). -->
+    <color name="um_background_scrim">#4D000000</color>
+    <!-- Fondo de los botones flotantes del contenedor de la letra del iPod (traducir, romanizar y
+         editar; también el de "Ver más/menos", hoy desactivado; ver ipod_lyrics_overlay_button.xml): semitransparente para no tapar del
          todo la letra que quede debajo, fijo en vez de con el color dinámico porque no es amarillo. -->
     <color name="um_lyrics_overlay_button">#99000000</color>
     <!-- Rojo de "esto ha ido mal" (de momento solo el token de Genius que no vale, ver
@@ -53,7 +57,6 @@
     <color name="um_tag_recently_added">#FFFFFFFF</color>  <!-- blanco -->
     <color name="um_tag_not_in_playlist">#FF333333</color> <!-- gris casi negro -->
     <color name="um_tag_no_custom_tags">#FF333333</color>  <!-- gris casi negro -->
-    <color name="um_tag_synced_video">#FFFFFFFF</color>    <!-- blanco -->
     <!-- Se asigna sola si "Título original" no está vacío en el editor de metadatos (ver
          SystemTagKey.REMIX_COVER); membresía real en song_tag, mantenida por
          LibraryRepository.syncRemixCoverTag, igual que "Vídeo sincronizado". -->

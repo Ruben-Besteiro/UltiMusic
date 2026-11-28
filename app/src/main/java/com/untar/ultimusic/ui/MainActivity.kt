@@ -17,13 +17,13 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.widget.ImageViewCompat
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -63,10 +63,14 @@ import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Calendar
+
+/** Clave del Bundle con la pestaña actual, para restaurarla al recrear la Activity (ver setupPager). */
+private const val STATE_SELECTED_TAB = "selected_tab"
 
 class MainActivity : AppCompatActivity() {
 
@@ -116,9 +120,6 @@ class MainActivity : AppCompatActivity() {
         R.drawable.ic_playlist
     )
 
-    /** En caso de ser true, mostramos el "por favor concede el permiso de almacenamiento" **/
-    private var permissionDialogPending = true
-
     /** Gris de las pestañas no seleccionadas de la barra de navegación (ver applyTabAppearance). */
     private val mutedTabColor: Int by lazy { ContextCompat.getColor(this, R.color.um_on_surface_muted) }
 
@@ -130,6 +131,10 @@ class MainActivity : AppCompatActivity() {
     private val tabPaddingRestDp = 16f
     private val tabPaddingMinDp = 4f
 
+    /** Lo máximo que puede ensancharse la pestaña seleccionada respecto a su ancho en reposo
+     *  (icono + padding) con el nombre en una línea; si haría falta más, se parte en dos. */
+    private val tabMaxGrowthFactor = 1.5f
+
     /**
      * Último acento recibido de [PlayerViewModel.accentColor], usado para pintar la pestaña actual
      * tanto al construirla (setupPager) como al cambiar de canción (setupDynamicColor). Empieza
@@ -137,17 +142,31 @@ class MainActivity : AppCompatActivity() {
      * no suena nada) sin llamar a `ContextCompat` aquí porque este campo se inicializa antes de que
      * la Activity tenga Context (a diferencia de [mutedTabColor], que usa `by lazy`).
      */
-    private var currentAccentColor: Int = 0xFFFBC10E.toInt()
+    private var currentAccentColor: Int = com.untar.ultimusic.util.DynamicColor.DEFAULT
 
     /** Scope de proceso para tareas best-effort que deben sobrevivir a la Activity (exportar la BD). */
     private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+        // Extremo a extremo sin enableEdgeToEdge(): usa APIs obsoletas en Android 15 (ver Android
+        // vitals). Barras transparentes y recorte de pantalla van en el tema (Base.Theme.UltiMusic).
+        WindowCompat.setDecorFitsSystemWindows(window, false)
         com.untar.ultimusic.ui.common.DialogOpenLock.install(supportFragmentManager)
         setContentView(R.layout.activity_main)
         com.untar.ultimusic.ui.common.DialogOpenLock.wrap(window)
+        // Fondo con desenfoque suave donde no hay tarjetas encima (las tarjetas usan uno más fuerte).
+        // Se recalcula cada vez que se elige otra imagen en Ajustes; `collectLatest` descarta el
+        // cálculo a medias si se elige otra antes de que acabe.
+        lifecycleScope.launch {
+            com.untar.ultimusic.data.BackgroundPreferences.selected.collectLatest {
+                val soft = withContext(Dispatchers.Default) { BlurredBackground.lightBackground(applicationContext) }
+                findViewById<android.widget.ImageView>(R.id.mainBackground).setImageBitmap(soft)
+                // Las tarjetas de las listas pintan su versión borrosa en onDraw: sin esto
+                // seguirían con la imagen anterior hasta el siguiente desplazamiento.
+                invalidateRecyclers(findViewById(android.R.id.content))
+            }
+        }
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
             v.setPadding(systemBars.left, systemBars.top, systemBars.right, systemBars.bottom)
@@ -167,10 +186,10 @@ class MainActivity : AppCompatActivity() {
         tagsViewModel.bindPlaylistFilenames { playlistsViewModel.allFilenamesInPlaylists }
         setupToolbar()
         setupSearch()
-        setupPager()
+        setupPager(savedInstanceState?.getInt(STATE_SELECTED_TAB, 0) ?: 0)
         setupMiniPlayer()
         setupDynamicColor()
-        checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
+        startLibrary()                 /** Escaneo de la fonoteca: ya no hay que pedir ninguna carpeta **/
         requestNotificationPermissionIfNeeded()
         handleViewIntent(intent)       /** "Abrir con UltiMusic" desde un gestor de archivos **/
         handleRecountIntent(intent)    /** Toque en la notificación de UltiMusic Recount **/
@@ -262,84 +281,18 @@ class MainActivity : AppCompatActivity() {
             no, no hay nada más que hacer aquí: ver el porqué en requestNotificationPermissionIfNeeded. */ }
 
     /**
-     * Pide la carpeta `UltiMusic` con el selector del sistema (ver [SafStorage]): es la ÚNICA carpeta
-     * obligatoria, sin ella no hay fonoteca. Tras concederla, se ofrece —una sola vez en la vida de la
-     * instalación, ver [offerLegacyRootsRelinkIfNeeded]— re-conceder también Download/Music/las
-     * raíces propias que tuviera de antes de esta migración, para re-enlazar lo ya catalogado.
+     * Arranque de la fonoteca. Ya no hay ningún diálogo: los datos de la app viven en el
+     * almacenamiento interno (ver [com.untar.ultimusic.util.AppStorage]) y la carpeta de música se
+     * elige desde el aviso de "no hay canciones" (ver SongsFragment) o desde Ajustes. Sin ninguna
+     * carpeta concedida el escaneo no hace nada y la lista sale vacía, con ese aviso.
      */
-    private fun checkStoragePermission() {
-        if (hasStoragePermission()) {
-            songsViewModel.loadIfNeeded()   /** Si el permiso está, creamos los modelos de las canciones **/
-            offerExtraFolderStep()
-        }
-        else {
-            // Primer diálogo: una sola salida (sin "Cancelar"), porque sin UltiMusic no hay
-            // fonoteca ni se puede mirar si hay una BD que restaurar (ver grantUltiMusicRoot).
-            val dialog = AlertDialog.Builder(this)
-                .setTitle(R.string.permission_needed_title)
-                .setMessage(R.string.permission_needed_message)
-                .setCancelable(false)
-                .setPositiveButton(R.string.permission_grant) { _, _ ->
-                    permissionDialogPending = false
-                    grantUltiMusicRoot.launch(null)
-                }
-                .show()
-            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
-        }
+    private fun startLibrary() {
+        songsViewModel.loadIfNeeded()
+        offerLegacyRootsRelinkIfNeeded()
     }
 
     /**
-     * Segundo paso del primer arranque, DESPUÉS de conceder `UltiMusic` (y de decidir si se
-     * restaura una BD, ver [LibraryRepository.grantUltiMusicRoot]): si está pendiente, el diálogo
-     * "Ahora elige tu carpeta de música"; si no, la oferta de siempre de re-enlazar carpetas de
-     * antes de la migración a SAF.
-     */
-    private fun offerExtraFolderStep() {
-        if (SafStorage.isMusicFolderPromptPending(this)) showMusicFolderPrompt()
-        else offerLegacyRootsRelinkIfNeeded()
-    }
-
-    private fun showMusicFolderPrompt() {
-        SafStorage.setMusicFolderPromptPending(this, false)
-        SafStorage.markOfferedLegacyRootsRelink(this)   // este diálogo ya cumple la función de la oferta vieja
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.permission_needed_title)
-            .setMessage(R.string.music_folder_prompt_message)
-            .setCancelable(false)
-            .setPositiveButton(R.string.permission_grant) { _, _ -> grantExtraLibraryRoot.launch(null) }
-            .setNegativeButton(R.string.music_folder_prompt_cancel, null)
-            .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
-    }
-
-    private val grantUltiMusicRoot =
-        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri == null) {
-                Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-                checkStoragePermission()   // el diálogo no tiene "Cancelar": vuelve a salir
-                return@registerForActivityResult
-            }
-            lifecycleScope.launch {
-                // Antes de nada, porque la restauración puede reiniciar el proceso: tras el reinicio
-                // el segundo diálogo sigue pendiente (ver offerExtraFolderStep).
-                SafStorage.setMusicFolderPromptPending(this@MainActivity, true)
-                val restartNeeded = LibraryRepository.get(this@MainActivity).grantUltiMusicRoot(uri)
-                if (restartNeeded) {
-                    // Se encontró una copia de la BD más completa que la recién creada: entra en
-                    // su lugar al arrancar (ver UltiMusicDatabase.restoreFromBackupIfNeeded).
-                    packageManager.getLaunchIntentForPackage(packageName)?.let {
-                        startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-                    }
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    return@launch
-                }
-                loadIfPermitted()
-                offerExtraFolderStep()
-            }
-        }
-
-    /**
-     * Tras conceder `UltiMusic`, si queda alguna canción catalogada ANTES de la migración a SAF sin
+     * Al arrancar, si queda alguna canción catalogada ANTES de la migración a SAF sin
      * re-enlazar (ver [LibraryRepository.hasUnlinkedLegacySongs]), ofrece re-conceder también
      * Download/Music/una raíz propia con el mismo selector. Se pregunta como mucho una vez en la vida
      * de la instalación ([SafStorage.hasOfferedLegacyRootsRelink]): quien la salta siempre puede
@@ -354,7 +307,9 @@ class MainActivity : AppCompatActivity() {
             val dialog = AlertDialog.Builder(this@MainActivity)
                 .setTitle(R.string.relink_legacy_roots_title)
                 .setMessage(R.string.relink_legacy_roots_message)
-                .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ -> grantExtraLibraryRoot.launch(null) }
+                .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ ->
+                    grantExtraLibraryRoot.launch(SafStorage.musicPickerInitialUri())
+                }
                 .setNegativeButton(R.string.relink_legacy_roots_skip, null)
                 .show()
             AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
@@ -371,7 +326,10 @@ class MainActivity : AppCompatActivity() {
     /** OBTENEMOS LA LISTA DE CANCIONES **/
     override fun onResume() {
         super.onResume()
-        loadIfPermitted()
+        songsViewModel.loadIfNeeded()
+        // Si un permiso se ha revocado/concedido fuera de la app, la lista se ajusta ya: nada que no
+        // se pueda abrir se queda listado.
+        lifecycleScope.launch { LibraryRepository.get(this@MainActivity).recheckRootPermissions() }
         // Estando la aplicación en segundo plano, el sistema puede haber matado el PlaybackService
         // (no está en primer plano mientras no suene nada). Lo revivimos aquí, al volver, en vez de
         // esperar a que el usuario toque una canción: así la cola y el mini-reproductor ya están de
@@ -380,23 +338,25 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Al pasar a segundo plano, exportamos una copia visible de la base de datos a
-     * ~/UltiMusic/databases (best-effort, prioridad baja). El scope de la app garantiza que
-     * termine aunque la Activity se destruya. También retiramos nuestro interés en el monitor de
-     * cambios del filesystem (ver el recuento de referencias en
-     * [LibraryRepository.startWatchingLibraryChanges]) y guardamos qué estaba sonando: si Android
+     * Al pasar a segundo plano, se pasa el WAL a `ultimusic.db` (ver
+     * [LibraryRepository.checkpointDatabase]): la copia automática de Android suele hacerse con la
+     * app en segundo plano, y así copia una BD completa. El scope de la app garantiza que termine
+     * aunque la Activity se destruya. También guardamos qué estaba sonando: si Android
      * mata el proceso mientras la app está en segundo plano (frecuente pasado un rato), sin esto
      * `PlayerViewModel` se recrearía en blanco y la app "olvidaría" la canción, aunque la base de
-     * datos siga intacta. El monitor en sí puede seguir vivo pese a esto: si hay una sesión de
-     * reproducción activa, [com.untar.ultimusic.playback.PlaybackService] también lo tiene pedido, y
-     * no se para hasta que él también lo suelte.
+     * datos siga intacta.
      */
     override fun onStop() {
         super.onStop()
         playerViewModel.savePlaybackState()
         val repository = LibraryRepository.get(this)
-        repository.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.ACTIVITY)
-        appScope.launch { repository.exportDatabaseCopy() }
+        appScope.launch { repository.checkpointDatabase() }
+    }
+
+    /** Fuerza a repintar las decoraciones (las tarjetas borrosas) de todas las listas bajo [view]. */
+    private fun invalidateRecyclers(view: View) {
+        if (view is RecyclerView) view.invalidateItemDecorations()
+        if (view is ViewGroup) for (i in 0 until view.childCount) invalidateRecyclers(view.getChildAt(i))
     }
 
     private fun setupToolbar() {
@@ -586,6 +546,8 @@ class MainActivity : AppCompatActivity() {
             searchResultsContainer = findViewById(R.id.searchResultsContainer),
             recycler = findViewById<RecyclerView>(R.id.recyclerSearchResults),
             emptyView = findViewById<TextView>(R.id.searchEmptyView),
+            lyricsRow = findViewById(R.id.searchLyricsRow),
+            lyricsCheck = findViewById(R.id.searchLyricsCheck),
             viewModel = searchViewModel,
             playerViewModel = playerViewModel,
             lifecycleOwner = this
@@ -600,9 +562,21 @@ class MainActivity : AppCompatActivity() {
      * selección; el de la pestaña actual se re-tiñe además cada vez que cambia el acento (ver
      * setupDynamicColor).
      */
-    private fun setupPager() {
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        findViewById<TabLayout>(R.id.tabLayout)?.let { outState.putInt(STATE_SELECTED_TAB, it.selectedTabPosition) }
+    }
+
+    /**
+     * [initialTab]: la pestaña en la que estaba la Activity antes de recrearse (p. ej. al cambiar
+     * de idioma). ViewPager2 restaura él solo su página, pero las pestañas son vistas nuestras: si
+     * se construyesen siempre con Canciones marcada, la barra quedaría a medias (icono de Listas
+     * en acento, Canciones levantada sin nombre). Por eso se construyen ya con la buena marcada.
+     */
+    private fun setupPager(initialTab: Int) {
         val viewPager = findViewById<ViewPager2>(R.id.viewPager)
         val tabLayout = findViewById<TabLayout>(R.id.tabLayout)
+        val initial = initialTab.coerceIn(0, tabTitles.size - 1)
         viewPager.adapter = MainPagerAdapter(this, tabTitles)
         // Sin rebote al llegar a la primera/última pestaña (deformaría la imagen de las tarjetas, ver
         // ItemCardDecoration).
@@ -622,9 +596,10 @@ class MainActivity : AppCompatActivity() {
             customView.findViewById<ImageView>(R.id.navIcon).setImageResource(tabIcons[position])
             customView.findViewById<TextView>(R.id.navLabel).text = tabTitles[position]
             tab.customView = customView
-            applyTabAppearance(tab, selected = position == 0, currentAccentColor)
-            tabLayout.addTab(tab, position == 0)
+            applyTabAppearance(tab, selected = position == initial, currentAccentColor)
+            tabLayout.addTab(tab, position == initial)
         }
+        viewPager.setCurrentItem(initial, false)
         // Deslizar con el dedo -> marca la pestaña de la página que queda.
         viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
             override fun onPageSelected(position: Int) {
@@ -634,7 +609,7 @@ class MainActivity : AppCompatActivity() {
             }
         })
 
-        redistributeTabPadding(tabLayout, selectedPosition = 0)
+        redistributeTabPadding(tabLayout, selectedPosition = initial)
 
         tabLayout.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
             override fun onTabSelected(tab: TabLayout.Tab) {
@@ -717,8 +692,17 @@ class MainActivity : AppCompatActivity() {
 
         val selectedLabel = tabLayout.getTabAt(selectedPosition)?.customView
             ?.findViewById<TextView>(R.id.navLabel) ?: return
-        val growthPx = (selectedLabel.paint.measureText(selectedLabel.text.toString()) - iconWidthPx)
-            .coerceAtLeast(0f)
+        // Si el nombre en una línea haría la pestaña más de 1.5x su ancho en reposo, se parte en
+        // dos (ver splitTabTitle). El ancho de la etiqueta se fija a mano al medido, en vez de
+        // dejarlo a wrap_content, para que coincida exactamente con el hueco que se le abre.
+        val restTabWidthPx = iconWidthPx + 2 * restPaddingPx
+        val maxSingleLinePx = tabMaxGrowthFactor * restTabWidthPx - 2 * restPaddingPx
+        val title = tabTitles.getOrNull(selectedPosition) ?: selectedLabel.text.toString()
+        val lines = splitTabTitle(title, selectedLabel.paint, maxSingleLinePx)
+        selectedLabel.text = lines.joinToString("\n")
+        val labelWidthPx = Math.ceil(lines.maxOf { selectedLabel.paint.measureText(it) }.toDouble()).toInt()
+        selectedLabel.layoutParams = selectedLabel.layoutParams.apply { width = labelWidthPx }
+        val growthPx = (labelWidthPx - iconWidthPx).coerceAtLeast(0f)
 
         val othersCount = tabLayout.tabCount - 1
         val reductionPerSidePx = if (othersCount > 0) growthPx / othersCount / 2f else 0f
@@ -730,6 +714,91 @@ class MainActivity : AppCompatActivity() {
             val paddingPx = if (i == selectedPosition) restPaddingIntPx else unselectedPaddingPx
             view.setPadding(paddingPx, view.paddingTop, paddingPx, view.paddingBottom)
         }
+    }
+
+    /**
+     * Devuelve [title] en una sola línea si cabe en [maxWidthPx]; si no, en dos. Si el nombre
+     * tiene espacios se corta por el espacio más equilibrado ("Daftar / Putar"); si es una sola
+     * palabra, por sílabas con el separador silábico del sistema para el idioma de la app
+     * ("Eti- / quetas", ver [hyphenateBySyllables]). Si el sistema no tiene datos de separación
+     * para ese idioma, por el punto que deja las dos mitades más parejas, también con guión. Solo
+     * se corta entre grafemas completos (BreakIterator) para no separar un acento o una marca
+     * combinante de su letra, y en escrituras sin guiones (chino, japonés, tailandés...) se parte
+     * sin él.
+     */
+    private fun splitTabTitle(title: String, paint: android.text.TextPaint, maxWidthPx: Float): List<String> {
+        if (paint.measureText(title) <= maxWidthPx) return listOf(title)
+
+        fun cost(a: String, b: String) = maxOf(paint.measureText(a), paint.measureText(b))
+
+        val spaces = title.indices.filter { title[it] == ' ' }
+        if (spaces.isNotEmpty()) {
+            val best = spaces.minBy { cost(title.substring(0, it), title.substring(it + 1)) }
+            return listOf(title.substring(0, best).trimEnd(), title.substring(best + 1).trimStart())
+        }
+
+        if (usesHyphenation(title)) hyphenateBySyllables(title, paint)?.let { return it }
+
+        val boundaries = java.text.BreakIterator.getCharacterInstance().run {
+            setText(title)
+            generateSequence(first()) { next().takeIf { b -> b != java.text.BreakIterator.DONE } }
+                .filter { it in 1 until title.length }
+                .toList()
+        }
+        if (boundaries.isEmpty()) return listOf(title)
+        val hyphen = if (usesHyphenation(title)) "-" else ""
+        val best = boundaries.minBy { cost(title.substring(0, it) + hyphen, title.substring(it)) }
+        return listOf(title.substring(0, best) + hyphen, title.substring(best))
+    }
+
+    /**
+     * Parte una sola palabra en dos líneas por una sílaba, usando el mismo separador silábico
+     * que TextView (patrones por idioma del sistema, según el `textLocale` del [paint], que es el
+     * de la app). Se prueba un StaticLayout cada vez más ancho, desde la mitad de la palabra, y se
+     * queda el primero que la deja en dos líneas con guión: así sale el corte silábico más
+     * equilibrado. Si el sistema corta sin guión (no tiene patrones para el idioma y parte "a la
+     * desesperada" por cualquier letra) se descarta y devuelve null.
+     *
+     * Las líneas se devuelven ya como texto ("Eti-", "quetas") para ponerlas con "\n" en la
+     * etiqueta, en vez de dejar que la etiqueta haga su propia separación: así el corte es
+     * exactamente el medido.
+     */
+    private fun hyphenateBySyllables(word: String, paint: android.text.TextPaint): List<String>? {
+        val fullWidth = paint.measureText(word)
+        val stepPx = resources.displayMetrics.density.coerceAtLeast(1f)
+        var width = fullWidth / 2f
+        while (width < fullWidth) {
+            val layout = android.text.StaticLayout.Builder
+                .obtain(word, 0, word.length, paint, Math.ceil(width.toDouble()).toInt())
+                .setHyphenationFrequency(android.text.Layout.HYPHENATION_FREQUENCY_FULL)
+                .setBreakStrategy(android.text.Layout.BREAK_STRATEGY_HIGH_QUALITY)
+                .setIncludePad(false)
+                .build()
+            if (layout.lineCount == 2) {
+                val breakAt = layout.getLineEnd(0)
+                val first = word.substring(0, breakAt)
+                // El guión no está en el texto: el layout lo dibuja aparte, así que se nota en
+                // que la línea mide más que su texto.
+                val hyphenated = layout.getLineWidth(0) > paint.measureText(first) + 0.5f
+                if (hyphenated && breakAt in 1 until word.length) {
+                    return listOf("$first-", word.substring(breakAt))
+                }
+            }
+            width += stepPx
+        }
+        return null
+    }
+
+    /** false para escrituras que no parten palabras con guión (CJK, tailandés, etc.). */
+    private fun usesHyphenation(text: String): Boolean {
+        val noHyphen = setOf(
+            Character.UnicodeScript.HAN, Character.UnicodeScript.HIRAGANA,
+            Character.UnicodeScript.KATAKANA, Character.UnicodeScript.HANGUL,
+            Character.UnicodeScript.THAI, Character.UnicodeScript.LAO,
+            Character.UnicodeScript.KHMER, Character.UnicodeScript.MYANMAR
+        )
+        val first = text.firstOrNull { Character.isLetter(it) } ?: return true
+        return Character.UnicodeScript.of(first.code) !in noHyphen
     }
 
     /**
@@ -822,41 +891,15 @@ class MainActivity : AppCompatActivity() {
                     // Sin esto, el ripple al tocar una pestaña se queda con el colorPrimary del
                     // tema (amarillo fijo) en vez de seguir el acento.
                     tabLayout.tabRippleColor = ColorStateList.valueOf(accent)
-                    // Fondos en el color débil (casi negro con el matiz de la canción) y botones y
-                    // texto de la barra superior en el claro. Las listas (fragmentos) no llevan
-                    // fondo propio: se ven sobre el de la raíz.
-                    val faint = DynamicColor.faint(accent)
-                    val light = DynamicColor.light(accent)
-                    val root = findViewById<View>(R.id.main)
-                    // Ni la raíz ni los resultados de búsqueda se pintan: dejan ver la imagen de fondo.
-                    findViewById<View>(R.id.toolbar).setBackgroundColor(faint)
-                    findViewById<View>(R.id.statusBarScrim).setBackgroundColor(faint)
-                    findViewById<View>(R.id.navBarScrim).setBackgroundColor(faint)
-                    tabLayout.setBackgroundColor(faint)
-                    AccentTint.icons(root, light, R.id.btnSettings, R.id.btnHelp, R.id.btnSort)
+                    // La barra superior, la de pestañas y las franjas de las barras del sistema NO
+                    // siguen el acento: se quedan en el gris oscuro (um_surface) y los botones de
+                    // arriba en el gris claro (um_on_background) que traen de activity_main.xml.
                     // Solo repintamos la pestaña actual: las demás ya están en gris y no cambian.
                     tabLayout.getTabAt(tabLayout.selectedTabPosition)?.let { tab ->
                         applyTabAppearance(tab, selected = true, accent)
                     }
                 }
             }
-        }
-    }
-
-    // --- Permiso de almacenamiento (Storage Access Framework, ver SafStorage) ---
-
-    private fun hasStoragePermission(): Boolean {
-        val treeUri = SafStorage.ultiMusicTreeUri(this) ?: return false
-        return SafStorage.isRootReadable(this, treeUri)
-    }
-
-    // Se llama desde el onResume = recargamos la lista de canciones cada vez que volvemos a la aplicación
-    private fun loadIfPermitted() {
-        if (hasStoragePermission()) {
-            songsViewModel.loadIfNeeded()
-            LibraryRepository.get(this).startWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.ACTIVITY)
-        } else if (!permissionDialogPending) {
-            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
         }
     }
 

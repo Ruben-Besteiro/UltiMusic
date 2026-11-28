@@ -40,13 +40,13 @@ import androidx.room.PrimaryKey
  * carátula más (ver `util/CoverArt.kt`): sirve de carátula de reserva cuando la canción no tiene
  * imagen propia ni arte embebido.
  *
- * [videoOffsetMs] adelanta (positivo) o atrasa (negativo) el vídeo respecto al audio local, para
- * cuando el videoclip no va del todo sincronizado. Se ajusta desde los ajustes del reproductor de
- * vídeo del iPod y nunca toca el audio, solo la posición a la que se pide el vídeo.
+ * [videoOffsetMs] adelanta (positivo) o atrasa (negativo) la letra respecto del vídeo en modo vídeo
+ * (p. ej. muy negativo si el vídeo de YouTube tiene intro). Se ajusta desde la regla del modo vídeo
+ * del iPod y desde el editor de metadatos, y nunca toca el audio local. Hasta v32 significaba lo
+ * contrario (adelantar el vídeo respecto del audio); MIGRATION_32_33 invirtió el signo.
  *
- * [lyricsOffsetMs] es lo mismo que [videoOffsetMs] pero para la letra sincronizada: adelanta o
- * atrasa qué línea toca resaltar respecto al audio, para cuando la letra de lrclib.net no va del
- * todo a tiempo. Se ajusta desde el editor de metadatos, igual que el del vídeo.
+ * [lyricsOffsetMs] adelanta o atrasa qué línea toca resaltar respecto al audio local, para cuando la
+ * letra de lrclib.net no va del todo a tiempo. Se ajusta desde el editor de metadatos.
  *
  * [hiddenByGreylist] marca una canción como oculta porque su carpeta está desactivada en la lista
  * gris de los ajustes (ver `LibraryDao.setSongsHiddenUnderFolder`). Es solo un filtro de lectura:
@@ -115,5 +115,52 @@ data class SongEntity(
      * que rompería la validación de esquema de Room al abrir la base de datos tras migrar.
      */
     @ColumnInfo(defaultValue = "0")
-    val dateAdded: Long = 0
-)
+    val dateAdded: Long = 0,
+
+    /**
+     * Estado de la búsqueda AUTOMÁTICA de letra en lrclib.net (ver
+     * [com.untar.ultimusic.data.LyricsAutoFetcher]), que se lanza al reproducir la canción o al
+     * abrir su editor de metadatos si todavía no tiene letra:
+     *
+     * - `null`: nunca se ha buscado.
+     * - [com.untar.ultimusic.data.LyricsAutoFetcher.SEARCH_DISABLED]: no volver a buscar nunca solo
+     *   (lrclib.net dice que es instrumental, o el usuario borró la letra a mano). El lápiz del iPod y
+     *   la lupa del editor siguen funcionando igual.
+     * - Cualquier otro valor: cuándo (epoch ms) se buscó por última vez sin encontrar nada; se vuelve
+     *   a intentar cuando caduca (por si alguien la ha subido a lrclib.net entretanto).
+     *
+     * Persistido en la BD, y no en memoria como hace namida, para que reiniciar la app no vuelva a
+     * consultar todas las canciones sin letra que suenen. Un fallo de red NO lo toca.
+     */
+    val lyricsSearchedAt: Long? = null,
+
+    /**
+     * Tamaño del archivo en bytes, tal y como lo informó el proveedor SAF la última vez que se
+     * escaneó (`0` = desconocido, p. ej. canciones catalogadas antes de v32 hasta el siguiente
+     * escaneo, que lo rellena sin releer ningún archivo).
+     *
+     * Existe para reencontrar un archivo MOVIDO Y RENOMBRADO: cuando ni la ruta ni el nombre sirven
+     * de ancla, el tamaño exacto en bytes es una pista casi única y, a diferencia de la duración, sale
+     * gratis en la misma consulta que lista la carpeta (ver `SafStorage.SafEntry.size`), sin abrir
+     * ningún archivo. Lo usan `LibraryDao.reconcile` (primero tamaño, después duración) y
+     * `LibraryRepository.resolvePlayablePath`.
+     */
+    val size: Long = 0L,
+
+    /**
+     * Cuándo (epoch ms) se detectó que el archivo ya no estaba en ninguna carpeta concedida, o `0`
+     * si la canción está en su sitio. Una canción perdida NO se borra: se oculta de las listas (como
+     * la lista gris, ver [hiddenByGreylist]) pero conserva su fila entera -imagen, etiquetas,
+     * ediciones, artistas, álbumes, historial-, y sigue siendo candidata a emparejarse por nombre,
+     * tamaño o duración con cualquier archivo que aparezca después (ver `LibraryDao.reconcile`).
+     * Así mover o renombrar archivos a una carpeta todavía no concedida, o quitar una carpeta y
+     * volver a añadirla, no pierde nada. Solo pasados [MISSING_GRACE_MS] se borra de verdad.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val missingSince: Long = 0L
+) {
+    companion object {
+        /** Cuánto se conserva una canción perdida antes de borrarla definitivamente: 30 días. */
+        const val MISSING_GRACE_MS = 30L * 24 * 60 * 60 * 1000
+    }
+}

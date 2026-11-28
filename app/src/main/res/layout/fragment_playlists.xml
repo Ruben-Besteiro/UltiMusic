@@ -12,7 +12,6 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:paddingTop="10dp"
         android:paddingBottom="88dp"
         android:scrollbars="none"
         tools:listitem="@layout/item_playlist" />
@@ -37,7 +36,7 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/playlist_create"
         android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="@color/um_yellow"
+        app:backgroundTint="@color/um_gold"
         app:tint="@color/um_background" />
 
 </FrameLayout>

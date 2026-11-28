@@ -24,11 +24,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
-            android:background="@drawable/bg_toolbar_scrim"
             app:navigationContentDescription="@string/editor_close"
             app:navigationIcon="@drawable/ic_close"
             app:title="@string/metadata_editor_title"
-            app:titleTextColor="@android:color/white" />
+            app:titleTextColor="@color/um_on_background" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView
@@ -89,6 +88,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputTitle"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -119,6 +119,7 @@
 
                     <com.google.android.material.textfield.MaterialAutoCompleteTextView
                         android:id="@+id/inputArtists"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:imeOptions="actionNext"
@@ -134,6 +135,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputYear"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="number"
@@ -150,6 +152,7 @@
 
                     <com.google.android.material.textfield.TextInputEditText
                         android:id="@+id/inputGenres"
+                        android:textAlignment="viewStart"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:inputType="textCapWords"
@@ -169,6 +172,6 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/editor_autofill"
         android:src="@drawable/ic_wand"
-        app:backgroundTint="@color/um_yellow"
+        app:backgroundTint="@color/um_gold"
         app:tint="@color/um_background" />
 </androidx.coordinatorlayout.widget.CoordinatorLayout>

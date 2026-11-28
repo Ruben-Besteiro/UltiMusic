@@ -3,6 +3,7 @@ package com.untar.ultimusic
 import android.app.Application
 import com.untar.ultimusic.data.ArtistGroupingPreferences
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.SettingsPreferences
 import com.untar.ultimusic.data.SortPreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.data.remote.ApiCache
@@ -12,6 +13,7 @@ import com.untar.ultimusic.data.remote.YouTubeStatsRefresh
 import com.untar.ultimusic.recount.RecountReminder
 import com.untar.ultimusic.recount.RecountReminderWorker
 import com.untar.ultimusic.util.AppLocale
+import com.untar.ultimusic.util.CrashLogger
 import com.untar.ultimusic.util.NetworkImage
 import com.untar.ultimusic.util.PlaylistHistoryStore
 import com.untar.ultimusic.util.PlaylistResumeStore
@@ -42,8 +44,12 @@ class UltiMusicApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Lo primero de todo, para cubrir también los cierres durante el resto del arranque.
+        CrashLogger.install(this)
         // Antes que cualquier otra cosa: si es la primera vez que arranca la aplicación, fija el
         // idioma según el del sistema (ver la cabecera de AppLocale.applyDefaultIfUnset).
+        // Primero el país del usuario (decide la variante del serbocroata), luego el idioma.
+        AppLocale.init(this)
         AppLocale.applyDefaultIfUnset()
         ApiCache.init(this)
         GeniusTokenStore.init(this)
@@ -51,6 +57,8 @@ class UltiMusicApp : Application() {
         YouTubeStatsRefresh.init(this)
         SortPreferences.init(this)
         ArtistGroupingPreferences.init(this)
+        // Aplica también el tema claro/oscuro guardado (ver ThemePreferences) antes de la primera Activity.
+        SettingsPreferences.init(this)
         PlaylistResumeStore.init(this)
         PlaylistHistoryStore.init(this)
         PlaylistShuffleStore.init(this)
@@ -69,5 +77,9 @@ class UltiMusicApp : Application() {
         // Etiqueta de idioma de canciones que se quedaron con letra pero sin ella (ver
         // LibraryRepository.backfillMissingLanguageTags).
         appScope.launch { LibraryRepository.get(this@UltiMusicApp).backfillMissingLanguageTags() }
+        // Datos en almacenamiento interno (ver AppStorage): copia los de la antigua carpeta
+        // UltiMusic de quien actualiza, quita carpetas sin permiso y repara imágenes que falten
+        // tras restaurar una copia (ver LibraryRepository.prepareStorage).
+        appScope.launch { LibraryRepository.get(this@UltiMusicApp).prepareStorage() }
     }
 }

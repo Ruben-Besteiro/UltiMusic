@@ -13,6 +13,8 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
+import androidx.core.widget.NestedScrollView
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
@@ -49,6 +51,7 @@ import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.android.material.textfield.MaterialAutoCompleteTextView
 import com.google.android.material.textfield.TextInputLayout
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.LyricsAutoFetcher
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.SongAlbumEntry
@@ -57,6 +60,7 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.ValueRuler
 import com.untar.ultimusic.ui.player.VideoPickerDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.ArtistSplitter
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
@@ -92,6 +96,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
     private var pickedImage: Uri? = null
 
     /** El formulario solo se rellena con la primera emisión: si no, escribir sería imposible. */
+    private var editorScrollAnimator: android.animation.ValueAnimator? = null
     private var formLoaded = false
 
     /** Se activa mientras [fillForm]/[fillFormMulti] escriben los campos, para que ese volcado
@@ -250,6 +255,43 @@ class MetadataEditorDialogFragment : DialogFragment() {
             insets
         }
 
+        // Al enfocar cualquier campo/elemento del editor, se desplaza para dejarlo centrado en la
+        // pantalla. Se espera un poco para que el teclado ya haya redimensionado el área visible;
+        // si no, se centraría respecto a una altura que luego cambia.
+        val editorScroll = view.findViewById<NestedScrollView>(R.id.editorScroll)
+        val focusListener = ViewTreeObserver.OnGlobalFocusChangeListener { _, newFocus ->
+            if (newFocus == null || newFocus === editorScroll) return@OnGlobalFocusChangeListener
+            var inside = false
+            var p = newFocus.parent
+            while (p != null) {
+                if (p === editorScroll) { inside = true; break }
+                p = p.parent
+            }
+            if (!inside) return@OnGlobalFocusChangeListener
+            // Se centra respecto al centro FÍSICO de la pantalla (no del área visible tras el
+            // teclado): queda un poco por encima del teclado y no hace falta esperar a que este
+            // redimensione nada. Animación con ease out.
+            val loc = IntArray(2)
+            newFocus.getLocationOnScreen(loc)
+            val delta = loc[1] + newFocus.height / 2 - resources.displayMetrics.heightPixels / 2
+            val from = editorScroll.scrollY
+            val to = (from + delta).coerceAtLeast(0)
+            if (to == from) return@OnGlobalFocusChangeListener
+            editorScrollAnimator?.cancel()
+            editorScrollAnimator = android.animation.ValueAnimator.ofInt(from, to).apply {
+                duration = 300
+                interpolator = android.view.animation.DecelerateInterpolator()
+                addUpdateListener { editorScroll.scrollTo(0, it.animatedValue as Int) }
+                start()
+            }
+        }
+        view.viewTreeObserver.addOnGlobalFocusChangeListener(focusListener)
+        viewLifecycleOwner.lifecycle.addObserver(object : androidx.lifecycle.DefaultLifecycleObserver {
+            override fun onDestroy(owner: androidx.lifecycle.LifecycleOwner) {
+                if (view.viewTreeObserver.isAlive) view.viewTreeObserver.removeOnGlobalFocusChangeListener(focusListener)
+            }
+        })
+
         bindViews(view)
         setupToolbar(view)
         setupBackHandling()
@@ -260,6 +302,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         setupOffsetControls(lyricsOffsetRuler, lyricsOffsetValue)
 
         collectTextInputLayouts(view, textFields)
+        ArtistSplitter.fillHelperTexts(requireContext(), textFields)
         collectEditTexts(view, editTexts)
         editTexts.forEach { field -> wireFieldDirtyTracking(field) }
 
@@ -848,10 +891,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputTitle.setText(song.title)
         // El segundo parámetro (`filter = false`) evita que rellenar el campo abra el desplegable.
         inputAlbum.setText(song.album?.title.orEmpty(), false)
-        inputArtists.setText(song.artists.joinToString(SEPARATOR) { it.name }, false)
-        inputProducers.setText(song.producers.joinToString(SEPARATOR) { it.name }, false)
+        inputArtists.setText(song.artists.joinToString(ArtistSplitter.joiner()) { it.name }, false)
+        inputProducers.setText(song.producers.joinToString(ArtistSplitter.joiner()) { it.name }, false)
         inputYear.setText(song.year?.toString().orEmpty())
-        inputGenres.setText(song.genres.joinToString(SEPARATOR))
+        inputGenres.setText(song.genres.joinToString(ArtistSplitter.joiner()))
         inputTrackNumber.setText(song.trackNumber?.toString().orEmpty())
         inputDiscNumber.setText(song.discNumber?.toString().orEmpty())
         // El primero de song.albums ya está en los campos fijos de arriba (song.album/trackNumber/
@@ -859,7 +902,7 @@ class MetadataEditorDialogFragment : DialogFragment() {
         // cada álbum adicional que ya tuviera guardado.
         song.albums.drop(1).forEach { addAlbumGroup(it) }
         inputLyrics.setText(song.lyrics.orEmpty())
-        inputLanguage.setText(song.language.orEmpty())
+        inputLanguage.setText(LanguageDetector.localizedName(song.language).orEmpty())
         inputComment.setText(song.comment.orEmpty())
         inputVideoUrl.setText(song.videoUrl.orEmpty())
         showOffset(offsetRuler, offsetValue, song.videoOffsetMs.toInt())
@@ -869,6 +912,25 @@ class MetadataEditorDialogFragment : DialogFragment() {
         inputOgYear.setText(song.ogYear?.toString().orEmpty())
 
         isFillingForm = false
+        autoFillLyrics(song)
+    }
+
+    /**
+     * Si la canción no tiene letra, la busca sola en lrclib.net ([LyricsAutoFetcher], la misma
+     * búsqueda que al reproducirla) y la mete en el campo. NO se guarda hasta pulsar "Guardar", como
+     * cualquier otro campo del formulario; si el usuario ya ha escrito algo en el campo mientras
+     * tanto, no se le pisa. Al rellenarlo se dispara solo el TextWatcher que deduce el idioma.
+     */
+    private fun autoFillLyrics(song: Song) {
+        if (!LyricsAutoFetcher.needsSearch(song)) return
+        val search = LyricsAutoFetcher.search(requireContext(), song)
+        viewLifecycleOwner.lifecycleScope.launch {
+            val outcome = search.await() as? LyricsAutoFetcher.Outcome.Found ?: return@launch
+            if (!LyricsAutoFetcher.hasLyrics(inputLyrics.text?.toString())) {
+                restoreFieldColor(inputLyrics)
+                inputLyrics.setText(outcome.lyrics)
+            }
+        }
     }
 
     /**
@@ -894,14 +956,14 @@ class MetadataEditorDialogFragment : DialogFragment() {
 
         fillMultiField(inputTitle, songs.map { it.title })
         fillMultiField(inputAlbum, songs.map { it.album?.title.orEmpty() })
-        fillMultiField(inputArtists, songs.map { it.artists.joinToString(SEPARATOR) { a -> a.name } })
-        fillMultiField(inputProducers, songs.map { it.producers.joinToString(SEPARATOR) { p -> p.name } })
+        fillMultiField(inputArtists, songs.map { it.artists.joinToString(ArtistSplitter.joiner()) { a -> a.name } })
+        fillMultiField(inputProducers, songs.map { it.producers.joinToString(ArtistSplitter.joiner()) { p -> p.name } })
         fillMultiField(inputYear, songs.map { it.year?.toString().orEmpty() })
-        fillMultiField(inputGenres, songs.map { it.genres.joinToString(SEPARATOR) })
+        fillMultiField(inputGenres, songs.map { it.genres.joinToString(ArtistSplitter.joiner()) })
         fillMultiField(inputTrackNumber, songs.map { it.trackNumber?.toString().orEmpty() })
         fillMultiField(inputDiscNumber, songs.map { it.discNumber?.toString().orEmpty() })
         fillMultiField(inputLyrics, songs.map { it.lyrics.orEmpty() })
-        fillMultiField(inputLanguage, songs.map { it.language.orEmpty() })
+        fillMultiField(inputLanguage, songs.map { LanguageDetector.localizedName(it.language).orEmpty() })
         fillMultiField(inputComment, songs.map { it.comment.orEmpty() })
         fillMultiField(inputVideoUrl, songs.map { it.videoUrl.orEmpty() })
         fillMultiOffset(offsetRuler, offsetValue, songs.map { it.videoOffsetMs })
@@ -1147,9 +1209,10 @@ class MetadataEditorDialogFragment : DialogFragment() {
      * fuente no sabía de ese campo, que no es lo mismo que decir que está vacío. Es el mismo
      * criterio para los dos porque, como dice el proyecto, artistas y productores se tratan igual. */
     private fun replaceValues(field: MaterialAutoCompleteTextView, incoming: String) {
-        val values = incoming.split(SEPARATOR_CHAR).map { it.trim() }.filter { it.isNotEmpty() }
+        // La sugerencia llega unida por comas (formato interno), no con los separadores del usuario.
+        val values = incoming.split(',').map { it.trim() }.filter { it.isNotEmpty() }
         if (values.isEmpty()) return
-        field.setText(values.joinToString(SEPARATOR), false)
+        field.setText(ArtistSplitter.join(values), false)
     }
 
     private fun save() {
@@ -1216,8 +1279,8 @@ class MetadataEditorDialogFragment : DialogFragment() {
         field.setSimpleItems(names.toTypedArray())
         field.setOnItemClickListener { parent, _, position, _ ->
             val chosen = parent.getItemAtPosition(position).toString()
-            val prefix = (field.tag as? String).orEmpty().substringBeforeLast(SEPARATOR_CHAR, "")
-            val merged = if (prefix.isBlank()) chosen else "${prefix.trim()}$SEPARATOR$chosen"
+            val prefix = ArtistSplitter.prefixBeforeLast((field.tag as? String).orEmpty())
+            val merged = if (prefix.isBlank()) chosen else "${prefix.trim()}${ArtistSplitter.joiner()}$chosen"
             field.setText(merged, false)
             field.setSelection(merged.length)
         }
@@ -1231,8 +1294,6 @@ class MetadataEditorDialogFragment : DialogFragment() {
         private const val TAG_VIDEO_PICKER = "video_picker"
         private const val TAG_SUGGESTIONS = "metadata_suggestions"
         private const val TAG_LYRICS_SUGGESTIONS = "lyrics_suggestions"
-        private const val SEPARATOR = ", "
-        private const val SEPARATOR_CHAR = ','
 
         /**
          * Tope del desplazamiento (vídeo/audio o letra/audio), en cada sentido. Como el del
@@ -1268,9 +1329,8 @@ private fun EditText.textOrNull(): String? = text.toString().trim().takeIf { it.
 
 private fun EditText.intOrNull(): Int? = text.toString().trim().toIntOrNull()
 
-/** Parte un campo multivalor por comas, quitando espacios y trozos vacíos. */
-private fun EditText.splitValues(): List<String> =
-    text.toString().split(',').map { it.trim() }.filter { it.isNotEmpty() }
+/** Parte un campo multivalor por los separadores de Ajustes (ver [ArtistSplitter]). */
+private fun EditText.splitValues(): List<String> = ArtistSplitter.split(text.toString())
 
 /**
  * Avisa con el texto que había JUSTO ANTES de cada cambio (`beforeTextChanged`). Un [TextWatcher]

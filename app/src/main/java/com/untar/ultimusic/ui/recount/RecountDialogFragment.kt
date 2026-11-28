@@ -128,7 +128,7 @@ class RecountDialogFragment : DialogFragment() {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
                 launch { viewModel.histogram.collect { data -> renderHistogram(data) } }
                 launch { viewModel.recount.collect { data -> renderRecount(data) } }
-                // Regla de color dinámico del proyecto: todo lo que en el XML es @color/um_yellow
+                // Regla de color dinámico del proyecto: todo lo que en el XML es @color/um_gold
                 // (los cuatro títulos) más los dos gráficos. Ver la cabecera de AccentTint: nadie
                 // adivina qué vistas son amarillas, cada pantalla las da de alta.
                 launch {

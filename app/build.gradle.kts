@@ -3,6 +3,7 @@
 // JavaPluginExtension), y tapa el nombre del paquete. Cualificarlo entero falla con
 // «Unresolved reference 'util'».
 import java.util.Properties
+import java.io.IOException
 
 plugins {
     alias(libs.plugins.android.application)
@@ -42,9 +43,7 @@ val youtubeApiKey: String = Properties().apply {
     if (file.exists()) file.inputStream().use { load(it) }
 }.getProperty("youtube.api_key").orEmpty()
 
-// La traducción de letras (botón "あ" del iPod) usa Lingva Translate (ver
-// `data/remote/LingvaTranslateApi.kt`), que no pide clave ni cuenta: no hace falta nada aquí para
-// ella, a diferencia de geniusToken/youtubeApiKey.
+// La traducción de letras (botón de arriba a la derecha) usa el endpoint no oficial de Google Translate
 
 android {
     namespace = "com.untar.ultimusic"
@@ -56,8 +55,8 @@ android {
         applicationId = "com.untar.ultimusic"
         minSdk = 24
         targetSdk = 37
-        versionCode = 8
-        versionName = "1"
+        versionCode = 12
+        versionName = "2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -90,7 +89,11 @@ android {
             // los usuarios volverían a compartir la cuota (y la cuenta) del desarrollador, que es
             // justo el problema que se quería resolver. Al no declararse aquí, hereda la cadena
             // vacía de `defaultConfig` y el token ni siquiera existe dentro del binario.
-            isMinifyEnabled = false
+            // R8: ofuscación/optimización del DEX (Play Console exige >25 % en cada categoría) y
+            // recorte de recursos sin usar. Las librerías (Room, Coil, Media3, WorkManager, ML Kit)
+            // traen sus propias reglas de consumidor.
+            isMinifyEnabled = true
+            isShrinkResources = true
             // Empaqueta en el AAB los símbolos de las librerías nativas de las dependencias, para
             // que Play Console pueda leer los fallos/ANR que ocurran en código nativo (quita la
             // advertencia de "símbolos de depuración").
@@ -106,6 +109,43 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
 }
+
+/**
+ * Mantenimiento de los strings traducidos: antes de cada compilación lanza
+ * `tools/translate_strings.py --gradle`, que compara `values/strings.xml` (español) con su última
+ * copia y hace lo que no cuesta nada: quitar de los demás idiomas los strings borrados, copiar la
+ * traducción de un texto idéntico ya traducido y regenerar el serbio en cirílico. NUNCA llama a la
+ * API: lo que quede sin traducir solo se avisa (y se ve en español en esos idiomas) hasta que se
+ * traduzca con la skill `translate-strings` (ver la cabecera del script).
+ *
+ * Necesita Python. Si falta, solo avisa y la compilación sigue. Para saltarse la tarea: variable de
+ * entorno `ULTIMUSIC_SKIP_TRANSLATE=1`.
+ *
+ * No declara entradas ni salidas a propósito, así que se ejecuta siempre: el aviso de lo pendiente
+ * tiene que salir en cada build aunque strings.xml no haya cambiado desde el anterior.
+ */
+val translateStrings by tasks.registering {
+    group = "ultimusic"
+    description = "Avisa de los strings sin traducir y hace el mantenimiento gratuito de los idiomas"
+    val script = rootProject.file("tools/translate_strings.py")
+    val workDir = rootProject.projectDir
+    doLast {
+        if (System.getenv("ULTIMUSIC_SKIP_TRANSLATE") == "1") return@doLast
+        try {
+            val process = ProcessBuilder("python", script.absolutePath, "--gradle")
+                .directory(workDir)
+                .redirectErrorStream(true)
+                .apply { environment()["PYTHONIOENCODING"] = "utf-8" }
+                .start()
+            process.inputStream.bufferedReader(Charsets.UTF_8).forEachLine { println(it) }
+            process.waitFor()
+        } catch (e: IOException) {
+            logger.warn("[translateStrings] AVISO: no se ha podido ejecutar Python (${e.message}); no se traduce nada")
+        }
+    }
+}
+
+tasks.named("preBuild") { dependsOn(translateStrings) }
 
 dependencies {
     implementation(libs.androidx.core.ktx)

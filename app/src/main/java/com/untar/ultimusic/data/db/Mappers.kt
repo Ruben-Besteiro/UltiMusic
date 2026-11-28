@@ -97,7 +97,10 @@ fun SongWithRelations.toDomain(): Song = Song(
     ogArtist = song.ogArtist,
     ogYear = song.ogYear,
     youtubeViewCount = song.youtubeViewCount,
-    dateAdded = song.dateAdded
+    dateAdded = song.dateAdded,
+    lyricsSearchedAt = song.lyricsSearchedAt,
+    youtubeChannelId = song.youtubeChannelId,
+    size = song.size
 )
 
 // --- Resúmenes de las pestañas de Álbumes / Artistas / Productores ---
@@ -107,6 +110,7 @@ fun AlbumSummaryRow.toDomain(): AlbumSummary = AlbumSummary(
     title = title,
     artistName = artistName,
     year = year,
+    genres = genres,
     songCount = songCount,
     totalDuration = totalDuration,
     cover = CoverRef(

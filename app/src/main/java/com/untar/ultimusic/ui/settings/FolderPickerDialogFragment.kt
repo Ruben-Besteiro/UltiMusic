@@ -59,11 +59,9 @@ class FolderPickerDialogFragment : DialogFragment() {
     // btnChooseFolder (ver onViewCreated).
     private val playerViewModel: PlayerViewModel by activityViewModels()
 
-    /** Todas las carpetas concedidas ahora mismo (docPath -> Uri de árbol), `UltiMusic` primero y el
-     *  resto en el mismo orden en que las devuelve [SafStorage.grantedRoots]. */
+    /** Todas las carpetas concedidas ahora mismo (docPath -> Uri de árbol), por orden alfabético. */
     private val roots: List<Pair<String, Uri>> by lazy {
-        val ultiMusicPath = SafStorage.ultiMusicDocPath(requireContext())
-        SafStorage.grantedRoots().sortedBy { (path, _) -> if (path == ultiMusicPath) "" else path.lowercase() }
+        SafStorage.grantedRoots().sortedBy { (path, _) -> path.lowercase() }
     }
     private val requestKey: String by lazy { requireArguments().getString(ARG_REQUEST_KEY) ?: RESULT_KEY }
 

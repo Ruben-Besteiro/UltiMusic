@@ -5,6 +5,7 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.playlist.PlaylistRepository
+import com.untar.ultimusic.model.AlbumSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.common.SongSelection
@@ -85,6 +86,17 @@ class CollectionDetailViewModel(app: Application) : AndroidViewModel(app) {
                 }
             }
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    /**
+     * Carrusel horizontal de álbumes, solo para un género (igual que el de la ficha de artista, ver
+     * [com.untar.ultimusic.ui.library.DetailViewModel.albums]): los álbumes cuyos géneros propios
+     * incluyen este (ver [LibraryRepository.genreAlbums]). Vacío para lista/etiqueta.
+     */
+    val albums: StateFlow<List<AlbumSummary>> = target
+        .flatMapLatest { t ->
+            if (t?.first == CollectionKind.GENRE) repository.genreAlbums(t.second) else flowOf(emptyList())
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
     /**
      * Título de la ficha. Para Género/Lista es literalmente [currentKey] (su nombre, síncrono, como

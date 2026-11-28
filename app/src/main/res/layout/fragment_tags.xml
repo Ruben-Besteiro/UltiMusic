@@ -14,17 +14,15 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:clipToPadding="false"
-        android:paddingTop="10dp"
         android:paddingBottom="88dp"
         android:scrollbars="none"
         tools:listitem="@layout/item_tag" />
 
     <TextView
         android:id="@+id/emptyView"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_gravity="center"
-        android:layout_margin="24dp"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:paddingHorizontal="24dp"
         android:gravity="center"
         android:text="@string/tags_no_custom_hint"
         android:textColor="@color/um_on_surface_muted"
@@ -39,7 +37,7 @@
         android:layout_margin="20dp"
         android:contentDescription="@string/tag_create"
         android:src="@android:drawable/ic_input_add"
-        app:backgroundTint="@color/um_yellow"
+        app:backgroundTint="@color/um_gold"
         app:tint="@color/um_background" />
 
 </FrameLayout>

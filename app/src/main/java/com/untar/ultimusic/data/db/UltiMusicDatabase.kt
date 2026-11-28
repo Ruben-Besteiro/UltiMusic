@@ -19,7 +19,6 @@ import com.untar.ultimusic.data.db.entities.SongEntity
 import com.untar.ultimusic.data.db.entities.SongProducerCrossRef
 import com.untar.ultimusic.data.db.entities.SongTagCrossRef
 import com.untar.ultimusic.data.db.entities.TagEntity
-import com.untar.ultimusic.util.SafStorage
 import java.io.File
 
 /**
@@ -136,7 +135,18 @@ import java.io.File
     // arreglan en caliente al re-conceder carpetas, no en la migración. El `Callback.onCreate` de más
     // abajo deja de sembrar `library_roots` para una instalación nueva por el mismo motivo: con SAF no
     // hay forma de "sembrar" un permiso de árbol sin que el usuario pase por el selector del sistema.
-    version = 30,
+    // v31: columna nueva `songs.lyricsSearchedAt` para la búsqueda automática de letras en lrclib.net
+    // (ver LyricsAutoFetcher), con migración escrita a mano (MIGRATION_30_31) por el mismo motivo que
+    // todas las anteriores.
+    // v32: columna nueva `songs.size` (tamaño del archivo en bytes) para reencontrar canciones
+    // movidas Y renombradas: tamaño primero, duración después (ver LibraryDao.reconcile y
+    // LibraryRepository.resolvePlayablePath). Migración escrita a mano (MIGRATION_31_32): las filas
+    // existentes quedan a 0 y el siguiente escaneo las rellena.
+    // v33: sin cambio de esquema. Se retira la etiqueta "Vídeo sincronizado" y `videoOffsetMs` pasa a
+    // significar "adelantar la letra respecto del vídeo" (signo invertido); MIGRATION_32_33.
+    // v34: `songs.missingSince` (MIGRATION_33_34): las canciones cuyo archivo desaparece se marcan
+    // como perdidas en vez de borrarse, para que mover/renombrar archivos no pierda nada.
+    version = 34,
     exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -148,7 +158,8 @@ abstract class UltiMusicDatabase : RoomDatabase() {
         const val DB_NAME = "ultimusic.db"
 
         /** Copia buena preparada para sustituir a la BD real en el próximo arranque (ver
-         *  [restoreFromBackupIfNeeded]). Vive junto a la BD, en `databases/`, para que el `rename` sea atómico. */
+         *  [restoreFromBackupIfNeeded]). Vive junto a la BD, en `databases/`, para que el `rename` sea
+         *  atómico. Fuera de la copia automática (ver `res/xml/data_extraction_rules.xml`). */
         const val STAGED_RESTORE_NAME = "ultimusic.restore.db"
 
         @Volatile
@@ -198,7 +209,11 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                             MIGRATION_26_27,
                             MIGRATION_27_28,
                             MIGRATION_28_29,
-                            MIGRATION_29_30
+                            MIGRATION_29_30,
+                            MIGRATION_30_31,
+                            MIGRATION_31_32,
+                            MIGRATION_32_33,
+                            MIGRATION_33_34
                         )
                         .fallbackToDestructiveMigration(dropAllTables = true)
                         // Instalación nueva: `onCreate` es el único momento en el que se sabe que es
@@ -215,60 +230,36 @@ abstract class UltiMusicDatabase : RoomDatabase() {
                                 super.onCreate(db)
                                 seedDefaultTags(db, context.applicationContext)
                             }
+
+                            // Reparación: las instalaciones nuevas desde v23 hasta este arreglo se
+                            // quedaron sin ninguna predefinida (el INSERT omitía isAutoAssigned, ver
+                            // seedDefaultTags). `INSERT OR IGNORE` sobre systemKey lo hace inocuo para
+                            // todos los demás.
+                            override fun onOpen(db: SupportSQLiteDatabase) {
+                                super.onOpen(db)
+                                if (!db.isReadOnly) seedDefaultTags(db, context.applicationContext)
+                            }
                         })
                         .build()
                 }.also { instance = it }
             }
 
         /**
-         * Si la base de datos interna no existe todavía (instalación nueva, o reinstalación tras
-         * desinstalar) y hay una copia en `UltiMusic/databases/` -la que deja
-         * [com.untar.ultimusic.data.LibraryRepository.exportDatabaseCopy] cada vez que la app pasa a
-         * segundo plano-, la restaura ahí antes de que Room llegue a abrirla. Así las ediciones del
-         * usuario (que solo viven en Room, nunca en MediaStore) sobreviven a un desinstalar/reinstalar
-         * SIEMPRE QUE el usuario ya haya vuelto a conceder la carpeta `UltiMusic` con el selector del
-         * sistema en este arranque (ver [SafStorage]): a diferencia de antes de la migración a SAF, un
-         * permiso de árbol normalmente NO sobrevive a un desinstalar/reinstalar (Android lo revoca con
-         * la app), así que en ese caso concreto esta restauración automática no puede dispararse hasta
-         * que el usuario haya concedido de nuevo `UltiMusic` -es un cambio de comportamiento esperado
-         * de la migración, no un fallo-.
+         * Restauración en dos tiempos del `.zip` de Ajustes > Copia de seguridad (ver
+         * [com.untar.ultimusic.data.backup.BackupArchive]): la importación deja la BD buena como
+         * [STAGED_RESTORE_NAME] (la real está abierta y no se puede pisar en caliente) y reinicia
+         * el proceso; aquí, con Room todavía sin abrir, entra en su lugar.
          *
-         * Solo necesita la URI de `UltiMusic` (persistida en `SharedPreferences`, ver
-         * [SafStorage.ultiMusicTreeUri]), no ninguna carpeta raíz adicional: es lo único que hace falta
-         * ANTES de que exista Room.
-         *
-         * Si la base de datos interna ya existe no se toca nada: esta copia es solo para el arranque
-         * en frío de una instalación sin datos propios todavía.
+         * Antes también restauraba la copia de `~/UltiMusic/databases/` tras reinstalar. Ya no hace
+         * falta: esa carpeta no se pide, y lo que sobrevive a reinstalar es la copia automática de
+         * Android, que restaura `databases/` ella sola antes del primer arranque.
          */
         private fun restoreFromBackupIfNeeded(context: Context) {
             val dbFile = context.getDatabasePath(DB_NAME)
-
-            // Restauración en dos tiempos: LibraryRepository.grantUltiMusicRoot deja la copia buena
-            // preparada como STAGED_RESTORE_NAME (la BD real está abierta y no se puede pisar en
-            // caliente) y reinicia el proceso; aquí, con Room todavía sin abrir, entra en su lugar.
             val staged = File(dbFile.parentFile, STAGED_RESTORE_NAME)
             if (staged.exists()) {
                 for (suffix in listOf("", "-wal", "-shm")) File(dbFile.path + suffix).delete()
                 if (!staged.renameTo(dbFile)) staged.delete()
-                return
-            }
-
-            if (dbFile.exists()) return
-
-            SafStorage.refreshRegistry(context)
-            val ultiMusicRoot = SafStorage.ultiMusicDocPath(context) ?: return
-            val backupDocPath = "$ultiMusicRoot/databases"
-            if (!SafStorage.exists(context, "$backupDocPath/$DB_NAME")) return
-
-            runCatching {
-                dbFile.parentFile?.mkdirs()
-                for (suffix in listOf("", "-wal", "-shm")) {
-                    val srcDocPath = "$backupDocPath/$DB_NAME$suffix"
-                    if (!SafStorage.exists(context, srcDocPath)) continue
-                    SafStorage.openInputStream(context, srcDocPath)?.use { input ->
-                        File(dbFile.path + suffix).outputStream().use { output -> input.copyTo(output) }
-                    }
-                }
             }
         }
     }

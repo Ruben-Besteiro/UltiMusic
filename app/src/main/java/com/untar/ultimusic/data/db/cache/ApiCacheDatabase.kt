@@ -18,9 +18,9 @@ import androidx.room.RoomDatabase
  *    añadir una caché. Inaceptable.
  * 2. Aquí ese mismo `fallbackToDestructiveMigration` es justo lo que se quiere: son datos
  *    desechables por definición, y si el esquema cambia, tirarlos no cuesta nada.
- * 3. `LibraryRepository.exportDatabaseCopy()` copia la base de datos de la biblioteca a
- *    `~/UltiMusic/databases` cada vez que la app pasa a segundo plano. La caché no tiene por qué ir
- *    en esa copia, ni engordarla.
+ * 3. La copia automática de Android y el `.zip` de Ajustes (ver `BackupArchive`) copian la base de
+ *    datos de la biblioteca. La caché no tiene por qué ir en esas copias, ni engordarlas (la
+ *    copia automática tiene un límite de 25 MB, ver `res/xml/data_extraction_rules.xml`).
  */
 @Database(entities = [ApiCacheEntity::class], version = 1, exportSchema = false)
 abstract class ApiCacheDatabase : RoomDatabase() {

@@ -22,6 +22,8 @@
     <string name="search_back">Cerrar la búsqueda</string>
     <string name="search_clear">Borrar lo escrito</string>
     <string name="search_prompt">Escribe para buscar canciones, álbumes y artistas.</string>
+    <string name="search_by_lyrics">Buscar por letra</string>
+    <string name="search_prompt_lyrics">Escribe para buscar canciones por su letra.</string>
     <string name="search_no_results">No se ha encontrado nada para «%1$s».</string>
     <string name="sql_toggle">SQL</string>
     <string name="sql_toggle_description">Modo SQL</string>
@@ -62,8 +64,10 @@
     <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
-    <string name="no_songs">Para utilizar UltiMusic necesitas archivos de audio. Untar Technologies recomienda obtenerlos de tiendas como iTunes Store, Amazon Music, etc.</string>
-    <string name="song_file_missing">No se encuentra el archivo de %1$s</string>
+    <!-- %1$s se sustituye por el icono ic_add (el botón de + de la barra superior) -->
+    <string name="no_songs">Para utilizar UltiMusic necesitas archivos de audio en tu dispositivo. Puedes añadir la carpeta donde los tienes desde el menú de ajustes o dándole al botón de abajo. Si no tienes música, puedes adquirirla dándole al botón de %1$s de arriba a la derecha</string>
+    <string name="no_songs_add_folder">Elegir carpeta</string>
+    <string name="song_file_missing">No se ha podido encontrar el archivo de %1$s</string>
     <string name="cannot_open_file">No se ha podido abrir el archivo</string>
     <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
     <string name="cannot_add_to_empty_queue">No hay cola de reproducción</string>
@@ -73,6 +77,9 @@
     <string name="playback_error_io">fallo al leer el archivo</string>
     <string name="playback_error_skip_known">No se ha podido reproducir %1$s (%2$s), se salta a la siguiente</string>
     <string name="playback_error_skip_unknown">No se ha podido reproducir %1$s, se salta a la siguiente</string>
+
+    <!-- Placeholder de una canción/álbum sin ningún artista etiquetado (ver Subtitles.artistDisplay). -->
+    <string name="unknown_artist">Artista desconocido</string>
 
     <!-- Selección múltiple de canciones (pulsación larga en la pestaña Canciones): ver
          SongsAdapter/SongsFragment y el icono de 3 puntos que sustituye al ojo de la toolbar
@@ -324,7 +331,7 @@
 
     <string name="section_details">Detalles</string>
     <string name="section_original">Grabación original (remix)</string>
-    <string name="multi_value_hint">Separa varios valores con comas</string>
+    <string name="multi_value_hint">Separa varios valores con %1$s</string>
 
     <!-- Mini-reproductor -->
     <string name="expand_player">Expandir reproductor</string>
@@ -340,8 +347,8 @@
     <string name="ipod_next">Siguiente</string>
     <string name="ipod_now_playing">Sonando ahora</string>
     <string name="ipod_toggle_video">Alternar audio y vídeo</string>
-    <string name="ipod_no_lyrics">No se ha detectado letra para esta canción. Añádela tocando aquí</string>
-    <!-- Botón flotante inferior derecho del contenedor de la letra: encoge la carátula/vídeo hasta
+    <!-- (Botón DESACTIVADO por ahora, ver dialog_ipod.xml; strings conservados por si vuelve.)
+         Botón flotante inferior derecho del contenedor de la letra: encoge la carátula/vídeo hasta
          desaparecer y le cede su hueco a la letra (ver IPodDialogFragment). Cambia a
          ipod_lyrics_collapse mientras está desplegado. -->
     <string name="ipod_lyrics_expand">Ver más</string>
@@ -349,12 +356,27 @@
     <!-- Botón flotante superior derecho del contenedor de la letra: la "a" en hiragana (あ) que
          traduce la letra al idioma del sistema (ver IPodDialogFragment/LyricsTranslator). Solo
          aparece si el idioma detectado de la canción no es el del sistema. -->
-    <string name="ipod_translate_lyrics_glyph">あ</string>
+    <string name="ipod_translate_lyrics_glyph">?</string>
     <string name="ipod_translate_lyrics_desc">Traducir la letra al idioma del sistema</string>
     <string name="ipod_translate_lyrics_failed">No se ha podido traducir la letra</string>
     <!-- Mientras LyricsTranslator/LingvaTranslateApi tienen la petición en marcha: sin este aviso,
          la espera se ve igual que si el botón no hiciera nada. -->
     <string name="ipod_translate_lyrics_working">Traduciendo letra…</string>
+    <string name="ipod_romanize_lyrics_working">Convirtiendo letra…</string>
+    <string name="error_with_reason">%1$s: %2$s</string>
+    <string name="error_reason_no_connection">sin conexión a internet</string>
+    <string name="error_reason_timeout">el servidor ha tardado demasiado en responder</string>
+    <string name="error_reason_rate_limited">Has alcanzado el límite. Espera al menos 15 minutos</string>
+    <string name="error_reason_rate_limited_hour">Has alcanzado el límite. Espera al menos una hora</string>
+    <string name="error_reason_http">el servidor ha respondido con el error %1$d</string>
+    <string name="error_reason_bad_response">respuesta inesperada del servidor</string>
+    <string name="error_reason_no_content">no hay texto que procesar</string>
+    <string name="error_reason_other">%1$s</string>
+    <string name="share_song_error_no_file">No se encuentra el archivo de la canción</string>
+    <string name="ipod_romanize_lyrics_failed">No se ha podido convertir la letra</string>
+    <!-- Descripción del botón de arriba a la izquierda del recuadro de la letra, que pasa la letra
+         a la escritura del idioma de la app (ver LyricsRomanizer). -->
+    <string name="ipod_romanize_lyrics_desc">Pasar la letra a la escritura del idioma de la app</string>
     <!-- Lo que queda de cola, en @+id/tvTitle (ver IPodDialogFragment.updateInfoBox), mientras se ve
          la cola/lista en vez de la carátula. No cuenta la canción actual: son las que quedan POR
          sonar. Debajo, en tvMeta, va lo que duran todas ellas juntas (TimeFormat.hhmmss). -->
@@ -394,10 +416,11 @@
     <string name="video_no_song">No hay ninguna canción sonando</string>
     <string name="video_bad_url">El enlace del vídeo no es válido</string>
     <string name="video_loading_desc">Cargando vídeo</string>
-    <!-- Desplazamiento vídeo/audio, ahora en el editor de metadatos (ver dialog_metadata_editor.xml),
-         debajo del campo de la URL del vídeo. -->
-    <string name="video_settings_offset_title">Desplazamiento del vídeo</string>
-    <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar el vídeo y en negativo para atrasarlo</string>
+    <!-- Desplazamiento de la letra respecto del vídeo en modo vídeo (Song.videoOffsetMs), en el editor
+         de metadatos (ver dialog_metadata_editor.xml, debajo del campo de la URL del vídeo) y en la
+         regla del iPod. -->
+    <string name="video_settings_offset_title">Desplazamiento de la letra (modo vídeo)</string>
+    <string name="video_settings_offset_subtitle">Ponlo en positivo para adelantar la letra respecto del vídeo y en negativo para atrasarla</string>
     <string name="video_settings_offset_unit">ms</string>
     <!-- Desplazamiento letra/audio, debajo del campo de la letra en el editor de metadatos. Solo
          tiene efecto con letra sincronizada (ver LrcParser); reutiliza video_settings_offset_unit
@@ -453,9 +476,6 @@
     <string name="tag_recently_added_name">Descargada recientemente</string>
     <string name="tag_not_in_playlist_name">En ninguna lista</string>
     <string name="tag_no_custom_tags_name">Sin etiquetas personalizadas</string>
-    <!-- Membresía real, pero LibraryRepository.syncSyncedVideoTag la mantiene sola en cuanto
-         Song.videoOffsetMs deja de ser 0 (ver SystemTagKey.SYNCED_VIDEO). -->
-    <string name="tag_synced_video_name">Vídeo sincronizado</string>
     <!-- Membresía real como Vídeo sincronizado, pero LibraryRepository.syncRemixCoverTag la mantiene
          sola en cuanto "Título original" deja de estar vacío en el editor de metadatos (ver
          SystemTagKey.REMIX_COVER). -->
@@ -521,7 +541,7 @@
     <string name="dialog_cancel">Cancelar</string>
     <string name="dialog_ok">Aceptar</string>
     <!-- Sí/No, distintos de dialog_ok/dialog_cancel: para confirmaciones que se formulan como
-         pregunta directa (p. ej. "Añadir todas las letras" en ajustes visuales) en vez de como
+         pregunta directa (el antiguo "Añadir todas las letras" ya no existe) en vez de como
          "Cancelar"/"Aceptar". -->
     <string name="dialog_yes">Sí</string>
     <string name="dialog_no">No</string>
@@ -538,18 +558,20 @@
     <string name="settings_boost_device_unknown">No se puede saber si el dispositivo conectado es un altavoz o unos auriculares, así que el límite se mantiene</string>
     <string name="settings_boost_bluetooth_denied">Sin ese permiso, UltiMusic no puede distinguir un altavoz Bluetooth de unos auriculares, así que mantiene el límite</string>
 
-    <!-- Idioma (primer ajuste del grupo "Ajustes visuales"): dos banderas, España e Inglaterra, que
-         cambian el idioma de toda la aplicación al instante (ver AppLocale y
-         SettingsDialogFragment.setupLanguage). Por defecto se elige según el idioma del sistema: si
-         es español, España; si es cualquier otro, Inglaterra. -->
+    <!-- Idioma (primer ajuste del grupo "Ajustes visuales"): cuadrícula de 25 banderas que cambian
+         el idioma de toda la aplicación al instante (ver AppLocale y
+         SettingsDialogFragment.setupLanguage). Por defecto se elige el idioma del sistema si está
+         soportado, e inglés si no. El nombre de cada idioma (contentDescription de su bandera) va
+         en AppLocale.LANGUAGES, en el propio idioma, así que no se traduce. -->
     <string name="settings_language_title">Idioma</string>
     <string name="settings_language_subtitle">Elige el idioma de la aplicación</string>
-    <string name="settings_language_spanish">Español</string>
-    <string name="settings_language_english">Inglés</string>
+    <!-- Descripción del desplegable del alfabeto del serbocroata: va en su propio idioma, como el
+         nombre de cada bandera, así que no se traduce. -->
+    <string name="settings_script_desc" translatable="false">Latinica / Ћирилица</string>
 
     <!-- Carpetas de la fonoteca -->
     <string name="settings_library_roots_title">Carpetas de la fonoteca</string>
-    <string name="settings_library_roots_subtitle">UltiMusic es tu carpeta principal. Añade más carpetas (como Download o Music) si quieres que también formen parte de tu fonoteca</string>
+    <string name="settings_library_roots_subtitle">Añade aquí tus carpetas que contengan música</string>
     <string name="settings_library_roots_add">Añadir carpeta</string>
     <string name="settings_library_root_delete_desc">Quitar carpeta de la fonoteca</string>
     <string name="settings_library_roots_remove_confirm">¿Quitar <b>^1</b> de la fonoteca? Las canciones que solo estén ahí se borrarán de la biblioteca (ediciones y listas incluidas), salvo que también estén en otra carpeta incluida con el mismo nombre de archivo</string>
@@ -566,22 +588,43 @@
 
     <string name="settings_add_all_lyrics_title">Ajustes adicionales</string>
 
-    <!-- Añadir todas las letras (BulkLyricsAdder/BulkLyricsProgressDialogFragment) -->
-    <string name="settings_bulk_lyrics_add">Añadir todas las letras</string>
-    <string name="settings_bulk_lyrics_confirm_title">¿Seguro que quieres añadir todas las letras?</string>
-    <string name="settings_bulk_lyrics_confirm_message">Al ser una operación automática, puede haber equivocaciones. En caso de haberlas, se pueden corregir desde el UltiMusicPod y desde el editor de metadatos.</string>
-    <string name="settings_bulk_lyrics_progress_title">Añadiendo letras…</string>
-    <!-- "5/1282" -->
-    <string name="settings_bulk_lyrics_counter">%1$d/%2$d</string>
-    <string name="settings_bulk_lyrics_background">Segundo plano</string>
-    <string name="settings_bulk_lyrics_empty">Todas las canciones ya tienen letra</string>
-    <string name="settings_bulk_lyrics_finished">Letras añadidas: %1$d de %2$d</string>
-    <!-- Notificación de la barra de progreso al mandar el pase a segundo plano: "Nombre (5/1282)" -->
-    <string name="settings_bulk_lyrics_notification_text">%1$s (%2$d/%3$d)</string>
-    <string name="notification_channel_bulk_lyrics">Añadir letras</string>
-
     <!-- Agrupar artistas pequeños en "Otros" (ver ArtistGroupingPreferences) -->
     <string name="settings_artist_grouping_title">Agrupar artistas con N canciones o menos</string>
+
+    <!-- Actualizar fonoteca (Ajustes auditivos, bajo las carpetas) -->
+    <string name="settings_refresh_library">Actualizar fonoteca</string>
+    <string name="settings_refresh_library_progress">Actualizando fonoteca… %1$d %%</string>
+
+    <!-- Temporizador de apagado (ver SleepTimerPreferences) -->
+    <string name="settings_sleep_timer_title">Temporizador de apagado</string>
+    <string name="settings_sleep_timer_subtitle">Pausa automáticamente tras N minutos si el valor es distinto de 0. Ideal si escuchas música para dormir</string>
+    <string name="settings_sleep_timer_unit">min</string>
+
+    <!-- Imagen de fondo -->
+    <string name="settings_background_title">Imagen de fondo</string>
+    <string name="settings_background_option_desc">Imagen de fondo %1$d</string>
+    <string name="settings_background_upload">Subir del dispositivo</string>
+    <string name="settings_background_upload_error">No se ha podido leer esa imagen</string>
+
+    <!-- Tema (ver ThemePreferences) -->
+    <string name="settings_theme_title">Tema</string>
+    <string name="settings_theme_system">Sistema</string>
+    <string name="settings_theme_light">Claro</string>
+    <string name="settings_theme_dark">Oscuro</string>
+
+    <!-- Color dinámico (ver DynamicColorPreferences) -->
+    <string name="settings_dynamic_color_title">Color dinámico</string>
+    <string name="settings_dynamic_color_subtitle">No recomendado para dispositivos de gama baja. Si lo desactivas, el dorado de UltiMusic se usará siempre</string>
+
+    <!-- Ajustes adicionales -->
+    <string name="settings_keep_screen_on_title">Mantener dispositivo encendido en el UltiMusicPod</string>
+    <string name="settings_min_duration_title">Duración mínima de canción (segundos)</string>
+    <string name="settings_artist_separators_title">Separadores de artistas</string>
+    <string name="settings_artist_separators_add_hint">Nuevo separador</string>
+    <string name="settings_artist_separators_add">Añadir</string>
+    <string name="settings_artist_separators_invalid">El separador no puede estar vacío, contener espacios ni estar repetido</string>
+    <string name="settings_artist_separators_last">Tiene que quedar al menos un separador</string>
+    <string name="settings_artist_separators_remove_desc">Quitar separador %1$s</string>
 
     <!-- Ecualizador -->
     <string name="settings_eq_title">Ecualizador</string>
@@ -609,7 +652,7 @@
     <string name="settings_eq_additional_options">Opciones adicionales</string>
     <string name="settings_eq_bass_boost_help_desc">Qué es el refuerzo de graves</string>
     <string name="settings_eq_bass_boost_help_title">Refuerzo de graves</string>
-    <string name="settings_eq_bass_boost_help_body">A diferencia de subir la banda más grave del ecualizador, este efecto actúa sobre todo el rango de graves, incluidas frecuencias más bajas que ninguna banda de este dispositivo cubre. En muchos móviles, además, añade armónicos para que el bajo se note incluso en altavoces pequeños que no pueden reproducir esas frecuencias tan bajas.</string>
+    <string name="settings_eq_bass_boost_help_body">A diferencia de subir la banda más grave del ecualizador, este efecto actúa sobre todo el rango de graves, incluidas frecuencias más bajas que ninguna banda de este dispositivo cubre. En muchos dispositivos, además, añade armónicos para que el bajo se note incluso en altavoces pequeños que no pueden reproducir esas frecuencias tan bajas.</string>
     <string name="settings_eq_virtualizer_help_desc">Qué es el sonido envolvente</string>
     <string name="settings_eq_virtualizer_help_title">Sonido envolvente</string>
     <string name="settings_eq_virtualizer_help_body">Ensancha el estéreo simulando altavoces separados a los lados. No es un ajuste de volumen por frecuencia: mezcla los canales izquierdo y derecho de otra forma para que el sonido parezca venir de fuera de la cabeza. Ningún slider del ecualizador puede lograr este efecto, porque esos solo suben o bajan bandas de frecuencia por igual en ambos canales.</string>
@@ -649,17 +692,22 @@
     <string name="folder_picker_choose">Elegir esta carpeta</string>
     <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>
 
-    <!-- Permisos -->
-    <string name="permission_needed_title">Acceso requerido</string>
-    <string name="permission_needed_message">Abre el explorador de archivos y selecciona la carpeta UltiMusic para poder utilizar la aplicación.</string>
-    <string name="permission_grant">Abrir explorador</string>
-    <string name="music_folder_prompt_message">Ahora elige tu carpeta de música. Si es UltiMusic, puedes darle a Cancelar.</string>
-    <string name="music_folder_prompt_cancel">Cancelar</string>
-    <string name="permission_denied">Sin la carpeta UltiMusic no se pueden mostrar las canciones</string>
+    <!-- Copia de seguridad (Ajustes, ver BackupArchive): un .zip con todos los datos de la app. -->
+    <string name="settings_backup_title">Copia de seguridad</string>
+    <string name="settings_backup_subtitle">Es de vital importancia que hagas esto antes de desinstalar o cambiar de dispositivo. De lo contrario, tus ediciones se perderán. Para importar la copia, debes seleccionar el mismo archivo .zip que exportaste</string>
+    <string name="settings_backup_export">Exportar copia</string>
+    <string name="settings_backup_import">Importar copia</string>
+    <string name="settings_backup_import_confirm">Todo lo que hay ahora en UltiMusic (ediciones, carátulas, listas y ajustes) se sustituirá por lo de la copia, y la aplicación se reiniciará. Tus archivos de música no se tocan</string>
+    <string name="settings_backup_working">Preparando la copia…</string>
+    <string name="settings_backup_export_done">Copia guardada</string>
+    <string name="settings_backup_export_failed">No se ha podido guardar la copia</string>
+    <string name="settings_backup_import_done">Copia importada. Reiniciando…</string>
+    <string name="settings_backup_import_invalid">Ese archivo no es una copia de UltiMusic</string>
+    <string name="settings_backup_import_too_new">Esa copia es de una versión más nueva de UltiMusic. Actualiza la aplicación e inténtalo de nuevo</string>
 
     <!-- Re-concesión de Download/Music/raíces propias tras la migración a Storage Access Framework
-         (ver SafStorage): se ofrece una sola vez, después de conceder UltiMusic, si queda alguna
-         canción catalogada antes de la migración sin re-enlazar. -->
+         (ver SafStorage): se ofrece una sola vez, al arrancar, si queda alguna canción catalogada
+         antes de la migración sin re-enlazar. -->
     <string name="relink_legacy_roots_title">¿Añadir más carpetas?</string>
     <string name="relink_legacy_roots_message">Algunas canciones de tu fonoteca estaban en otras carpetas (como Descargas o Música). Elige una para recuperarlas; siempre puedes añadir más luego desde Ajustes.</string>
     <string name="relink_legacy_roots_action">Elegir carpeta</string>

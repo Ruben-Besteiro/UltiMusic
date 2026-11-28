@@ -7,6 +7,7 @@ import android.os.Build
 import android.os.Bundle
 import android.net.Uri
 import android.text.TextUtils
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,7 +17,10 @@ import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.EditText
 import android.widget.FrameLayout
+import android.widget.GridLayout
+import android.widget.ImageView
 import android.widget.LinearLayout
+import android.widget.RadioGroup
 import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
@@ -38,10 +42,20 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.checkbox.MaterialCheckBox
+import com.google.android.material.chip.Chip
+import com.google.android.material.chip.ChipGroup
 import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.radiobutton.MaterialRadioButton
 import com.google.android.material.slider.Slider
 import com.untar.ultimusic.R
-import com.untar.ultimusic.data.BulkLyricsAdder
+import com.untar.ultimusic.data.ArtistSeparatorPreferences
+import com.untar.ultimusic.data.DynamicColorPreferences
+import com.untar.ultimusic.data.KeepScreenOnPreferences
+import com.untar.ultimusic.data.MinDurationPreferences
+import com.untar.ultimusic.data.BackgroundPreferences
+import com.untar.ultimusic.data.SleepTimerPreferences
+import com.untar.ultimusic.data.ThemePreferences
+import com.untar.ultimusic.data.backup.BackupArchive
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
@@ -136,10 +150,10 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var audioSectionTitle: TextView
     private lateinit var visualSectionTitle: TextView
     private lateinit var languageTitle: TextView
-    private lateinit var languageSpainButton: View
-    private lateinit var languageEnglishButton: View
-    private lateinit var languageSpainBorder: View
-    private lateinit var languageEnglishBorder: View
+    private lateinit var languageGrid: GridLayout
+    private lateinit var scriptSpinner: Spinner
+    /** Una celda por idioma, en el orden de [AppLocale.LANGUAGES] (ver [setupLanguage]). */
+    private val languageCells = mutableListOf<Pair<AppLocale.Language, View>>()
     private lateinit var boostTitle: TextView
     private lateinit var slider: Slider
     private lateinit var ruler: ValueRuler
@@ -152,7 +166,6 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var artistGroupingTitle: TextView
     private lateinit var artistGroupingValue: EditText
     private lateinit var addAllLyricsTitle: TextView
-    private lateinit var btnAddAllLyrics: TextView
 
     private lateinit var eqTitle: TextView
     private lateinit var eqUnavailable: View
@@ -179,6 +192,7 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var dynamicsUnsupported: View
 
     private lateinit var servicesSectionTitle: TextView
+    private lateinit var backupSectionTitle: TextView
     private lateinit var geniusTitle: TextView
     private lateinit var geniusStatus: TextView
     private lateinit var btnConfigureGenius: TextView
@@ -216,6 +230,25 @@ class SettingsDialogFragment : DialogFragment() {
     /** Misma bandera que [updatingUi] pero para [artistGroupingValue], independiente de ella. */
     private var updatingArtistGroupingUi = false
 
+    private lateinit var btnRefreshLibrary: TextView
+    private lateinit var sleepTimerTitle: TextView
+    private lateinit var sleepTimerValue: EditText
+    private lateinit var backgroundTitle: TextView
+    private lateinit var backgroundAdapter: BackgroundPickerAdapter
+    private lateinit var themeTitle: TextView
+    private lateinit var themeGroup: RadioGroup
+    private lateinit var dynamicColorTitle: TextView
+    private lateinit var dynamicColorSwitch: MaterialSwitch
+    private var dynamicColorSwitchDefaultTrackTint: ColorStateList? = null
+    private lateinit var keepScreenOnSwitch: MaterialSwitch
+    private var keepScreenOnSwitchDefaultTrackTint: ColorStateList? = null
+    private lateinit var minDurationValue: EditText
+    private lateinit var artistSeparatorsGroup: ChipGroup
+    private lateinit var artistSeparatorInput: EditText
+
+    /** Para no reaccionar a los cambios que se hacen por código en los controles nuevos. */
+    private var updatingExtraUi = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NO_FRAME, R.style.Theme_UltiMusic_FullScreenDialog)
@@ -240,17 +273,15 @@ class SettingsDialogFragment : DialogFragment() {
         audioSectionTitle = view.findViewById(R.id.audioSectionTitle)
         visualSectionTitle = view.findViewById(R.id.visualSectionTitle)
         languageTitle = view.findViewById(R.id.languageTitle)
-        languageSpainButton = view.findViewById(R.id.languageSpainButton)
-        languageEnglishButton = view.findViewById(R.id.languageEnglishButton)
-        languageSpainBorder = view.findViewById(R.id.languageSpainSelectedBorder)
-        languageEnglishBorder = view.findViewById(R.id.languageEnglishSelectedBorder)
+        languageGrid = view.findViewById(R.id.languageGrid)
+        scriptSpinner = view.findViewById(R.id.scriptSpinner)
         boostTitle = view.findViewById(R.id.boostTitle)
         slider = view.findViewById(R.id.boostSlider)
         ruler = view.findViewById(R.id.boostRuler)
         valueInput = view.findViewById(R.id.boostValue)
         noLimitCheck = view.findViewById(R.id.boostNoLimit)
         libraryRootsTitle = view.findViewById(R.id.libraryRootsTitle)
-        val libraryRootsRecycler = view.findViewById<RecyclerView>(R.id.libraryRootsRecycler)
+        val libraryRootsRecycler = view.findViewById<android.widget.LinearLayout>(R.id.libraryRootsRecycler)
         val addLibraryRootButton = view.findViewById<View>(R.id.btnAddLibraryRoot)
         greylistTitle = view.findViewById(R.id.greylistTitle)
         val greylistRecycler = view.findViewById<RecyclerView>(R.id.greylistRecycler)
@@ -258,7 +289,6 @@ class SettingsDialogFragment : DialogFragment() {
         artistGroupingTitle = view.findViewById(R.id.artistGroupingTitle)
         artistGroupingValue = view.findViewById(R.id.artistGroupingValue)
         addAllLyricsTitle = view.findViewById(R.id.addAllLyricsTitle)
-        btnAddAllLyrics = view.findViewById(R.id.btnAddAllLyrics)
         eqTitle = view.findViewById(R.id.eqTitle)
         eqUnavailable = view.findViewById(R.id.eqUnavailable)
         eqSwitch = view.findViewById(R.id.eqSwitch)
@@ -281,6 +311,7 @@ class SettingsDialogFragment : DialogFragment() {
         dynamicsSlider = view.findViewById(R.id.dynamicsSlider)
         dynamicsUnsupported = view.findViewById(R.id.dynamicsUnsupported)
         servicesSectionTitle = view.findViewById(R.id.servicesSectionTitle)
+        backupSectionTitle = view.findViewById(R.id.backupSectionTitle)
         geniusTitle = view.findViewById(R.id.geniusTitle)
         geniusStatus = view.findViewById(R.id.geniusStatus)
         btnConfigureGenius = view.findViewById(R.id.btnConfigureGenius)
@@ -289,6 +320,20 @@ class SettingsDialogFragment : DialogFragment() {
         btnConfigureYoutube = view.findViewById(R.id.btnConfigureYoutube)
         recountSectionTitle = view.findViewById(R.id.recountSectionTitle)
         val openRecountButton = view.findViewById<TextView>(R.id.btnOpenRecount)
+        btnRefreshLibrary = view.findViewById(R.id.btnRefreshLibrary)
+        sleepTimerTitle = view.findViewById(R.id.sleepTimerTitle)
+        sleepTimerValue = view.findViewById(R.id.sleepTimerValue)
+        backgroundTitle = view.findViewById(R.id.backgroundTitle)
+        themeTitle = view.findViewById(R.id.themeTitle)
+        themeGroup = view.findViewById(R.id.themeGroup)
+        dynamicColorTitle = view.findViewById(R.id.dynamicColorTitle)
+        dynamicColorSwitch = view.findViewById(R.id.dynamicColorSwitch)
+        dynamicColorSwitchDefaultTrackTint = dynamicColorSwitch.trackTintList
+        keepScreenOnSwitch = view.findViewById(R.id.keepScreenOnSwitch)
+        keepScreenOnSwitchDefaultTrackTint = keepScreenOnSwitch.trackTintList
+        minDurationValue = view.findViewById(R.id.minDurationValue)
+        artistSeparatorsGroup = view.findViewById(R.id.artistSeparatorsGroup)
+        artistSeparatorInput = view.findViewById(R.id.artistSeparatorInput)
 
         // La barra de estado es transparente en este tema, así que la toolbar se aparta ella sola
         // de la hora y la batería con un padding del tamaño de ese hueco.
@@ -309,37 +354,250 @@ class SettingsDialogFragment : DialogFragment() {
 
         setupBoostControls()
         setupLanguage()
+        setupScriptSpinner()
         setupLibraryRoots(libraryRootsRecycler, addLibraryRootButton)
         setupGreylist(greylistRecycler, addGreylistFolderButton)
         setupArtistGrouping()
-        setupBulkLyrics()
         setupEqualizer(eqBandsContainer)
         setupServices()
         setupRecount(openRecountButton)
+        setupBackup(view.findViewById(R.id.btnExportBackup), view.findViewById(R.id.btnImportBackup))
+        setupRefreshLibrary()
+        setupSleepTimer()
+        setupBackground(view.findViewById(R.id.backgroundRecycler))
+        setupTheme()
+        setupDynamicColor()
+        setupKeepScreenOn()
+        setupMinDuration()
+        setupArtistSeparators(view.findViewById(R.id.btnAddArtistSeparator))
         observeState()
     }
 
+    private fun setupRefreshLibrary() {
+        btnRefreshLibrary.setOnClickListener { settingsViewModel.refreshLibrary() }
+    }
+
+    private fun showRefreshProgress(progress: Int?) {
+        btnRefreshLibrary.isEnabled = progress == null
+        btnRefreshLibrary.alpha = if (progress == null) 1f else 0.6f
+        btnRefreshLibrary.text =
+            if (progress == null) getString(R.string.settings_refresh_library)
+            else getString(R.string.settings_refresh_library_progress, progress)
+    }
+
     /**
-     * Las dos banderas del selector de idioma (ver [AppLocale]): tocar una cambia el idioma de toda
-     * la aplicación al instante -[AppLocale.select] recrea sola cualquier Activity viva- y mueve el
-     * borde marcado a la bandera recién elegida. Tocar la que ya está seleccionada no hace nada.
+     * Caja numérica de un ajuste entero (temporizador, duración mínima): mismo patrón que
+     * [setupArtistGrouping]. Se guarda en caliente mientras lo escrito es un número, y al terminar
+     * (tecla "hecho" o perder el foco) se cuadra con lo que de verdad quedó guardado.
+     */
+    private fun setupIntField(field: EditText, current: () -> Int, save: (Int) -> Unit) {
+        fun normalize() = showIntValue(field, current())
+        field.doAfterTextChanged { text ->
+            if (updatingExtraUi) return@doAfterTextChanged
+            text?.toString()?.toIntOrNull()?.let(save)
+        }
+        field.setOnEditorActionListener { _, _, _ ->
+            normalize()
+            val imm = requireContext().getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+            imm.hideSoftInputFromWindow(field.windowToken, 0)
+            field.clearFocus()
+            true
+        }
+        field.setOnFocusChangeListener { _, hasFocus -> if (!hasFocus) normalize() }
+    }
+
+    private fun showIntValue(field: EditText, value: Int) {
+        if (field.text.toString() == value.toString()) return
+        updatingExtraUi = true
+        field.setText(value.toString())
+        updatingExtraUi = false
+    }
+
+    private fun setupSleepTimer() {
+        setupIntField(sleepTimerValue, { SleepTimerPreferences.minutes.value }, SleepTimerPreferences::set)
+    }
+
+    private fun setupMinDuration() {
+        setupIntField(minDurationValue, { MinDurationPreferences.seconds.value }, MinDurationPreferences::set)
+    }
+
+    private fun setupBackground(recycler: RecyclerView) {
+        backgroundAdapter = BackgroundPickerAdapter(onUpload = {
+            pickBackgroundLauncher.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        })
+        backgroundAdapter.setUploads(BackgroundPreferences.uploads.value)
+        backgroundAdapter.setSelected(BackgroundPreferences.selected.value)
+        recycler.adapter = backgroundAdapter
+        viewLifecycleOwner.lifecycleScope.launch {
+            launch {
+                var count = BackgroundPreferences.uploads.value.size
+                BackgroundPreferences.uploads.collect { names ->
+                    backgroundAdapter.setUploads(names)
+                    // La recién subida queda al final, justo antes del "+": que se vea.
+                    if (names.size > count) recycler.smoothScrollToPosition(backgroundAdapter.itemCount - 1)
+                    count = names.size
+                }
+            }
+            launch { BackgroundPreferences.selected.collect { backgroundAdapter.setSelected(it) } }
+        }
+    }
+
+    /**
+     * Selector de fotos del sistema, como el de las carátulas del editor: sin permisos, el usuario
+     * elige la imagen en una pantalla del propio sistema. La copia (reducida) se hace fuera del hilo
+     * principal y la deja elegida; MainActivity cambia el fondo en cuanto cambia la elección.
+     */
+    private val pickBackgroundLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val appContext = requireContext().applicationContext
+            lifecycleScope.launch {
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    BackgroundPreferences.importImage(appContext, uri)
+                }
+                if (!ok && isAdded) toast(R.string.settings_background_upload_error)
+            }
+        }
+
+    private fun setupTheme() {
+        val ids = mapOf(
+            ThemePreferences.Mode.SYSTEM to R.id.themeSystem,
+            ThemePreferences.Mode.LIGHT to R.id.themeLight,
+            ThemePreferences.Mode.DARK to R.id.themeDark,
+        )
+        themeGroup.check(ids.getValue(ThemePreferences.mode.value))
+        themeGroup.setOnCheckedChangeListener { _, checkedId ->
+            ids.entries.firstOrNull { it.value == checkedId }?.key?.let(ThemePreferences::set)
+        }
+    }
+
+    private fun setupDynamicColor() {
+        dynamicColorSwitch.setOnCheckedChangeListener { _, checked ->
+            if (!updatingExtraUi) DynamicColorPreferences.set(checked)
+        }
+    }
+
+    private fun setupKeepScreenOn() {
+        keepScreenOnSwitch.setOnCheckedChangeListener { _, checked ->
+            if (!updatingExtraUi) KeepScreenOnPreferences.set(checked)
+        }
+    }
+
+    private fun setupArtistSeparators(addButton: View) {
+        fun add() {
+            val typed = artistSeparatorInput.text.toString()
+            if (ArtistSeparatorPreferences.add(typed)) {
+                artistSeparatorInput.setText("")
+            } else {
+                toast(R.string.settings_artist_separators_invalid)
+            }
+        }
+        addButton.setOnClickListener { add() }
+        artistSeparatorInput.setOnEditorActionListener { _, _, _ -> add(); true }
+    }
+
+    private fun showArtistSeparators(separators: List<String>) {
+        artistSeparatorsGroup.removeAllViews()
+        val accent = playerViewModel.accentTarget.value
+        separators.forEach { separator ->
+            val chip = Chip(requireContext()).apply {
+                text = separator
+                isCloseIconVisible = true
+                closeIconContentDescription = getString(R.string.settings_artist_separators_remove_desc, separator)
+                chipStrokeColor = ColorStateList.valueOf(accent)
+                chipStrokeWidth = resources.displayMetrics.density
+                setOnCloseIconClickListener {
+                    if (!ArtistSeparatorPreferences.remove(separator)) toast(R.string.settings_artist_separators_last)
+                }
+            }
+            artistSeparatorsGroup.addView(chip)
+        }
+    }
+
+    private fun showSwitch(switch: MaterialSwitch, checked: Boolean) {
+        if (switch.isChecked == checked) return
+        updatingExtraUi = true
+        switch.isChecked = checked
+        updatingExtraUi = false
+    }
+
+    /**
+     * La cuadrícula de banderas del selector de idioma (ver [AppLocale]): 5 columnas x 5 filas, en el
+     * orden de [AppLocale.LANGUAGES]. Tocar una cambia el idioma de toda la aplicación al instante
+     * -[AppLocale.select] recrea sola cualquier Activity viva- y mueve el borde marcado a la bandera
+     * recién elegida. Tocar la que ya está seleccionada no hace nada.
      */
     private fun setupLanguage() {
-        updateLanguageSelection()
-        languageSpainButton.setOnClickListener {
-            AppLocale.select(spanish = true)
-            updateLanguageSelection()
+        val inflater = LayoutInflater.from(languageGrid.context)
+        val rowGap = resources.getDimensionPixelSize(R.dimen.language_grid_row_gap)
+        languageGrid.removeAllViews()
+        languageCells.clear()
+        AppLocale.LANGUAGES.forEachIndexed { index, language ->
+            val cell = inflater.inflate(R.layout.item_language_flag, languageGrid, false)
+            cell.findViewById<ImageView>(R.id.flagImage).setImageResource(language.flag)
+            cell.contentDescription = language.nativeName
+            cell.setOnClickListener {
+                AppLocale.select(language)
+                updateLanguageSelection()
+            }
+            val columns = languageGrid.columnCount
+            cell.layoutParams = GridLayout.LayoutParams(
+                GridLayout.spec(index / columns),
+                GridLayout.spec(index % columns, 1f),
+            ).apply {
+                setGravity(Gravity.CENTER)
+                if (index >= columns) topMargin = rowGap
+            }
+            languageGrid.addView(cell)
+            languageCells += language to cell
         }
-        languageEnglishButton.setOnClickListener {
-            AppLocale.select(spanish = false)
-            updateLanguageSelection()
+        updateLanguageSelection()
+    }
+
+    /**
+     * Desplegable del alfabeto del serbocroata (latín / cirílico). Solo se ve mientras ese es el
+     * idioma activo (ver [updateLanguageSelection]). El valor inicial es el elegido antes o, si no
+     * hay, el que toca por el país del usuario ([AppLocale.serbocroatianScript]).
+     */
+    private fun setupScriptSpinner() {
+        val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_item, SCRIPT_LABELS)
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        scriptSpinner.adapter = adapter
+        scriptSpinner.setSelection(scriptPosition())
+        scriptSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                // El Spinner dispara esto al montarse con lo que ya había: no hay nada que cambiar.
+                if (position == scriptPosition()) return
+                AppLocale.setSerbocroatianScript(if (position == 1) AppLocale.SCRIPT_CYRILLIC else AppLocale.SCRIPT_LATIN)
+                rebuildLanguageGrid()
+            }
+            override fun onNothingSelected(parent: AdapterView<*>?) {}
+        }
+    }
+
+    private fun scriptPosition(): Int = if (AppLocale.serbocroatianScript() == AppLocale.SCRIPT_CYRILLIC) 1 else 0
+
+    /**
+     * Reconstruye la cuadrícula de banderas: la celda del serbocroata pasa a ser otro objeto al
+     * cambiar su alfabeto y la selección se decide por igualdad. Se le vuelve a poner el acento,
+     * que de otro modo solo se aplica al llegar un color nuevo.
+     */
+    private fun rebuildLanguageGrid() {
+        setupLanguage()
+        val accent = playerViewModel.accentColor.value
+        languageCells.forEach { (_, cell) ->
+            AccentTint.stroke(cell, R.id.flagSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
         }
     }
 
     private fun updateLanguageSelection() {
-        val spanish = AppLocale.isSpanishSelected()
-        languageSpainBorder.isVisible = spanish
-        languageEnglishBorder.isVisible = !spanish
+        val current = AppLocale.current()
+        scriptSpinner.isVisible = current.matches("sr")
+        languageCells.forEach { (language, cell) ->
+            cell.findViewById<View>(R.id.flagSelectedBorder).isVisible = language == current
+        }
     }
 
     /**
@@ -348,12 +606,14 @@ class SettingsDialogFragment : DialogFragment() {
      * lista gris, aquí sí hace falta un permiso nuevo, ver [com.untar.ultimusic.util.SafStorage]) y la
      * papelera de cada fila.
      */
-    private fun setupLibraryRoots(recycler: RecyclerView, addFolderButton: View) {
-        libraryRootAdapter = LibraryRootAdapter(onDelete = { root -> showRemoveLibraryRootDialog(root) })
-        recycler.layoutManager = LinearLayoutManager(requireContext())
-        recycler.adapter = libraryRootAdapter
+    private fun setupLibraryRoots(container: android.widget.LinearLayout, addFolderButton: View) {
+        libraryRootAdapter = LibraryRootAdapter(container, onDelete = { root -> showRemoveLibraryRootDialog(root) })
 
-        addFolderButton.setOnClickListener { addLibraryRootLauncher.launch(null) }
+        // Con null Android abriría el selector en la última carpeta usada (`UltiMusic`): se pide que
+        // empiece en la raíz del almacenamiento interno, igual que los diálogos de MainActivity.
+        addFolderButton.setOnClickListener {
+            addLibraryRootLauncher.launch(com.untar.ultimusic.util.SafStorage.musicPickerInitialUri())
+        }
     }
 
     private val addLibraryRootLauncher =
@@ -419,38 +679,6 @@ class SettingsDialogFragment : DialogFragment() {
             .setPositiveButton(R.string.dialog_ok) { _, _ -> settingsViewModel.removeGreylistFolder(folder.path) }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
-    }
-
-    /**
-     * "Añadir todas las letras", al final de "ajustes visuales" (ver [BulkLyricsAdder]): pide
-     * confirmación y, si se acepta, lanza el pase y abre su diálogo de progreso.
-     *
-     * Si ya hay un pase en marcha —el usuario lo mandó a segundo plano y ha vuelto a Ajustes, o
-     * simplemente lo dejó corriendo y reabrió esta pantalla— se reabre directamente el diálogo de
-     * progreso, sin volver a pedir confirmación: ya se dio una vez para ESTE pase.
-     */
-    private fun setupBulkLyrics() {
-        btnAddAllLyrics.setOnClickListener {
-            if (BulkLyricsAdder.isRunning) showBulkLyricsProgress() else showBulkLyricsConfirm()
-        }
-    }
-
-    private fun showBulkLyricsConfirm() {
-        val dialog = AlertDialog.Builder(requireContext())
-            .setTitle(R.string.settings_bulk_lyrics_confirm_title)
-            .setMessage(R.string.settings_bulk_lyrics_confirm_message)
-            .setNegativeButton(R.string.dialog_no, null)
-            .setPositiveButton(R.string.dialog_yes) { _, _ ->
-                BulkLyricsAdder.start(requireContext())
-                showBulkLyricsProgress()
-            }
-            .show()
-        AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
-    }
-
-    private fun showBulkLyricsProgress() {
-        if (childFragmentManager.findFragmentByTag(BulkLyricsProgressDialogFragment.TAG) != null) return
-        BulkLyricsProgressDialogFragment().show(childFragmentManager, BulkLyricsProgressDialogFragment.TAG)
     }
 
     /**
@@ -913,6 +1141,80 @@ class SettingsDialogFragment : DialogFragment() {
         }
     }
 
+    // --- Copia de seguridad (ver BackupArchive) ---
+
+    private val exportBackupLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            if (uri == null) return@registerForActivityResult
+            runBackupTask { app ->
+                val ok = BackupArchive.export(app, uri)
+                Toast.makeText(
+                    app,
+                    if (ok) R.string.settings_backup_export_done else R.string.settings_backup_export_failed,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+    private val importBackupLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val dialog = AlertDialog.Builder(requireContext())
+                .setTitle(R.string.settings_backup_import)
+                .setMessage(R.string.settings_backup_import_confirm)
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.dialog_ok) { _, _ -> importBackup(uri) }
+                .show()
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
+        }
+
+    private fun setupBackup(exportButton: TextView, importButton: TextView) {
+        exportButton.setOnClickListener {
+            if (!backupInProgress) exportBackupLauncher.launch(BackupArchive.suggestedName())
+        }
+        importButton.setOnClickListener {
+            // Algunos gestores de archivos no etiquetan los .zip como application/zip.
+            if (!backupInProgress) importBackupLauncher.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed"))
+        }
+    }
+
+    private fun importBackup(uri: Uri) = runBackupTask { app ->
+        when (BackupArchive.import(app, uri)) {
+            BackupArchive.ImportResult.OK -> {
+                // Como al restaurar la antigua copia de la BD: la nueva solo entra al arrancar de
+                // cero (ver UltiMusicDatabase.restoreFromBackupIfNeeded), así que se reinicia ya.
+                Toast.makeText(app, R.string.settings_backup_import_done, Toast.LENGTH_LONG).show()
+                kotlinx.coroutines.delay(1000)   // que dé tiempo a verse antes de que muera el proceso
+                app.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
+                    app.startActivity(
+                        it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    )
+                }
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+            BackupArchive.ImportResult.TOO_NEW -> Toast.makeText(app, R.string.settings_backup_import_too_new, Toast.LENGTH_LONG).show()
+            BackupArchive.ImportResult.INVALID -> Toast.makeText(app, R.string.settings_backup_import_invalid, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Lanza [block] con un aviso de "trabajando" y sin permitir otra a la vez. Va en [backupScope]
+     * (de proceso), no en el del fragmento: si el usuario cierra Ajustes a mitad, la importación
+     * tiene que llegar igual al reinicio, y el aviso final salir igual (con el contexto de la app).
+     */
+    private fun runBackupTask(block: suspend (Context) -> Unit) {
+        val app = requireContext().applicationContext
+        backupInProgress = true
+        Toast.makeText(app, R.string.settings_backup_working, Toast.LENGTH_SHORT).show()
+        backupScope.launch {
+            try {
+                block(app)
+            } finally {
+                backupInProgress = false
+            }
+        }
+    }
+
     private fun observeState() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -920,7 +1222,7 @@ class SettingsDialogFragment : DialogFragment() {
                     playerViewModel.volumeBoost.collect { percent -> showValue(percent) }
                 }
                 launch {
-                    settingsViewModel.libraryRoots.collect { roots -> libraryRootAdapter.submit(roots) }
+                    settingsViewModel.visibleRoots.collect { roots -> libraryRootAdapter.submit(roots) }
                 }
                 launch {
                     settingsViewModel.greylistFolders.collect { folders -> greylistAdapter.submit(folders) }
@@ -928,6 +1230,12 @@ class SettingsDialogFragment : DialogFragment() {
                 launch {
                     settingsViewModel.artistGroupingThreshold.collect { value -> showArtistGroupingValue(value) }
                 }
+                launch { settingsViewModel.refreshProgress.collect(::showRefreshProgress) }
+                launch { SleepTimerPreferences.minutes.collect { showIntValue(sleepTimerValue, it) } }
+                launch { MinDurationPreferences.seconds.collect { showIntValue(minDurationValue, it) } }
+                launch { DynamicColorPreferences.enabled.collect { showSwitch(dynamicColorSwitch, it) } }
+                launch { KeepScreenOnPreferences.enabled.collect { showSwitch(keepScreenOnSwitch, it) } }
+                launch { ArtistSeparatorPreferences.separators.collect(::showArtistSeparators) }
                 launch {
                     playerViewModel.limitDisabled.collect { disabled ->
                         showMode(disabled)
@@ -1018,8 +1326,9 @@ class SettingsDialogFragment : DialogFragment() {
                         audioSectionTitle.setTextColor(accent)
                         visualSectionTitle.setTextColor(accent)
                         languageTitle.setTextColor(accent)
-                        AccentTint.stroke(languageSpainBorder, R.id.languageSpainSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
-                        AccentTint.stroke(languageEnglishBorder, R.id.languageEnglishSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
+                        languageCells.forEach { (_, cell) ->
+                            AccentTint.stroke(cell, R.id.flagSelectedBorder, accent, R.dimen.flag_selected_stroke_width)
+                        }
                         boostTitle.setTextColor(accent)
                         slider.trackActiveTintList = tint
                         slider.thumbTintList = tint
@@ -1049,9 +1358,25 @@ class SettingsDialogFragment : DialogFragment() {
                         dynamicsSlider.trackActiveTintList = tint
                         dynamicsSlider.thumbTintList = tint
                         servicesSectionTitle.setTextColor(accent)
+                        backupSectionTitle.setTextColor(accent)
                         geniusTitle.setTextColor(accent)
                         youtubeTitle.setTextColor(accent)
                         recountSectionTitle.setTextColor(accent)
+                        sleepTimerTitle.setTextColor(accent)
+                        backgroundTitle.setTextColor(accent)
+                        themeTitle.setTextColor(accent)
+                        dynamicColorTitle.setTextColor(accent)
+                        for (i in 0 until themeGroup.childCount) {
+                            (themeGroup.getChildAt(i) as? MaterialRadioButton)?.buttonTintList = tint
+                        }
+                        dynamicColorSwitch.trackTintList = DynamicColor.switchTrackTint(accent, dynamicColorSwitchDefaultTrackTint)
+                        keepScreenOnSwitch.trackTintList = DynamicColor.switchTrackTint(accent, keepScreenOnSwitchDefaultTrackTint)
+                        if (accent == playerViewModel.accentTarget.value) {
+                            backgroundAdapter.setAccent(accent)
+                            for (i in 0 until artistSeparatorsGroup.childCount) {
+                                (artistSeparatorsGroup.getChildAt(i) as? Chip)?.chipStrokeColor = tint
+                            }
+                        }
                     }
                 }
                 // Si se conectan auriculares con el límite quitado, el ViewModel lo repone solo; aquí
@@ -1102,5 +1427,16 @@ class SettingsDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "settings"
+
+        /** Ver [runBackupTask]: sobrevive al fragmento. */
+        private val backupScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
+        )
+
+        @Volatile
+        private var backupInProgress = false
+
+        /** Opciones del desplegable del alfabeto del serbocroata: cada una en su propia escritura. */
+        private val SCRIPT_LABELS = listOf("Latinica", "Ћирилица")
     }
 }

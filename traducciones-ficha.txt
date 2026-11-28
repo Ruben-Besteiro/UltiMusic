@@ -1,0 +1,389 @@
+==================== Español (es) ====================
+Eslogan: El reproductor de música definitivo para Android
+
+Tú serás quien juzgue si el eslogan es cierto o falso
+Con funciones destacadas como:
+- Disponible totalmente en español
+- Cero (0) anuncios o contenido de pago
+- Foco puesto en la interfaz y experiencia del usuario
+- Facilitación del proceso de adquisición de música
+- Rellenado automático de metadatos para las canciones
+- Canciones con letra sincronizada y traducción
+- Sistema de etiquetas personalizadas para categorizar la música
+- Ver vídeos de YouTube dentro de la aplicación
+- Y un largo etcétera
+
+==================== Português (pt) ====================
+Slogan: O reprodutor de música definitivo para Android
+
+Você será quem julgará se o slogan é verdadeiro ou falso
+Com recursos de destaque como:
+- Disponível totalmente em português
+- Zero (0) anúncios ou conteúdo pago
+- Foco na interface e na experiência do usuário
+- Facilidade no processo de aquisição de músicas
+- Preenchimento automático de metadados das músicas
+- Músicas com letra sincronizada e tradução
+- Sistema de etiquetas personalizadas para categorizar a música
+- Assista a vídeos do YouTube dentro do aplicativo
+- E muito mais
+
+==================== Français (fr) ====================
+Slogan : Le lecteur de musique ultime pour Android
+
+C'est vous qui jugerez si le slogan est vrai ou faux
+Avec des fonctionnalités phares telles que :
+- Entièrement disponible en français
+- Zéro (0) publicité ou contenu payant
+- Accent mis sur l'interface et l'expérience utilisateur
+- Processus d'acquisition de musique simplifié
+- Remplissage automatique des métadonnées des chansons
+- Chansons avec paroles synchronisées et traduction
+- Système d'étiquettes personnalisées pour catégoriser la musique
+- Regarder des vidéos YouTube dans l'application
+- Et bien d'autres encore
+
+==================== Italiano (it) ====================
+Slogan: Il lettore musicale definitivo per Android
+
+Sarai tu a giudicare se lo slogan è vero o falso
+Con funzionalità di spicco come:
+- Disponibile completamente in italiano
+- Zero (0) pubblicità o contenuti a pagamento
+- Attenzione all'interfaccia e all'esperienza utente
+- Processo di acquisizione della musica semplificato
+- Compilazione automatica dei metadati dei brani
+- Brani con testo sincronizzato e traduzione
+- Sistema di etichette personalizzate per categorizzare la musica
+- Guarda i video di YouTube all'interno dell'app
+- E molto altro ancora
+
+==================== English (en) ====================
+Slogan: The ultimate music player for Android
+
+You will be the one to judge whether the slogan is true or false
+With standout features like:
+- Fully available in English
+- Zero (0) ads or paid content
+- Focus on the interface and user experience
+- Easier process for getting new music
+- Automatic metadata filling for songs
+- Songs with synchronized lyrics and translation
+- Custom tag system to categorize your music
+- Watch YouTube videos inside the app
+- And a long list of more
+
+==================== Deutsch (de) ====================
+Slogan: Der ultimative Musikplayer für Android
+
+Du entscheidest, ob der Slogan wahr oder falsch ist
+Mit herausragenden Funktionen wie:
+- Vollständig auf Deutsch verfügbar
+- Null (0) Werbung oder kostenpflichtige Inhalte
+- Fokus auf Oberfläche und Benutzererlebnis
+- Einfachere Beschaffung von Musik
+- Automatisches Ausfüllen von Metadaten für Songs
+- Songs mit synchronisiertem Liedtext und Übersetzung
+- System benutzerdefinierter Tags zur Kategorisierung der Musik
+- YouTube-Videos direkt in der App ansehen
+- Und vieles mehr
+
+==================== Nederlands (nl) ====================
+Slogan: De ultieme muziekspeler voor Android
+
+Jij bent degene die beoordeelt of de slogan waar of onwaar is
+Met opvallende functies zoals:
+- Volledig beschikbaar in het Nederlands
+- Nul (0) advertenties of betaalde content
+- Focus op de interface en gebruikerservaring
+- Eenvoudiger muziek verkrijgen
+- Automatisch invullen van metadata voor nummers
+- Nummers met gesynchroniseerde songteksten en vertaling
+- Systeem met eigen tags om muziek te categoriseren
+- YouTube-video's bekijken in de app
+- En nog veel meer
+
+==================== Polski (pl) ====================
+Slogan: Najlepszy odtwarzacz muzyki na Androida
+
+To Ty ocenisz, czy slogan jest prawdziwy, czy fałszywy
+Z wyjątkowymi funkcjami, takimi jak:
+- W pełni dostępny po polsku
+- Zero (0) reklam i płatnych treści
+- Nacisk na interfejs i wygodę użytkownika
+- Łatwiejsze zdobywanie muzyki
+- Automatyczne uzupełnianie metadanych utworów
+- Utwory z synchronizowanym tekstem i tłumaczeniem
+- System własnych tagów do kategoryzowania muzyki
+- Oglądanie filmów z YouTube w aplikacji
+- I wiele więcej
+
+==================== Српски (sr) ====================
+Слоган: Врхунски музички плејер за Android
+
+Ти ћеш бити тај који ће проценити да ли је слоган истинит или лажан
+Са истакнутим функцијама као што су:
+- Потпуно доступан на српскохрватском
+- Нула (0) реклама или плаћеног садржаја
+- Фокус на интерфејс и корисничко искуство
+- Једноставније набављање музике
+- Аутоматско попуњавање метаподатака песама
+- Песме са синхронизованим текстом и преводом
+- Систем сопствених ознака за категоризацију музике
+- Гледање YouTube видео-снимака унутар апликације
+- И још много тога
+
+==================== Русский (ru) ====================
+Слоган: Совершенный музыкальный плеер для Android
+
+Вы сами рассудите, правдив ли слоган или нет
+Ключевые возможности:
+- Полностью доступен на русском языке
+- Ноль (0) рекламы и платного контента
+- Упор на интерфейс и удобство использования
+- Упрощённый процесс получения музыки
+- Автоматическое заполнение метаданных песен
+- Песни с синхронизированным текстом и переводом
+- Система пользовательских меток для категоризации музыки
+- Просмотр видео YouTube прямо в приложении
+- И многое другое
+
+==================== Türkçe (tr) ====================
+Slogan: Android için nihai müzik çalar
+
+Sloganın doğru mu yanlış mı olduğuna siz karar vereceksiniz
+Öne çıkan özellikler:
+- Tamamen Türkçe olarak kullanılabilir
+- Sıfır (0) reklam veya ücretli içerik
+- Arayüze ve kullanıcı deneyimine odaklanma
+- Müzik edinme sürecinin kolaylaştırılması
+- Şarkılar için otomatik üst veri doldurma
+- Senkronize söz ve çeviri içeren şarkılar
+- Müziği kategorilere ayırmak için özel etiket sistemi
+- YouTube videolarını uygulama içinde izleme
+- Ve çok daha fazlası
+
+==================== Kiswahili (sw) ====================
+Slogan: Kicheza muziki bora kabisa kwa Android
+
+Wewe ndiye utakayehukumu kama kauli mbiu ni ya kweli au ya uongo
+Kikiwa na vipengele vya kipekee kama:
+- Kinapatikana kikamilifu kwa Kiswahili
+- Sifuri (0) matangazo au maudhui ya kulipia
+- Msisitizo kwenye kiolesura na uzoefu wa mtumiaji
+- Urahisi wa kupata muziki
+- Kujaza metadata ya nyimbo kiotomatiki
+- Nyimbo zenye mashairi yaliyosawazishwa na tafsiri
+- Mfumo wa lebo maalum za kuainisha muziki
+- Tazama video za YouTube ndani ya programu
+- Na mengine mengi zaidi
+
+==================== עברית (he) ====================
+סלוגן: נגן המוזיקה האולטימטיבי לאנדרואיד
+
+אתם תהיו אלה שישפטו אם הסלוגן נכון או שגוי
+עם תכונות בולטות כמו:
+- זמין במלואו בעברית
+- אפס (0) פרסומות או תוכן בתשלום
+- דגש על הממשק וחוויית המשתמש
+- תהליך קל יותר להשגת מוזיקה
+- מילוי אוטומטי של מטא־נתונים לשירים
+- שירים עם מילים מסונכרנות ותרגום
+- מערכת תגיות מותאמות אישית לסיווג המוזיקה
+- צפייה בסרטוני YouTube בתוך האפליקציה
+- ועוד הרבה
+
+==================== العربية (ar) ====================
+الشعار: مشغّل الموسيقى المثالي لنظام أندرويد
+
+أنت من سيحكم إن كان الشعار صحيحًا أم خاطئًا
+مع ميزات بارزة مثل:
+- متوفر بالكامل باللغة العربية
+- صفر (0) إعلانات أو محتوى مدفوع
+- التركيز على الواجهة وتجربة المستخدم
+- تسهيل عملية الحصول على الموسيقى
+- تعبئة تلقائية للبيانات الوصفية للأغاني
+- أغانٍ بكلمات متزامنة وترجمة
+- نظام وسوم مخصّصة لتصنيف الموسيقى
+- مشاهدة مقاطع يوتيوب داخل التطبيق
+- والكثير غير ذلك
+
+==================== فارسی (fa) ====================
+شعار: پخش‌کننده نهایی موسیقی برای اندروید
+
+این شما هستید که قضاوت می‌کنید شعار درست است یا نادرست
+با ویژگی‌های برجسته‌ای مانند:
+- کاملاً در دسترس به زبان فارسی
+- صفر (0) تبلیغ یا محتوای پولی
+- تمرکز بر رابط کاربری و تجربه کاربر
+- آسان‌تر شدن فرایند تهیه موسیقی
+- تکمیل خودکار فراداده‌های آهنگ‌ها
+- آهنگ‌هایی با متن همگام‌شده و ترجمه
+- سیستم برچسب‌های سفارشی برای دسته‌بندی موسیقی
+- تماشای ویدیوهای یوتیوب درون برنامه
+- و بسیاری موارد دیگر
+
+==================== اردو (ur) ====================
+نعرہ: اینڈرائیڈ کے لیے حتمی میوزک پلیئر
+
+نعرہ سچ ہے یا جھوٹ، اس کا فیصلہ آپ خود کریں گے
+نمایاں خصوصیات کے ساتھ جیسے:
+- مکمل طور پر اردو زبان میں دستیاب
+- صفر (0) اشتہارات یا ادائیگی والا مواد
+- انٹرفیس اور صارف کے تجربے پر توجہ
+- موسیقی حاصل کرنے کے عمل میں آسانی
+- گانوں کے میٹا ڈیٹا کی خودکار پُر کاری
+- ہم وقت ساز بولوں اور ترجمے والے گانے
+- موسیقی کی درجہ بندی کے لیے حسبِ ضرورت ٹیگز کا نظام
+- ایپ کے اندر یوٹیوب ویڈیوز دیکھیں
+- اور بہت کچھ
+
+==================== हिन्दी (hi) ====================
+स्लोगन: Android के लिए सर्वश्रेष्ठ म्यूज़िक प्लेयर
+
+स्लोगन सच है या झूठ, इसका फ़ैसला आप ही करेंगे
+इन प्रमुख सुविधाओं के साथ:
+- पूरी तरह हिन्दी में उपलब्ध
+- शून्य (0) विज्ञापन या सशुल्क सामग्री
+- इंटरफ़ेस और उपयोगकर्ता अनुभव पर ध्यान
+- संगीत प्राप्त करने की प्रक्रिया को आसान बनाना
+- गानों के मेटाडेटा का स्वचालित भरण
+- सिंक्रनाइज़्ड बोल और अनुवाद वाले गाने
+- संगीत को वर्गीकृत करने के लिए कस्टम टैग सिस्टम
+- ऐप के भीतर ही YouTube वीडियो देखें
+- और भी बहुत कुछ
+
+==================== বাংলা (bn) ====================
+স্লোগান: অ্যান্ড্রয়েডের জন্য সেরা মিউজিক প্লেয়ার
+
+স্লোগানটি সত্য নাকি মিথ্যা, তার বিচার আপনিই করবেন
+উল্লেখযোগ্য বৈশিষ্ট্য সহ:
+- সম্পূর্ণ বাংলা ভাষায় উপলব্ধ
+- শূন্য (0) বিজ্ঞাপন বা পেইড কন্টেন্ট
+- ইন্টারফেস ও ব্যবহারকারীর অভিজ্ঞতার ওপর জোর
+- গান সংগ্রহের প্রক্রিয়া সহজ করা
+- গানের মেটাডেটা স্বয়ংক্রিয়ভাবে পূরণ
+- সিঙ্ক্রোনাইজড লিরিক্স ও অনুবাদসহ গান
+- সঙ্গীত শ্রেণিবদ্ধ করার জন্য কাস্টম ট্যাগ সিস্টেম
+- অ্যাপের ভেতরেই ইউটিউব ভিডিও দেখুন
+- আরও অনেক কিছু
+
+==================== 中文 (zh) ====================
+标语：Android 终极音乐播放器
+
+标语是真是假，由你来评判
+主要功能包括：
+- 完整提供中文版本
+- 零（0）广告，无付费内容
+- 专注于界面与用户体验
+- 简化获取音乐的流程
+- 自动填充歌曲元数据
+- 支持同步歌词和翻译的歌曲
+- 自定义标签系统，用于对音乐分类
+- 在应用内观看 YouTube 视频
+- 还有更多功能
+
+==================== 日本語 (ja) ====================
+スローガン：Android向け究極の音楽プレーヤー
+
+スローガンが本当かどうかは、あなたが判断してください
+主な機能：
+- 日本語に完全対応
+- 広告も有料コンテンツも一切なし（0）
+- インターフェースとユーザー体験を重視
+- 音楽の入手プロセスをスムーズに
+- 曲のメタデータを自動入力
+- 同期歌詞と翻訳付きの楽曲
+- 音楽を分類できるカスタムタグ機能
+- アプリ内でYouTube動画を視聴
+- そのほかにも多数
+
+==================== 한국어 (ko) ====================
+슬로건: 안드로이드를 위한 궁극의 음악 플레이어
+
+슬로건이 사실인지 거짓인지는 여러분이 직접 판단하세요
+주요 기능:
+- 한국어 완벽 지원
+- 광고 및 유료 콘텐츠 제로(0)
+- 인터페이스와 사용자 경험에 집중
+- 음악을 더 쉽게 구하는 과정
+- 노래 메타데이터 자동 채우기
+- 동기화된 가사와 번역이 있는 노래
+- 음악을 분류하는 사용자 지정 태그 시스템
+- 앱 안에서 YouTube 동영상 시청
+- 그 외 다양한 기능
+
+==================== Tiếng Việt (vi) ====================
+Khẩu hiệu: Trình phát nhạc tối thượng dành cho Android
+
+Khẩu hiệu đúng hay sai sẽ do chính bạn đánh giá
+Với các tính năng nổi bật như:
+- Hỗ trợ đầy đủ tiếng Việt
+- Không (0) quảng cáo hay nội dung trả phí
+- Tập trung vào giao diện và trải nghiệm người dùng
+- Đơn giản hóa quy trình có được nhạc
+- Tự động điền siêu dữ liệu cho bài hát
+- Bài hát có lời đồng bộ và bản dịch
+- Hệ thống nhãn tùy chỉnh để phân loại nhạc
+- Xem video YouTube ngay trong ứng dụng
+- Và còn nhiều hơn nữa
+
+==================== ภาษาไทย (th) ====================
+สโลแกน: เครื่องเล่นเพลงที่ดีที่สุดสำหรับ Android
+
+สโลแกนจริงหรือเท็จ คุณจะเป็นผู้ตัดสินเอง
+พร้อมฟีเจอร์เด่น เช่น:
+- รองรับภาษาไทยอย่างเต็มรูปแบบ
+- ไม่มีโฆษณาหรือเนื้อหาแบบเสียเงินเลย (0)
+- เน้นที่หน้าอินเทอร์เฟซและประสบการณ์ผู้ใช้
+- ทำให้การหาเพลงง่ายขึ้น
+- กรอกข้อมูลเมทาดาทาของเพลงอัตโนมัติ
+- เพลงพร้อมเนื้อเพลงซิงก์และคำแปล
+- ระบบแท็กแบบกำหนดเองสำหรับจัดหมวดหมู่เพลง
+- ดูวิดีโอ YouTube ภายในแอป
+- และอีกมากมาย
+
+==================== Bahasa Indonesia (in) ====================
+Slogan: Pemutar musik terbaik untuk Android
+
+Anda sendiri yang akan menilai apakah slogan ini benar atau salah
+Dengan fitur unggulan seperti:
+- Tersedia sepenuhnya dalam bahasa Indonesia
+- Nol (0) iklan atau konten berbayar
+- Fokus pada antarmuka dan pengalaman pengguna
+- Memudahkan proses memperoleh musik
+- Pengisian otomatis metadata lagu
+- Lagu dengan lirik tersinkronisasi dan terjemahan
+- Sistem label khusus untuk mengategorikan musik
+- Tonton video YouTube di dalam aplikasi
+- Dan masih banyak lagi
+
+==================== Filipino (fil) ====================
+Slogan: Ang pinakamahusay na music player para sa Android
+
+Ikaw ang huhusga kung totoo o hindi ang slogan
+May mga natatanging tampok tulad ng:
+- Ganap na available sa Filipino
+- Zero (0) ad o bayad na nilalaman
+- Nakatuon sa interface at karanasan ng user
+- Mas madaling pagkuha ng musika
+- Awtomatikong pagpuno ng metadata ng mga kanta
+- Mga kantang may naka-sync na lyrics at salin
+- Sistema ng custom na tag para pangkategorya ng musika
+- Manood ng mga video sa YouTube sa loob ng app
+- At marami pang iba
+
+==================== Hrvatski (hr) ====================
+Slogan: Vrhunski glazbeni player za Android
+
+Ti ćeš biti taj koji će procijeniti je li slogan istinit ili lažan
+S istaknutim funkcijama kao što su:
+- Potpuno dostupan na hrvatskosrpskom
+- Nula (0) reklama ili plaćenog sadržaja
+- Fokus na sučelje i korisničko iskustvo
+- Jednostavnije nabavljanje glazbe
+- Automatsko popunjavanje metapodataka pjesama
+- Pjesme sa sinkroniziranim tekstom i prijevodom
+- Sustav vlastitih oznaka za kategorizaciju glazbe
+- Gledanje YouTube videa unutar aplikacije
+- I još mnogo toga

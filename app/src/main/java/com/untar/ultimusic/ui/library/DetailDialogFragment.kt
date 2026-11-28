@@ -46,6 +46,7 @@ import com.untar.ultimusic.ui.PlayerViewModel
 import com.untar.ultimusic.ui.common.ItemCardDecoration
 import com.untar.ultimusic.ui.common.MiniPlayerController
 import com.untar.ultimusic.ui.common.attachScrollbarDrag
+import com.untar.ultimusic.ui.common.hasTopDialog
 import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
@@ -681,6 +682,7 @@ class DetailDialogFragment : DialogFragment() {
                 )
             )
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ColorStateList.valueOf(accent))
+            AccentTint.title(dialog, accent)
         }
         dialog.show()
     }
@@ -733,7 +735,9 @@ class DetailDialogFragment : DialogFragment() {
 
         private fun show(manager: FragmentManager, kind: DetailKind, id: Long) {
             // Guarda anti-duplicado: dos toques rápidos abrirían dos fichas apiladas.
-            if (manager.findFragmentByTag(TAG) != null) return
+            // hasTopDialog y no findFragmentByTag: si la ficha de debajo (abierta antes del iPod)
+            // sigue viva, "ir al artista/álbum" desde el iPod no abría nada.
+            if (manager.hasTopDialog(TAG)) return
             DetailDialogFragment().apply {
                 arguments = Bundle().apply {
                     putString(ARG_KIND, kind.name)

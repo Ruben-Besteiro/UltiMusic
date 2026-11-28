@@ -15,10 +15,18 @@ data class AlbumSummary(
     val title: String,
     val artistName: String?,
     val year: Int?,
+    /** Géneros propios del álbum (los del editor de álbum, no los de sus canciones): deciden en qué
+     *  fichas de género sale su tarjeta, ver [com.untar.ultimusic.data.LibraryRepository.genreAlbums]. */
+    val genres: List<String>,
     val songCount: Int,
     val totalDuration: Long,
     val cover: CoverRef
 ) : SortableLibraryItem {
+    /** True si [artistName] (lista separada por comas, como en el resto de la app) incluye a
+     *  [name] como uno de sus artistas, no como trozo de otro nombre. */
+    fun hasArtist(name: String): Boolean =
+        artistName.orEmpty().split(',').any { it.trim().equals(name.trim(), ignoreCase = true) }
+
     override val sortName: String get() = title
     override val sortDuration: Long get() = totalDuration
     override val sortYear: Int? get() = year

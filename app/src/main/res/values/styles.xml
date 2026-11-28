@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Estilo por defecto de todas las RecyclerView (recyclerViewStyle en el tema), incluida la
+         interna de ViewPager2: sin rebote/estiramiento al llegar arriba o abajo, que deformaba lo
+         dibujado por la lista pero no la imagen de fondo de detrás (ver ItemCardDecoration). -->
+    <style name="Widget.UltiMusic.RecyclerView" parent="">
+        <item name="android:overScrollMode">never</item>
+    </style>
+
     <!-- Esquinas redondeadas para las carátulas (recuadros del wireframe). -->
     <style name="ShapeAppearanceOverlay.UltiMusic.Cover" parent="">
         <item name="cornerFamily">rounded</item>

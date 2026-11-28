@@ -94,6 +94,7 @@ class TagEditorDialogFragment : DialogFragment() {
                 )
             )
             dialog.getButton(AlertDialog.BUTTON_NEGATIVE)?.setTextColor(ColorStateList.valueOf(accent))
+            AccentTint.title(dialog, accent)
         }
         return dialog
     }

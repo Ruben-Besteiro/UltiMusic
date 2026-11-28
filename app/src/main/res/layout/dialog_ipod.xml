@@ -199,9 +199,13 @@
 
         <!-- En modo vídeo se oculta ENTERA (ver IPodDialogFragment.startVideo/exitVideo), no solo
              ipodProgress: con la barra fuera pero tvPosition/tvDuration a la vista, los dos números
-             quedaban pegados uno al otro sin nada que los separe (p.ej. "0:043:29"). -->
+             quedaban pegados uno al otro sin nada que los separe (p.ej. "0:043:29").
+             Dirección fija LTR, como buttonRow: el tiempo avanza de izquierda a derecha también en
+             idiomas RTL (posición a la izquierda, duración a la derecha, la barra se llena hacia la
+             derecha). -->
         <LinearLayout
             android:id="@+id/positionRow"
+            android:layoutDirection="ltr"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -228,7 +232,7 @@
                 android:progress="0"
                 android:progressBackgroundTint="@color/um_divider"
                 android:progressDrawable="@drawable/seekbar_line"
-                android:progressTint="@color/um_yellow"
+                android:progressTint="@color/um_gold"
                 android:splitTrack="false"
                 android:thumb="@null" />
 
@@ -245,9 +249,12 @@
              de repartidos en una rueda como el iPod classic de 3ª generación. Cada botón vive
              centrado en una celda de igual ancho (layout_weight="1") dentro de un FrameLayout
              propio, así el círculo se mantiene de tamaño fijo aunque la fila se estire para ocupar
-             todo el ancho disponible. -->
+             todo el ancho disponible.
+             layoutDirection="ltr": los controles de reproducción no se voltean en idiomas RTL
+             (los iconos tampoco), si no "siguiente" acabaría a la izquierda apuntando a la derecha. -->
         <LinearLayout
             android:id="@+id/buttonRow"
+            android:layoutDirection="ltr"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
@@ -270,7 +277,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_skip_previous"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <FrameLayout
@@ -288,7 +295,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_menu"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <!-- En modo vídeo se oculta la celda ENTERA (ver IPodDialogFragment.startVideo/exitVideo),
@@ -312,7 +319,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_play"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <FrameLayout
@@ -330,7 +337,7 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_more_vert"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
 
             <FrameLayout
@@ -348,12 +355,12 @@
                     android:foreground="@drawable/ipod_round_button_ripple"
                     android:padding="13dp"
                     android:src="@drawable/ic_skip_next"
-                    app:tint="@color/um_yellow" />
+                    app:tint="@color/um_gold" />
             </FrameLayout>
         </LinearLayout>
 
         <!-- Contenedor de la letra: ocupa todo el espacio restante (weight=1). Envuelve a lyricsBox
-             (el RecyclerView de siempre) y a sus dos botones flotantes semitransparentes en un
+             (el RecyclerView de siempre) y a sus botones flotantes semitransparentes en un
              FrameLayout porque ambos se dibujan ENCIMA de la letra, no al lado: lyricsBox ya no
              lleva el weight/los márgenes directamente, los lleva este envoltorio, y él pasa a
              match_parent dentro para seguir ocupando exactamente el mismo hueco que antes. -->
@@ -366,8 +373,8 @@
             android:layout_weight="1">
 
             <!-- Lo rellena IPodDialogFragment.onViewCreated con Song.lyrics, una fila por línea (ver
-                 IPodLyricsAdapter); si la canción no tiene letra guardada, una única fila con un
-                 aviso invitando a rellenarla en el editor de metadatos. Es un RecyclerView (no un
+                 IPodLyricsAdapter); si la canción no tiene letra guardada se queda vacío (la busca
+                 sola LyricsAutoFetcher, y si no, el lápiz de abajo). Es un RecyclerView (no un
                  NestedScrollView con un TextView, como antes) porque con letra sincronizada hace
                  falta poder resaltar y centrar la línea que toca cantar ahora; con letra sin
                  sincronizar se ve exactamente igual que antes (una fila = el texto entero, centrado,
@@ -377,13 +384,34 @@
                 android:layout_width="match_parent"
                 android:layout_height="match_parent"
                 android:background="@drawable/ipod_info_box"
-                android:clipToPadding="false"
-                android:padding="20dp" />
+                android:clipToPadding="true"
+                android:paddingVertical="2dp"
+                android:paddingHorizontal="20dp" />
 
-            <!-- Botón superior derecho: la "a" en hiragana que traduce la letra al idioma del
+            <!-- Botón superior izquierdo: pasa la letra a la escritura del idioma de la app (ver
+                 LyricsRomanizer): "A" en idiomas de alfabeto latino, "ア" en japonés, "ㄅ" en chino
+                 (el glifo lo pone IPodDialogFragment). Empieza oculto; solo se muestra si la letra
+                 tiene alguna escritura ajena a la de destino. -->
+            <TextView
+                android:id="@+id/btnRomanizeLyrics"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="top|start"
+                android:layout_margin="10dp"
+                android:background="@drawable/ipod_lyrics_overlay_button"
+                android:clickable="true"
+                android:contentDescription="@string/ipod_romanize_lyrics_desc"
+                android:focusable="true"
+                android:foreground="@drawable/ipod_lyrics_overlay_button_ripple"
+                android:gravity="center"
+                android:textColor="@android:color/white"
+                android:textSize="16sp"
+                android:visibility="gone" />
+
+            <!-- Botón superior derecho: la interrogación que traduce la letra al idioma del
                  sistema (ver IPodDialogFragment/LyricsTranslator). Empieza oculto; solo se muestra
                  si el idioma detectado de la canción no es el del sistema Y hay letra que traducir. -->
-            <TextView
+            <ImageView
                 android:id="@+id/btnTranslateLyrics"
                 android:layout_width="36dp"
                 android:layout_height="36dp"
@@ -394,16 +422,17 @@
                 android:contentDescription="@string/ipod_translate_lyrics_desc"
                 android:focusable="true"
                 android:foreground="@drawable/ipod_lyrics_overlay_button_ripple"
-                android:gravity="center"
-                android:text="@string/ipod_translate_lyrics_glyph"
-                android:textColor="@android:color/white"
-                android:textSize="16sp"
+                android:scaleType="fitCenter"
+                android:src="@drawable/ic_globe_spain"
+                android:padding="7dp"
                 android:visibility="gone" />
 
             <!-- Botón inferior derecho: encoge la carátula/vídeo (topBox) solo en el eje vertical
                  hasta desaparecer, cediéndole su hueco a esta letra; pasa a decir "Ver menos" y
                  vuelve a encogerla al revés (ver IPodDialogFragment). Misma animación corta que el
-                 cambio entre modo carátula y modo vídeo (SquareFrameLayout.animateAspectRatio). -->
+                 cambio entre modo carátula y modo vídeo (SquareFrameLayout.animateAspectRatio).
+                 DESACTIVADO por ahora (por si vuelve): para reactivarlo, quitar este comentario y
+                 el de IPodDialogFragment (btnExpandLyrics).
             <TextView
                 android:id="@+id/btnExpandLyrics"
                 android:layout_width="wrap_content"
@@ -419,6 +448,37 @@
                 android:text="@string/ipod_lyrics_expand"
                 android:textColor="@android:color/white"
                 android:textSize="13sp" />
+            -->
+
+            <!-- Botón inferior izquierdo: el lápiz abre el buscador manual de lrclib.net
+                 (LyricsSuggestionsDialogFragment), equivalente a la lupa del campo "Letra" del
+                 editor de metadatos, por si la búsqueda automática se ha equivocado o no ha
+                 encontrado nada. Mismo aspecto que los otros botones flotantes. -->
+            <ImageView
+                android:id="@+id/btnEditLyrics"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:layout_gravity="bottom|start"
+                android:layout_margin="10dp"
+                android:background="@drawable/ipod_lyrics_overlay_button"
+                android:clickable="true"
+                android:contentDescription="@string/editor_search_lyrics"
+                android:focusable="true"
+                android:foreground="@drawable/ipod_lyrics_overlay_button_ripple"
+                android:padding="9dp"
+                android:src="@drawable/ic_edit"
+                android:tint="@android:color/white"
+                android:visibility="gone" />
+
+            <!-- Mientras LyricsAutoFetcher busca la letra de la canción que suena. Su color lo pone
+                 IPodDialogFragment con el color dinámico. -->
+            <ProgressBar
+                android:id="@+id/lyricsSearchProgress"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:layout_gravity="center"
+                android:indeterminate="true"
+                android:visibility="gone" />
         </FrameLayout>
 
         <!-- Regla de desplazamiento vídeo/audio del modo vídeo (ver IPodDialogFragment.startVideo /
@@ -448,6 +508,7 @@
 
             <EditText
                 android:id="@+id/ipodOffsetValue"
+                android:textDirection="ltr"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="8dp"

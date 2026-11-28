@@ -31,7 +31,7 @@
                 android:layout_gravity="center"
                 android:contentDescription="@string/ipod_now_playing"
                 android:src="@drawable/ic_speaker"
-                android:tint="@color/um_yellow"
+                android:tint="@color/um_gold"
                 android:visibility="gone" />
 
             <TextView
@@ -80,6 +80,7 @@
 
         <TextView
             android:id="@+id/queueSubtitle"
+            android:textAlignment="viewStart"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"

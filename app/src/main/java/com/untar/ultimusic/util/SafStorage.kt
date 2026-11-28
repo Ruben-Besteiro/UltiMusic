@@ -37,62 +37,76 @@ import java.util.concurrent.ConcurrentHashMap
  */
 object SafStorage {
 
-    private const val PREFS_NAME = "saf_storage"
+    /** Fuera de la copia automática (ver `res/xml/data_extraction_rules.xml`): guarda permisos de
+     *  carpeta y marcas que solo valen en ESTE dispositivo y ESTA instalación. */
+    const val PREFS_NAME = "saf_storage"
     private const val KEY_ULTIMUSIC_TREE_URI = "ultimusic_tree_uri"
     private const val KEY_OFFERED_LEGACY_RELINK = "offered_legacy_relink"
-    private const val KEY_BACKUP_CHECKED = "backup_checked"
-    private const val KEY_MUSIC_FOLDER_PROMPT = "music_folder_prompt_pending"
+    private const val KEY_ORPHAN_IMAGES_RELINKED = "orphan_images_relinked"
+    private const val KEY_STORAGE_MIGRATED = "storage_migrated_v1"
     private const val VOLUME_PRIMARY = "primary"
     private const val AUTHORITY_EXTERNAL = "com.android.externalstorage.documents"
 
     /** Una fila de [listChildren]: ya trae su propio docPath, no hace falta reconstruirlo. */
-    data class SafEntry(val docPath: String, val name: String, val isDirectory: Boolean, val lastModified: Long)
+    /** [size] en bytes (`0` si el proveedor no lo informa o es una carpeta); sale gratis en la misma
+     *  consulta que el resto, ver [listChildren]. */
+    data class SafEntry(
+        val docPath: String,
+        val name: String,
+        val isDirectory: Boolean,
+        val lastModified: Long,
+        val size: Long = 0L
+    )
 
     private fun prefs(context: Context): SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
 
-    // --- La carpeta UltiMusic: el único root que hace falta ANTES de que exista Room (ver
-    // UltiMusicDatabase.restoreFromBackupIfNeeded), así que vive en SharedPreferences y no en la BD. ---
+    // --- La antigua carpeta UltiMusic (de antes de guardar los datos en /data/data, ver
+    // AppStorage). Ya no se pide nunca: solo queda la concedida por quien actualiza desde una
+    // versión anterior, hasta que LibraryRepository.migrateLegacyUltiMusicFolder copia sus datos y
+    // la convierte en una carpeta más de library_roots. ---
 
-    fun ultiMusicTreeUri(context: Context): Uri? =
+    fun legacyUltiMusicTreeUri(context: Context): Uri? =
         prefs(context).getString(KEY_ULTIMUSIC_TREE_URI, null)?.let { runCatching { Uri.parse(it) }.getOrNull() }
 
-    /**
-     * El docPath de la propia carpeta `UltiMusic` concedida (p. ej. `"UltiMusic"` en el caso normal,
-     * pero puede ser cualquier otra cosa si el usuario eligió/creó una carpeta con otro nombre o en
-     * otro sitio del selector: nunca se asume el literal `"UltiMusic/..."` en ningún sitio de la app,
-     * siempre se compone a partir de esto). Null si todavía no se ha concedido ninguna.
-     */
-    fun ultiMusicDocPath(context: Context): String? = ultiMusicTreeUri(context)?.let { treeDocPath(it) }
+    /** El docPath de la antigua carpeta `UltiMusic` (no siempre se llamaba así), o null. */
+    fun legacyUltiMusicDocPath(context: Context): String? =
+        legacyUltiMusicTreeUri(context)?.let { treeDocPath(it) }?.takeIf { it.isNotEmpty() }
 
-    /** Concede permiso persistente sobre [uri] y la recuerda como raíz de `UltiMusic`. */
-    fun setUltiMusicTreeUri(context: Context, uri: Uri) {
-        takePersistablePermission(context, uri)
-        prefs(context).edit().putString(KEY_ULTIMUSIC_TREE_URI, uri.toString()).apply()
-        ensureUltiMusicRegistered(context)
+    /** Olvida la antigua carpeta `UltiMusic` SIN soltar su permiso: lo sigue usando su fila nueva de
+     *  `library_roots` (ver `LibraryRepository.migrateLegacyUltiMusicFolder`). */
+    fun forgetLegacyUltiMusicTree(context: Context) {
+        prefs(context).edit().remove(KEY_ULTIMUSIC_TREE_URI).apply()
+    }
+
+    /** ¿Ya se copiaron los datos de la antigua carpeta `UltiMusic` a /data/data? */
+    fun isStorageMigrated(context: Context): Boolean = prefs(context).getBoolean(KEY_STORAGE_MIGRATED, false)
+
+    fun markStorageMigrated(context: Context) {
+        prefs(context).edit().putBoolean(KEY_STORAGE_MIGRATED, true).apply()
     }
 
     /**
-     * ¿Ya se decidió, en esta instalación, si la BD interna o la copia de `UltiMusic/databases/` es
-     * la buena? Mientras sea false NO se exporta nada a esa carpeta: una instalación nueva arranca
-     * con una BD vacía (el permiso de `UltiMusic` se revoca al desinstalar, así que la restauración
-     * de [com.untar.ultimusic.data.db.UltiMusicDatabase] no puede dispararse antes de conceder la
-     * carpeta) y exportarla encima destruiría la única copia buena.
+     * Dónde se abre el selector de carpetas de música (`OpenDocumentTree`): en Music, o en Download si
+     * no existe, que es donde suele estar la música. NO en la raíz del almacenamiento: no se puede
+     * elegir, y en algunos selectores (visto en HyperOS con perfil de trabajo, 2026-11-27) se muestra
+     * vacía, "No hay elementos", sin ninguna carpeta a la que entrar. Con `null` Android lo abriría en
+     * la última carpeta usada.
      */
-    fun isBackupChecked(context: Context): Boolean = prefs(context).getBoolean(KEY_BACKUP_CHECKED, false)
-
-    fun markBackupChecked(context: Context) {
-        prefs(context).edit().putBoolean(KEY_BACKUP_CHECKED, true).apply()
+    fun musicPickerInitialUri(): Uri {
+        val storage = android.os.Environment.getExternalStorageDirectory()
+        val folder = listOf(android.os.Environment.DIRECTORY_MUSIC, android.os.Environment.DIRECTORY_DOWNLOADS)
+            .firstOrNull { runCatching { java.io.File(storage, it).isDirectory }.getOrDefault(false) }
+        return DocumentsContract.buildDocumentUri(AUTHORITY_EXTERNAL, "$VOLUME_PRIMARY:${folder.orEmpty()}")
     }
 
-    /** Segundo diálogo del primer arranque ("Ahora elige tu carpeta de música"): pendiente desde que
-     *  se concede `UltiMusic` hasta que se muestra. Vive en prefs porque la restauración de la BD
-     *  reinicia el proceso entre un momento y otro. */
-    fun isMusicFolderPromptPending(context: Context): Boolean =
-        prefs(context).getBoolean(KEY_MUSIC_FOLDER_PROMPT, false)
+    /** ¿Ya se reenlazaron las imágenes huérfanas de `images/` (ver `LibraryRepository.relinkOrphanImages`)?
+     *  Se hace una sola vez por instalación: repetirlo resucitaría una carátula que el usuario quitó. */
+    fun isOrphanImageRelinkDone(context: Context): Boolean =
+        prefs(context).getBoolean(KEY_ORPHAN_IMAGES_RELINKED, false)
 
-    fun setMusicFolderPromptPending(context: Context, pending: Boolean) {
-        prefs(context).edit().putBoolean(KEY_MUSIC_FOLDER_PROMPT, pending).apply()
+    fun markOrphanImageRelinkDone(context: Context) {
+        prefs(context).edit().putBoolean(KEY_ORPHAN_IMAGES_RELINKED, true).apply()
     }
 
     fun takePersistablePermission(context: Context, uri: Uri) {
@@ -142,26 +156,23 @@ object SafStorage {
      * Reemplaza el registro entero. Solo debe llamarla quien conozca TODAS las raíces adicionales de
      * verdad ([com.untar.ultimusic.data.LibraryRepository], que las lee de `library_roots`): con
      * [extraRootUriStrings] vacío (el valor por defecto) borraría de un plumazo cualquier raíz extra
-     * que otro consumidor hubiera registrado antes. Para solo asegurar que `UltiMusic` está en el
-     * registro sin tocar lo demás, ver [ensureUltiMusicRegistered].
+     * que otro consumidor hubiera registrado antes. Mientras no se haya migrado, la antigua carpeta
+     * `UltiMusic` también cuenta como raíz (ver [legacyUltiMusicTreeUri]).
      */
     fun refreshRegistry(context: Context, extraRootUriStrings: List<String> = emptyList()) {
-        val trees = listOfNotNull(ultiMusicTreeUri(context)) +
+        val trees = listOfNotNull(legacyUltiMusicTreeUri(context)) +
             extraRootUriStrings.mapNotNull { runCatching { Uri.parse(it) }.getOrNull() }
         registry = trees.associateBy { treeDocPath(it) }
     }
 
     /**
-     * Versión ligera de [refreshRegistry] que solo (re)confirma la entrada de `UltiMusic` en el
-     * registro, SIN tocar las raíces adicionales que ya hubiera. La llaman consumidores que solo
-     * necesitan resolver rutas dentro de `UltiMusic` y no conocen las raíces adicionales de Room
-     * ([com.untar.ultimusic.data.playlist.PlaylistRepository], [CoverArt], la copia de seguridad de
-     * la BD): así funcionan aunque
-     * [com.untar.ultimusic.data.LibraryRepository.reconcile] (quien sí hace el [refreshRegistry]
-     * completo) todavía no haya llegado a ejecutarse en este arranque.
+     * Versión ligera de [refreshRegistry] que solo (re)confirma la entrada de la antigua carpeta
+     * `UltiMusic` en el registro, SIN tocar las raíces adicionales que ya hubiera: la usa la
+     * migración, que lee de ella antes de que [com.untar.ultimusic.data.LibraryRepository.reconcile]
+     * haya hecho el [refreshRegistry] completo.
      */
-    fun ensureUltiMusicRegistered(context: Context) {
-        val treeUri = ultiMusicTreeUri(context) ?: return
+    fun ensureLegacyUltiMusicRegistered(context: Context) {
+        val treeUri = legacyUltiMusicTreeUri(context) ?: return
         val docPath = treeDocPath(treeUri)
         if (registry[docPath] == treeUri) return
         registry = registry + (docPath to treeUri)
@@ -219,7 +230,8 @@ object SafStorage {
             Document.COLUMN_DOCUMENT_ID,
             Document.COLUMN_DISPLAY_NAME,
             Document.COLUMN_MIME_TYPE,
-            Document.COLUMN_LAST_MODIFIED
+            Document.COLUMN_LAST_MODIFIED,
+            Document.COLUMN_SIZE
         )
         val out = ArrayList<SafEntry>()
         runCatching {
@@ -228,6 +240,7 @@ object SafStorage {
                 val nameIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_DISPLAY_NAME)
                 val mimeIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_MIME_TYPE)
                 val modIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_LAST_MODIFIED)
+                val sizeIdx = cursor.getColumnIndexOrThrow(Document.COLUMN_SIZE)
                 while (cursor.moveToNext()) {
                     val docId = cursor.getString(idIdx) ?: continue
                     val docPath = docId.removePrefix("$VOLUME_PRIMARY:")
@@ -237,7 +250,12 @@ object SafStorage {
                     // fecha (p. ej. el usuario le ha cambiado la carátula embebida con otra app), se
                     // le sube la versión para que su carátula se recargue (ver [contentVersion]).
                     noteModified(docPath, modified)
-                    out.add(SafEntry(docPath, name, cursor.getString(mimeIdx) == Document.MIME_TYPE_DIR, modified))
+                    // Un proveedor que no sabe el tamaño devuelve NULL (getLong da 0) o un valor
+                    // negativo: ambos significan "desconocido", que aquí es 0.
+                    val size = if (cursor.isNull(sizeIdx)) 0L else cursor.getLong(sizeIdx).coerceAtLeast(0L)
+                    out.add(
+                        SafEntry(docPath, name, cursor.getString(mimeIdx) == Document.MIME_TYPE_DIR, modified, size)
+                    )
                 }
             }
         }
@@ -256,11 +274,12 @@ object SafStorage {
     /**
      * Busca una subcarpeta por nombre dentro de [parentDocPath], SIN crearla si no existe (a
      * diferencia de [getOrCreateSubfolder]). Para quien solo necesita LEER (p. ej.
-     * [com.untar.ultimusic.util.CoverArt.imagesDocPath] con `createIfMissing = false`): antes
+     * la migración de la antigua carpeta `UltiMusic`): antes
      * reconstruía la ruta a mano (`"$parentDocPath/$name"`) confiando en que el proveedor resolviera
      * mayúsculas/minúsculas por su cuenta al abrirla -y ese comportamiento no está garantizado en
      * todos los pasos (ver el porqué en [getOrCreateSubfolder])-, así que ahora busca igual que la
-     * versión que sí crea: sin distinguir mayúsculas.
+     * versión que sí crea: sin distinguir mayúsculas. Hoy solo la usa la migración de la antigua
+     * carpeta `UltiMusic` (ver `LibraryRepository.migrateLegacyUltiMusicFolder`).
      */
     fun findSubfolder(context: Context, treeUri: Uri, parentDocPath: String, name: String): String? =
         listChildren(context, treeUri, parentDocPath)
@@ -308,6 +327,15 @@ object SafStorage {
         }.getOrNull() ?: return null
         return (docPathOf(newUri) ?: docPath).also { bumpVersion(it) }
     }
+
+    /** ¿Responde el proveedor a un listado de [docPath]? (carpeta vacía incluida). `false` si la
+     *  consulta falla o no devuelve cursor: es lo que pasa cuando el permiso está concedido pero la
+     *  carpeta aún no se puede leer (primer arranque tras reinstalar, proveedor sin indexar...). */
+    fun isDirectoryListable(context: Context, treeUri: Uri, docPath: String): Boolean = runCatching {
+        val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, "$VOLUME_PRIMARY:$docPath")
+        context.contentResolver.query(childrenUri, arrayOf(Document.COLUMN_DOCUMENT_ID), null, null, null)
+            ?.use { true } ?: false
+    }.getOrDefault(false)
 
     fun exists(context: Context, docPath: String): Boolean {
         val uri = resolveUri(docPath) ?: return false
@@ -380,12 +408,21 @@ object SafStorage {
     /** Última fecha de modificación vista por [listChildren], para detectar cambios hechos fuera de la app. */
     private val seenModified = ConcurrentHashMap<String, Long>()
 
-    /** Ver [versions]. Sin ninguna consulta: apto para llamarse en el hilo principal en cada bind. */
-    fun contentVersion(uri: Uri): Int = docPathOf(uri)?.let { versions[it] } ?: 0
+    /** Ver [versions]. Sin ninguna consulta: apto para llamarse en el hilo principal en cada bind.
+     *  Un `file://` (las imágenes propias, ver [AppStorage]) lleva su propia entrada, que sube con
+     *  [bumpVersion] de `File`. */
+    fun contentVersion(uri: Uri): Int =
+        if (uri.scheme == "file") uri.path?.let { versions[fileKey(it)] } ?: 0
+        else docPathOf(uri)?.let { versions[it] } ?: 0
 
     fun bumpVersion(docPath: String) {
         versions.merge(docPath, 1, Int::plus)
     }
+
+    /** Ver [contentVersion]: hay que llamarla tras escribir, renombrar o borrar [file]. */
+    fun bumpVersion(file: java.io.File) = bumpVersion(fileKey(file.path))
+
+    private fun fileKey(path: String) = "file:$path"
 
     private fun noteModified(docPath: String, modified: Long) {
         val previous = seenModified.put(docPath, modified)

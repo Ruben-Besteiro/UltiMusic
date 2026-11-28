@@ -37,4 +37,8 @@
     <!-- Contorno que marca la bandera elegida en el selector de idioma (ver
          bg_flag_selected.xml/AccentTint.stroke), mismo motivo que tag_chip_stroke_width. -->
     <dimen name="flag_selected_stroke_width">3dp</dimen>
+    <!-- Separación vertical entre filas de la cuadrícula de banderas de Ajustes (item_language_flag.xml). -->
+    <dimen name="language_grid_row_gap">8dp</dimen>
+    <!-- Ancho de cada miniatura del selector de imagen de fondo (alto = el doble, 1:2). -->
+    <dimen name="background_option_width">72dp</dimen>
 </resources>

@@ -14,9 +14,9 @@ import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 
 /**
- * Carrusel horizontal de álbumes de la ficha de un artista: la misma tarjeta que [AlbumsAdapter]
- * pero en pequeño, con el año siempre en el subtítulo (el artista siempre es el mismo en esta
- * ficha, así que no aporta nada repetirlo).
+ * Carrusel horizontal de álbumes de la ficha de un artista o de un género (ver
+ * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]): la misma tarjeta que
+ * [AlbumsAdapter] pero en pequeño, con el año siempre en el subtítulo.
  */
 class DetailAlbumsAdapter(
     private val onAlbumClick: (AlbumSummary) -> Unit

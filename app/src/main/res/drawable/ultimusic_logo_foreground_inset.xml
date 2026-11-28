@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Primer plano del icono adaptativo, encogido para que el logo ocupe ~2/3 del icono visible,
+     igual que el icono de la ficha de Google Play. Sin esto el logo llenaba casi toda la máscara
+     del launcher y algunas capas (HyperOS) lo cortaban en el splash. Desplazado hacia arriba
+     (top < bottom) porque la imagen está centrada respecto de la nota, que sobresale por encima
+     del círculo; así queda centrado el círculo. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android"
+    android:drawable="@mipmap/ultimusic_logo_foreground"
+    android:insetLeft="7%"
+    android:insetRight="7%"
+    android:insetTop="5.5%"
+    android:insetBottom="8.5%" />

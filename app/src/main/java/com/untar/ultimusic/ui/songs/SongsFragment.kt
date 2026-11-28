@@ -1,14 +1,27 @@
 package com.untar.ultimusic.ui.songs
 
 import android.content.res.ColorStateList
+import android.os.Build
 import android.os.Bundle
+import android.text.SpannableStringBuilder
+import android.text.Spanned
 import android.text.TextUtils
+import android.text.style.DynamicDrawableSpan
+import android.text.style.ImageSpan
 import android.view.View
 import android.widget.ProgressBar
 import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
+import androidx.core.content.ContextCompat
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.fragment.app.viewModels
+import com.google.android.material.button.MaterialButton
+import com.untar.ultimusic.ui.settings.SettingsViewModel
+import com.untar.ultimusic.util.DynamicColor
+import com.untar.ultimusic.util.SafStorage
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
@@ -44,11 +57,44 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
     private val playerViewModel: PlayerViewModel by activityViewModels()
     private val playlistsViewModel: PlaylistsViewModel by activityViewModels()
     private val tagsViewModel: TagsViewModel by activityViewModels()
+    private val settingsViewModel: SettingsViewModel by viewModels()
+
+    /** Botón "Elegir carpeta de música" del aviso de "no hay canciones": mismo selector y misma
+     *  validación que Ajustes > Carpetas de la fonoteca. */
+    private val addMusicFolderLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            when (settingsViewModel.tryAddLibraryRoot(uri)) {
+                SettingsViewModel.AddLibraryRootResult.SUCCESS -> Unit
+                SettingsViewModel.AddLibraryRootResult.ALREADY_COVERED -> Toast.makeText(
+                    requireContext(), R.string.settings_library_root_error_nested, Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         val recycler = view.findViewById<RecyclerView>(R.id.recyclerSongs)
         val emptyView = view.findViewById<TextView>(R.id.emptyView)
+        val addFolderButton = view.findViewById<MaterialButton>(R.id.btnAddMusicFolder)
         val loadingSpinner = view.findViewById<ProgressBar>(R.id.loadingSpinner)
+
+        // Con null Android abriría el selector en la última carpeta usada (`UltiMusic`): se pide que
+        // empiece en la raíz del almacenamiento interno, igual que Ajustes.
+        addFolderButton.setOnClickListener {
+            addMusicFolderLauncher.launch(SafStorage.musicPickerInitialUri())
+        }
+        settingsViewModel.libraryRoots   // arranca ya la carga de raíces (ver SettingsViewModel)
+
+        /** Aviso de "no hay canciones" con su botón, o (con [text] distinto) solo el texto. */
+        fun showEmpty(text: CharSequence?, withButton: Boolean) {
+            if (text == null) {
+                emptyView.visibility = View.GONE
+            } else {
+                emptyView.text = text
+                emptyView.visibility = View.VISIBLE
+            }
+            addFolderButton.visibility = if (withButton) View.VISIBLE else View.GONE
+        }
 
         val adapter = SongsAdapter(
             // Con selección activa, tocar una fila la marca/desmarca en vez de reproducir; si no,
@@ -128,11 +174,12 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                                 TimeFormat.hhmmss(list.sumOf { it.duration })
                             )
                         )
+                        // Antes ponía R.string.nothing_playing (el texto del reproductor vacío): si la
+                        // lista llegaba vacía DESPUÉS de acabar el escaneo, pisaba al aviso bueno.
                         if (list.isEmpty() && !songsViewModel.loading.value) {
-                            emptyView.text = requireContext().getString(R.string.nothing_playing)
-                            emptyView.visibility = View.VISIBLE
+                            showEmpty(noSongsText(emptyView), withButton = true)
                         } else if (list.isNotEmpty()) {
-                            emptyView.visibility = View.GONE
+                            showEmpty(null, withButton = false)
                         }
                     }
                 }
@@ -147,19 +194,20 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                         loading to percent
                     }.collect { (loading, percent) ->
                         if (loading) {
-                            emptyView.text = String.format(
-                                requireContext().getString(R.string.updating_database_percent),
-                                percent
+                            showEmpty(
+                                String.format(
+                                    requireContext().getString(R.string.updating_database_percent),
+                                    percent
+                                ),
+                                withButton = false
                             )
-                            emptyView.visibility = View.VISIBLE
                         } else if (songsViewModel.songs.value.isEmpty()) {
-                            emptyView.text = requireContext().getString(R.string.no_songs)
-                            emptyView.visibility = View.VISIBLE
+                            showEmpty(noSongsText(emptyView), withButton = true)
                         } else {
                             // La reconciliación puede terminar sin cambiar ninguna fila (biblioteca ya al
                             // día): el flujo `songs` no reemite y el otro collector nunca se dispara, así
                             // que hay que ocultar el aviso aquí también o se queda clavado en pantalla.
-                            emptyView.visibility = View.GONE
+                            showEmpty(null, withButton = false)
                         }
                     }
                 }
@@ -167,6 +215,8 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
                     playerViewModel.accentColor.collect { accent ->
                         scrollbar.setAccentColor(accent)
                         loadingSpinner.indeterminateTintList = ColorStateList.valueOf(accent)
+                        addFolderButton.backgroundTintList = ColorStateList.valueOf(accent)
+                        addFolderButton.setTextColor(DynamicColor.onColor(accent))
                         adapter.setAccentColor(accent)
                     }
                 }
@@ -209,5 +259,29 @@ class SongsFragment : Fragment(R.layout.fragment_songs) {
             }
             .show()
         AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
+    }
+
+    /**
+     * Texto de "no hay canciones" con el `%1$s` del string cambiado por el icono ic_add (el botón
+     * de + de la barra superior), del tamaño de la letra y del mismo color que el texto.
+     */
+    private fun noSongsText(textView: TextView): CharSequence {
+        val placeholder = "%1\$s"
+        val raw = getString(R.string.no_songs).replace("%%", "%")
+        val start = raw.indexOf(placeholder)
+        if (start < 0) return raw
+        val icon = ContextCompat.getDrawable(requireContext(), R.drawable.ic_add)?.mutate()
+            ?: return raw.replace(placeholder, "+")
+        val size = (textView.textSize * 1.2f).toInt()
+        icon.setBounds(0, 0, size, size)
+        icon.setTint(textView.currentTextColor)
+        val align = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            DynamicDrawableSpan.ALIGN_CENTER
+        } else {
+            DynamicDrawableSpan.ALIGN_BOTTOM
+        }
+        return SpannableStringBuilder(raw).apply {
+            setSpan(ImageSpan(icon, align), start, start + placeholder.length, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+        }
     }
 }

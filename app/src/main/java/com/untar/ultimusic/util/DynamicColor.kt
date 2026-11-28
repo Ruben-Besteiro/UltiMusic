@@ -10,6 +10,8 @@ import androidx.core.graphics.ColorUtils
 import androidx.palette.graphics.Palette
 import coil.request.ImageRequest
 import coil.request.SuccessResult
+import com.untar.ultimusic.data.DynamicColorPreferences
+import com.untar.ultimusic.data.ThemePreferences
 import java.util.concurrent.ConcurrentHashMap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -42,7 +44,7 @@ object DynamicColor {
     /**
      * El amarillo de siempre: se usa mientras no hay carátula de la que sacar nada.
      *
-     * Tiene que valer lo mismo que `@color/um_yellow` (res/values/colors.xml). Está repetido aquí
+     * Tiene que valer lo mismo que `@color/um_gold` (res/values/colors.xml). Está repetido aquí
      * como constante, y no leído del recurso, porque hace falta como valor inicial en sitios que no
      * tienen un `Context` a mano (los campos `accent` de los adaptadores, por ejemplo). Si se cambia
      * el amarillo de la app hay que cambiarlo en los dos sitios.
@@ -65,6 +67,8 @@ object DynamicColor {
      * puede ir en el hilo principal; se llama desde el `viewModelScope`.
      */
     suspend fun fromCover(context: Context, data: Any): Int = withContext(Dispatchers.IO) {
+        // Color dinámico apagado en Ajustes: amarillo fijo y ni se decodifica la carátula.
+        if (!DynamicColorPreferences.enabled.value) return@withContext DEFAULT
         val key = cacheKey(context, data)
         key?.let { cache[it] }?.let { return@withContext it }
 
@@ -195,28 +199,37 @@ object DynamicColor {
 
     /**
      * El color **oscuro**: el matiz y la saturación del color dado con una luminosidad FIJA
-     * ([DARK_LIGHTNESS]), y la opacidad intacta. Es lo que sustituye a `@color/um_yellow_dark`.
+     * ([DARK_LIGHTNESS]), y la opacidad intacta. Es lo que sustituye a `@color/um_gold_dark`.
      *
      * Antes dividía los canales RGB entre 5, que en HSL equivale a dividir la luminosidad entre 5:
      * como el acento llega con luminosidad 0.45–0.72, el oscuro variaba de 0.09 a 0.14 según la
      * canción. Con luminosidad fija todas las canciones tienen el mismo "peso" de fondo y solo cambia
      * el matiz. Cuidado con no confundirlo con [asBackground], que además desatura (ver ahí).
      */
-    fun dark(color: Int): Int = withLightness(color, DARK_LIGHTNESS)
+    fun dark(color: Int): Int = withLightness(color, themed(DARK_LIGHTNESS))
 
     /**
      * El color **débil** (faint): el [dark] con la mitad de su luminosidad ([FAINT_LIGHTNESS]).
      * Casi negro, pero con el matiz y la saturación del color dado para que al cambiar de canción
      * se siga notando. Pensado para fondos donde las filas coloreadas no deben desentonar.
      */
-    fun faint(color: Int): Int = withLightness(color, FAINT_LIGHTNESS)
+    fun faint(color: Int): Int = withLightness(color, themed(FAINT_LIGHTNESS))
 
     /**
      * El color **claro**: el inverso del [dark], es decir, el mismo matiz y saturación con una
      * luminosidad FIJA alta ([LIGHT_LIGHTNESS]). Cercano al blanco pero todavía reconocible como
      * del color de la canción. Para textos y botones que antes eran grises claros o blancos.
      */
-    fun light(color: Int): Int = withLightness(color, LIGHT_LIGHTNESS)
+    fun light(color: Int): Int = withLightness(color, themed(LIGHT_LIGHTNESS))
+
+    /**
+     * En el tema claro los tonos [dark], [faint] y [light] son "el opuesto" en luminosidad (1 - L):
+     * el oscuro pasa a ser un tono muy claro para los fondos y el claro uno oscuro para los textos.
+     * El color base del acento no cambia. Los equivalentes estáticos están en
+     * `values-notnight/colors.xml`.
+     */
+    private fun themed(lightness: Float): Float =
+        if (ThemePreferences.isLight()) 1f - lightness else lightness
 
     /** Mismo matiz y saturación que [color], con luminosidad [lightness] y la opacidad original. */
     private fun withLightness(color: Int, lightness: Float): Int {

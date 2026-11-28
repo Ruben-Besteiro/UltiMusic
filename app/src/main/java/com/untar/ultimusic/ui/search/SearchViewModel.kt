@@ -241,16 +241,43 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
     private class SearchIndex(
         val songs: List<Indexed<Song>>,
         val albums: List<Indexed<AlbumSummary>>,
-        val artists: List<Indexed<PersonSummary>>
+        val artists: List<Indexed<PersonSummary>>,
+        /** Canciones con letra, con la letra ya limpia (ver [lyricsKey]) y el título normalizado para desempatar. */
+        val lyrics: List<LyricsEntry>
     )
+
+    private class LyricsEntry(val song: Song, val lyricsKey: String, val titleKey: String)
 
     private val index = combine(repository.songs, repository.albums, repository.artists) { songs, albums, artists ->
         SearchIndex(
             songs.map { Indexed(it, TextSearch.normalize(it.title)) },
             albums.map { Indexed(it, TextSearch.normalize(it.title)) },
-            artists.map { Indexed(it, TextSearch.normalize(it.name)) }
+            artists.map { Indexed(it, TextSearch.normalize(it.name)) },
+            songs.mapNotNull { s ->
+                val text = s.lyrics?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
+                LyricsEntry(s, lyricsKey(text), TextSearch.normalize(s.title))
+            }
         )
     }.flowOn(Dispatchers.Default)
+
+    /**
+     * Letra lista para comparar: sin marcas de tiempo LRC (`[01:23.45]`), sin tildes ni mayúsculas y
+     * con todo lo que no sea letra o número convertido en un único espacio, de modo que la puntuación
+     * y los saltos de línea no impidan encontrar una frase.
+     */
+    private fun lyricsKey(text: String): String =
+        NON_WORD.replace(LRC_STAMP.replace(text, " ").let(TextSearch::normalize), " ").trim()
+
+    // ------------------------------------------------------------------ búsqueda por letra
+
+    private val _lyricsMode = MutableStateFlow(false)
+
+    /** Buscar por letra en vez de por título. Vive lo que el ViewModel (hasta cerrar la app). */
+    val lyricsMode: StateFlow<Boolean> = _lyricsMode.asStateFlow()
+
+    fun setLyricsMode(on: Boolean) {
+        _lyricsMode.value = on
+    }
 
     /**
      * Debounce corto: mientras el usuario teclea seguido no tiene sentido recorrer la biblioteca y
@@ -262,8 +289,8 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
         .distinctUntilChanged()
         .debounce { if (it.isEmpty()) 0L else QUERY_DEBOUNCE_MS }
 
-    val results: StateFlow<List<SearchResult>> = combine(needle, index) { needle, index ->
-        build(needle, index)
+    val results: StateFlow<List<SearchResult>> = combine(needle, index, _lyricsMode) { needle, index, lyricsMode ->
+        if (lyricsMode) buildByLyrics(needle, index) else build(needle, index)
     }
         .flowOn(Dispatchers.Default)
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
@@ -306,7 +333,30 @@ class SearchViewModel(app: Application) : AndroidViewModel(app) {
     private fun <T> List<Indexed<T>>.matching(needle: String): List<T> =
         mapNotNull { if (it.key.contains(needle)) it.item else null }
 
+    /**
+     * Modo letra (binario: aquí NO se mira el título, y no hay álbumes ni artistas). Primero las
+     * canciones cuya letra contiene la frase entera; después las que tienen todas las palabras pero
+     * sueltas. Dentro de cada grupo, por orden alfabético del título.
+     */
+    private fun buildByLyrics(rawNeedle: String, index: SearchIndex): List<SearchResult> {
+        val phrase = NON_WORD.replace(rawNeedle, " ").trim()
+        if (phrase.isEmpty()) return emptyList()
+        val words = phrase.split(' ').distinct()
+
+        val byTitle = compareBy<LyricsEntry> { it.titleKey }
+        val exact = ArrayList<LyricsEntry>()
+        val loose = ArrayList<LyricsEntry>()
+        for (entry in index.lyrics) {
+            val key = entry.lyricsKey
+            if (key.contains(phrase)) exact += entry
+            else if (words.size > 1 && words.all { key.contains(it) }) loose += entry
+        }
+        return (exact.sortedWith(byTitle) + loose.sortedWith(byTitle)).map { SearchResult.SongRow(it.song) }
+    }
+
     private companion object {
+        val NON_WORD = Regex("[^\\p{L}\\p{N}]+")
+        val LRC_STAMP = Regex("\\[\\d{1,3}:\\d{2}(?:[.:]\\d{1,3})?]|\\[[A-Za-z]+:[^\\]]*]")
         const val QUERY_DEBOUNCE_MS = 150L
         const val SQL_MAX_ROWS = 500
     }

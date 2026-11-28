@@ -13,6 +13,8 @@
     android:background="@color/um_surface"
     android:paddingHorizontal="16dp"
     android:paddingVertical="10dp"
+    android:layout_marginTop="10dp"
+    android:layout_marginBottom="10dp"
     android:textAllCaps="true"
     android:textSize="14sp"
     android:textStyle="bold"

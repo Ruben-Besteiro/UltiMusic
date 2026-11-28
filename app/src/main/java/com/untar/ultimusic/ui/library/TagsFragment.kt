@@ -61,6 +61,17 @@ class TagsFragment : Fragment(R.layout.fragment_tags) {
             kind == CollectionKind.TAG && name != null && adapter.tagAt(pos)?.name == name
         }
 
+        // El aviso se centra en el hueco libre bajo la última etiqueta (el TextView ocupa todo el
+        // alto y su topMargin lo recorta a ese hueco), no en el centro físico de la pantalla.
+        recycler.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            val last = (0 until recycler.childCount).maxOfOrNull { recycler.getChildAt(it).bottom } ?: 0
+            val lp = emptyView.layoutParams as android.widget.FrameLayout.LayoutParams
+            if (lp.topMargin != last) {
+                lp.topMargin = last
+                emptyView.layoutParams = lp
+            }
+        }
+
         createButton.setOnClickListener {
             TagEditorDialogFragment.newCreate().show(parentFragmentManager, TagEditorDialogFragment.TAG)
         }

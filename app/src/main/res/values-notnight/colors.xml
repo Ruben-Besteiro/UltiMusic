@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Tema claro (Ajustes > Tema > Claro, o "Sistema" con el móvil en modo claro). Cada color de
+  values/colors.xml que depende del tema tiene aquí su "opuesto" en luminosidad (L -> 1 - L); el
+  color base del acento (um_gold) es el mismo en los dos temas. En código, DynamicColor.dark/
+  faint/light hacen lo mismo con el acento dinámico (ver DynamicColor.themed).
+-->
+<resources>
+    <color name="um_ripple_white">#1F000000</color>
+    <!-- El velo opuesto al del tema oscuro: blanco al 30 % en vez de negro, aclara la imagen de
+         fondo para que se lea el texto oscuro. -->
+    <color name="um_background_scrim">#4DFFFFFF</color>
+
+    <!-- Neutros: fondo 0x20 -> 0xDF, superficie 0x14 -> 0xEB, etc. -->
+    <color name="um_background">#FFDFDFDF</color>
+    <color name="um_surface">#FFEBEBEB</color>
+    <color name="um_surface_variant">#FFE0E0E0</color>
+    <color name="um_sql_toggle_bg">#FFC7C7C7</color>
+    <color name="um_on_background">#FF0D0D0D</color>
+    <color name="um_on_surface_muted">#FF4F4F4F</color>
+    <color name="um_divider">#FFBFBFBF</color>
+    <color name="um_error">#FFB3261E</color>
+
+    <!-- Tonos del acento (L 0.115 -> 0.885, 0.0575 -> 0.9425, 0.82 -> 0.18) -->
+    <color name="um_gold_dark">#FFFEF0C5</color>
+    <color name="um_gold_faint">#FFFFF8E2</color>
+    <color name="um_gold_light">#FF5A4501</color>
+
+    <!-- Etiquetas predefinidas: blancos -> negro, grises casi negros -> grises casi blancos -->
+    <color name="um_tag_recently_added">#FF000000</color>
+    <color name="um_tag_not_in_playlist">#FFCCCCCC</color>
+    <color name="um_tag_no_custom_tags">#FFCCCCCC</color>
+    <color name="um_tag_remix_cover">#FF000000</color>
+    <color name="um_tag_language">#FF000000</color>
+</resources>

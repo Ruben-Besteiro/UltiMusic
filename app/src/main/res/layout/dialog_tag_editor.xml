@@ -12,6 +12,7 @@
 
     <EditText
         android:id="@+id/inputTagName"
+        android:textAlignment="viewStart"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="@string/tag_name_hint"

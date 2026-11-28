@@ -1,6 +1,8 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
-    <!-- Tema base de UltiMusic: siempre oscuro (negro) con acento amarillo. -->
-    <style name="Base.Theme.UltiMusic" parent="Theme.Material3.Dark.NoActionBar">
+    <!-- Tema base de UltiMusic con acento amarillo. DayNight: claro u oscuro según Ajustes > Tema
+         (ver ThemePreferences). En modo noche manda values-night/themes.xml; los colores claros
+         están en values-notnight/colors.xml. -->
+    <style name="Base.Theme.UltiMusic" parent="Theme.Material3.DayNight.NoActionBar">
         <item name="android:fontFamily">@font/app_font</item>
         <item name="fontFamily">@font/app_font</item>
         <item name="textAppearanceDisplayLarge">@style/TextAppearance.UltiMusic.DisplayLarge</item>
@@ -18,17 +20,24 @@
         <item name="textAppearanceLabelLarge">@style/TextAppearance.UltiMusic.LabelLarge</item>
         <item name="textAppearanceLabelMedium">@style/TextAppearance.UltiMusic.LabelMedium</item>
         <item name="textAppearanceLabelSmall">@style/TextAppearance.UltiMusic.LabelSmall</item>
-        <item name="colorPrimary">@color/um_yellow</item>
+        <item name="colorPrimary">@color/um_gold</item>
         <item name="colorOnPrimary">@color/black</item>
-        <item name="colorSecondary">@color/um_yellow</item>
+        <item name="colorSecondary">@color/um_gold</item>
         <item name="colorOnSecondary">@color/black</item>
         <item name="android:colorBackground">@color/um_background</item>
         <item name="colorSurface">@color/um_surface</item>
         <item name="colorSurfaceVariant">@color/um_surface_variant</item>
         <item name="colorOnBackground">@color/um_on_background</item>
         <item name="colorOnSurface">@color/um_on_background</item>
-        <item name="android:statusBarColor">@color/um_background</item>
-        <item name="android:navigationBarColor">@color/um_background</item>
+        <!-- Extremo a extremo SIN enableEdgeToEdge() (que llama a las APIs obsoletas de Android 15):
+             barras transparentes, sin contraste forzado y el contenido bajo el recorte de pantalla.
+             Los colores de las barras los pintan los scrims de activity_main. En Android 15+ el
+             sistema ignora estos atributos y ya fuerza el extremo a extremo. -->
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:enforceStatusBarContrast" tools:targetApi="29">false</item>
+        <item name="android:enforceNavigationBarContrast" tools:targetApi="29">false</item>
+        <item name="android:windowLayoutInDisplayCutoutMode" tools:targetApi="28">shortEdges</item>
         <!-- En Android < 10 el cursor de texto (rayita y gota) no se puede recolorear en tiempo
              real (ver MetadataEditorDialogFragment), así que se fijan en blanco en vez de en el
              amarillo que les daría colorPrimary por defecto. -->
@@ -36,9 +45,17 @@
         <item name="android:textSelectHandle">@drawable/handle_teardrop</item>
         <item name="android:textSelectHandleLeft">@drawable/handle_teardrop</item>
         <item name="android:textSelectHandleRight">@drawable/handle_teardrop</item>
+        <item name="recyclerViewStyle">@style/Widget.UltiMusic.RecyclerView</item>
     </style>
 
-    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic" />
+    <!-- Splash de Android 12+ (ignorado antes): fondo negro (el mismo que el del icono, para que el
+         logo no quede como un círculo negro sobre gris) + logo, que es lo que se ve en el
+         arranque en frío, incluido el reinicio de la restauración de la BD (ver MainActivity), en
+         vez de una pantalla negra. -->
+    <style name="Theme.UltiMusic" parent="Base.Theme.UltiMusic">
+        <item name="android:windowSplashScreenBackground" tools:targetApi="31">@color/black</item>
+        <item name="android:windowSplashScreenAnimatedIcon" tools:targetApi="31">@mipmap/ultimusic_logo</item>
+    </style>
 
     <!--
       Tema del diálogo del iPod: pantalla completa y fondo transparente. Sin

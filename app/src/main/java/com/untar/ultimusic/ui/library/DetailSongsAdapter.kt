@@ -63,7 +63,7 @@ class DetailSongsAdapter(
     /** Ids de las canciones marcadas; no vacío = selección múltiple activa. */
     private var selectedIds: Set<Long> = emptySet()
 
-    private var accentColor: Int = 0xFFFBC10E.toInt()
+    private var accentColor: Int = com.untar.ultimusic.util.DynamicColor.DEFAULT
 
     fun submit(list: List<Song>) {
         tracks = list

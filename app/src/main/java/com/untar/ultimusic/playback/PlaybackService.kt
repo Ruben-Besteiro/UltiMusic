@@ -17,6 +17,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
@@ -25,10 +26,15 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.DynamicColorPreferences
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.LyricsAutoFetcher
+import com.untar.ultimusic.data.SleepTimerPreferences
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.EqBand
@@ -57,6 +63,8 @@ import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -255,7 +263,12 @@ class PlaybackService : MediaSessionService() {
      * [enforceHeadphoneLimit].)
      */
     private val player: ExoPlayer by lazy {
-        ExoPlayer.Builder(this)
+        // Búsqueda por bitrate constante: los formatos sin índice (AAC en ADTS crudo, `.aac`, y los
+        // MP3/AMR sin cabecera Xing/VBRI) salen como "no se puede buscar" por defecto y la barra
+        // de progreso no deja saltar. Con esto se estima la posición a partir del bitrate, que en
+        // esos archivos es exacta (CBR) o casi (VBR).
+        val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+        ExoPlayer.Builder(this, DefaultMediaSourceFactory(this, extractors))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -445,12 +458,11 @@ class PlaybackService : MediaSessionService() {
         serviceScope.launch {
             library.songs.collect { librarySongsPool.value = it }
         }
-        // El vigilante de cambios del filesystem también nos interesa a nosotros, no solo a
-        // MainActivity: mientras haya sesión de reproducción activa (sonando o en pausa) el proceso
-        // sigue vivo aunque la Activity esté en segundo plano, así que aprovechamos para detectar
-        // canciones nuevas sin depender de que el usuario reabra la app. Recuento de referencias en
-        // [LibraryRepository.startWatchingLibraryChanges]: no pisa lo que ya tuviera pedido la Activity.
-        library.startWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
+        // Al encender/apagar el color dinámico en Ajustes, el acento de lo que suena cambia ya.
+        serviceScope.launch {
+            DynamicColorPreferences.enabled.drop(1).collect { _currentSong.value?.let(::updateAccent) }
+        }
+        startSleepTimerWatcher()
         restorePlaybackState()
 
         mediaSession = MediaSession.Builder(this, QueueAwarePlayer(player))
@@ -480,7 +492,6 @@ class PlaybackService : MediaSessionService() {
         // si ya pasaba del 50% se anota aquí mismo. [PlayTracker] escribe desde un scope propio justo
         // para que la cancelación de más abajo no se la lleve por delante a mitad.
         playTracker.flush()
-        library.stopWatchingLibraryChanges(LibraryRepository.LibraryWatchRequester.PLAYBACK_SERVICE)
         val audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         audioManager.unregisterAudioDeviceCallback(audioDeviceCallback)
         loudnessEnhancer?.release(); loudnessEnhancer = null
@@ -588,7 +599,8 @@ class PlaybackService : MediaSessionService() {
         val wasRandomContinuation = playbackPrefs.getBoolean(KEY_RANDOM_CONTINUATION, false)
 
         restoreJob = serviceScope.launch {
-            val restoredQueue = library.songsByIds(queueIds)
+            // Solo lo reproducible, igual que la lista de Canciones: nada que no se pueda abrir.
+            val restoredQueue = library.playableOnly(library.songsByIds(queueIds))
             if (restoredQueue.isEmpty()) return@launch
 
             // Resolver la cola guardada contra la base de datos es una llamada suspend: tarda lo
@@ -1084,6 +1096,8 @@ class PlaybackService : MediaSessionService() {
         // diferencia del historial de listas, el contador NO mira de qué colección venga la cola:
         // todo lo que suene cuenta, salga de una lista, de un género o de la cola suelta.
         playTracker.start(song)
+        // Y lo mismo para la letra: si la canción no tiene, se busca en lrclib.net ahora.
+        autoFetchLyrics(song)
         // Cualquier carga por el camino normal es un intento nuevo y limpio, aunque sea la misma
         // canción que acaba de fallar (p. ej. repetir la cola): el reintento de onPlayerError no
         // pasa por aquí (llama a player.prepare() directamente), así que esto no le pisa nada.
@@ -1107,7 +1121,16 @@ class PlaybackService : MediaSessionService() {
             val path = library.resolvePlayablePath(song)
             if (path == null) {
                 player.stop()
-                _missingFile.emit(song)
+                // Si aún no hay carpeta concedida (instalación limpia: la cola guardada se restaura
+                // al arrancar, antes de que el usuario conceda UltiMusic) TODOS los archivos
+                // "faltan", y avisar de uno en concreto sería mentira: es solo falta de permiso.
+                if (library.libraryFolderReadable()) {
+                    _missingFile.emit(song)
+                    // Y se reconcilia la fonoteca con el disco: la fila de este archivo (y cualquier
+                    // otra que haya desaparecido igual) se da de baja y los flujos de Room repintan
+                    // todos los recyclers, así que la canción no vuelve a salir en ninguna lista.
+                    library.reconcile()
+                }
                 return@launch
             }
             rewritePath(index, song, path)
@@ -1158,7 +1181,7 @@ class PlaybackService : MediaSessionService() {
      * miraba esta metadata; ahora la mira la notificación (y, con ella, la pantalla de bloqueo).
      */
     private fun buildMediaItem(song: Song, path: String): MediaItem {
-        val artistName = song.artistDisplay()
+        val artistName = song.artistDisplay(this)
         val albumName = song.album?.title
         val metadata = MediaMetadata.Builder()
             .setTitle(song.title)
@@ -1190,6 +1213,24 @@ class PlaybackService : MediaSessionService() {
      * arrancaba otra canción (que sí recarga [Song] fresca desde el repositorio, ver [play]), por
      * mucho que Room ya tuviera el cambio guardado.
      */
+    /**
+     * Rellenado automático de letra al reproducir (ver [LyricsAutoFetcher]). Una canción "suelta"
+     * (Abrir con UltiMusic) no está en la BD, así que no hay dónde guardarla. Al guardarse, la
+     * canción releída de Room se mete en la cola con [refreshSong]: así el iPod (que lee
+     * [currentSong]) la pinta al momento, y el resto de pantallas ya se enteran solas por Room.
+     */
+    private fun autoFetchLyrics(song: Song) {
+        if (song.id <= 0L || "://" in song.filePath) return
+        if (!LyricsAutoFetcher.needsSearch(song)) return
+        serviceScope.launch {
+            // La copia de la cola puede ir desfasada (p. ej. un "no encontrada" guardado hace un
+            // rato no la toca): se decide con la fila de Room de ahora.
+            val fresh = library.songsByIds(listOf(song.id)).firstOrNull() ?: return@launch
+            if (!LyricsAutoFetcher.needsSearch(fresh)) return@launch
+            LyricsAutoFetcher.fetchAndSave(this@PlaybackService, fresh)?.let(::refreshSong)
+        }
+    }
+
     fun refreshSong(fresh: Song) {
         fun patch(song: Song) = if (song.id == fresh.id) fresh else song
         _queue.value = _queue.value.map(::patch)
@@ -1214,6 +1255,37 @@ class PlaybackService : MediaSessionService() {
             player.seekTo((duration * fraction.coerceIn(0f, 1f)).toLong())
         }
     }
+
+    /**
+     * Temporizador de apagado (ver [SleepTimerPreferences]): con un valor distinto de 0, la cuenta
+     * empieza al ponerse a sonar y, al acabar, pausa. Una pausa manual NO la cancela (si se reanuda
+     * de madrugada, sigue queriendo apagarse); al vencer se reinicia y vuelve a empezar con la
+     * siguiente reproducción. Cambiar el número en Ajustes la reinicia, y 0 la cancela.
+     *
+     * `collectLatest` sobre (minutos, sonando) hace todo eso solo: un cambio de minutos cancela la
+     * cuenta en curso, y `sleepTimerDeadline` conserva el plazo entre pausas y reanudaciones.
+     */
+    private fun startSleepTimerWatcher() {
+        serviceScope.launch {
+            SleepTimerPreferences.minutes.collectLatest { minutes ->
+                sleepTimerDeadline = 0L
+                if (minutes <= 0) return@collectLatest
+                _isPlaying.collectLatest inner@{ playing ->
+                    if (!playing && sleepTimerDeadline == 0L) return@inner
+                    if (sleepTimerDeadline == 0L) {
+                        sleepTimerDeadline = SystemClock.elapsedRealtime() + minutes * 60_000L
+                    }
+                    val remaining = sleepTimerDeadline - SystemClock.elapsedRealtime()
+                    if (remaining > 0) delay(remaining)
+                    sleepTimerDeadline = 0L
+                    if (player.isPlaying) player.pause()
+                }
+            }
+        }
+    }
+
+    /** Momento (`elapsedRealtime`) en que vence el temporizador de apagado, o 0 si no hay cuenta. */
+    private var sleepTimerDeadline = 0L
 
     fun togglePlayPause() = withQueue {
         if (_currentSong.value == null) return@withQueue

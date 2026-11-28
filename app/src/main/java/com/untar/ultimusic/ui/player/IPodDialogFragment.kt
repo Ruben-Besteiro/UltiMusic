@@ -6,9 +6,7 @@ import android.content.res.ColorStateList
 import android.graphics.Outline
 import android.os.Bundle
 import android.text.TextUtils
-import android.view.GestureDetector
 import android.view.LayoutInflater
-import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
@@ -17,7 +15,9 @@ import android.view.inputmethod.InputMethodManager
 import android.widget.EditText
 import android.widget.FrameLayout
 import android.widget.ImageButton
+import android.widget.ImageView
 import android.widget.PopupMenu
+import android.widget.ProgressBar
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -42,8 +42,9 @@ import com.google.android.material.progressindicator.CircularProgressIndicator
 import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTubePlayerView
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
+import com.untar.ultimusic.data.LyricsAutoFetcher
+import com.untar.ultimusic.data.ThemePreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
-import com.untar.ultimusic.data.scan.MusicScanner
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
 import com.untar.ultimusic.ui.PlayerViewModel
@@ -63,12 +64,16 @@ import com.untar.ultimusic.util.DynamicColor
 import com.untar.ultimusic.util.LanguageDetector
 import com.untar.ultimusic.util.LrcParser
 import com.untar.ultimusic.util.LyricLine
+import com.untar.ultimusic.util.LyricsCache
+import com.untar.ultimusic.util.LyricsRomanizer
+import com.untar.ultimusic.util.errorWithReason
 import com.untar.ultimusic.util.LyricsTranslator
 import com.untar.ultimusic.util.TimeFormat
 import com.untar.ultimusic.util.YouTubeUrl
 import com.untar.ultimusic.util.albumDisplay
 import com.untar.ultimusic.util.artistDisplay
 import com.untar.ultimusic.util.joinNonBlank
+import com.untar.ultimusic.util.unknownArtist
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 import java.io.File
@@ -335,8 +340,13 @@ class IPodDialogFragment : DialogFragment() {
         val tvTitle = view.findViewById<TextView>(R.id.tvTitle)
         val tvMeta = view.findViewById<TextView>(R.id.tvMeta)
         val lyricsBox = view.findViewById<RecyclerView>(R.id.lyricsBox)
-        val btnExpandLyrics = view.findViewById<TextView>(R.id.btnExpandLyrics)
-        val btnTranslateLyrics = view.findViewById<TextView>(R.id.btnTranslateLyrics)
+        // Botón "Ver más" desactivado (por si vuelve): ver también dialog_ipod.xml.
+        // val btnExpandLyrics = view.findViewById<TextView>(R.id.btnExpandLyrics)
+        val btnTranslateLyrics = view.findViewById<ImageView>(R.id.btnTranslateLyrics)
+        val btnRomanizeLyrics = view.findViewById<TextView>(R.id.btnRomanizeLyrics)
+        val btnEditLyrics = view.findViewById<ImageView>(R.id.btnEditLyrics)
+        val lyricsSearchProgress = view.findViewById<ProgressBar>(R.id.lyricsSearchProgress)
+        lyricsSearchProgress.indeterminateTintList = ColorStateList.valueOf(playerViewModel.accentTarget.value)
         // Fila entera de tvPosition/ipodProgress/tvDuration: en modo vídeo se oculta junta (ver
         // [startVideo]/[exitVideo] y el comentario de positionRow en el XML).
         val positionRow = view.findViewById<View>(R.id.positionRow)
@@ -426,6 +436,12 @@ class IPodDialogFragment : DialogFragment() {
         // si hace falta, o traduciendo línea a línea): evita que un segundo toque al botón dispare
         // otra traducción por encima de la que ya está en marcha.
         var translatingLyrics = false
+        // Botón de arriba a la izquierda (ver LyricsRomanizer): true mientras lyricsBox muestra la
+        // letra pasada a la escritura del idioma de la app. Excluyente con lyricsTranslated: las dos
+        // versiones salen de la letra ORIGINAL, así que pulsar una pisa la otra.
+        var lyricsRomanized = false
+        // True mientras LyricsRomanizer trabaja (puede ir a Google): evita un segundo toque encima.
+        var romanizingLyrics = false
 
         /**
          * Resalta y centra la línea de letra que toca a [positionMs] (posición del audio local, SIN
@@ -439,33 +455,29 @@ class IPodDialogFragment : DialogFragment() {
             if (lyricLines.isEmpty()) return
             val index = LrcParser.currentIndex(lyricLines, positionMs + lyricsOffsetMs)
             if (lyricsAdapter.setCurrentLine(index) && index >= 0) {
-                // Con este offset la línea actual se pone en la posición 2 de 7 (o 5)
-                lyricsLayoutManager.scrollToPositionWithOffset(index, lyricsBox.height / 12)
+                // Caben 5 filas: la actual va en la posición 2 (una fila encima, tres debajo). El
+                // offset es la altura de una fila (la de un hijo ya medido; si aún no hay, 1/5 de la caja).
+                val rowHeight = lyricsBox.getChildAt(0)?.height?.takeIf { it > 0 } ?: (lyricsBox.height / 5)
+                lyricsLayoutManager.scrollToPositionWithOffset(index, rowHeight)
             }
         }
 
         /**
          * Pinta [lyricsBox] con la letra ORIGINAL (sin traducir) de [song]: sincronizada línea a
-         * línea si tiene marcas LRC, o una única fila con el texto entero / el aviso de "sin letra".
-         * Dejaba [lyricLines] y [lyricsOffsetMs] listos para el collect de progress de más abajo.
-         * La usan tanto el collect de currentSong como el botón "あ" al volver de la traducción.
+         * línea si tiene marcas LRC, una única fila con el texto entero si no, o nada si no tiene
+         * letra (la busca sola [LyricsAutoFetcher]; mientras, se ve el spinner, y si no encuentra
+         * nada queda el lápiz). Deja [lyricLines] y [lyricsOffsetMs] listos para el collect de
+         * progress de más abajo. La usan tanto el collect de currentSong como el botón "あ" al
+         * volver de la traducción.
          */
         val paintOriginalLyrics = { song: Song? ->
             val rawLyrics = song?.lyrics?.takeIf { it.isNotBlank() }
             lyricLines = rawLyrics?.let { LrcParser.parse(it) } ?: emptyList()
             lyricsOffsetMs = song?.lyricsOffsetMs ?: 0L
-            if (lyricLines.isNotEmpty()) {
-                lyricsAdapter.submit(lyricLines.map { it.text }, synced = true)
-            } else if (song != null) {
-                // Solo avisamos de "sin letra" si de verdad suena algo: sin canción (app recién
-                // abierta en frío) el recuadro debe quedarse vacío, no fingir que hay una canción
-                // sin letra.
-                lyricsAdapter.submit(
-                    listOf(rawLyrics ?: getString(R.string.ipod_no_lyrics)),
-                    synced = false
-                )
-            } else {
-                lyricsAdapter.submit(emptyList(), synced = false)
+            when {
+                lyricLines.isNotEmpty() -> lyricsAdapter.submit(lyricLines.map { it.text }, synced = true)
+                rawLyrics != null -> lyricsAdapter.submit(listOf(rawLyrics), synced = false)
+                else -> lyricsAdapter.submit(emptyList(), synced = false)
             }
         }
 
@@ -497,37 +509,89 @@ class IPodDialogFragment : DialogFragment() {
             }
         }
 
-        // Sin letra guardada, tocar el recuadro abre el mismo buscador de lrclib.net que el campo
-        // "Letra" del editor de metadatos ([MetadataEditorDialogFragment.openLyricsPicker], la
-        // ÚNICA forma de ponerle letra a una canción): así se puede añadir/editar desde aquí
-        // también, sin tener que abrir el editor completo. El resultado se guarda directo en Room
-        // (ver el listener de [LyricsSuggestionsDialogFragment.RESULT_KEY] más abajo), como el
-        // enlace del vídeo.
-        //
-        // Un `setOnClickListener` normal NO sirve aquí: `RecyclerView.onTouchEvent` gestiona el
-        // toque entero para el scroll/fling y nunca llama a `performClick()`, así que el click
-        // nunca llegaría a dispararse. Hace falta interceptar el toque a mano con un
-        // `OnItemTouchListener` + `GestureDetector` (la vía que recomienda la propia documentación
-        // de RecyclerView para detectar un toque simple sin robarle el gesto al scroll).
-        val lyricsTapDetector = GestureDetector(
-            requireContext(),
-            object : GestureDetector.SimpleOnGestureListener() {
-                override fun onSingleTapUp(e: MotionEvent): Boolean {
-                    val song = playerViewModel.currentSong.value ?: return false
-                    if (!song.lyrics.isNullOrBlank()) return false
-                    val artist = song.artists.firstOrNull()?.name
-                        ?.takeIf { it != MusicScanner.UNKNOWN_ARTIST }
-                        .orEmpty()
-                    LyricsSuggestionsDialogFragment.newInstance(song.title, artist, song.duration)
-                        .show(childFragmentManager, TAG_LYRICS_SUGGESTIONS)
-                    return true
-                }
+        /**
+         * Muestra/oculta el botón de la "A" (romanizar): solo si el idioma de la app tiene destino
+         * ([LyricsRomanizer.targetFor]) y la letra tiene alguna escritura ajena a ese destino. Va
+         * por escritura Unicode, no por idioma detectado, así que es síncrono y no necesita red.
+         */
+        val updateRomanizeButtonVisibility = { song: Song? ->
+            val target = LyricsRomanizer.targetFor()
+            val lyrics = song?.lyrics?.takeIf { it.isNotBlank() }
+            if (target == null || lyrics == null) {
+                btnRomanizeLyrics.isVisible = false
+            } else {
+                btnRomanizeLyrics.text = LyricsRomanizer.glyph(target)
+                btnRomanizeLyrics.isVisible = LyricsRomanizer.needsConversion(lyrics, target)
             }
-        )
-        lyricsBox.addOnItemTouchListener(object : RecyclerView.SimpleOnItemTouchListener() {
-            override fun onInterceptTouchEvent(rv: RecyclerView, e: MotionEvent): Boolean =
-                lyricsTapDetector.onTouchEvent(e)
-        })
+        }
+
+        // Botón "A": pasa la letra original a la escritura del idioma de la app. Segundo toque,
+        // vuelve a la original. Mismo orden de filas que lyricsBox, así la letra sincronizada sigue
+        // resaltando la fila correcta.
+        btnRomanizeLyrics.setOnClickListener {
+            val song = playerViewModel.currentSong.value ?: return@setOnClickListener
+            val target = LyricsRomanizer.targetFor() ?: return@setOnClickListener
+            if (lyricsRomanized) {
+                paintOriginalLyrics(song)
+                lyricsRomanized = false
+                return@setOnClickListener
+            }
+            val originalLines =
+                if (lyricLines.isNotEmpty()) lyricLines.map { it.text }
+                else listOfNotNull(song.lyrics?.takeIf { it.isNotBlank() })
+            if (originalLines.isEmpty()) return@setOnClickListener
+            if (romanizingLyrics) return@setOnClickListener
+            romanizingLyrics = true
+            btnRomanizeLyrics.isEnabled = false
+            btnRomanizeLyrics.alpha = 0.4f
+            val timesMs = lyricLines.takeIf { it.isNotEmpty() }?.map { it.timeMs }
+            viewLifecycleOwner.lifecycleScope.launch {
+                // Con la romanización ya guardada en UltiMusic/conversions (LyricsCache) no hay
+                // petición ni aviso: es instantáneo.
+                val converted = LyricsCache.getOrCompute(
+                    requireContext(), song, LyricsCache.Kind.ROMANIZATION, LyricsCache.suffixFor(target),
+                    originalLines, timesMs,
+                    onMiss = {
+                        Toast.makeText(requireContext(), R.string.ipod_romanize_lyrics_working, Toast.LENGTH_SHORT).show()
+                    }
+                ) {
+                    val source = LyricsRomanizer.resolveSourceLanguage(song.language, song.lyrics.orEmpty())
+                    LyricsRomanizer.convert(originalLines, target, source)
+                }
+                romanizingLyrics = false
+                btnRomanizeLyrics.isEnabled = true
+                btnRomanizeLyrics.alpha = 1f
+                // Misma guarda que el botón "?": si ya suena otra canción o el usuario ha traducido
+                // mientras tanto, lo que llega tarde se descarta.
+                if (playerViewModel.currentSong.value?.id != song.id || lyricsRomanized || lyricsTranslated) {
+                    return@launch
+                }
+                val convertedLines = converted.getOrElse { error ->
+                    Toast.makeText(
+                        requireContext(),
+                        requireContext().errorWithReason(R.string.ipod_romanize_lyrics_failed, error),
+                        Toast.LENGTH_LONG
+                    ).show()
+                    return@launch
+                }
+                lyricsAdapter.submit(convertedLines, synced = lyricLines.isNotEmpty())
+                lyricsRomanized = true
+            }
+        }
+
+        // Lápiz de abajo a la izquierda: abre el mismo buscador de lrclib.net que la lupa del campo
+        // "Letra" del editor de metadatos ([MetadataEditorDialogFragment.openLyricsPicker]), para
+        // corregir lo que haya puesto la búsqueda automática ([LyricsAutoFetcher]) o ponerla a mano
+        // si no encontró nada. El resultado se guarda directo en Room (ver el listener de
+        // [LyricsSuggestionsDialogFragment.RESULT_KEY] más abajo), como el enlace del vídeo.
+        btnEditLyrics.setOnClickListener {
+            val song = playerViewModel.currentSong.value ?: return@setOnClickListener
+            val artist = song.artists.firstOrNull()?.name
+                ?.takeIf { it != unknownArtist(requireContext()) }
+                .orEmpty()
+            LyricsSuggestionsDialogFragment.newInstance(song.title, artist, song.duration)
+                .show(childFragmentManager, TAG_LYRICS_SUGGESTIONS)
+        }
 
         /**
          * Decide si [queueAdapter] pinta el divisor de "final de cola" en su última fila: solo si la
@@ -828,6 +892,8 @@ class IPodDialogFragment : DialogFragment() {
         // volver, la proporción objetivo es la que le toque a lo que topBox esté mostrando AHORA
         // (cuadrada en modo carátula/cola, 16:9 en modo vídeo): así encaja también si el modo vídeo
         // se ha alternado mientras la letra estaba desplegada.
+        // DESACTIVADO por ahora (por si vuelve), junto con el botón en dialog_ipod.xml.
+        /*
         var lyricsExpanded = false
         var lyricsExpandAnimating = false
         btnExpandLyrics.setOnClickListener {
@@ -849,8 +915,9 @@ class IPodDialogFragment : DialogFragment() {
                 }
             }
         }
+        */
 
-        // Botón "あ": traduce la letra visible al idioma del sistema con LyricsTranslator (Lingva
+        // Botón "?": traduce la letra visible al idioma del sistema con LyricsTranslator (Lingva
         // Translate, sin clave ni cuenta de por medio), en el mismo orden que lyricsBox (así una
         // letra sincronizada sigue resaltando la fila correcta). Un segundo toque, ya traducida,
         // vuelve a la letra original sin llamar de nuevo al traductor.
@@ -874,9 +941,17 @@ class IPodDialogFragment : DialogFragment() {
             // hecho nada. El aviso y la atenuación cubren esa espera.
             btnTranslateLyrics.isEnabled = false
             btnTranslateLyrics.alpha = 0.4f
-            Toast.makeText(requireContext(), R.string.ipod_translate_lyrics_working, Toast.LENGTH_SHORT).show()
+            val timesMs = lyricLines.takeIf { it.isNotEmpty() }?.map { it.timeMs }
             viewLifecycleOwner.lifecycleScope.launch {
-                val translated = LyricsTranslator.translate(originalLines)
+                // Con la traducción ya guardada en UltiMusic/translations (LyricsCache) no hay
+                // petición ni aviso: es instantáneo.
+                val translated = LyricsCache.getOrCompute(
+                    requireContext(), song, LyricsCache.Kind.TRANSLATION, java.util.Locale.getDefault().language,
+                    originalLines, timesMs,
+                    onMiss = {
+                        Toast.makeText(requireContext(), R.string.ipod_translate_lyrics_working, Toast.LENGTH_SHORT).show()
+                    }
+                ) { LyricsTranslator.translate(originalLines) }
                 translatingLyrics = false
                 btnTranslateLyrics.isEnabled = true
                 btnTranslateLyrics.alpha = 1f
@@ -884,12 +959,15 @@ class IPodDialogFragment : DialogFragment() {
                 // original a mano), la traducción que llega tarde se descarta: pintarla ahora
                 // pisaría la letra de otra canción, o una que ya no toca mostrar.
                 if (playerViewModel.currentSong.value?.id != song.id || lyricsTranslated) return@launch
-                if (translated != null) {
-                    lyricsAdapter.submit(translated, synced = lyricLines.isNotEmpty())
+                translated.onSuccess {
+                    lyricsAdapter.submit(it, synced = lyricLines.isNotEmpty())
                     lyricsTranslated = true
-                } else {
+                    lyricsRomanized = false
+                }.onFailure { error ->
                     Toast.makeText(
-                        requireContext(), R.string.ipod_translate_lyrics_failed, Toast.LENGTH_SHORT
+                        requireContext(),
+                        requireContext().errorWithReason(R.string.ipod_translate_lyrics_failed, error),
+                        Toast.LENGTH_LONG
                     ).show()
                 }
             }
@@ -974,8 +1052,7 @@ class IPodDialogFragment : DialogFragment() {
             }
         }
 
-        // El buscador de letras devuelve el texto elegido por aquí (ver su listener de arriba en
-        // lyricsBox). Se guarda directo en Room, sin formulario abierto de por medio, igual que el
+        // El buscador de letras devuelve el texto elegido por aquí (ver btnEditLyrics más arriba). Se guarda directo en Room, sin formulario abierto de por medio, igual que el
         // enlace del vídeo: al reemitir, currentSong llega ya con la letra nueva y el collect de
         // más abajo la pinta sola.
         childFragmentManager.setFragmentResultListener(
@@ -994,6 +1071,11 @@ class IPodDialogFragment : DialogFragment() {
 
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
+                // Ajustes > Mantener pantalla encendida en el UltiMusicPod. keepScreenOn de la vista
+                // (y no un flag de ventana) se apaga solo en cuanto el iPod deja de verse.
+                launch {
+                    com.untar.ultimusic.data.KeepScreenOnPreferences.enabled.collect { requireView().keepScreenOn = it }
+                }
                 launch {
                     // El título, la carátula y el resto de info reflejan siempre lo que suena de
                     // verdad, esté o no la ventana en modo navegación de una lista: nunca se debe
@@ -1038,11 +1120,16 @@ class IPodDialogFragment : DialogFragment() {
                         // metadatos. Si tiene marcas de tiempo LRC (una sugerencia sincronizada de
                         // lrclib.net, ver LrcParser) se pinta línea a línea, resaltando la que toca
                         // cantar ahora (lo hace el collect de progress, más abajo); si no, una única
-                        // fila con el texto entero — o el aviso de "sin letra" si no hay ninguna. Al
+                        // fila con el texto entero, o nada si no hay ninguna. Al
                         // cambiar de canción se vuelve SIEMPRE a la letra original, nunca se arrastra
                         // una traducción de la canción anterior (ver el botón "あ" más abajo).
                         paintOriginalLyrics(song)
                         lyricsTranslated = false
+                        lyricsRomanized = false
+                        romanizingLyrics = false
+                        btnRomanizeLyrics.isEnabled = true
+                        btnRomanizeLyrics.alpha = 1f
+                        updateRomanizeButtonVisibility(song)
                         // Por si venía de otra canción con una traducción todavía en marcha: el
                         // botón de ESTA canción tiene que nacer siempre habilitado.
                         translatingLyrics = false
@@ -1095,6 +1182,17 @@ class IPodDialogFragment : DialogFragment() {
                     playerViewModel.accentColor.collect { accent ->
                         tintIPod(view, accent)
                         lyricsAdapter.setAccent(accent)
+                        lyricsSearchProgress.indeterminateTintList = ColorStateList.valueOf(accent)
+                    }
+                }
+                launch {
+                    // Spinner mientras se busca la letra de la canción que suena, y lápiz siempre
+                    // que suene algo (ver btnEditLyrics más arriba).
+                    combine(playerViewModel.currentSong, LyricsAutoFetcher.searching) { song, searching ->
+                        song to (song != null && song.lyrics.isNullOrBlank() && song.id in searching)
+                    }.collect { (song, isSearching) ->
+                        lyricsSearchProgress.isVisible = isSearching
+                        btnEditLyrics.isVisible = song != null && !isSearching
                     }
                 }
                 launch {
@@ -1180,7 +1278,7 @@ class IPodDialogFragment : DialogFragment() {
      * el relleno del cuerpo, y el icono de altavoz de la fila "sonando ahora" de la cola.
      *
      * Es el sitio donde se ve mejor la regla de los dos amarillos (ver [AccentTint]): todo lo que en
-     * el XML era `um_yellow` lleva el acento tal cual, y lo que era `um_yellow_dark` lo lleva
+     * el XML era `um_gold` lleva el acento tal cual, y lo que era `um_gold_dark` lo lleva
      * atenuado ([DynamicColor.dark]).
      */
     private fun tintIPod(view: View, accent: Int) {
@@ -1194,18 +1292,23 @@ class IPodDialogFragment : DialogFragment() {
         // fija directo, igual que offsetRuler en el editor de metadatos.
         view.findViewById<ValueRuler>(R.id.ipodOffsetRuler).accentColor = accent
 
-        // Los contornos del iPod son un degradado (claro -> acento, de arriba a abajo), no un color liso:
+        // Los contornos del iPod son un degradado (ver strokeStart/strokeEnd), no un color liso:
         // un `<stroke>` de XML no admite degradado, así que estos fondos son GradientStrokeDrawable
         // (ver su doc) y se crean aquí la primera vez; las siguientes (cada paso del fundido de
         // acento) solo se actualizan los colores. El relleno y la geometría replican los
         // drawable/ipod_*.xml, que quedan como fondo inicial hasta este primer paso.
         //
-        // El cuerpo es el único sitio de la app pintado con `@color/um_yellow_dark`, así que es el
+        // El cuerpo es el único sitio de la app pintado con `@color/um_gold_dark`, así que es el
         // único que lleva el acento atenuado (relleno = DynamicColor.dark(accent)).
         val ctx = requireContext()
         val density = resources.displayMetrics.density
         val surface = ctx.getColor(R.color.um_surface_variant)
-        val strokeStart = DynamicColor.light(accent)
+        // Oscuro: claro arriba -> acento abajo. Claro: al revés, acento arriba -> oscuro abajo (en el
+        // tema claro DynamicColor.light ya devuelve el tono oscuro, ver DynamicColor.themed).
+        val tone = DynamicColor.light(accent)
+        val isLight = ThemePreferences.isLight()
+        val strokeStart = if (isLight) accent else tone
+        val strokeEnd = if (isLight) tone else accent
         val ring = R.dimen.ipod_stroke_button_ring
         val box = R.dimen.ipod_stroke_info_box
         // id, grosor, ovalado, radio (dp) y relleno
@@ -1230,7 +1333,7 @@ class IPodDialogFragment : DialogFragment() {
             val existing = target.background as? GradientStrokeDrawable
             if (existing != null) {
                 existing.fillColor = spec.fill
-                existing.setStrokeColors(strokeStart, accent)
+                existing.setStrokeColors(strokeStart, strokeEnd)
             } else {
                 target.background = GradientStrokeDrawable(
                     oval = spec.oval,
@@ -1238,7 +1341,7 @@ class IPodDialogFragment : DialogFragment() {
                     strokeWidthPx = resources.getDimension(spec.width),
                     fillColor = spec.fill,
                     strokeStart = strokeStart,
-                    strokeEnd = accent
+                    strokeEnd = strokeEnd
                 )
             }
         }
@@ -1269,7 +1372,7 @@ class IPodDialogFragment : DialogFragment() {
 
     /** Construye la línea "Artista | Álbum | Año" omitiendo el año si no existe. */
     private fun metaLine(song: Song): String =
-        joinNonBlank(song.artistDisplay(), song.albumDisplay(), song.year?.toString())
+        joinNonBlank(song.artistDisplay(requireContext()), song.albumDisplay(), song.year?.toString())
 
     /**
      * Actualiza [R.id.infoBox] según si se ve la cola/lista o la carátula.
@@ -1356,7 +1459,7 @@ class IPodDialogFragment : DialogFragment() {
      */
     private fun searchQuery(song: Song): String {
         val artist = song.artists.firstOrNull()?.name
-            ?.takeIf { it != MusicScanner.UNKNOWN_ARTIST }
+            ?.takeIf { it != unknownArtist(requireContext()) }
         return listOfNotNull(song.title, artist).joinToString(" ")
     }
 

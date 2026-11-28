@@ -2,6 +2,7 @@ package com.untar.ultimusic.ui.common
 
 import android.content.Context
 import android.graphics.Canvas
+import android.view.View
 import androidx.core.content.ContextCompat
 import androidx.core.graphics.drawable.DrawableCompat
 import androidx.recyclerview.widget.ItemTouchHelper
@@ -24,7 +25,8 @@ import kotlin.math.min
  * [attachSwipeToQueue].
  *
  * El callback anfitrión debe:
- * - Declarar `ItemTouchHelper.RIGHT` entre sus direcciones de swipe.
+ * - Declarar `ItemTouchHelper.END` (no RIGHT: así en idiomas RTL el gesto va hacia la izquierda)
+ *   entre sus direcciones de swipe.
  * - Devolver [swipeThreshold] en su `getSwipeThreshold`: mayor que 1, para que el gesto nunca se dé
  *   por "confirmado" al soltar (la fila SIEMPRE debe volver sola a su sitio, nunca comportarse como
  *   un swipe-to-delete de verdad).
@@ -35,7 +37,7 @@ import kotlin.math.min
  *   sitio (justo el bug que este comentario documenta haber corregido).
  * - Dejar `onSwiped` vacío (nunca llega a dispararse con esos dos umbrales, pero el override es
  *   obligatorio).
- * - En su `onChildDraw`, mientras `actionState == ACTION_STATE_SWIPE && dX > 0`, llamar a
+ * - En su `onChildDraw`, mientras [isQueueSwipe] sea true, llamar a
  *   [onChildDraw] en vez de a `super.onChildDraw`; para cualquier otro caso (incluida la animación de
  *   vuelta al soltar), dejar que `super.onChildDraw` haga lo suyo como siempre.
  * - Llamar a [reset] desde su `clearView`, para poder disparar la acción de nuevo en el siguiente
@@ -61,33 +63,53 @@ class SwipeToQueueGesture(context: Context, private val accentColor: () -> Int) 
     }
 
     /**
+     * True si el arrastre en curso es un swipe hacia el lado END (derecha, o izquierda en idiomas
+     * RTL): el anfitrión debe llamar entonces a [onChildDraw] en vez de a `super.onChildDraw`.
+     */
+    fun isQueueSwipe(actionState: Int, viewHolder: RecyclerView.ViewHolder, dX: Float): Boolean =
+        actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX * endSign(viewHolder) > 0
+
+    /** +1 si el lado END es la derecha, -1 si es la izquierda (RTL). [ItemTouchHelper] da dX absoluto. */
+    private fun endSign(viewHolder: RecyclerView.ViewHolder): Int =
+        if (viewHolder.itemView.layoutDirection == View.LAYOUT_DIRECTION_RTL) -1 else 1
+
+    /**
      * Dibuja el icono revelado (creciendo en opacidad con el arrastre) y dispara [onAddToQueue] en
-     * cuanto [dX] supera [TRIGGER_FRACTION] del ancho de la fila -una sola vez por gesto, ver
+     * cuanto el arrastre supera [TRIGGER_FRACTION] del ancho de la fila -una sola vez por gesto, ver
      * [fired]-. Mueve la fila a mano con `translationX`, capada en [MAX_DRAG_FRACTION] del ancho para
      * que no se pueda tirar fuera de pantalla (efecto "goma" al llegar al tope).
+     *
+     * Todo va relativo al lado START/END: en RTL la fila se arrastra hacia la izquierda y el icono
+     * aparece por la derecha, para que el gesto no choque con el de pasar a la pestaña anterior.
      */
     fun onChildDraw(c: Canvas, viewHolder: RecyclerView.ViewHolder, dX: Float, onAddToQueue: (position: Int) -> Unit) {
         val itemView = viewHolder.itemView
+        val sign = endSign(viewHolder)
+        val drag = dX * sign
         val maxDrag = itemView.width * MAX_DRAG_FRACTION
         val triggerDistance = itemView.width * TRIGGER_FRACTION
-        val cappedDx = min(dX, maxDrag)
+        val cappedDrag = min(drag, maxDrag)
 
-        if (!fired && dX >= triggerDistance) {
+        if (!fired && drag >= triggerDistance) {
             fired = true
             onAddToQueue(viewHolder.bindingAdapterPosition)
         }
 
         icon?.let {
             DrawableCompat.setTint(it, accentColor())
+            // Se pinta a mano en el Canvas, sin ImageView que le pase la dirección: sin esto su
+            // autoMirrored no haría nada.
+            DrawableCompat.setLayoutDirection(it, itemView.layoutDirection)
             val size = min(itemView.height / 2, it.intrinsicHeight)
             val top = itemView.top + (itemView.height - size) / 2
-            val left = itemView.left + (itemView.height - size) / 2
+            val inset = (itemView.height - size) / 2
+            val left = if (sign > 0) itemView.left + inset else itemView.right - inset - size
             it.setBounds(left, top, left + size, top + size)
-            it.alpha = (255f * min(cappedDx / triggerDistance, 1f)).toInt()
+            it.alpha = (255f * min(cappedDrag / triggerDistance, 1f)).toInt()
             it.draw(c)
         }
 
-        itemView.translationX = cappedDx
+        itemView.translationX = cappedDrag * sign
     }
 
     private companion object {
@@ -117,9 +139,9 @@ fun attachSwipeToQueue(
     onAddToQueue: (position: Int) -> Unit
 ): ItemTouchHelper {
     val gesture = SwipeToQueueGesture(recyclerView.context, accentColor)
-    val callback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.RIGHT) {
+    val callback = object : ItemTouchHelper.SimpleCallback(0, ItemTouchHelper.END) {
         override fun getSwipeDirs(rv: RecyclerView, vh: RecyclerView.ViewHolder): Int =
-            if (canSwipe(vh.bindingAdapterPosition)) ItemTouchHelper.RIGHT else 0
+            if (canSwipe(vh.bindingAdapterPosition)) ItemTouchHelper.END else 0
 
         override fun onMove(
             rv: RecyclerView, vh: RecyclerView.ViewHolder, target: RecyclerView.ViewHolder
@@ -143,7 +165,7 @@ fun attachSwipeToQueue(
             actionState: Int,
             isCurrentlyActive: Boolean
         ) {
-            if (actionState == ItemTouchHelper.ACTION_STATE_SWIPE && dX > 0) {
+            if (gesture.isQueueSwipe(actionState, vh, dX)) {
                 gesture.onChildDraw(c, vh, dX, onAddToQueue)
             } else {
                 super.onChildDraw(c, rv, vh, dX, dY, actionState, isCurrentlyActive)

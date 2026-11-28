@@ -1,19 +1,40 @@
-<?xml version="1.0" encoding="utf-8"?><!--
-   Sample data extraction rules file; uncomment and customize as necessary.
-   See https://developer.android.com/about/versions/12/backup-restore#xml-changes
-   for details.
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Copia automática de Android (Android 12+; para Android 11 o anterior, ver backup_rules.xml).
+    Ver AppStorage: los datos de UltiMusic viven en el almacenamiento interno, y esto es lo que
+    los hace sobrevivir a una reinstalación o un cambio de móvil.
+
+    Con <include>, todo lo que no se incluye queda fuera. Fuera a propósito:
+     - files/images y files/backgrounds en la nube: la copia en la nube tiene un límite de 25 MB, y
+       si se pasa, Android no sube NADA. Tras restaurar, LibraryRepository.repairMissingImages
+       limpia las referencias y la cadena de carátulas sigue sola (arte embebido, YouTube,
+       placeholder). En la transferencia entre móviles no hay límite, así que ahí sí van.
+     - files/crash-logs: solo sirven en el móvil donde pasó el cierre (van en el .zip).
+     - la BD api_cache: caché de respuestas de APIs, se rehace sola.
+     - ultimusic.restore.db: restauración a medias del .zip (ver UltiMusicDatabase).
+     - saf_storage.xml: permisos de carpeta y marcas de ESTA instalación (en otra no valen).
 -->
 <data-extraction-rules>
     <cloud-backup>
-        <!-- TODO: Use <include> and <exclude> to control what is backed up.
-        <include .../>
-        <exclude .../>
-        -->
+        <include domain="database" path="ultimusic.db" />
+        <include domain="database" path="ultimusic.db-wal" />
+        <include domain="database" path="ultimusic.db-shm" />
+        <include domain="file" path="playlists/" />
+        <include domain="file" path="conversions/" />
+        <include domain="file" path="translations/" />
+        <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="saf_storage.xml" />
     </cloud-backup>
-    <!--
     <device-transfer>
-        <include .../>
-        <exclude .../>
+        <include domain="database" path="ultimusic.db" />
+        <include domain="database" path="ultimusic.db-wal" />
+        <include domain="database" path="ultimusic.db-shm" />
+        <include domain="file" path="images/" />
+        <include domain="file" path="backgrounds/" />
+        <include domain="file" path="playlists/" />
+        <include domain="file" path="conversions/" />
+        <include domain="file" path="translations/" />
+        <include domain="sharedpref" path="." />
+        <exclude domain="sharedpref" path="saf_storage.xml" />
     </device-transfer>
-    -->
 </data-extraction-rules>
