@@ -57,7 +57,8 @@
     <string name="delete_album_confirm">کیا البم <b>^1</b> اور اس کے تمام گانے ڈیوائس سے حذف کریں؟</string>
     <string name="album_cover_desc">البم کا سرورق</string>
     <string name="song_cover_desc">گانے کا سرورق</string>
-    <string name="no_songs">UltiMusic استعمال کرنے کے لیے آپ کو آڈیو فائلوں کی ضرورت ہے۔ Untar Technologies انہیں iTunes Store، Amazon Music وغیرہ جیسے اسٹورز سے حاصل کرنے کی سفارش کرتا ہے۔</string>
+    <string name="no_songs">UltiMusic استعمال کرنے کے لیے آپ کی ڈیوائس میں آڈیو فائلیں ہونی چاہئیں۔ آپ جس فولڈر میں انہیں رکھتے ہیں اسے ترتیبات کے مینو سے یا نیچے دیے گئے بٹن کے ذریعے شامل کر سکتے ہیں۔ اگر آپ کے پاس موسیقی نہیں ہے، تو اوپر دائیں جانب %1$s بٹن دبا کر اسے حاصل کر سکتے ہیں</string>
+    <string name="no_songs_add_folder">فولڈر چنیں</string>
     <string name="song_file_missing">%1$s کی فائل نہیں ملی</string>
     <string name="cannot_open_file">فائل نہیں کھل سکی</string>
     <string name="cannot_add_current_song_to_queue">آپ موجودہ گانا قطار میں شامل نہیں کر سکتے</string>
@@ -309,7 +310,7 @@
         <item quantity="one">%d چلایا گیا</item>
         <item quantity="other">%d چلائے گئے</item>
     </plurals>
-    <string name="playlist_reset_history_desc">چلائے گئے گانے دوبارہ ترتیب دیں</string>
+    <string name="playlist_reset_history_desc">چلائے گئے گانے ری سیٹ کریں</string>
     <string name="tag_recently_added_name">حال ہی میں ڈاؤن لوڈ کیے گئے</string>
     <string name="tag_not_in_playlist_name">کسی فہرست میں نہیں</string>
     <string name="tag_no_custom_tags_name">ذاتی ٹیگز کے بغیر</string>
@@ -381,7 +382,8 @@
     <string name="settings_sleep_timer_unit">منٹ</string>
     <string name="settings_background_title">پس منظر کی تصویر</string>
     <string name="settings_background_option_desc">پس منظر کی تصویر %1$d</string>
-    <string name="settings_background_placeholder_desc">جلد آ رہا ہے</string>
+    <string name="settings_background_upload">ڈیوائس سے اپ لوڈ کریں</string>
+    <string name="settings_background_upload_error">وہ تصویر پڑھی نہیں جا سکی</string>
     <string name="settings_theme_title">تھیم</string>
     <string name="settings_theme_system">سسٹم</string>
     <string name="settings_theme_light">روشن</string>
@@ -390,7 +392,7 @@
     <string name="settings_dynamic_color_subtitle">کم رینج والی ڈیوائسز کے لیے تجویز نہیں کیا جاتا۔ اسے بند کرنے پر ہمیشہ UltiMusic کا سنہرا رنگ استعمال ہوگا</string>
     <string name="settings_keep_screen_on_title">UltiMusicPod میں ڈیوائس کو آن رکھیں</string>
     <string name="settings_min_duration_title">گانے کا کم از کم دورانیہ (سیکنڈ)</string>
-    <string name="settings_artist_separators_title">فنکار کے الگ کرنے والے علامات</string>
+    <string name="settings_artist_separators_title">فنکاروں کے الگ کنندہ</string>
     <string name="settings_artist_separators_add_hint">نیا الگ کنندہ</string>
     <string name="settings_artist_separators_add">شامل کریں</string>
     <string name="settings_artist_separators_invalid">الگ کنندہ خالی نہیں ہو سکتا، اس میں فاصلے نہیں ہو سکتے اور وہ دہرایا نہیں جا سکتا</string>
@@ -417,7 +419,7 @@
     <string name="settings_eq_additional_options">اضافی اختیارات</string>
     <string name="settings_eq_bass_boost_help_desc">باس بوسٹ کیا ہے</string>
     <string name="settings_eq_bass_boost_help_title">باس بوسٹ</string>
-    <string name="settings_eq_bass_boost_help_body">ایکولائزر کے سب سے نچلے بینڈ کو بڑھانے کے برعکس، یہ اثر پوری باس رینج پر کام کرتا ہے، بشمول ان فریکوئنسیوں کے جو اس ڈیوائس کے کسی بھی بینڈ سے نیچی ہیں۔ بہت سے فونز میں یہ ہارمونکس بھی شامل کرتا ہے تاکہ باس ان چھوٹے اسپیکرز پر بھی محسوس ہو جو اتنی نچلی فریکوئنسیاں نہیں چلا سکتے۔</string>
+    <string name="settings_eq_bass_boost_help_body">ایکولائزر کے سب سے نچلے بینڈ کو بڑھانے کے برعکس، یہ اثر پوری باس رینج پر کام کرتا ہے، بشمول ان فریکوئنسیوں کے جو اس ڈیوائس کے کسی بھی بینڈ سے نیچی ہیں۔ بہت سی ڈیوائسز میں یہ ہارمونکس بھی شامل کرتا ہے تاکہ باس ان چھوٹے اسپیکرز پر بھی محسوس ہو جو اتنی نچلی فریکوئنسیاں نہیں چلا سکتے۔</string>
     <string name="settings_eq_virtualizer_help_desc">سراؤنڈ ساؤنڈ کیا ہے</string>
     <string name="settings_eq_virtualizer_help_title">سراؤنڈ ساؤنڈ</string>
     <string name="settings_eq_virtualizer_help_body">دونوں طرف دور رکھے اسپیکرز کی نقل کر کے اسٹیریو کو چوڑا کرتا ہے۔ یہ فریکوئنسی کے لحاظ سے والیوم کی ترتیب نہیں: یہ بائیں اور دائیں چینلز کو مختلف طریقے سے ملاتا ہے تاکہ آواز سر کے باہر سے آتی محسوس ہو۔ ایکولائزر کا کوئی سلائیڈر یہ اثر پیدا نہیں کر سکتا، کیونکہ وہ دونوں چینلز میں فریکوئنسی بینڈز کو یکساں بڑھاتے یا گھٹاتے ہیں۔</string>
@@ -448,13 +450,17 @@
     <string name="folder_picker_back">ایک فولڈر اوپر</string>
     <string name="folder_picker_choose">یہ فولڈر چنیں</string>
     <string name="folder_picker_empty">اس فولڈر میں کوئی ذیلی فولڈر نہیں</string>
-    <string name="permission_needed_title">رسائی درکار ہے</string>
-    <string name="permission_needed_message">UltiMusic کو کام کرنے کے لیے اندرونی اسٹوریج میں ایک فولڈر درکار ہے، لیکن وہ اسے خود بخود نہیں بنا سکتی۔\nآپ کے سامنے ایک فائل ایکسپلورر کھلے گا، جہاں آپ کو \"UltiMusic\" نام کا ایک فولڈر بنانا ہے، اسے کھولنا ہے اور \"اس فولڈر کو استعمال کریں\" پر ٹیپ کرنا ہے۔</string>
-    <string name="permission_grant">ایکسپلورر کھولیں</string>
-    <string name="music_folder_prompt_message">اب اپنا موسیقی کا فولڈر چنیں۔ اگر وہ UltiMusic ہے تو آپ منسوخ کریں دبا سکتے ہیں۔</string>
-    <string name="music_folder_prompt_cancel">منسوخ کریں</string>
-    <string name="restoring_database">ڈیٹابیس بحال ہو رہا ہے...</string>
-    <string name="permission_denied">UltiMusic فولڈر کے بغیر گانے نہیں دکھائے جا سکتے</string>
+    <string name="settings_backup_title">بیک اپ</string>
+    <string name="settings_backup_subtitle">ان انسٹال کرنے یا ڈیوائس تبدیل کرنے سے پہلے یہ کرنا انتہائی ضروری ہے۔ ورنہ آپ کی ترامیم ضائع ہو جائیں گی۔ بیک اپ امپورٹ کرنے کے لیے آپ کو وہی ‎.zip فائل منتخب کرنی ہوگی جو آپ نے ایکسپورٹ کی تھی</string>
+    <string name="settings_backup_export">بیک اپ ایکسپورٹ کریں</string>
+    <string name="settings_backup_import">بیک اپ امپورٹ کریں</string>
+    <string name="settings_backup_import_confirm">UltiMusic میں اس وقت موجود سب کچھ (ترامیم، کور آرٹ، فہرستیں اور ترتیبات) بیک اپ کے مواد سے بدل دیا جائے گا، اور ایپ دوبارہ شروع ہو جائے گی۔ آپ کی موسیقی کی فائلوں کو نہیں چھیڑا جائے گا</string>
+    <string name="settings_backup_working">بیک اپ تیار ہو رہا ہے…</string>
+    <string name="settings_backup_export_done">بیک اپ محفوظ ہو گیا</string>
+    <string name="settings_backup_export_failed">بیک اپ محفوظ نہیں ہو سکا</string>
+    <string name="settings_backup_import_done">بیک اپ امپورٹ ہو گیا۔ دوبارہ شروع ہو رہا ہے…</string>
+    <string name="settings_backup_import_invalid">یہ فائل UltiMusic کا بیک اپ نہیں ہے</string>
+    <string name="settings_backup_import_too_new">یہ بیک اپ UltiMusic کے نئے ورژن کا ہے۔ ایپ اپ ڈیٹ کریں اور دوبارہ کوشش کریں</string>
     <string name="relink_legacy_roots_title">مزید فولڈرز شامل کریں؟</string>
     <string name="relink_legacy_roots_message">آپ کی لائبریری کے کچھ گانے دوسرے فولڈرز میں تھے (جیسے ڈاؤن لوڈز یا موسیقی)۔ انہیں واپس لانے کے لیے ایک چنیں؛ آپ بعد میں ترتیبات سے ہمیشہ مزید شامل کر سکتے ہیں۔</string>
     <string name="relink_legacy_roots_action">فولڈر چنیں</string>

@@ -87,6 +87,14 @@ data class SongVideoRow(
 /** Fila mínima (id + título) para reenlazar imágenes huérfanas, ver `LibraryRepository.relinkOrphanImages`. */
 data class TitledRow(val id: Long, val title: String)
 
+/** Canción con miniatura de YouTube guardada, ver `LibraryRepository.repairMissingImages`. */
+data class VideoThumbnailRow(
+    val id: Long,
+    val title: String,
+    val videoUrl: String?,
+    val videoThumbnailName: String
+)
+
 /** Un nombre de artista de la canción/álbum [ownerId], ya ordenado por posición. */
 data class OwnerNameRow(val ownerId: Long, val name: String)
 

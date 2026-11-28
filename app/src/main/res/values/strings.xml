@@ -64,7 +64,9 @@
     <string name="delete_album_confirm">¿Eliminar el álbum <b>^1</b> y todas sus canciones del dispositivo?</string>
     <string name="album_cover_desc">Portada del álbum</string>
     <string name="song_cover_desc">Portada de la canción</string>
-    <string name="no_songs">Para utilizar UltiMusic necesitas archivos de audio. Untar Technologies recomienda obtenerlos de tiendas como iTunes Store, Amazon Music, etc.</string>
+    <!-- %1$s se sustituye por el icono ic_add (el botón de + de la barra superior) -->
+    <string name="no_songs">Para utilizar UltiMusic necesitas archivos de audio en tu dispositivo. Puedes añadir la carpeta donde los tienes desde el menú de ajustes o dándole al botón de abajo. Si no tienes música, puedes adquirirla dándole al botón de %1$s de arriba a la derecha</string>
+    <string name="no_songs_add_folder">Elegir carpeta</string>
     <string name="song_file_missing">No se ha podido encontrar el archivo de %1$s</string>
     <string name="cannot_open_file">No se ha podido abrir el archivo</string>
     <string name="cannot_add_current_song_to_queue">No puedes añadir la canción actual a la cola</string>
@@ -601,7 +603,8 @@
     <!-- Imagen de fondo -->
     <string name="settings_background_title">Imagen de fondo</string>
     <string name="settings_background_option_desc">Imagen de fondo %1$d</string>
-    <string name="settings_background_placeholder_desc">Próximamente</string>
+    <string name="settings_background_upload">Subir del dispositivo</string>
+    <string name="settings_background_upload_error">No se ha podido leer esa imagen</string>
 
     <!-- Tema (ver ThemePreferences) -->
     <string name="settings_theme_title">Tema</string>
@@ -649,7 +652,7 @@
     <string name="settings_eq_additional_options">Opciones adicionales</string>
     <string name="settings_eq_bass_boost_help_desc">Qué es el refuerzo de graves</string>
     <string name="settings_eq_bass_boost_help_title">Refuerzo de graves</string>
-    <string name="settings_eq_bass_boost_help_body">A diferencia de subir la banda más grave del ecualizador, este efecto actúa sobre todo el rango de graves, incluidas frecuencias más bajas que ninguna banda de este dispositivo cubre. En muchos móviles, además, añade armónicos para que el bajo se note incluso en altavoces pequeños que no pueden reproducir esas frecuencias tan bajas.</string>
+    <string name="settings_eq_bass_boost_help_body">A diferencia de subir la banda más grave del ecualizador, este efecto actúa sobre todo el rango de graves, incluidas frecuencias más bajas que ninguna banda de este dispositivo cubre. En muchos dispositivos, además, añade armónicos para que el bajo se note incluso en altavoces pequeños que no pueden reproducir esas frecuencias tan bajas.</string>
     <string name="settings_eq_virtualizer_help_desc">Qué es el sonido envolvente</string>
     <string name="settings_eq_virtualizer_help_title">Sonido envolvente</string>
     <string name="settings_eq_virtualizer_help_body">Ensancha el estéreo simulando altavoces separados a los lados. No es un ajuste de volumen por frecuencia: mezcla los canales izquierdo y derecho de otra forma para que el sonido parezca venir de fuera de la cabeza. Ningún slider del ecualizador puede lograr este efecto, porque esos solo suben o bajan bandas de frecuencia por igual en ambos canales.</string>
@@ -689,27 +692,22 @@
     <string name="folder_picker_choose">Elegir esta carpeta</string>
     <string name="folder_picker_empty">Esta carpeta no tiene subcarpetas</string>
 
-    <!-- Permisos -->
-    <string name="permission_needed_title">Acceso requerido</string>
-    <!-- Primer diálogo del primer arranque. "Usar esta carpeta" es el texto EXACTO del botón del selector de
-         carpetas del sistema (DocumentsUI de Android) en cada idioma: no lo traduzcas, usa literalmente
-         esta etiqueta según el idioma de destino: en "Use this folder", pt "Usar esta pasta",
-         de "Diesen Ordner verwenden", fr "Utiliser ce dossier", it "Usa questa cartella",
-         ru "Использовать эту папку", tr "Bu klasörü kullan", ar "استخدام هذا المجلد",
-         fa "استفاده از این پوشه", ur "اس فولڈر کو استعمال کریں", hi "यह फ़ोल्डर इस्तेमाल करें",
-         bn "এই ফোল্ডার ব্যবহার করুন", zh "使用此文件夹", ja "このフォルダを使用", ko "이 폴더 사용",
-         vi "Sử dụng thư mục này", th "ใช้โฟลเดอร์นี้", in "Gunakan folder ini",
-         fil "Gamitin ang folder na ito". -->
-    <string name="permission_needed_message">UltiMusic necesita una carpeta en el almacenamiento interno para funcionar, pero no puede crearla automáticamente.\nSe te abrirá un explorador de archivos, y lo que debes hacer es crear una carpeta llamada \"UltiMusic\", abrirla y darle a \"Usar esta carpeta\".</string>
-    <string name="permission_grant">Abrir explorador</string>
-    <string name="music_folder_prompt_message">Ahora elige tu carpeta de música. Si es UltiMusic, puedes darle a Cancelar.</string>
-    <string name="music_folder_prompt_cancel">Cancelar</string>
-    <string name="restoring_database">Restaurando base de datos...</string>
-    <string name="permission_denied">Sin la carpeta UltiMusic no se pueden mostrar las canciones</string>
+    <!-- Copia de seguridad (Ajustes, ver BackupArchive): un .zip con todos los datos de la app. -->
+    <string name="settings_backup_title">Copia de seguridad</string>
+    <string name="settings_backup_subtitle">Es de vital importancia que hagas esto antes de desinstalar o cambiar de dispositivo. De lo contrario, tus ediciones se perderán. Para importar la copia, debes seleccionar el mismo archivo .zip que exportaste</string>
+    <string name="settings_backup_export">Exportar copia</string>
+    <string name="settings_backup_import">Importar copia</string>
+    <string name="settings_backup_import_confirm">Todo lo que hay ahora en UltiMusic (ediciones, carátulas, listas y ajustes) se sustituirá por lo de la copia, y la aplicación se reiniciará. Tus archivos de música no se tocan</string>
+    <string name="settings_backup_working">Preparando la copia…</string>
+    <string name="settings_backup_export_done">Copia guardada</string>
+    <string name="settings_backup_export_failed">No se ha podido guardar la copia</string>
+    <string name="settings_backup_import_done">Copia importada. Reiniciando…</string>
+    <string name="settings_backup_import_invalid">Ese archivo no es una copia de UltiMusic</string>
+    <string name="settings_backup_import_too_new">Esa copia es de una versión más nueva de UltiMusic. Actualiza la aplicación e inténtalo de nuevo</string>
 
     <!-- Re-concesión de Download/Music/raíces propias tras la migración a Storage Access Framework
-         (ver SafStorage): se ofrece una sola vez, después de conceder UltiMusic, si queda alguna
-         canción catalogada antes de la migración sin re-enlazar. -->
+         (ver SafStorage): se ofrece una sola vez, al arrancar, si queda alguna canción catalogada
+         antes de la migración sin re-enlazar. -->
     <string name="relink_legacy_roots_title">¿Añadir más carpetas?</string>
     <string name="relink_legacy_roots_message">Algunas canciones de tu fonoteca estaban en otras carpetas (como Descargas o Música). Elige una para recuperarlas; siempre puedes añadir más luego desde Ajustes.</string>
     <string name="relink_legacy_roots_action">Elegir carpeta</string>

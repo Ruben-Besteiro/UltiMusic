@@ -48,24 +48,14 @@
             android:paddingEnd="20dp"
             android:paddingBottom="16dp">
 
-            <!-- ===== Grupo: ajustes auditivos ===== -->
-
-            <TextView
-                android:id="@+id/audioSectionTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="@string/settings_audio_section_title"
-                android:textColor="@color/um_gold"
-                android:textSize="20sp"
-                android:textStyle="bold" />
-
-            <!-- ===== Ajuste: carpetas de la fonoteca ===== -->
+            <!-- ===== Ajuste: carpetas de la fonoteca =====
+                 Arriba del todo, sin grupo, junto con la copia de seguridad: son lo primero que
+                 hay que ver (sin carpetas no hay música, y sin copia se pierden las ediciones). -->
 
             <TextView
                 android:id="@+id/libraryRootsTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
                 android:text="@string/settings_library_roots_title"
                 android:textColor="@color/um_gold"
                 android:textSize="18sp"
@@ -112,6 +102,76 @@
                 android:textColor="@color/um_on_background"
                 android:textStyle="bold"
                 app:drawableStartCompat="@drawable/ic_refresh" />
+
+            <!-- ===== Ajuste: copia de seguridad ===== -->
+            <!--
+              Exportar/importar un .zip con todos los datos de la app (ver BackupArchive). La copia
+              automática de Android ya guarda casi todo, pero no las carátulas (límite de 25 MB) ni
+              se puede forzar: esto es la copia completa, y la forma de cambiar de móvil a mano. El
+              subtítulo exagera a propósito (no menciona la copia de Android) para que la gente la haga.
+            -->
+            <TextView
+                android:id="@+id/backupSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/settings_backup_title"
+                android:textColor="@color/um_gold"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:text="@string/settings_backup_subtitle"
+                android:textColor="@color/um_on_surface_muted"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/btnExportBackup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_backup_export"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold"
+                app:drawableStartCompat="@drawable/ic_backup_export" />
+
+            <TextView
+                android:id="@+id/btnImportBackup"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="?attr/selectableItemBackground"
+                android:drawablePadding="8dp"
+                android:gravity="center_vertical"
+                android:paddingVertical="8dp"
+                android:text="@string/settings_backup_import"
+                android:textColor="@color/um_on_background"
+                android:textStyle="bold"
+                app:drawableStartCompat="@drawable/ic_backup_import" />
+
+            <!-- ===== Grupo: ajustes auditivos ===== -->
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:layout_marginTop="28dp"
+                android:background="@color/um_divider" />
+
+            <TextView
+                android:id="@+id/audioSectionTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:text="@string/settings_audio_section_title"
+                android:textColor="@color/um_gold"
+                android:textSize="20sp"
+                android:textStyle="bold" />
 
             <!-- ===== Ajuste: lista gris ===== -->
 
@@ -718,20 +778,20 @@
                     app:rippleColor="@color/um_ripple_white" />
 
                 <com.google.android.material.radiobutton.MaterialRadioButton
-                    android:id="@+id/themeLight"
-                    android:layout_width="0dp"
-                    android:layout_height="wrap_content"
-                    android:layout_weight="1"
-                    android:text="@string/settings_theme_light"
-                    android:textColor="@color/um_on_background"
-                    app:rippleColor="@color/um_ripple_white" />
-
-                <com.google.android.material.radiobutton.MaterialRadioButton
                     android:id="@+id/themeDark"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:text="@string/settings_theme_dark"
+                    android:textColor="@color/um_on_background"
+                    app:rippleColor="@color/um_ripple_white" />
+
+                <com.google.android.material.radiobutton.MaterialRadioButton
+                    android:id="@+id/themeLight"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="@string/settings_theme_light"
                     android:textColor="@color/um_on_background"
                     app:rippleColor="@color/um_ripple_white" />
 

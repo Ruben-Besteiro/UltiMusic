@@ -10,6 +10,8 @@ import android.graphics.Shader
 import android.view.View
 import android.widget.ImageView
 import com.untar.ultimusic.R
+import com.untar.ultimusic.data.BackgroundPreferences
+import com.untar.ultimusic.data.ThemePreferences
 import java.lang.ref.WeakReference
 
 /**
@@ -45,6 +47,7 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
     }
 
     companion object {
+        @Volatile
         private var instance: BlurredBackground? = null
         private var backgroundRef = WeakReference<ImageView>(null)
 
@@ -56,13 +59,29 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
             return found
         }
 
-        fun get(context: Context): BlurredBackground = instance ?: create(context).also { instance = it }
+        /** La imagen ([BackgroundPreferences.selected]) de la que salen [instance] y [light]. */
+        @Volatile
+        private var builtFor: String? = null
 
-        private fun create(context: Context): BlurredBackground {
+        /** Si [instance] y [light] se calcularon con el tema claro (cambia el velo, ver [SCRIM]). */
+        @Volatile
+        private var builtLight: Boolean? = null
+
+        /**
+         * La versión de las tarjetas. Al cambiar de imagen de fondo sigue devolviendo la anterior
+         * hasta que [lightBackground] (lanzada por MainActivity fuera del hilo principal) cambie
+         * las dos a la vez; solo se calcula aquí si todavía no hay ninguna.
+         */
+        fun get(context: Context): BlurredBackground =
+            instance ?: create(context, BackgroundPreferences.selected.value).also { instance = it }
+
+        private fun create(context: Context, name: String?): BlurredBackground {
             // Desenfoque de verdad (no solo reducir y ampliar): las líneas finas, como las órbitas,
             // se ven pixeladas si se limitan a ampliarse; difuminadas quedan suaves.
-            val result = blurredCopy(context, BLUR_WIDTH_PX, BLUR_RADIUS_PX, BLUR_PASSES)
-            Canvas(result).drawColor(SCRIM)
+            val result = blurredCopy(context, name, BLUR_WIDTH_PX, BLUR_RADIUS_PX, BLUR_PASSES)
+            // Con ThemePreferences y no con getColor(um_background_scrim): el contexto que llega es
+            // el de la aplicación, que no sigue el tema elegido en Ajustes.
+            Canvas(result).drawColor(if (ThemePreferences.isLight()) SCRIM_LIGHT else SCRIM)
             return BlurredBackground(result)
         }
 
@@ -70,15 +89,30 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
 
         /**
          * La imagen de fondo con un desenfoque suave, para la imagen que se ve directamente (donde no
-         * hay tarjetas encima). Sin oscurecer: de eso se encarga la capa de activity_main.xml. Es
-         * pesada de calcular, así que hay que llamarla fuera del hilo principal.
+         * hay tarjetas encima). Sin oscurecer: de eso se encarga la capa de activity_main.xml. Deja
+         * calculada también la versión de las tarjetas ([get]), para que al cambiar de imagen de
+         * fondo no se calcule en el hilo principal al pintar. Es pesada: llamarla fuera de él.
          */
-        fun lightBackground(context: Context): Bitmap =
-            light ?: blurredCopy(context, LIGHT_WIDTH_PX, LIGHT_RADIUS_PX, LIGHT_PASSES).also { light = it }
+        @Synchronized
+        fun lightBackground(context: Context): Bitmap {
+            val current = BackgroundPreferences.selected.value
+            val isLight = ThemePreferences.isLight()
+            light?.let { if (builtFor == current && builtLight == isLight) return it }
+            val soft = blurredCopy(context, current, LIGHT_WIDTH_PX, LIGHT_RADIUS_PX, LIGHT_PASSES)
+            val cards = create(context, current)
+            builtFor = current
+            builtLight = isLight
+            light = soft
+            instance = cards
+            return soft
+        }
 
-        private fun blurredCopy(context: Context, width: Int, radius: Int, passes: Int): Bitmap {
+        private fun blurredCopy(context: Context, name: String?, width: Int, radius: Int, passes: Int): Bitmap {
             val options = BitmapFactory.Options().apply { inSampleSize = 2 }
-            val source = BitmapFactory.decodeResource(context.resources, R.drawable.bg_main, options)
+            // Una imagen subida que no se pueda leer (borrada a mano, corrupta) cae a la de serie
+            // predeterminada.
+            val source = BackgroundPreferences.fileFor(name)?.let { BitmapFactory.decodeFile(it.path, options) }
+                ?: BitmapFactory.decodeResource(context.resources, BackgroundPreferences.builtInImage(name), options)
             val height = (width * source.height / source.width.toFloat()).toInt().coerceAtLeast(1)
             val small = Bitmap.createScaledBitmap(source, width, height, true)
             if (small !== source) source.recycle()
@@ -142,7 +176,11 @@ internal class BlurredBackground private constructor(private val bitmap: Bitmap)
         private const val LIGHT_RADIUS_PX = 2
         private const val LIGHT_PASSES = 2
 
-        /** El mismo `#99000000` de la capa de encima de la imagen en activity_main.xml. */
-        private const val SCRIM = 0x99000000.toInt()
+        /** El mismo `@color/um_background_scrim` de la capa de encima de la imagen en activity_main.xml
+         *  en el tema oscuro. */
+        private const val SCRIM = 0x4D000000
+
+        /** El velo opuesto, el de `values-notnight`: blanco al 30 % que aclara en el tema claro. */
+        private const val SCRIM_LIGHT = 0x4DFFFFFF
     }
 }

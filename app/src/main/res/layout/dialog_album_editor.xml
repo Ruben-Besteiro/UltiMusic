@@ -24,11 +24,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:minHeight="?attr/actionBarSize"
-            android:background="@drawable/bg_toolbar_scrim"
             app:navigationContentDescription="@string/editor_close"
             app:navigationIcon="@drawable/ic_close"
             app:title="@string/metadata_editor_title"
-            app:titleTextColor="@android:color/white" />
+            app:titleTextColor="@color/um_on_background" />
     </com.google.android.material.appbar.AppBarLayout>
 
     <androidx.core.widget.NestedScrollView

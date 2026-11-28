@@ -111,22 +111,22 @@ android {
 }
 
 /**
- * Traducción automática de los strings: antes de cada compilación lanza
- * `tools/translate_strings.py`, que compara `values/strings.xml` (español) con su última copia y
- * traduce a los otros 19 idiomas lo nuevo o cambiado con la API de Claude (ver la cabecera del
- * script). Si no ha cambiado nada termina enseguida sin conectarse a nada.
+ * Mantenimiento de los strings traducidos: antes de cada compilación lanza
+ * `tools/translate_strings.py --gradle`, que compara `values/strings.xml` (español) con su última
+ * copia y hace lo que no cuesta nada: quitar de los demás idiomas los strings borrados, copiar la
+ * traducción de un texto idéntico ya traducido y regenerar el serbio en cirílico. NUNCA llama a la
+ * API: lo que quede sin traducir solo se avisa (y se ve en español en esos idiomas) hasta que se
+ * traduzca con la skill `translate-strings` (ver la cabecera del script).
  *
- * Necesita Python con `pip install anthropic` y la clave en `local.properties`
- * (`anthropic.api_key=...`). Si falta algo, o no hay conexión, solo avisa y la compilación sigue:
- * los strings nuevos se verán en español en los demás idiomas hasta la siguiente compilación que
- * consiga traducirlos. Para saltarse la tarea: variable de entorno `ULTIMUSIC_SKIP_TRANSLATE=1`.
+ * Necesita Python. Si falta, solo avisa y la compilación sigue. Para saltarse la tarea: variable de
+ * entorno `ULTIMUSIC_SKIP_TRANSLATE=1`.
  *
- * No declara entradas ni salidas a propósito, así que se ejecuta siempre: si un intento falla, el
- * siguiente build tiene que volver a probar aunque strings.xml no haya cambiado desde entonces.
+ * No declara entradas ni salidas a propósito, así que se ejecuta siempre: el aviso de lo pendiente
+ * tiene que salir en cada build aunque strings.xml no haya cambiado desde el anterior.
  */
 val translateStrings by tasks.registering {
     group = "ultimusic"
-    description = "Traduce los strings nuevos o cambiados de values/strings.xml a todos los idiomas"
+    description = "Avisa de los strings sin traducir y hace el mantenimiento gratuito de los idiomas"
     val script = rootProject.file("tools/translate_strings.py")
     val workDir = rootProject.projectDir
     doLast {

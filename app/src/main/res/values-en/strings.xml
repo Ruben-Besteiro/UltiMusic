@@ -19,7 +19,7 @@
     <string name="search_prompt">Type to search songs, albums and artists.</string>
     <string name="search_by_lyrics">Search by lyrics</string>
     <string name="search_prompt_lyrics">Type to search songs by their lyrics.</string>
-    <string name="search_no_results">Nothing found for «%1$s».</string>
+    <string name="search_no_results">Nothing found for “%1$s”.</string>
     <string name="sql_toggle">SQL</string>
     <string name="sql_toggle_description">SQL mode</string>
     <string name="sql_hint">Enter an SQL command</string>
@@ -57,7 +57,8 @@
     <string name="delete_album_confirm">Delete the album <b>^1</b> and all its songs from the device?</string>
     <string name="album_cover_desc">Album cover</string>
     <string name="song_cover_desc">Song cover</string>
-    <string name="no_songs">To use UltiMusic you need audio files. Untar Technologies recommends obtaining them from stores such as iTunes Store, Amazon Music, etc.</string>
+    <string name="no_songs">To use UltiMusic you need audio files on your device. You can add the folder where you keep them from the settings menu or by tapping the button below. If you don\'t have any music, you can get some by tapping the %1$s button at the top right</string>
+    <string name="no_songs_add_folder">Choose folder</string>
     <string name="song_file_missing">Couldn\'t find the file for %1$s</string>
     <string name="cannot_open_file">Couldn\'t open the file</string>
     <string name="cannot_add_current_song_to_queue">You can\'t add the current song to the queue</string>
@@ -100,8 +101,8 @@
         <item quantity="other">Added %d songs to the queue</item>
     </plurals>
     <plurals name="toast_added_to_playlist">
-        <item quantity="one">Added %1$d song to «%2$s»</item>
-        <item quantity="other">Added %1$d songs to «%2$s»</item>
+        <item quantity="one">Added %1$d song to “%2$s”</item>
+        <item quantity="other">Added %1$d songs to “%2$s”</item>
     </plurals>
     <string name="edit_metadata">Edit metadata</string>
     <string name="edit_tags">Edit tags</string>
@@ -228,7 +229,7 @@
     <string name="multi_value_hint">Separate multiple values with %1$s</string>
     <string name="expand_player">Expand player</string>
     <string name="play_pause">Play or pause</string>
-    <string name="nothing_playing">Tap anywhere or tap here →</string>
+    <string name="nothing_playing">Tap anywhere, or here →</string>
     <string name="updating_database_percent">Updating local database… %d%%</string>
     <string name="ipod_title">UltiMusicPod</string>
     <string name="ipod_close">Close</string>
@@ -260,10 +261,10 @@
         <item quantity="one">%d song left</item>
         <item quantity="other">%d songs left</item>
     </plurals>
-    <string name="queue_hint_loose">You can add more music to the queue with the three dots and \"Add to queue\"</string>
-    <string name="queue_expand_hint">The playback queue will expand automatically. To add songs to the queue, you can swipe right or use the three dots and \"Add to queue\"</string>
-    <string name="queue_expand_hint_genre">The playback queue will expand automatically with songs from the genre you picked. To add songs to the queue, you can swipe right or use the three dots and \"Add to queue\"</string>
-    <string name="queue_hint_playlist">You can add more music to the playlist with the three dots and \"Add to playlist\"</string>
+    <string name="queue_hint_loose">You can add more music to the queue by tapping the three dots and then \"Add to queue\"</string>
+    <string name="queue_expand_hint">The playback queue will expand automatically. To add songs to the queue, swipe right or tap the three dots and then \"Add to queue\"</string>
+    <string name="queue_expand_hint_genre">The playback queue will expand automatically with songs from the genre you picked. To add songs to the queue, swipe right or tap the three dots and then \"Add to queue\"</string>
+    <string name="queue_hint_playlist">You can add more music to the playlist by tapping the three dots and then \"Add to playlist\"</string>
     <string name="queue_end">You\'ve reached the end</string>
     <string name="queue_empty">There\'s no playback queue</string>
     <string name="ipod_nothing_playing">Nothing playing</string>
@@ -328,8 +329,8 @@
     <string name="remove_song_from_tag_confirm">Remove <b>^1</b> from this tag?</string>
     <string name="remove_song_from_playlist_confirm">Remove <b>^1</b> from this playlist?</string>
     <string name="remove_from_queue">Remove from queue</string>
-    <string name="add_songs_to_tag_title">Add tag «%1$s» to songs</string>
-    <string name="add_songs_to_playlist_title">Add songs to «%1$s»</string>
+    <string name="add_songs_to_tag_title">Add the tag “%1$s” to songs</string>
+    <string name="add_songs_to_playlist_title">Add songs to “%1$s”</string>
     <string name="add_songs_close_desc">Close without adding songs</string>
     <string name="add_songs_confirm_desc">Add the checked songs</string>
     <string name="add_songs_search_hint">Search songs</string>
@@ -372,7 +373,7 @@
     <string name="settings_greylist_delete_desc">Remove from the greylist</string>
     <string name="settings_greylist_remove_confirm">Remove <b>^1</b> from the greylist?</string>
     <string name="settings_greylist_empty">You haven\'t added any subfolder yet</string>
-    <string name="settings_add_all_lyrics_title">Add all settings</string>
+    <string name="settings_add_all_lyrics_title">Additional settings</string>
     <string name="settings_artist_grouping_title">Group artists with N songs or fewer</string>
     <string name="settings_refresh_library">Refresh library</string>
     <string name="settings_refresh_library_progress">Refreshing library… %1$d %%</string>
@@ -381,7 +382,8 @@
     <string name="settings_sleep_timer_unit">min</string>
     <string name="settings_background_title">Background image</string>
     <string name="settings_background_option_desc">Background image %1$d</string>
-    <string name="settings_background_placeholder_desc">Coming soon</string>
+    <string name="settings_background_upload">Upload from device</string>
+    <string name="settings_background_upload_error">Couldn\'t read that image</string>
     <string name="settings_theme_title">Theme</string>
     <string name="settings_theme_system">System</string>
     <string name="settings_theme_light">Light</string>
@@ -417,7 +419,7 @@
     <string name="settings_eq_additional_options">Additional options</string>
     <string name="settings_eq_bass_boost_help_desc">What bass boost is</string>
     <string name="settings_eq_bass_boost_help_title">Bass boost</string>
-    <string name="settings_eq_bass_boost_help_body">Unlike raising the equalizer\'s lowest band, this effect acts on the whole bass range, including frequencies lower than any band this device covers. On many phones it also adds harmonics so the bass can be felt even on small speakers that can\'t reproduce those low frequencies.</string>
+    <string name="settings_eq_bass_boost_help_body">Unlike raising the equalizer\'s lowest band, this effect acts on the whole bass range, including frequencies lower than any band this device covers. On many devices it also adds harmonics so the bass can be felt even on small speakers that can\'t reproduce those low frequencies.</string>
     <string name="settings_eq_virtualizer_help_desc">What surround sound is</string>
     <string name="settings_eq_virtualizer_help_title">Surround sound</string>
     <string name="settings_eq_virtualizer_help_body">Widens the stereo image by simulating speakers placed off to the sides. It\'s not a volume adjustment by frequency: it mixes the left and right channels differently so the sound seems to come from outside your head. No equalizer slider can achieve this effect, since those only raise or lower frequency bands equally on both channels.</string>
@@ -448,13 +450,17 @@
     <string name="folder_picker_back">Go up a folder</string>
     <string name="folder_picker_choose">Choose this folder</string>
     <string name="folder_picker_empty">This folder has no subfolders</string>
-    <string name="permission_needed_title">Access required</string>
-    <string name="permission_needed_message">UltiMusic needs a folder in internal storage to work, but it can\'t create it automatically.\nA file explorer will open, and what you need to do is create a folder called \"UltiMusic\", open it and tap \"Use this folder\".</string>
-    <string name="permission_grant">Open explorer</string>
-    <string name="music_folder_prompt_message">Now choose your music folder. If it\'s UltiMusic, you can tap Cancel.</string>
-    <string name="music_folder_prompt_cancel">Cancel</string>
-    <string name="restoring_database">Restoring database...</string>
-    <string name="permission_denied">Songs can\'t be shown without the UltiMusic folder</string>
+    <string name="settings_backup_title">Backup</string>
+    <string name="settings_backup_subtitle">It\'s vitally important that you do this before uninstalling or switching devices. Otherwise, your edits will be lost. To import the backup, select the same .zip file you exported</string>
+    <string name="settings_backup_export">Export backup</string>
+    <string name="settings_backup_import">Import backup</string>
+    <string name="settings_backup_import_confirm">Everything currently in UltiMusic (edits, covers, playlists and settings) will be replaced with what\'s in the backup, and the app will restart. Your music files won\'t be touched</string>
+    <string name="settings_backup_working">Preparing the backup…</string>
+    <string name="settings_backup_export_done">Backup saved</string>
+    <string name="settings_backup_export_failed">Couldn\'t save the backup</string>
+    <string name="settings_backup_import_done">Backup imported. Restarting…</string>
+    <string name="settings_backup_import_invalid">That file isn\'t an UltiMusic backup</string>
+    <string name="settings_backup_import_too_new">That backup is from a newer version of UltiMusic. Update the app and try again</string>
     <string name="relink_legacy_roots_title">Add more folders?</string>
     <string name="relink_legacy_roots_message">Some of your songs were in other folders (like Downloads or Music). Pick one to get them back; you can always add more later from Settings.</string>
     <string name="relink_legacy_roots_action">Choose folder</string>

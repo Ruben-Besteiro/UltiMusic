@@ -26,6 +26,8 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
+import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.extractor.DefaultExtractorsFactory
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.untar.ultimusic.R
@@ -261,7 +263,12 @@ class PlaybackService : MediaSessionService() {
      * [enforceHeadphoneLimit].)
      */
     private val player: ExoPlayer by lazy {
-        ExoPlayer.Builder(this)
+        // Búsqueda por bitrate constante: los formatos sin índice (AAC en ADTS crudo, `.aac`, y los
+        // MP3/AMR sin cabecera Xing/VBRI) salen como "no se puede buscar" por defecto y la barra
+        // de progreso no deja saltar. Con esto se estima la posición a partir del bitrate, que en
+        // esos archivos es exacta (CBR) o casi (VBR).
+        val extractors = DefaultExtractorsFactory().setConstantBitrateSeekingEnabled(true)
+        ExoPlayer.Builder(this, DefaultMediaSourceFactory(this, extractors))
             .setAudioAttributes(
                 AudioAttributes.Builder()
                     .setUsage(C.USAGE_MEDIA)
@@ -454,10 +461,6 @@ class PlaybackService : MediaSessionService() {
         // Al encender/apagar el color dinámico en Ajustes, el acento de lo que suena cambia ya.
         serviceScope.launch {
             DynamicColorPreferences.enabled.drop(1).collect { _currentSong.value?.let(::updateAccent) }
-        }
-        // Ídem al cambiar el tema: el acento tiene una franja de luminosidad distinta en el claro.
-        serviceScope.launch {
-            com.untar.ultimusic.data.ThemePreferences.mode.drop(1).collect { _currentSong.value?.let(::updateAccent) }
         }
         startSleepTimerWatcher()
         restorePlaybackState()

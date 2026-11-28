@@ -19,7 +19,7 @@
     <string name="search_prompt">הקלד כדי לחפש שירים, אלבומים ואמנים.</string>
     <string name="search_by_lyrics">חיפוש לפי מילים</string>
     <string name="search_prompt_lyrics">הקלד כדי לחפש שירים לפי מילות השיר.</string>
-    <string name="search_no_results">לא נמצאו תוצאות עבור "%1$s".</string>
+    <string name="search_no_results">לא נמצאו תוצאות עבור \"%1$s\".</string>
     <string name="sql_toggle">SQL</string>
     <string name="sql_toggle_description">מצב SQL</string>
     <string name="sql_hint">הזן פקודת SQL</string>
@@ -36,7 +36,7 @@
     <string name="sql_confirm_other">פקודה זו תשנה את מסד הנתונים הפנימי של UltiMusic.</string>
     <string name="sql_error_empty">הפקודה ריקה.</string>
     <string name="sql_error_multi">מותר להפעיל פקודה אחת בלבד בכל פעם.</string>
-    <string name="sql_error_unknown">"%1$s" אינה פקודת SQL תקינה. השתמש ב-SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP או PRAGMA.</string>
+    <string name="sql_error_unknown">\"%1$s\" אינה פקודת SQL תקינה. השתמש ב-SELECT, INSERT, UPDATE, DELETE, CREATE, ALTER, DROP או PRAGMA.</string>
     <string name="sql_error_failed">שגיאה: %1$s</string>
     <string name="sql_rows_header">שורות: %1$d</string>
     <string name="sql_rows_truncated">שורות: מוצגות %1$d הראשונות</string>
@@ -57,7 +57,8 @@
     <string name="delete_album_confirm">למחוק את האלבום <b>^1</b> ואת כל השירים שלו מהמכשיר?</string>
     <string name="album_cover_desc">עטיפת האלבום</string>
     <string name="song_cover_desc">עטיפת השיר</string>
-    <string name="no_songs">כדי להשתמש ב-UltiMusic דרושים קובצי אודיו. Untar Technologies ממליצה להשיג אותם מחנויות כמו iTunes Store, Amazon Music ועוד.</string>
+    <string name="no_songs">כדי להשתמש ב-UltiMusic צריך קובצי אודיו במכשיר שלך. אפשר להוסיף את התיקייה שבה הם נמצאים מתפריט ההגדרות או בלחיצה על הכפתור שלמטה. אם אין לך מוזיקה, אפשר להשיג אותה בלחיצה על הכפתור %1$s בפינה הימנית העליונה</string>
+    <string name="no_songs_add_folder">בחירת תיקייה</string>
     <string name="song_file_missing">לא ניתן למצוא את הקובץ של %1$s</string>
     <string name="cannot_open_file">לא ניתן לפתוח את הקובץ</string>
     <string name="cannot_add_current_song_to_queue">לא ניתן להוסיף את השיר הנוכחי לתור</string>
@@ -218,11 +219,11 @@
     <string name="field_year">שנה</string>
     <string name="field_genres">ז\'אנר/ים</string>
     <string name="field_lyrics">מילים</string>
-    <string name="field_lyrics_hint">כתבו אותן, או הקישו על הזכוכית המגדלת כדי לחפש ב-lrclib.net</string>
+    <string name="field_lyrics_hint">כתוב אותן, או הקש על הזכוכית המגדלת כדי לחפש ב-lrclib.net</string>
     <string name="field_language">שפה</string>
     <string name="field_comment">הערה</string>
     <string name="field_video_url">כתובת הסרטון</string>
-    <string name="field_video_url_hint">הדביקו קישור, או הקישו על הזכוכית המגדלת כדי לבחור קליפ ב-YouTube. אם תשאירו ריק, ה-iPod יאפשר לכם לבחור אותו בפעם הראשונה שתפעילו את מצב הווידאו</string>
+    <string name="field_video_url_hint">הדבק קישור, או הקש על הזכוכית המגדלת כדי לבחור קליפ ב-YouTube. אם תשאיר ריק, ה-iPod יאפשר לך לבחור אותו בפעם הראשונה שתפעיל את מצב הווידאו</string>
     <string name="field_video_url_open">פתיחה</string>
     <string name="field_track_number">מס\' רצועה</string>
     <string name="field_disc_number">מס\' דיסק</string>
@@ -234,7 +235,7 @@
     <string name="multi_value_hint">הפרד בין כמה ערכים באמצעות %1$s</string>
     <string name="expand_player">הרחבת הנגן</string>
     <string name="play_pause">ניגון או השהיה</string>
-    <string name="nothing_playing">הקישו בכל מקום או לחצו כאן ←</string>
+    <string name="nothing_playing">הקש בכל מקום או כאן ←</string>
     <string name="updating_database_percent">מעדכן מסד נתונים מקומי… %d%%</string>
     <string name="ipod_title">UltiMusicPod</string>
     <string name="ipod_close">סגירה</string>
@@ -253,8 +254,8 @@
     <string name="error_with_reason">%1$s: %2$s</string>
     <string name="error_reason_no_connection">אין חיבור לאינטרנט</string>
     <string name="error_reason_timeout">השרת התעכב יותר מדי להגיב</string>
-    <string name="error_reason_rate_limited">הגעתם למגבלה. המתינו לפחות 15 דקות</string>
-    <string name="error_reason_rate_limited_hour">הגעתם למגבלה. המתינו לפחות שעה</string>
+    <string name="error_reason_rate_limited">הגעת למגבלה. המתן לפחות 15 דקות</string>
+    <string name="error_reason_rate_limited_hour">הגעת למגבלה. המתן לפחות שעה</string>
     <string name="error_reason_http">השרת הגיב בשגיאה %1$d</string>
     <string name="error_reason_bad_response">תגובה בלתי צפויה מהשרת</string>
     <string name="error_reason_no_content">אין טקסט לעיבוד</string>
@@ -269,8 +270,8 @@
     </plurals>
     <string name="queue_hint_loose">אפשר להוסיף עוד מוזיקה לתור בלחיצה על שלוש הנקודות ואז על \"הוספה לתור\"</string>
     <string name="queue_expand_hint">תור ההשמעה יתרחב אוטומטית. כדי להוסיף שירים לתור, אפשר לגרור ימינה או ללחוץ על שלוש הנקודות ואז על \"הוספה לתור\"</string>
-    <string name="queue_expand_hint_genre">תור ההשמעה יתרחב אוטומטית עם שירים מהז\'אנר שבחרתם. כדי להוסיף שירים לתור, אפשר לגרור ימינה או ללחוץ על שלוש הנקודות ואז על \"הוספה לתור\"</string>
-    <string name="queue_hint_playlist">אפשר להוסיף עוד מוזיקה לרשימה בלחיצה על שלוש הנקודות ובחירה ב-\"הוסף לרשימה\"</string>
+    <string name="queue_expand_hint_genre">תור ההשמעה יתרחב אוטומטית עם שירים מהז\'אנר שבחרת. כדי להוסיף שירים לתור, אפשר לגרור ימינה או ללחוץ על שלוש הנקודות ואז על \"הוספה לתור\"</string>
+    <string name="queue_hint_playlist">אפשר להוסיף עוד מוזיקה לרשימה בלחיצה על שלוש הנקודות ואז על \"הוספה לרשימה\"</string>
     <string name="queue_end">הגעת לסוף</string>
     <string name="queue_empty">אין תור השמעה</string>
     <string name="ipod_nothing_playing">שום דבר לא מושמע</string>
@@ -336,8 +337,8 @@
     <string name="remove_song_from_tag_confirm">להסיר את <b>^1</b> מהתגית הזו?</string>
     <string name="remove_song_from_playlist_confirm">להסיר את <b>^1</b> מהרשימה הזו?</string>
     <string name="remove_from_queue">הסר מהתור</string>
-    <string name="add_songs_to_tag_title">הוספת התגית "%1$s" לשירים</string>
-    <string name="add_songs_to_playlist_title">הוספת שירים אל "%1$s"</string>
+    <string name="add_songs_to_tag_title">הוספת התגית \"%1$s\" לשירים</string>
+    <string name="add_songs_to_playlist_title">הוספת שירים אל \"%1$s\"</string>
     <string name="add_songs_close_desc">סגור בלי להוסיף שירים</string>
     <string name="add_songs_confirm_desc">הוסף את השירים שנבחרו</string>
     <string name="add_songs_search_hint">חיפוש שירים</string>
@@ -389,7 +390,8 @@
     <string name="settings_sleep_timer_unit">דק\'</string>
     <string name="settings_background_title">תמונת רקע</string>
     <string name="settings_background_option_desc">תמונת רקע %1$d</string>
-    <string name="settings_background_placeholder_desc">בקרוב</string>
+    <string name="settings_background_upload">העלאה מהמכשיר</string>
+    <string name="settings_background_upload_error">לא ניתן היה לקרוא את התמונה הזו</string>
     <string name="settings_theme_title">עיצוב</string>
     <string name="settings_theme_system">מערכת</string>
     <string name="settings_theme_light">בהיר</string>
@@ -413,9 +415,9 @@
     <string name="settings_eq_unavailable">אין אקולייזר במכשיר הזה</string>
     <string name="settings_eq_bass_unsupported">אינו נתמך במכשיר הזה</string>
     <string name="settings_eq_virtualizer_unsupported">אינו נתמך במכשיר הזה</string>
-    <string name="settings_eq_presets">הגדרות מוכנות</string>
+    <string name="settings_eq_presets">פריסטים</string>
     <string name="settings_eq_pre_gain">הגבר ראשי</string>
-    <string name="settings_eq_save_preset">שמור כהגדרה מוכנה</string>
+    <string name="settings_eq_save_preset">שמור כפריסט</string>
     <string name="settings_eq_save_preset_name">שם הפריסט</string>
     <string name="settings_eq_delete_preset">מחק</string>
     <string name="settings_eq_preset_deleted">הפריסט נמחק</string>
@@ -423,12 +425,12 @@
     <string name="settings_eq_preset_name_invalid">השם הזה אינו זמין</string>
     <string name="settings_eq_delete_preset_confirm">למחוק את הפריסט <b>^1</b>?</string>
     <string name="settings_eq_additional_options">אפשרויות נוספות</string>
-    <string name="settings_eq_bass_boost_help_desc">מהו הגברת בס</string>
+    <string name="settings_eq_bass_boost_help_desc">מהי הגברת בס</string>
     <string name="settings_eq_bass_boost_help_title">הגברת בס</string>
-    <string name="settings_eq_bass_boost_help_body">בניגוד להעלאת הלהקה הנמוכה ביותר באקולייזר, אפקט זה פועל על כל טווח הבס, כולל תדרים נמוכים יותר מכפי שכל להקה במכשיר הזה מכסה. בטלפונים רבים הוא גם מוסיף הרמוניות, כך שהבס יישמע גם ברמקולים קטנים שאינם יכולים להשמיע תדרים נמוכים כל כך.</string>
+    <string name="settings_eq_bass_boost_help_body">בניגוד להעלאת רצועת התדרים הנמוכה ביותר באקולייזר, אפקט זה פועל על כל טווח הבס, כולל תדרים נמוכים יותר מכפי שכל רצועה במכשיר הזה מכסה. במכשירים רבים הוא גם מוסיף הרמוניות, כך שהבס יישמע גם ברמקולים קטנים שאינם יכולים להשמיע תדרים נמוכים כל כך.</string>
     <string name="settings_eq_virtualizer_help_desc">מהו סאונד היקפי</string>
     <string name="settings_eq_virtualizer_help_title">סאונד היקפי</string>
-    <string name="settings_eq_virtualizer_help_body">מרחיב את הסטריאו על ידי הדמיה של רמקולים נפרדים בצדדים. זו אינה התאמת עוצמה לפי תדר: הוא מערבב את הערוצים השמאלי והימני בדרך אחרת, כך שהצליל נשמע כאילו הוא מגיע מחוץ לראש. אף סליידר באקולייזר לא יכול להשיג אפקט זה, כי הם רק מעלים או מורידים להקות תדרים באותה מידה בשני הערוצים.</string>
+    <string name="settings_eq_virtualizer_help_body">מרחיב את הסטריאו על ידי הדמיה של רמקולים נפרדים בצדדים. זו אינה התאמת עוצמה לפי תדר: הוא מערבב את הערוצים השמאלי והימני בדרך אחרת, כך שהצליל נשמע כאילו הוא מגיע מחוץ לראש. אף סליידר באקולייזר לא יכול להשיג אפקט זה, כי הם רק מעלים או מורידים רצועות תדרים באותה מידה בשני הערוצים.</string>
     <string name="settings_eq_reverb_title">הדהוד</string>
     <string name="settings_eq_reverb_help_desc">מהו הדהוד</string>
     <string name="settings_eq_reverb_help_title">הדהוד</string>
@@ -444,8 +446,8 @@
     <string name="settings_service_status_not_configured">לא מוגדר</string>
     <string name="settings_genius_title">Genius</string>
     <string name="settings_genius_subtitle">משמש להשלמה אוטומטית של שירים: מפיקים, שיר מקורי (אם זה רמיקס) וקליפ</string>
-    <string name="settings_genius_configure">הגדרת טוקן</string>
-    <string name="settings_genius_reconfigure">החלפת טוקן</string>
+    <string name="settings_genius_configure">הגדרת אסימון</string>
+    <string name="settings_genius_reconfigure">החלפת אסימון</string>
     <string name="settings_youtube_title">YouTube Data API</string>
     <string name="settings_youtube_subtitle">משמש למיון שירים ואמנים לפי פופולריות</string>
     <string name="settings_youtube_configure">הגדרת מפתח</string>
@@ -456,13 +458,17 @@
     <string name="folder_picker_back">תיקייה אחת למעלה</string>
     <string name="folder_picker_choose">בחירת התיקייה הזו</string>
     <string name="folder_picker_empty">בתיקייה הזו אין תיקיות משנה</string>
-    <string name="permission_needed_title">נדרשת גישה</string>
-    <string name="permission_needed_message">UltiMusic צריכה תיקייה באחסון הפנימי כדי לפעול, אך אינה יכולה ליצור אותה אוטומטית.\nייפתח מנהל קבצים, ועליך ליצור תיקייה בשם \"UltiMusic\", לפתוח אותה וללחוץ על \"שימוש בתיקייה זו\".</string>
-    <string name="permission_grant">פתיחת מנהל קבצים</string>
-    <string name="music_folder_prompt_message">עכשיו בחר את תיקיית המוזיקה שלך. אם היא UltiMusic, אפשר ללחוץ על ביטול.</string>
-    <string name="music_folder_prompt_cancel">ביטול</string>
-    <string name="restoring_database">משחזר את מסד הנתונים...</string>
-    <string name="permission_denied">בלי התיקייה UltiMusic אי אפשר להציג את השירים</string>
+    <string name="settings_backup_title">גיבוי</string>
+    <string name="settings_backup_subtitle">חשוב מאוד לעשות זאת לפני הסרת ההתקנה או החלפת המכשיר. אחרת, העריכות שלך יאבדו. כדי לייבא את הגיבוי, יש לבחור את אותו קובץ ‎.zip שייצאת</string>
+    <string name="settings_backup_export">ייצוא גיבוי</string>
+    <string name="settings_backup_import">ייבוא גיבוי</string>
+    <string name="settings_backup_import_confirm">כל מה שיש כעת ב-UltiMusic (עריכות, תמונות עטיפה, רשימות והגדרות) יוחלף בתוכן הגיבוי, והאפליקציה תופעל מחדש. קובצי המוזיקה שלך לא יושפעו</string>
+    <string name="settings_backup_working">מכין את הגיבוי…</string>
+    <string name="settings_backup_export_done">הגיבוי נשמר</string>
+    <string name="settings_backup_export_failed">לא ניתן היה לשמור את הגיבוי</string>
+    <string name="settings_backup_import_done">הגיבוי יובא. מופעל מחדש…</string>
+    <string name="settings_backup_import_invalid">הקובץ הזה אינו גיבוי של UltiMusic</string>
+    <string name="settings_backup_import_too_new">הגיבוי הזה הוא מגרסה חדשה יותר של UltiMusic. עדכן את האפליקציה ונסה שוב</string>
     <string name="relink_legacy_roots_title">להוסיף עוד תיקיות?</string>
     <string name="relink_legacy_roots_message">חלק מהשירים באוסף שלך היו בתיקיות אחרות (כמו הורדות או מוזיקה). בחר אחת כדי לשחזר אותם; תמיד אפשר להוסיף עוד מאוחר יותר מההגדרות.</string>
     <string name="relink_legacy_roots_action">בחירת תיקייה</string>
@@ -501,7 +507,7 @@
     <string name="settings_recount_open">צפייה ב-UltiMusic Recount</string>
     <string name="notification_channel_recount">UltiMusic Recount</string>
     <string name="recount_reminder_title">למה שלא תציץ ב-UltiMusic Recount שלך ל-%d?</string>
-    <string name="recount_reminder_text">הציצו במה שהאזנתם לו הכי הרבה השנה</string>
+    <string name="recount_reminder_text">הצץ במה שהאזנת לו הכי הרבה השנה</string>
     <string name="recount_reminder_see">צפייה</string>
     <string name="recount_reminder_later">לא עכשיו</string>
 </resources>

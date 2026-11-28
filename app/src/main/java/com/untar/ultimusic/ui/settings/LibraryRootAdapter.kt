@@ -41,8 +41,6 @@ class LibraryRootAdapter(
         val delete: ImageButton = row.findViewById(R.id.btnLibraryRootDelete)
         path.text = runCatching { Uri.parse(root.path) }.getOrNull()
             ?.let { SafStorage.docPathOfTree(it) } ?: root.path
-        // La carpeta UltiMusic no se puede quitar: se enseña sin papelera.
-        delete.isVisible = !root.isMain
         delete.setOnClickListener { onDelete(root) }
     }
 }

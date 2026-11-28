@@ -14,23 +14,19 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Registro de cierres inesperados: al morir el proceso por una excepción no capturada, escribe un
- * archivo de texto plano en `~/UltiMusic/crash-logs/` con la traza, datos del dispositivo y de la
- * app, y las últimas [LOGCAT_LINES] líneas del logcat. El título es la fecha del cierre.
+ * archivo de texto plano en `files/crash-logs/` (almacenamiento interno, ver [AppStorage]) con la
+ * traza, datos del dispositivo y de la app, y las últimas [LOGCAT_LINES] líneas del logcat. El
+ * título es la fecha del cierre. No va en la copia automática de Android, pero sí en el `.zip` de
+ * Ajustes > Copia de seguridad: es la forma de sacarlos del móvil.
  *
  * El logcat se lee con `logcat -d`: sin el permiso `READ_LOGS` (que solo se concede por adb) Android
  * entrega únicamente las líneas del propio proceso, que es justo lo que interesa.
- *
- * Dónde se guarda, por orden de preferencia:
- *  1. La carpeta `UltiMusic` concedida por SAF (lo normal desde la migración a SAF).
- *  2. `~/UltiMusic/crash-logs` con la API de archivos (solo funciona si el sistema lo permite).
- *  3. `Android/data/<paquete>/files/crash-logs`, que siempre es escribible.
  *
  * Todo va envuelto en `runCatching`: un fallo escribiendo el informe nunca debe tapar el cierre
  * original, y después siempre se delega en el handler anterior del sistema.
  */
 object CrashLogger {
 
-    private const val DIR_NAME = "crash-logs"
     private const val LOGCAT_LINES = 500
 
     @Volatile
@@ -51,9 +47,7 @@ object CrashLogger {
         val now = Date()
         val name = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US).format(now)
         val body = buildReport(context, now, thread, throwable)
-        if (saveViaSaf(context, name, body)) return
-        if (saveViaFile(File(File(android.os.Environment.getExternalStorageDirectory(), "UltiMusic"), DIR_NAME), name, body)) return
-        context.getExternalFilesDir(null)?.let { saveViaFile(File(it, DIR_NAME), name, body) }
+        saveViaFile(File(context.filesDir, AppStorage.CRASH_LOGS), name, body)
     }
 
     private fun buildReport(context: Context, now: Date, thread: Thread, throwable: Throwable): String {
@@ -122,17 +116,6 @@ object CrashLogger {
         if (t.isAlive) process.destroy()
         out.toString()
     }.getOrElse { "(no se pudo leer el logcat: $it)" }
-
-    private fun saveViaSaf(context: Context, name: String, body: String): Boolean = runCatching {
-        val tree = SafStorage.ultiMusicTreeUri(context) ?: return false
-        SafStorage.ensureUltiMusicRegistered(context)
-        val root = SafStorage.ultiMusicDocPath(context) ?: return false
-        val folder = SafStorage.getOrCreateSubfolder(context, tree, root, DIR_NAME) ?: return false
-        val file = SafStorage.createFile(context, tree, folder, "$name.txt", "text/plain") ?: return false
-        val out = SafStorage.openOutputStream(context, file) ?: return false
-        out.use { it.write(body.toByteArray(Charsets.UTF_8)) }
-        true
-    }.getOrDefault(false)
 
     private fun saveViaFile(dir: File, name: String, body: String): Boolean = runCatching {
         if (!dir.isDirectory && !dir.mkdirs()) return false

@@ -19,6 +19,6 @@ El menú de tres puntos de la selección múltiple de canciones debe ser idénti
 
 Para hacer ediciones utiliza Edit a no ser que tenga alguna desventaja importante (explícala), para que así salgan los diffs en la terminal.
 
-Si hay que cambiar los strings, los cambios deben aplicarse a todos los idiomas. Tras usar la API de traducciones de Claude, dime cuánto dinero se gastó. Usa tail para verlo.
+Si hay que cambiar los strings, los cambios deben aplicarse a todos los idiomas: usa la skill translate-strings, que traduce en la sesión sin llamar a la API. Solo si llegamos a usar la API de traducciones de Claude, dime cuánto dinero se gastó. Usa tail para verlo.
 
 Si estamos probando la API de Google Translate, no llames al endpoint porque me pueden bloquear por tráfico automatizado. En vez de eso, dime cómo probarlo yo.

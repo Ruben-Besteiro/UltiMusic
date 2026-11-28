@@ -18,7 +18,7 @@ import java.util.concurrent.TimeUnit
  * miniatura de YouTube), aquí no hace falta pasar por Coil ni recortar nada a cuadrado: las
  * carátulas de iTunes ya vienen cuadradas, así que basta con copiar los bytes tal cual.
  *
- * Se guarda en la caché (no directamente en `~/UltiMusic/images`) porque todavía no se sabe si el
+ * Se guarda en la caché (no directamente en `files/images`) porque todavía no se sabe si el
  * usuario va a guardar el formulario: la importación "de verdad", con el nombre final basado en el
  * título, la sigue haciendo
  * [com.untar.ultimusic.data.LibraryRepository.importCoverImage] al guardar — exactamente igual que
@@ -77,7 +77,7 @@ object NetworkImage {
     /**
      * Poda por tiempo de los temporales de [download] que nadie reclamó: si el usuario previsualiza
      * una portada y cierra el editor sin guardar (o guarda, que también deja huérfano el temporal
-     * una vez importado a su ubicación final en [CoverArt.imagesDocPath]), el archivo se queda en
+     * una vez importado a su ubicación final en [CoverArt.imagesDir]), el archivo se queda en
      * [Context.cacheDir] para siempre, porque nada más lo borra. Mismo patrón que
      * [com.untar.ultimusic.data.remote.ApiCache.pruneExpired]: la llama
      * [com.untar.ultimusic.UltiMusicApp] una vez por arranque, en segundo plano.

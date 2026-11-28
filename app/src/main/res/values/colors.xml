@@ -32,6 +32,10 @@
     <!-- Velo semitransparente sobre la carátula cuando el iPod muestra la cola encima de ella
          (ver IPodDialogFragment): la carátula se ve de fondo, atenuada, en vez de desaparecer. -->
     <color name="um_queue_scrim">#D9000000</color>
+    <!-- Velo sobre la imagen de fondo de la pantalla principal (activity_main.xml y la copia
+         borrosa de las tarjetas, ver BlurredBackground.SCRIM): la oscurece para que se lea el texto
+         claro. En el tema claro es el opuesto, blanco, y la aclara (ver values-notnight). -->
+    <color name="um_background_scrim">#4D000000</color>
     <!-- Fondo de los botones flotantes del contenedor de la letra del iPod (traducir, romanizar y
          editar; también el de "Ver más/menos", hoy desactivado; ver ipod_lyrics_overlay_button.xml): semitransparente para no tapar del
          todo la letra que quede debajo, fijo en vez de con el color dinámico porque no es amarillo. -->

@@ -77,5 +77,9 @@ class UltiMusicApp : Application() {
         // Etiqueta de idioma de canciones que se quedaron con letra pero sin ella (ver
         // LibraryRepository.backfillMissingLanguageTags).
         appScope.launch { LibraryRepository.get(this@UltiMusicApp).backfillMissingLanguageTags() }
+        // Datos en almacenamiento interno (ver AppStorage): copia los de la antigua carpeta
+        // UltiMusic de quien actualiza, quita carpetas sin permiso y repara imágenes que falten
+        // tras restaurar una copia (ver LibraryRepository.prepareStorage).
+        appScope.launch { LibraryRepository.get(this@UltiMusicApp).prepareStorage() }
     }
 }

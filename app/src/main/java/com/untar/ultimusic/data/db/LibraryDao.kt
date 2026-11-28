@@ -21,6 +21,7 @@ import com.untar.ultimusic.data.db.entities.SongTagCrossRef
 import com.untar.ultimusic.data.db.entities.TagEntity
 import com.untar.ultimusic.data.db.relations.OwnerNameRow
 import com.untar.ultimusic.data.db.relations.TitledRow
+import com.untar.ultimusic.data.db.relations.VideoThumbnailRow
 import com.untar.ultimusic.data.db.relations.AlbumGroupRow
 import com.untar.ultimusic.data.db.relations.AlbumSummaryRow
 import com.untar.ultimusic.data.db.relations.ArtistChannelCandidateRow
@@ -700,6 +701,44 @@ abstract class LibraryDao {
 
     @Query("UPDATE albums SET imageName = :imageName WHERE id = :id AND imageName IS NULL")
     abstract suspend fun setAlbumImageIfEmpty(id: Long, imageName: String)
+
+    // --- Imágenes cuyo archivo ya no existe (ver LibraryRepository.repairMissingImages) ---
+
+    /** Quita la imagen propia que apunte a uno de [names] en canciones, álbumes, artistas y
+     *  productores: así la cadena de carátulas pasa sola a la siguiente opción. */
+    @Transaction
+    open suspend fun clearImageNames(names: List<String>) {
+        if (names.isEmpty()) return
+        names.chunked(500).forEach { chunk ->
+            clearSongImageNames(chunk)
+            clearAlbumImageNames(chunk)
+            clearArtistImageNames(chunk)
+            clearProducerImageNames(chunk)
+        }
+    }
+
+    @Query("UPDATE songs SET imageName = NULL WHERE imageName IN (:names)")
+    abstract suspend fun clearSongImageNames(names: List<String>)
+
+    @Query("UPDATE albums SET imageName = NULL WHERE imageName IN (:names)")
+    abstract suspend fun clearAlbumImageNames(names: List<String>)
+
+    @Query("UPDATE artists SET imageName = NULL WHERE imageName IN (:names)")
+    abstract suspend fun clearArtistImageNames(names: List<String>)
+
+    @Query("UPDATE producers SET imageName = NULL WHERE imageName IN (:names)")
+    abstract suspend fun clearProducerImageNames(names: List<String>)
+
+    /** Canciones con miniatura de YouTube guardada, para comprobar si su archivo sigue ahí. */
+    @Query("SELECT id, title, videoUrl, videoThumbnailName FROM songs WHERE videoThumbnailName IS NOT NULL")
+    abstract suspend fun songsWithVideoThumbnail(): List<VideoThumbnailRow>
+
+    @Query("UPDATE songs SET videoThumbnailName = :name WHERE id = :songId")
+    abstract suspend fun setVideoThumbnailName(songId: Long, name: String?)
+
+    /** Igual que [allUsedImageNames] pero incluyendo productores (ver [clearImageNames]). */
+    @Query("SELECT imageName FROM songs WHERE imageName IS NOT NULL UNION SELECT imageName FROM albums WHERE imageName IS NOT NULL UNION SELECT imageName FROM artists WHERE imageName IS NOT NULL UNION SELECT imageName FROM producers WHERE imageName IS NOT NULL")
+    abstract suspend fun allOwnImageNames(): List<String>
 
     // --- Canciones perdidas (ver [com.untar.ultimusic.data.db.entities.SongEntity.missingSince]) ---
 

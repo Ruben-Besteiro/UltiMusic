@@ -7,6 +7,9 @@
 -->
 <resources>
     <color name="um_ripple_white">#1F000000</color>
+    <!-- El velo opuesto al del tema oscuro: blanco al 30 % en vez de negro, aclara la imagen de
+         fondo para que se lea el texto oscuro. -->
+    <color name="um_background_scrim">#4DFFFFFF</color>
 
     <!-- Neutros: fondo 0x20 -> 0xDF, superficie 0x14 -> 0xEB, etc. -->
     <color name="um_background">#FFDFDFDF</color>
@@ -17,9 +20,6 @@
     <color name="um_on_surface_muted">#FF4F4F4F</color>
     <color name="um_divider">#FFBFBFBF</color>
     <color name="um_error">#FFB3261E</color>
-
-    <!-- Dorado base más oscuro para leerse sobre fondo claro (mismo matiz, L 0.33). -->
-    <color name="um_gold">#FFA67E03</color>
 
     <!-- Tonos del acento (L 0.115 -> 0.885, 0.0575 -> 0.9425, 0.82 -> 0.18) -->
     <color name="um_gold_dark">#FFFEF0C5</color>

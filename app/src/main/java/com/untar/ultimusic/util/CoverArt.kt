@@ -36,7 +36,7 @@ import kotlin.math.sqrt
  *   YouTube cacheada (Song.videoThumbnailName) → recuadro negro.
  *
  * El primer eslabón lo rellena el editor de metadatos: cuando el usuario elige una portada, el
- * archivo se copia a [CoverArt.imagesDocPath] con un nombre derivado del título/nombre de la
+ * archivo se copia a [CoverArt.imagesDir] con un nombre derivado del título/nombre de la
  * canción/álbum/artista al que pertenece, y ese nombre queda en `imageName`. El tercer
  * eslabón lo rellena el mismo editor al guardar un enlace de YouTube: se descarga y recorta la
  * miniatura del vídeo (ver `LibraryRepository.downloadVideoThumbnail`) y su nombre queda en
@@ -80,7 +80,6 @@ object CoverArt {
 
     /** Ver [revision]. Lo llama cada editor justo después de guardar. */
     fun touch() {
-        imagesDirCache = null
         _revision.value++
     }
 
@@ -95,66 +94,30 @@ object CoverArt {
     /** True si [name] es el nombre de un archivo de imagen de verdad (ni vacío, ni [NO_COVER]). */
     fun isRealImage(name: String?): Boolean = !name.isNullOrEmpty() && name != NO_COVER
 
-    /** Ver [imagesDocPath]: árbol `UltiMusic` concedido -> docPath de su carpeta `images` (o null si
-     *  todavía no existe). */
-    @Volatile
-    private var imagesDirCache: Pair<String, String?>? = null
-
     /**
-     * docPath de `UltiMusic/images` (ver [com.untar.ultimusic.util.SafStorage]), donde viven TODAS
-     * las imágenes de la app: las portadas importadas por el usuario y las miniaturas de YouTube
-     * cacheadas. Es una subcarpeta VISIBLE de la carpeta `UltiMusic` que el usuario concedió (mismo
-     * patrón que `Playlists` o `databases`, ver
-     * [PlaylistRepository][com.untar.ultimusic.data.playlist.PlaylistRepository]), no privada de la
-     * app, así que sobrevive a un desinstalar/reinstalar siempre que la carpeta siga en el
-     * dispositivo Y el usuario la vuelva a conceder.
-     *
-     * @param createIfMissing la crea si hace falta (para escribir); si es `false` (para leer) y
-     * todavía no existe, devuelve null en vez de crearla solo para comprobar que está vacía.
-     * Null también si `UltiMusic` no se ha concedido todavía.
+     * `files/images` ([AppStorage]), donde viven TODAS las imágenes de la app: las portadas
+     * importadas por el usuario y las miniaturas de YouTube cacheadas. Antes era `~/UltiMusic/images`
+     * vía SAF; ahora es almacenamiento interno, sin permisos y sin consultas IPC.
      */
-    fun imagesDocPath(context: Context, createIfMissing: Boolean = false): String? {
-        SafStorage.ensureUltiMusicRegistered(context)
-        val treeUri = SafStorage.ultiMusicTreeUri(context) ?: return null
-        val treeKey = treeUri.toString()
-        // Se llama desde CoverArt.cover en CADA bind de cada fila con imagen propia, en el hilo
-        // principal: sin esta caché era un listado IPC de la carpeta UltiMusic por fila. Se
-        // recuerda por árbol concedido (si el usuario cambia de carpeta, se vuelve a buscar) y se
-        // olvida en [touch].
-        imagesDirCache?.let { (key, dir) ->
-            if (key == treeKey && (dir != null || !createIfMissing)) return dir
-        }
-        val root = SafStorage.ultiMusicDocPath(context) ?: return null
-        val dir = if (createIfMissing) {
-            SafStorage.getOrCreateSubfolder(context, treeUri, root, "images")
-        } else {
-            SafStorage.findSubfolder(context, treeUri, root, "images")
-        }
-        // Solo se recuerda un resultado POSITIVO. Un null puede significar "no existe" pero también
-        // "existe y aún no se ha podido leer" (primer arranque tras reinstalar, proveedor sin
-        // indexar...): cachearlo dejaba todas las carátulas propias sin resolver hasta reiniciar la
-        // app. Costaría un listado por fila si la carpeta no existiera, pero solo se llega aquí con
-        // una fila que SÍ tiene nombre de imagen (ver [imageUri]), lo que implica que la carpeta existe.
-        if (dir != null) imagesDirCache = treeKey to dir
-        else if (!createIfMissing) SafStorage.watchUltiMusicRoot(context, onRootRecovered)
-        return dir
+    fun imagesDir(context: Context): java.io.File = AppStorage.imagesDir(context)
+
+    /** El archivo de una imagen ya guardada por su nombre, o null si es [NO_COVER]/vacío. */
+    fun imageFile(context: Context, name: String?): java.io.File? {
+        if (!isRealImage(name)) return null
+        return java.io.File(imagesDir(context), name!!)
     }
 
-    /** Al recuperarse la lectura de `UltiMusic` (ver [SafStorage.watchUltiMusicRoot]): limpia la
-     *  caché y repinta todas las listas, así las carátulas propias vuelven solas. Es una única
-     *  instancia a propósito: el registro de oyentes la deduplica. */
-    private val onRootRecovered: () -> Unit = { touch() }
-
-    /** Lo llama `MainActivity.onResume`: si `UltiMusic` no se puede leer, reactiva la vigilancia
-     *  (ver [SafStorage.watchUltiMusicRoot]); si se puede, no hace nada. */
-    fun watchRoot(context: Context) = SafStorage.watchUltiMusicRoot(context, onRootRecovered)
-
-    /** URI abrible de una imagen ya guardada en `UltiMusic/images` por su nombre, o null si no existe
-     *  (imagen sin poner, o `UltiMusic` sin conceder todavía). */
+    /**
+     * URI abrible de una imagen ya guardada por su nombre, o null si no está puesta o SU ARCHIVO NO
+     * EXISTE. Esto último es lo que hace funcionar la cadena de carátulas tras restaurar la copia
+     * automática de Android, que no incluye las imágenes (ver `res/xml/data_extraction_rules.xml`):
+     * la fila sigue con su `imageName`, pero aquí sale null y [cover] pasa solo al arte embebido, a
+     * la miniatura de YouTube o al placeholder. Un `stat` local por bind es barato (nada que ver con
+     * la consulta IPC de cuando era SAF).
+     */
     fun imageUri(context: Context, name: String?): Uri? {
-        if (name.isNullOrEmpty() || name == NO_COVER) return null
-        val dir = imagesDocPath(context) ?: return null
-        return SafStorage.resolveUri("$dir/$name")
+        val file = imageFile(context, name) ?: return null
+        return if (file.isFile) Uri.fromFile(file) else null
     }
 
     /** Quita del nombre los caracteres que ningún sistema de archivos admite, para poder nombrar
@@ -174,7 +137,7 @@ object CoverArt {
     }
 
     /**
-     * Busca un nombre de archivo libre en `UltiMusic/images` para `baseName.ext`.
+     * Busca un nombre de archivo libre en `files/images` para `baseName.ext`.
      *
      * Si ese nombre ya lo tiene ESTA MISMA imagen ([currentName], la que ya tenía la
      * canción/álbum/persona antes de guardar), se reutiliza tal cual: así renombrar no dispara una
@@ -185,7 +148,8 @@ object CoverArt {
      * escrituras concurrentes) es suficiente y no hace falta ir a consultar quién es cada dueño.
      */
     fun reserveFileName(context: Context, baseName: String, ext: String, currentName: String?): String {
-        fun taken(name: String) = imagesDocPath(context)?.let { dir -> SafStorage.exists(context, "$dir/$name") } == true
+        val dir = imagesDir(context)
+        fun taken(name: String) = java.io.File(dir, name).exists()
         var candidate = "$baseName.$ext"
         if (candidate == currentName || !taken(candidate)) return candidate
         var suffix = 2
@@ -316,8 +280,8 @@ private fun extractEmbeddedArt(context: Context, uri: Uri): ByteArray? = runCatc
     }
 }.getOrNull()
 
-/** Bytes crudos de un [uri] abrible (una imagen ya guardada en `UltiMusic/images`, o una miniatura
- *  de YouTube cacheada). Usado en vez de `File.readBytes()` porque ya no hay un `File` real. */
+/** Bytes crudos de un [uri] abrible (una imagen ya guardada en `files/images`, o una miniatura
+ *  de YouTube cacheada). `openInputStream` acepta tanto `file://` como `content://`. */
 private fun readBytesFromUri(context: Context, uri: Uri): ByteArray? = runCatching {
     context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
 }.getOrNull()

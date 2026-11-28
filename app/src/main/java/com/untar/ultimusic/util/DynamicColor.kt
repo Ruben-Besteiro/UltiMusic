@@ -49,23 +49,14 @@ object DynamicColor {
      * tienen un `Context` a mano (los campos `accent` de los adaptadores, por ejemplo). Si se cambia
      * el amarillo de la app hay que cambiarlo en los dos sitios.
      */
-    val DEFAULT: Int
-        get() = if (ThemePreferences.isLight()) DEFAULT_LIGHT else DEFAULT_DARK
-
-    /** El dorado del tema oscuro. Igual que `@color/um_gold` de values/colors.xml. */
-    const val DEFAULT_DARK = 0xFFFBC10E.toInt()
-
-    /** El dorado del tema claro (mismo matiz, más oscuro para leerse sobre fondo claro). Igual que
-     *  `@color/um_gold` de values-notnight/colors.xml. */
-    const val DEFAULT_LIGHT = 0xFFA67E03.toInt()
+    const val DEFAULT = 0xFFFBC10E.toInt()
 
     /**
      * Para una carátula sin color real (blanco y negro o casi): más claro que el fondo negro de la
      * app, pero sin inventar un matiz que no está en la imagen (ver el porqué en [pickSwatch], que
      * es quien de verdad decide cuándo hace falta este recurso en vez de [DEFAULT]).
      */
-    private val GRAYSCALE_FALLBACK: Int
-        get() = if (ThemePreferences.isLight()) 0xFF606060.toInt() else 0xFFA0A0A0.toInt()
+    private const val GRAYSCALE_FALLBACK = 0xFFA0A0A0.toInt()
 
     /**
      * Carga la imagen indicada (cualquier dato que entienda Coil: un [Uri], un
@@ -78,7 +69,7 @@ object DynamicColor {
     suspend fun fromCover(context: Context, data: Any): Int = withContext(Dispatchers.IO) {
         // Color dinámico apagado en Ajustes: amarillo fijo y ni se decodifica la carátula.
         if (!DynamicColorPreferences.enabled.value) return@withContext DEFAULT
-        val key = cacheKey(context, data)?.let { if (ThemePreferences.isLight()) "$it:L" else it }
+        val key = cacheKey(context, data)
         key?.let { cache[it] }?.let { return@withContext it }
 
         val bitmap = loadBitmap(context, data) ?: return@withContext DEFAULT
@@ -202,7 +193,7 @@ object DynamicColor {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(color, hsl)
         hsl[1] = hsl[1].coerceAtLeast(MIN_SATURATION)
-        hsl[2] = hsl[2].coerceIn(minLightness(), maxLightness())
+        hsl[2] = hsl[2].coerceIn(MIN_LIGHTNESS, MAX_LIGHTNESS)
         return ColorUtils.HSLToColor(hsl)
     }
 
@@ -285,7 +276,7 @@ object DynamicColor {
         val hsl = FloatArray(3)
         ColorUtils.colorToHSL(accent, hsl)
         val saturation = hsl[1].coerceAtLeast(MIN_SATURATION)
-        val lightness = hsl[2].coerceIn(minLightness(), maxLightness())
+        val lightness = hsl[2].coerceIn(MIN_LIGHTNESS, MAX_LIGHTNESS)
         val step = 360f / count
         return List(count) { index ->
             ColorUtils.HSLToColor(
@@ -332,12 +323,6 @@ object DynamicColor {
         )
     }
 
-    /** Franja de luminosidad del acento: en el tema claro, más oscura para leerse sobre fondo claro. */
-    private fun minLightness() = if (ThemePreferences.isLight()) MIN_LIGHTNESS_LIGHT else MIN_LIGHTNESS
-    private fun maxLightness() = if (ThemePreferences.isLight()) MAX_LIGHTNESS_LIGHT else MAX_LIGHTNESS
-
-    private const val MIN_LIGHTNESS_LIGHT = 0.25f
-    private const val MAX_LIGHTNESS_LIGHT = 0.40f
     private const val SAMPLE_SIZE = 128
     private const val MIN_POPULATION_FRACTION = 0.08f
     private const val MIN_SOURCE_SATURATION = 0.12f

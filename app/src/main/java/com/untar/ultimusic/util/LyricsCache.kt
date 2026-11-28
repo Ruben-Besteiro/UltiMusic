@@ -5,18 +5,19 @@ import android.util.Log
 import com.untar.ultimusic.model.Song
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.security.MessageDigest
 
 /**
  * Caché en disco de las letras ya traducidas/romanizadas: cada resultado se guarda como un `.lrc`
- * en una carpeta VISIBLE dentro de `UltiMusic` (mismo patrón que `images`, ver
- * [CoverArt.imagesDocPath]), así que no hay que volver a pedírselo a Google (y gastar peticiones, ver
- * `RateLimitGuard`) cada vez que se pulsa el botón, y sobrevive a reinstalar la app.
+ * en `files/conversions` o `files/translations` (almacenamiento interno, ver [AppStorage]), así que
+ * no hay que volver a pedírselo a Google (y gastar peticiones, ver `RateLimitGuard`) cada vez que se
+ * pulsa el botón. Sobrevive a reinstalar con la copia automática de Android y con el `.zip`.
  *
- *  - `UltiMusic/conversions/Ado - Vivarium latin.lrc` (sufijo: `latin`, `katakana` o `bopomofo`,
+ *  - `conversions/Ado - Vivarium latin.lrc` (sufijo: `latin`, `katakana` o `bopomofo`,
  *    el sistema de escritura de destino, ver [LyricsRomanizer.Target]; la carpeta se llama
  *    "conversions" y no "romanizations" porque no todos los destinos son el alfabeto latino);
- *  - `UltiMusic/translations/Ado - Vivarium es.lrc` (sufijo: código del idioma de destino).
+ *  - `translations/Ado - Vivarium es.lrc` (sufijo: código del idioma de destino).
  *
  * El nombre base es el de las carátulas ([CoverArt.imageBaseName]). Es un LRC de verdad: si la letra
  * original está sincronizada, cada línea lleva su `[mm:ss.xx]` y cualquier reproductor puede abrirlo;
@@ -87,12 +88,11 @@ object LyricsCache {
 
     /** Archivos de la caché de la canción de nombre base [base] (en ambas carpetas), con su parte
      *  final (`"latin.lrc"`, `"es.lrc"`...). */
-    private fun filesOf(context: Context, base: String): List<Pair<SafStorage.SafEntry, String>> {
-        val out = mutableListOf<Pair<SafStorage.SafEntry, String>>()
+    private fun filesOf(context: Context, base: String): List<Pair<File, String>> {
+        val out = mutableListOf<Pair<File, String>>()
         for (kind in Kind.values()) {
-            val (treeUri, dir) = dirPath(context, kind, create = false) ?: continue
-            for (entry in SafStorage.listChildren(context, treeUri, dir)) {
-                if (entry.isDirectory || !entry.name.startsWith("$base ", ignoreCase = true)) continue
+            for (entry in dir(context, kind).listFiles().orEmpty()) {
+                if (!entry.isFile || !entry.name.startsWith("$base ", ignoreCase = true)) continue
                 val rest = entry.name.substring(base.length + 1)
                 if (SUFFIX_PART.matches(rest)) out.add(entry to rest)
             }
@@ -112,14 +112,12 @@ object LyricsCache {
         val appContext = context.applicationContext
         runCatching {
             val taken = Kind.values().flatMap { kind ->
-                dirPath(appContext, kind, create = false)?.let { (tree, dir) ->
-                    SafStorage.listChildren(appContext, tree, dir).map { it.name.lowercase() }
-                } ?: emptyList()
+                dir(appContext, kind).listFiles().orEmpty().map { it.name.lowercase() }
             }.toSet()
             for ((entry, rest) in filesOf(appContext, oldBase)) {
                 val newName = "$newBase $rest"
-                if (newName.lowercase() in taken) SafStorage.deleteRecursively(appContext, entry.docPath)
-                else SafStorage.renameTo(appContext, entry.docPath, newName)
+                if (newName.lowercase() in taken) entry.delete()
+                else entry.renameTo(File(entry.parentFile, newName))
             }
         }.onFailure { Log.w(TAG, "No se pudieron renombrar las letras de $oldBase: ${it.message}") }
         Unit
@@ -129,7 +127,7 @@ object LyricsCache {
     suspend fun delete(context: Context, base: String) = withContext(Dispatchers.IO) {
         val appContext = context.applicationContext
         runCatching {
-            filesOf(appContext, base).forEach { (entry, _) -> SafStorage.deleteRecursively(appContext, entry.docPath) }
+            filesOf(appContext, base).forEach { (entry, _) -> entry.delete() }
         }.onFailure { Log.w(TAG, "No se pudieron borrar las letras de $base: ${it.message}") }
         Unit
     }
@@ -139,27 +137,16 @@ object LyricsCache {
         return digest.take(6).joinToString("") { String.format(java.util.Locale.ROOT, "%02x", it) }
     }
 
-    private fun dirPath(context: Context, kind: Kind, create: Boolean): Pair<android.net.Uri, String>? {
-        SafStorage.ensureUltiMusicRegistered(context)
-        val treeUri = SafStorage.ultiMusicTreeUri(context) ?: return null
-        val root = SafStorage.ultiMusicDocPath(context) ?: return null
-        val dir = if (create) SafStorage.getOrCreateSubfolder(context, treeUri, root, kind.folder)
-        else SafStorage.findSubfolder(context, treeUri, root, kind.folder)
-        return dir?.let { treeUri to it }
-    }
+    private fun dir(context: Context, kind: Kind): File = AppStorage.dir(context, kind.folder)
 
-    private fun findFile(context: Context, treeUri: android.net.Uri, dir: String, name: String): String? =
-        SafStorage.listChildren(context, treeUri, dir)
-            .firstOrNull { !it.isDirectory && it.name.equals(name, ignoreCase = true) }
-            ?.docPath
+    /** Sin distinguir mayúsculas: los archivos migrados de `~/UltiMusic` pueden venir con otra. */
+    private fun findFile(context: Context, kind: Kind, name: String): File? =
+        dir(context, kind).listFiles()?.firstOrNull { it.isFile && it.name.equals(name, ignoreCase = true) }
 
     private fun read(
         context: Context, kind: Kind, fileName: String, hash: String, rowCount: Int, synced: Boolean
     ): List<String>? {
-        val (treeUri, dir) = dirPath(context, kind, create = false) ?: return null
-        val docPath = findFile(context, treeUri, dir, fileName) ?: return null
-        val text = SafStorage.openInputStream(context, docPath)?.use { it.readBytes().toString(Charsets.UTF_8) }
-            ?: return null
+        val text = findFile(context, kind, fileName)?.readText(Charsets.UTF_8) ?: return null
         val lines = text.lines()
         val savedHash = lines.firstOrNull()?.let { TAG_REGEX.find(it)?.groupValues?.get(1) }
         if (savedHash != hash) return null
@@ -179,10 +166,8 @@ object LyricsCache {
         context: Context, kind: Kind, fileName: String, hash: String,
         converted: List<String>, timesMs: List<Long>?
     ) {
-        val (treeUri, dir) = dirPath(context, kind, create = true) ?: return
-        // Se borra el anterior (si lo hay) y se crea de nuevo: "abrir para escribir" no garantiza
-        // truncar en todos los proveedores, y crear sobre un nombre existente duplicaría el archivo.
-        findFile(context, treeUri, dir, fileName)?.let { SafStorage.deleteRecursively(context, it) }
+        // Si ya había uno con otra capitalización, se borra: si no, quedarían los dos.
+        findFile(context, kind, fileName)?.takeIf { it.name != fileName }?.delete()
         val content = buildString {
             append("[ultimusic:").append(hash).append("]\n")
             if (timesMs != null) {
@@ -195,9 +180,6 @@ object LyricsCache {
                 append(converted.joinToString("\n")).append('\n')
             }
         }
-        val docPath = SafStorage.createFile(context, treeUri, dir, fileName, "application/octet-stream")
-            ?: error("No se ha podido crear $fileName")
-        SafStorage.openOutputStream(context, docPath)?.use { it.write(content.toByteArray(Charsets.UTF_8)) }
-            ?: error("No se ha podido escribir $fileName")
+        File(dir(context, kind), fileName).writeText(content, Charsets.UTF_8)
     }
 }

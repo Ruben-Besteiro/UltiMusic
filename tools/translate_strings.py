@@ -1,34 +1,49 @@
 """
-Traduce automáticamente los strings de UltiMusic a los 24 idiomas que no son el español.
+Mantiene los strings de UltiMusic en los 24 idiomas que no son el español. La traducción en sí la
+hace Claude Code en la sesión (skill `.claude/skills/translate-strings`), y este script hace la
+parte mecánica: saber qué falta, validar y escribir. Solo llama a la API de Claude con --api.
 
 La fuente de verdad es `app/src/main/res/values/strings.xml` (español). Este script compara ese
-archivo con la copia que guardó la última vez (`tools/strings_snapshot.xml`) y:
+archivo con la copia que guardó la última vez (`tools/strings_snapshot.xml`) para saber qué strings
+son nuevos o han cambiado (o le faltan a un idioma: añadir uno a LOCALES basta para que salga
+entero como pendiente), y además:
 
-  - traduce los strings nuevos o cambiados a cada idioma,
-  - traduce también los que le falten a un idioma (así, añadir un idioma nuevo a LOCALES basta para
-    que se rellene entero en la siguiente ejecución),
   - quita de todos los idiomas los strings que se hayan borrado del español,
+  - si el texto nuevo es IDÉNTICO al de otro string sin cambios, copia su traducción
+    (`reuse_identical`),
   - regenera `values-b+sr+Cyrl` (serbocroata en cirílico, el de Serbia) transliterando el latino
-    (`sync_cyrillic`): no usa la API ni cuesta nada.
+    (`sync_cyrillic`).
 
 Un string que no se ha tocado en español conserva su traducción actual, así que las correcciones
 hechas a mano en un idioma sobreviven hasta que se cambie ese mismo string en español.
 
-Traduce con la API de Claude (modelo claude-sonnet-5-5) usando el SDK oficial `anthropic`
+Lo lanza la tarea `translateStrings` de Gradle antes de cada compilación (`--gradle`, ver
+app/build.gradle.kts): hace solo lo de arriba, NUNCA llama a la API, y avisa de lo que quede sin
+traducir (se ve en español en esos idiomas hasta que se traduzca). A mano:
+
+    python tools/translate_strings.py --dry-run    # qué hay pendiente en cada idioma
+    python tools/translate_strings.py --pending F  # escribe en F lo pendiente: español nuevo, el
+                                                   # anterior y la traducción actual de cada idioma
+    python tools/translate_strings.py --apply F    # valida y escribe las traducciones de F:
+                                                   #   <translations>
+                                                   #     <locale folder="en"><string name="k">…</string></locale>
+                                                   #   </translations>
+                                                   # si alguna no es válida, no escribe nada
+    python tools/translate_strings.py --accept K…  # da por traducidas esas claves tal como están
+                                                   # ahora en cada idioma (tras editarlas a mano)
+    python tools/translate_strings.py --check      # revisa todas las traducciones actuales
+    python tools/translate_strings.py --retranslate K…   # marca esas claves como pendientes
+    python tools/translate_strings.py --api        # traduce lo pendiente con la API (cuesta dinero)
+
+Las reglas de traducción (marcadores, apóstrofos, plurales, nombres propios...) están en
+SYSTEM_PROMPT, y las comprueba `validate` tanto en --apply como en --api.
+
+Con --api traduce con el modelo claude-sonnet-5-5 usando el SDK oficial `anthropic`
 (`pip install anthropic`). La clave se lee de `local.properties` (`anthropic.api_key=...`) o, si no
 está, de las credenciales por defecto del SDK (variable ANTHROPIC_API_KEY o `ant auth login`).
 
-Lo lanza solo la tarea `translateStrings` de Gradle antes de cada compilación (ver
-app/build.gradle.kts). Si no hay cambios termina en milisegundos sin conectarse a nada. También se
-puede lanzar a mano:
-
-    python tools/translate_strings.py              # traduce lo pendiente
-    python tools/translate_strings.py --dry-run    # solo enseña qué traduciría
-    python tools/translate_strings.py --retranslate tab_songs settings_title
-                                                   # vuelve a traducir esas claves en todos los idiomas
-
-La copia `tools/strings_snapshot.xml` solo se actualiza cuando TODOS los idiomas se han traducido
-bien: si algo falla (sin conexión, sin clave...), la siguiente compilación lo vuelve a intentar.
+Una clave cambiada se da por traducida en `tools/strings_snapshot.xml` cuando ya está traducida en
+TODOS los idiomas: hasta entonces sigue saliendo como pendiente.
 """
 
 from __future__ import annotations
@@ -51,8 +66,9 @@ SNAPSHOT_FILE = ROOT / "tools" / "strings_snapshot.xml"
 LOCAL_PROPERTIES = ROOT / "local.properties"
 
 MODEL = "claude-sonnet-5-5"
-# Precio de claude-sonnet-5-5 en dólares por millón de tokens (entrada, salida), solo para el resumen.
-PRICE_PER_MTOK = (2.00, 10.00)
+# Precio de claude-sonnet-5-5 en dólares por millón de tokens, solo para el resumen del coste:
+# (entrada, salida, escritura en caché = 1,25x la entrada, lectura de caché).
+PRICE_PER_MTOK = (2.00, 10.00, 2.50, 0.10)
 # Strings por petición: así cada respuesta se mantiene corta aunque haya que traducir un idioma entero.
 CHUNK_SIZE = 60
 # Idiomas traducidos a la vez.
@@ -69,8 +85,20 @@ LOCALES: dict[str, tuple[str, list[str]]] = {
     "nl": ("holandés (neerlandés)", ["one", "other"]),
     "pl": ("polaco", ["one", "few", "many", "other"]),
     # El cirílico (values-b+sr+Cyrl) NO se traduce: lo genera sync_cyrillic() a partir de este.
+    # Variedad común para serbios, croatas, bosnios y montenegrinos (ver AppLocale.serbocroatian):
+    # ijekavo, que admiten los cuatro estándares, con vocabulario neutro o, donde no lo hay, serbio
+    # (más hablantes). El cirílico se genera de este, así que no puede llevar croatismos marcados.
     "b+sr+Latn": ("serbocroata (variedad común serbio/croata), escrito SOLO en alfabeto latino, "
-                  "nunca en cirílico", ["one", "few", "other"]),
+                  "nunca en cirílico. Usa SIEMPRE la pronunciación ijekava (pjesma, uvijek, cijeli, "
+                  "sljedeći), nunca la ekava. En el vocabulario elige la palabra neutra o internacional, "
+                  "y si no la hay, la serbia, nunca la croata: muzika (no glazba), folder (no mapa), "
+                  "sistem (no sustav), server (no poslužitelj), link (no poveznica), meni (no izbornik), "
+                  "komanda (no naredba), podešavanja (no postavke), sačuvati (no spremiti), izabrati (no "
+                  "odabrati), tačka (no točka), dugme (no gumb), prodavnica (no trgovina), spoljni (no "
+                  "vanjski), važeći (no valjan), zvaničan (no službeni), korišćenje (no korištenje), "
+                  "verbos en -ovati/-isati (reprodukovati, sinhronizovati, grupisati; no -irati), futuro "
+                  "biće/provjeriće (no bit će), participio dodat (no dodan), «da + presente» (prestati da "
+                  "radi) y «šta» como interrogativo", ["one", "few", "other"]),
     "sw": ("suajili", ["one", "other"]),
     "iw": ("hebreo", ["one", "two", "other"]),
     "ru": ("ruso", ["one", "few", "many", "other"]),
@@ -93,6 +121,9 @@ RESOURCE_TAGS = ("string", "plurals", "string-array")
 PLACEHOLDER = re.compile(r"%(?:\d+\$)?[sd]|%%|\^\d")
 WORD = re.compile(r"\w{4,}")
 UNESCAPED_APOSTROPHE = re.compile(r"(?<!\\)'")
+# Comillas dobles rectas sin escapar: Android se las come. La única excepción es un texto entero
+# entre comillas (p. ej. `" | "`), que es como Android conserva los espacios de los extremos.
+UNESCAPED_QUOTE = re.compile(r'(?<!\\)"')
 
 SYSTEM_PROMPT = """Eres el traductor de la interfaz de UltiMusic, un reproductor de música para Android. \
 Traduces recursos de strings de Android del español al {language}.
@@ -338,6 +369,9 @@ def validate(source: ET.Element, xml_text: str, quantities: list[str]) -> tuple[
     for text in text_parts(translated):
         if UNESCAPED_APOSTROPHE.search(text):
             return None, "hay un apóstrofo sin escapar (debe ser \\')"
+        quotes = UNESCAPED_QUOTE.findall(text)
+        if quotes and not (len(quotes) == 2 and text.startswith('"') and text.endswith('"')):
+            return None, 'hay comillas dobles sin escapar (deben ser \\")'
     if canonical(source).count("<b>") != canonical(translated).count("<b>"):
         return None, "no conserva las etiquetas <b>"
 
@@ -425,7 +459,7 @@ def request_translations(client, folder: str, sources: list[tuple[ET.Element, st
         items.append(entry)
 
     # El glosario va en su propio bloque, separado de los elementos, para poder cachearlo: es idéntico
-    # en todas las peticiones de este idioma, así que las siguientes lo leen de caché (10 % del precio).
+    # en todas las peticiones de este idioma, así que las siguientes lo leen de caché (5 % del precio).
     glossary_text = (
         "Glosario de traducciones ya existentes en la app (español -> traducción):\n"
         + json.dumps(glossary, ensure_ascii=False)
@@ -526,8 +560,120 @@ def translate_locale(client, folder: str, sources: list[tuple[ET.Element, str]],
 
 
 # ---------------------------------------------------------------------------------------------
+# Atajos sin API: reutilizar traducciones idénticas y aceptar ediciones a mano
+# ---------------------------------------------------------------------------------------------
+
+def content_key(element: ET.Element) -> str:
+    """El elemento sin su nombre: dos strings con el mismo texto (y tipo) dan la misma clave."""
+    element = copy.deepcopy(element)
+    element.attrib.pop("name", None)
+    return canonical(element)
+
+
+def reuse_identical(base: list[tuple[ET.Element, str]], changed: set[str], existing: dict[str, ET.Element],
+                    to_translate: list[tuple[ET.Element, str]]) -> tuple[dict[str, ET.Element], list]:
+    """Separa de `to_translate` los strings cuyo español es idéntico al de otro string que no ha
+    cambiado y ya está traducido en este idioma: devuelve ({nombre: traducción copiada}, lo que
+    sigue pendiente de traducir)."""
+    donors: dict[str, str] = {}
+    for element, _ in base:
+        name = element.get("name")
+        if name not in changed and name in existing:
+            donors.setdefault(content_key(element), name)
+    reused: dict[str, ET.Element] = {}
+    pending = []
+    for element, comment in to_translate:
+        donor = donors.get(content_key(element))
+        if donor is None:
+            pending.append((element, comment))
+            continue
+        copied = copy.deepcopy(existing[donor])
+        copied.set("name", element.get("name"))
+        reused[element.get("name")] = copied
+    return reused, pending
+
+
+def accept_into_snapshot(keys: list[str]) -> None:
+    """Pone en `strings_snapshot.xml` el español actual de [keys] y deja el resto como estaba: el
+    build da esas claves por traducidas (con lo que haya ahora en cada idioma)."""
+    current = {e.get("name"): e for e, _ in parse_resources(BASE_FILE)}
+    old = {e.get("name"): e for e, _ in parse_resources(SNAPSHOT_FILE)}
+    elements = []
+    for name, element in current.items():
+        if name in keys:
+            elements.append(element)
+        elif name in old:
+            elements.append(old[name])
+    SNAPSHOT_FILE.write_text(locale_content(elements, note=""), encoding="utf-8", newline="\n")
+
+
+# ---------------------------------------------------------------------------------------------
 # Programa principal
 # ---------------------------------------------------------------------------------------------
+
+def build_pending_file(path: Path, pending: dict[str, list[str]], base_by_name: dict[str, tuple[ET.Element, str]],
+                       snapshot_elements: dict[str, ET.Element], existing_by_folder: dict[str, dict[str, ET.Element]]) -> None:
+    """Escribe en [path] lo que falta traducir, para traducirlo a mano (en la sesión de Claude Code)
+    y devolverlo con --apply. Por cada clave: el español nuevo, el anterior (si cambió) y la
+    traducción actual en cada idioma (si existe), para que un cambio pequeño se pueda trasladar."""
+    root = ET.Element("pending")
+    for folder, (language, quantities) in LOCALES.items():
+        ET.SubElement(root, "idioma", folder=folder, nombre=language, quantities=" ".join(quantities))
+    for name, folders in pending.items():
+        element, comment = base_by_name[name]
+        item = ET.SubElement(root, "item", name=name, idiomas=" ".join(folders))
+        if comment:
+            ET.SubElement(item, "contexto").text = comment
+        if name in snapshot_elements and canonical(snapshot_elements[name]) != canonical(element):
+            ET.SubElement(item, "anterior").append(copy.deepcopy(snapshot_elements[name]))
+        ET.SubElement(item, "nuevo").append(copy.deepcopy(element))
+        for folder in folders:
+            current = existing_by_folder[folder].get(name)
+            if current is not None:
+                ET.SubElement(item, "actual", folder=folder).append(copy.deepcopy(current))
+    ET.indent(root, space=" ")
+    path.write_text(ET.tostring(root, encoding="unicode") + "\n", encoding="utf-8", newline="\n")
+
+
+def read_apply_file(path: Path) -> dict[str, list[ET.Element]]:
+    """Lee un archivo de --apply:
+        <translations>
+          <locale folder="en">
+            <string name="clave">…</string>
+          </locale>
+          …
+        </translations>"""
+    root = ET.parse(path).getroot()
+    result: dict[str, list[ET.Element]] = {}
+    for locale in root.findall("locale"):
+        result.setdefault(locale.get("folder"), []).extend(
+            child for child in locale if child.tag in RESOURCE_TAGS)
+    return result
+
+
+def check_locales(base: list[tuple[ET.Element, str]], only: set[str] | None = None) -> list[str]:
+    """Problemas de las traducciones actuales frente al español (marcadores, apóstrofos, plurales,
+    <b>, claves que faltan). Con [only], solo mira esas claves."""
+    problems = []
+    for folder, (_, quantities) in LOCALES.items():
+        path = RES / f"values-{folder}" / "strings.xml"
+        try:
+            existing = {e.get("name"): e for e, _ in parse_resources(path)} if path.exists() else {}
+        except ET.ParseError as e:
+            problems.append(f"values-{folder}: XML no válido ({e})")
+            continue
+        for element, _ in base:
+            name = element.get("name")
+            if only is not None and name not in only:
+                continue
+            if name not in existing:
+                problems.append(f"values-{folder}: falta {name}")
+                continue
+            _, error = validate(element, canonical(existing[name]), quantities)
+            if error:
+                problems.append(f"values-{folder}: {name}: {error}")
+    return problems
+
 
 def main() -> int:
     for stream in (sys.stdout, sys.stderr):
@@ -537,13 +683,25 @@ def main() -> int:
             pass
 
     parser = argparse.ArgumentParser(description="Traduce los strings de UltiMusic a todos los idiomas.")
-    parser.add_argument("--dry-run", action="store_true", help="solo enseña lo que traduciría")
+    parser.add_argument("--dry-run", action="store_true", help="solo enseña lo que haría")
     parser.add_argument("--retranslate", nargs="+", default=[], metavar="CLAVE",
-                        help="vuelve a traducir estas claves en todos los idiomas")
+                        help="marca estas claves como pendientes de traducir en todos los idiomas")
+    parser.add_argument("--accept", nargs="+", default=[], metavar="CLAVE",
+                        help="da por traducidas estas claves con lo que tenga ahora cada idioma")
+    parser.add_argument("--pending", metavar="ARCHIVO", type=Path,
+                        help="escribe en ARCHIVO lo que falta traducir, para traducirlo a mano")
+    parser.add_argument("--apply", metavar="ARCHIVO", type=Path,
+                        help="valida y escribe las traducciones hechas a mano de ARCHIVO")
+    parser.add_argument("--check", action="store_true",
+                        help="revisa todas las traducciones actuales (marcadores, plurales, apóstrofos…)")
+    parser.add_argument("--api", action="store_true",
+                        help="traduce lo pendiente con la API de Claude (cuesta dinero)")
     parser.add_argument("--gradle", action="store_true",
-                        help="modo compilación: los fallos son avisos y no paran el build")
+                        help="modo compilación: nunca llama a la API y los fallos no paran el build")
     args = parser.parse_args()
     fail_code = 0 if args.gradle else 1
+    if args.gradle:
+        args.api = False
 
     def warn(message: str) -> int:
         print(f"[translateStrings] AVISO: {message}", file=sys.stderr)
@@ -554,8 +712,16 @@ def main() -> int:
     except ET.ParseError as e:
         return warn(f"values/strings.xml no es XML válido ({e}); no se traduce nada")
     base_names = {e.get("name") for e, _ in base}
+    base_by_name = {e.get("name"): (e, c) for e, c in base}
 
-    unknown = [k for k in args.retranslate if k not in base_names]
+    if args.check:
+        problems = check_locales(base)
+        for problem in problems:
+            print(f"[translateStrings] {problem}")
+        print(f"[translateStrings] {len(problems)} problema(s)")
+        return 1 if problems else 0
+
+    unknown = [k for k in args.retranslate + args.accept if k not in base_names]
     if unknown:
         return warn(f"estas claves no existen en values/strings.xml: {', '.join(unknown)}")
 
@@ -563,22 +729,66 @@ def main() -> int:
     if not SNAPSHOT_FILE.exists():
         SNAPSHOT_FILE.write_bytes(BASE_FILE.read_bytes())
         print("[translateStrings] Creada tools/strings_snapshot.xml con el español actual.")
-    snapshot = {e.get("name"): canonical(e) for e, _ in parse_resources(SNAPSHOT_FILE)}
-    changed = {e.get("name") for e, _ in base if snapshot.get(e.get("name")) != canonical(e)}
+    if args.accept and not args.dry_run:
+        problems = check_locales(base, set(args.accept))
+        if problems:
+            for problem in problems:
+                print(f"[translateStrings] {problem}", file=sys.stderr)
+            return warn("no se aceptan: corrige antes esos problemas")
+        accept_into_snapshot(args.accept)
+        print(f"[translateStrings] Aceptadas sin traducir: {', '.join(args.accept)}")
+    snapshot_elements = {e.get("name"): e for e, _ in parse_resources(SNAPSHOT_FILE)}
+    changed = {e.get("name") for e, _ in base
+               if e.get("name") not in snapshot_elements or canonical(snapshot_elements[e.get("name")]) != canonical(e)}
     changed |= set(args.retranslate)
+
+    # Traducciones hechas a mano (--apply): pendientes o correcciones de cualquier clave. Se valida
+    # cada una igual que las de la API, y si alguna no vale no se escribe nada.
+    applied: dict[str, dict[str, ET.Element]] = {}
+    if args.apply:
+        try:
+            supplied = read_apply_file(args.apply)
+        except (ET.ParseError, OSError) as e:
+            return warn(f"no se ha podido leer {args.apply} ({e})")
+        invalid = []
+        for folder, elements in supplied.items():
+            if folder not in LOCALES:
+                invalid.append(f"idioma desconocido: {folder}")
+                continue
+            _, quantities = LOCALES[folder]
+            for element in elements:
+                name = element.get("name")
+                if name not in base_by_name:
+                    invalid.append(f"values-{folder}: la clave {name} no existe en español")
+                    continue
+                translated, error = validate(base_by_name[name][0], canonical(element), quantities)
+                if error:
+                    invalid.append(f"values-{folder}: {name}: {error}")
+                else:
+                    applied.setdefault(folder, {})[name] = translated
+        if invalid:
+            for problem in invalid:
+                print(f"[translateStrings]   NO VÁLIDO, {problem}", file=sys.stderr)
+            return warn("hay traducciones no válidas: no se ha escrito nada. Corrígelas y vuelve a aplicar")
 
     # Qué hay que hacer en cada idioma.
     plans = {}
+    existing_by_folder: dict[str, dict[str, ET.Element]] = {}
     for folder in LOCALES:
         path = RES / f"values-{folder}" / "strings.xml"
         try:
             existing = {e.get("name"): e for e, _ in parse_resources(path)} if path.exists() else {}
         except ET.ParseError as e:
             return warn(f"values-{folder}/strings.xml no es XML válido ({e}); corrígelo antes de traducir")
-        to_translate = [(e, c) for e, c in base if e.get("name") in changed or e.get("name") not in existing]
+        existing_by_folder[folder] = existing
+        mine = applied.get(folder, {})
+        to_translate = [(e, c) for e, c in base
+                        if (e.get("name") in changed or e.get("name") not in existing) and e.get("name") not in mine]
+        reused, to_translate = reuse_identical(base, changed, existing, to_translate)
+        reused = {**reused, **mine}
         removed = sorted(set(existing) - base_names)
-        if to_translate or removed:
-            plans[folder] = (existing, to_translate, removed)
+        if to_translate or removed or reused:
+            plans[folder] = (existing, to_translate, removed, reused)
 
     if not plans:
         if not args.dry_run:
@@ -587,8 +797,10 @@ def main() -> int:
                 SNAPSHOT_FILE.write_bytes(BASE_FILE.read_bytes())
         return 0
 
-    for folder, (_, to_translate, removed) in plans.items():
+    for folder, (_, to_translate, removed, reused) in plans.items():
         parts = []
+        if reused:
+            parts.append(f"escribir {len(reused)} sin API ({', '.join(sorted(reused))})")
         if to_translate:
             parts.append(f"traducir {len(to_translate)}")
         if removed:
@@ -597,12 +809,12 @@ def main() -> int:
     if args.dry_run:
         return 0
 
-    jobs = {folder: plan for folder, plan in plans.items() if plan[1]}
     results: dict[str, dict[str, ET.Element]] = {}
     errors: dict[str, str] = {}
     usage = [0, 0, 0, 0]  # entrada sin caché, salida, escritura en caché, lectura de caché
+    jobs = {folder: plan for folder, plan in plans.items() if plan[1]}
 
-    if jobs:
+    if args.api and jobs:
         try:
             import anthropic
         except ImportError:
@@ -611,7 +823,7 @@ def main() -> int:
         client = anthropic.Anthropic(api_key=api_key) if api_key else anthropic.Anthropic()
 
         def run(folder: str) -> dict[str, ET.Element]:
-            existing, to_translate, _ = jobs[folder]
+            existing, to_translate, _, _ = jobs[folder]
             translating = {e.get("name") for e, _ in to_translate}
             glossary = [
                 {"es": text_parts(e)[0], "traduccion": text_parts(existing[e.get("name")])[0]}
@@ -638,11 +850,12 @@ def main() -> int:
                     errors[folder] = str(e)
                     print(f"[translateStrings]   values-{folder}: FALLO, {e}", file=sys.stderr)
 
-    # Se escriben los idiomas que han ido bien; los demás se quedan como estaban.
-    for folder, (existing, to_translate, _) in plans.items():
+    # Se escriben los idiomas que han ido bien (lo reutilizado, lo traducido y lo quitado); lo que
+    # siga pendiente conserva su traducción anterior, o se queda en español si no tenía.
+    for folder, (existing, _, _, reused) in plans.items():
         if folder in errors:
             continue
-        translated = results.get(folder, {})
+        translated = {**reused, **results.get(folder, {})}
         elements = []
         for element, _ in base:
             name = element.get("name")
@@ -655,7 +868,7 @@ def main() -> int:
 
     if any(usage):
         cost = (usage[0] * PRICE_PER_MTOK[0] + usage[1] * PRICE_PER_MTOK[1]
-                + usage[2] * PRICE_PER_MTOK[0] * 1.25 + usage[3] * PRICE_PER_MTOK[0] * 0.1) / 1e6
+                + usage[2] * PRICE_PER_MTOK[2] + usage[3] * PRICE_PER_MTOK[3]) / 1e6
         print(f"[translateStrings] Tokens: {usage[0]} de entrada, {usage[2]} escritos en caché, "
               f"{usage[3]} leídos de caché, {usage[1]} de salida (≈ {cost:.2f} $)")
         # Gradle se traga la salida entre otras mil líneas; este archivo permite leer el coste sin buscarlo.
@@ -663,10 +876,28 @@ def main() -> int:
             f"{usage[0]} entrada, {usage[2]} escritos en caché, {usage[3]} leídos de caché, "
             f"{usage[1]} salida: ≈ {cost:.4f} $ ({MODEL})\n", encoding="utf-8")
 
-    if errors:
+    # Lo que sigue pendiente tras esta pasada, por clave: en qué idiomas.
+    pending: dict[str, list[str]] = {}
+    for folder, (_, to_translate, _, _) in plans.items():
+        for element, _ in to_translate:
+            name = element.get("name")
+            if folder in errors or name not in results.get(folder, {}):
+                pending.setdefault(name, []).append(folder)
+
+    if pending:
+        # Las claves ya resueltas en todos sus idiomas se dan por traducidas; el resto no.
+        resolved = sorted(name for name in changed if name not in pending)
+        if resolved:
+            accept_into_snapshot(resolved)
+        if args.pending:
+            build_pending_file(args.pending, pending, base_by_name, snapshot_elements, existing_by_folder)
+            print(f"[translateStrings] Pendiente escrito en {args.pending}")
+        if errors:
+            return warn(f"no se han podido traducir {len(errors)} idioma(s): {', '.join(sorted(errors))}")
         return warn(
-            f"no se han podido traducir {len(errors)} idioma(s): {', '.join(sorted(errors))}. "
-            "Se volverá a intentar en la próxima compilación"
+            f"{len(pending)} string(s) sin traducir: {', '.join(sorted(pending))}. En los idiomas que no "
+            "lo tenían se verán en español. Tradúcelos con la skill translate-strings "
+            "(o con --api, que cuesta dinero)"
         )
     SNAPSHOT_FILE.write_bytes(BASE_FILE.read_bytes())
     return 0

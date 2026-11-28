@@ -43,6 +43,7 @@ import com.pierfrancescosoffritti.androidyoutubeplayer.core.player.views.YouTube
 import com.untar.ultimusic.R
 import com.untar.ultimusic.data.LibraryRepository
 import com.untar.ultimusic.data.LyricsAutoFetcher
+import com.untar.ultimusic.data.ThemePreferences
 import com.untar.ultimusic.data.playlist.PlaylistRepository
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.ui.CollectionKind
@@ -1291,7 +1292,7 @@ class IPodDialogFragment : DialogFragment() {
         // fija directo, igual que offsetRuler en el editor de metadatos.
         view.findViewById<ValueRuler>(R.id.ipodOffsetRuler).accentColor = accent
 
-        // Los contornos del iPod son un degradado (claro -> acento, de arriba a abajo), no un color liso:
+        // Los contornos del iPod son un degradado (ver strokeStart/strokeEnd), no un color liso:
         // un `<stroke>` de XML no admite degradado, así que estos fondos son GradientStrokeDrawable
         // (ver su doc) y se crean aquí la primera vez; las siguientes (cada paso del fundido de
         // acento) solo se actualizan los colores. El relleno y la geometría replican los
@@ -1302,7 +1303,12 @@ class IPodDialogFragment : DialogFragment() {
         val ctx = requireContext()
         val density = resources.displayMetrics.density
         val surface = ctx.getColor(R.color.um_surface_variant)
-        val strokeStart = DynamicColor.light(accent)
+        // Oscuro: claro arriba -> acento abajo. Claro: al revés, acento arriba -> oscuro abajo (en el
+        // tema claro DynamicColor.light ya devuelve el tono oscuro, ver DynamicColor.themed).
+        val tone = DynamicColor.light(accent)
+        val isLight = ThemePreferences.isLight()
+        val strokeStart = if (isLight) accent else tone
+        val strokeEnd = if (isLight) tone else accent
         val ring = R.dimen.ipod_stroke_button_ring
         val box = R.dimen.ipod_stroke_info_box
         // id, grosor, ovalado, radio (dp) y relleno
@@ -1327,7 +1333,7 @@ class IPodDialogFragment : DialogFragment() {
             val existing = target.background as? GradientStrokeDrawable
             if (existing != null) {
                 existing.fillColor = spec.fill
-                existing.setStrokeColors(strokeStart, accent)
+                existing.setStrokeColors(strokeStart, strokeEnd)
             } else {
                 target.background = GradientStrokeDrawable(
                     oval = spec.oval,
@@ -1335,7 +1341,7 @@ class IPodDialogFragment : DialogFragment() {
                     strokeWidthPx = resources.getDimension(spec.width),
                     fillColor = spec.fill,
                     strokeStart = strokeStart,
-                    strokeEnd = accent
+                    strokeEnd = strokeEnd
                 )
             }
         }

@@ -33,6 +33,7 @@ object SettingsPreferences {
             KeepScreenOnPreferences.load(p)
             MinDurationPreferences.load(p)
             ArtistSeparatorPreferences.load(p)
+            BackgroundPreferences.load(context.applicationContext, p)
         }
     }
 
@@ -152,6 +153,117 @@ object MinDurationPreferences {
         val clamped = value.coerceAtLeast(0)
         _seconds.value = clamped
         SettingsPreferences.edit { putInt(KEY, clamped) }
+    }
+}
+
+/**
+ * Imagen de fondo de la actividad principal, la misma en los dos temas. `null` = la de serie
+ * predeterminada; un nombre que empieza por `@`, otra de serie (ver [builtIns]); si no, el nombre de
+ * una imagen subida por el usuario, que vive en `filesDir/backgrounds/` (ver [importImage]). Las
+ * subidas se guardan ya reducidas y giradas según su EXIF, para no tener que decodificar una foto
+ * de 50 MP cada vez que se recalcula el desenfoque.
+ */
+object BackgroundPreferences {
+    private const val KEY = "background_image"
+    private const val DIR = "backgrounds"
+
+    /** Lado mayor máximo con el que se guarda una imagen subida. */
+    private const val MAX_SIDE_PX = 2160
+
+    private lateinit var dir: java.io.File
+
+    private val _selected = MutableStateFlow<String?>(null)
+    val selected: StateFlow<String?> = _selected
+
+    /** Imágenes subidas, de la más antigua a la más reciente. */
+    private val _uploads = MutableStateFlow<List<String>>(emptyList())
+    val uploads: StateFlow<List<String>> = _uploads
+
+    /**
+     * Las imágenes de serie, en el orden del selector, valgan para el tema que valgan: `null` es la
+     * predeterminada (`bg_1`) y el resto se guardan con nombres que empiezan por `@`, que nunca
+     * chocan con los de las subidas (`bg_<fecha>.jpg`).
+     */
+    private val builtIns: Map<String?, Int> = linkedMapOf(
+        null to com.untar.ultimusic.R.drawable.bg_1,
+        "@bg_2" to com.untar.ultimusic.R.drawable.bg_2,
+    )
+
+    /** Los nombres de las imágenes de serie (ver [builtIns]), la predeterminada primero. */
+    val builtInNames: List<String?> = builtIns.keys.toList()
+
+    /**
+     * El drawable de una imagen de serie, o la predeterminada si [name] es de una subida. Sirve
+     * también de respaldo cuando una subida no se puede leer.
+     */
+    @androidx.annotation.DrawableRes
+    fun builtInImage(name: String?): Int = builtIns[name] ?: builtIns.getValue(null)
+
+    internal fun load(context: Context, p: SharedPreferences) {
+        dir = java.io.File(context.filesDir, DIR)
+        _uploads.value = dir.listFiles()?.filter { it.isFile }?.sortedBy { it.name }?.map { it.name }.orEmpty()
+        // Si el archivo elegido ya no existe, se vuelve al de serie.
+        _selected.value = p.getString(KEY, null)?.takeIf { it in _uploads.value || it in builtIns }
+    }
+
+    /** El archivo de una imagen subida, o null para las de serie. */
+    fun fileFor(name: String?): java.io.File? = name?.takeIf { it !in builtIns }?.let { java.io.File(dir, it) }
+
+    fun select(name: String?) {
+        if (_selected.value == name) return
+        _selected.value = name
+        SettingsPreferences.edit { putString(KEY, name) }
+    }
+
+    /**
+     * Copia la imagen de [uri] (reducida y bien orientada) a `filesDir/backgrounds/`, la añade a
+     * [uploads] y la deja elegida. Es pesada: llamarla fuera del hilo principal. Devuelve false si
+     * no se pudo leer como imagen.
+     */
+    fun importImage(context: Context, uri: android.net.Uri): Boolean {
+        val bitmap = decodeScaled(context, uri) ?: return false
+        dir.mkdirs()
+        val name = "bg_${System.currentTimeMillis()}.jpg"
+        val file = java.io.File(dir, name)
+        try {
+            file.outputStream().use { bitmap.compress(android.graphics.Bitmap.CompressFormat.JPEG, 92, it) }
+        } catch (e: java.io.IOException) {
+            file.delete()
+            return false
+        } finally {
+            bitmap.recycle()
+        }
+        _uploads.value = _uploads.value + name
+        select(name)
+        return true
+    }
+
+    private fun decodeScaled(context: Context, uri: android.net.Uri): android.graphics.Bitmap? = try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+            // ImageDecoder ya aplica la rotación del EXIF.
+            val source = android.graphics.ImageDecoder.createSource(context.contentResolver, uri)
+            android.graphics.ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+                val side = maxOf(info.size.width, info.size.height)
+                if (side > MAX_SIDE_PX) {
+                    val scale = MAX_SIDE_PX / side.toFloat()
+                    decoder.setTargetSize(
+                        (info.size.width * scale).toInt().coerceAtLeast(1),
+                        (info.size.height * scale).toInt().coerceAtLeast(1),
+                    )
+                }
+                decoder.allocator = android.graphics.ImageDecoder.ALLOCATOR_SOFTWARE
+            }
+        } else {
+            val resolver = context.contentResolver
+            val bounds = android.graphics.BitmapFactory.Options().apply { inJustDecodeBounds = true }
+            resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, bounds) }
+            var sample = 1
+            while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= MAX_SIDE_PX) sample *= 2
+            val options = android.graphics.BitmapFactory.Options().apply { inSampleSize = sample }
+            resolver.openInputStream(uri)?.use { android.graphics.BitmapFactory.decodeStream(it, null, options) }
+        }
+    } catch (e: Exception) {
+        null
     }
 }
 

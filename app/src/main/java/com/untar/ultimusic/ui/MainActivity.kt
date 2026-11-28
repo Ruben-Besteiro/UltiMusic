@@ -57,12 +57,12 @@ import com.untar.ultimusic.ui.settings.SettingsDialogFragment
 import com.untar.ultimusic.ui.preview.PreviewSearchDialogFragment
 import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
-import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SafStorage
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -119,9 +119,6 @@ class MainActivity : AppCompatActivity() {
         R.drawable.ic_playlist
     )
 
-    /** En caso de ser true, mostramos el "por favor concede el permiso de almacenamiento" **/
-    private var permissionDialogPending = true
-
     /** Gris de las pestañas no seleccionadas de la barra de navegación (ver applyTabAppearance). */
     private val mutedTabColor: Int by lazy { ContextCompat.getColor(this, R.color.um_on_surface_muted) }
 
@@ -158,9 +155,16 @@ class MainActivity : AppCompatActivity() {
         setContentView(R.layout.activity_main)
         com.untar.ultimusic.ui.common.DialogOpenLock.wrap(window)
         // Fondo con desenfoque suave donde no hay tarjetas encima (las tarjetas usan uno más fuerte).
+        // Se recalcula cada vez que se elige otra imagen en Ajustes; `collectLatest` descarta el
+        // cálculo a medias si se elige otra antes de que acabe.
         lifecycleScope.launch {
-            val soft = withContext(Dispatchers.Default) { BlurredBackground.lightBackground(applicationContext) }
-            findViewById<android.widget.ImageView>(R.id.mainBackground).setImageBitmap(soft)
+            com.untar.ultimusic.data.BackgroundPreferences.selected.collectLatest {
+                val soft = withContext(Dispatchers.Default) { BlurredBackground.lightBackground(applicationContext) }
+                findViewById<android.widget.ImageView>(R.id.mainBackground).setImageBitmap(soft)
+                // Las tarjetas de las listas pintan su versión borrosa en onDraw: sin esto
+                // seguirían con la imagen anterior hasta el siguiente desplazamiento.
+                invalidateRecyclers(findViewById(android.R.id.content))
+            }
         }
         ViewCompat.setOnApplyWindowInsetsListener(findViewById(R.id.main)) { v, insets ->
             val systemBars = insets.getInsets(WindowInsetsCompat.Type.systemBars())
@@ -184,7 +188,7 @@ class MainActivity : AppCompatActivity() {
         setupPager(savedInstanceState?.getInt(STATE_SELECTED_TAB, 0) ?: 0)
         setupMiniPlayer()
         setupDynamicColor()
-        checkStoragePermission()       /** Lo primero que hacemos es pedir permiso de almacenamiento **/
+        startLibrary()                 /** Escaneo de la fonoteca: ya no hay que pedir ninguna carpeta **/
         requestNotificationPermissionIfNeeded()
         handleViewIntent(intent)       /** "Abrir con UltiMusic" desde un gestor de archivos **/
         handleRecountIntent(intent)    /** Toque en la notificación de UltiMusic Recount **/
@@ -276,102 +280,18 @@ class MainActivity : AppCompatActivity() {
             no, no hay nada más que hacer aquí: ver el porqué en requestNotificationPermissionIfNeeded. */ }
 
     /**
-     * Pide la carpeta `UltiMusic` con el selector del sistema (ver [SafStorage]): es la ÚNICA carpeta
-     * obligatoria, sin ella no hay fonoteca. Tras concederla, se ofrece —una sola vez en la vida de la
-     * instalación, ver [offerLegacyRootsRelinkIfNeeded]— re-conceder también Download/Music/las
-     * raíces propias que tuviera de antes de esta migración, para re-enlazar lo ya catalogado.
+     * Arranque de la fonoteca. Ya no hay ningún diálogo: los datos de la app viven en el
+     * almacenamiento interno (ver [com.untar.ultimusic.util.AppStorage]) y la carpeta de música se
+     * elige desde el aviso de "no hay canciones" (ver SongsFragment) o desde Ajustes. Sin ninguna
+     * carpeta concedida el escaneo no hace nada y la lista sale vacía, con ese aviso.
      */
-    private fun checkStoragePermission() {
-        if (hasStoragePermission()) {
-            songsViewModel.loadIfNeeded()   /** Si el permiso está, creamos los modelos de las canciones **/
-            offerExtraFolderStep()
-        }
-        else {
-            // Primer diálogo: una sola salida (sin "Cancelar"), porque sin UltiMusic no hay
-            // fonoteca ni se puede mirar si hay una BD que restaurar (ver grantUltiMusicRoot).
-            // Se intenta crear ~/UltiMusic ya ahora, y el selector se abre dentro de ella (o en ~
-            // si no se pudo crear): al usuario solo le queda pulsar "Usar esta carpeta".
-            val initialUri = SafStorage.initialPickerUri()
-            val dialog = AlertDialog.Builder(this)
-                .setTitle(R.string.permission_needed_title)
-                .setMessage(R.string.permission_needed_message)
-                .setCancelable(false)
-                .setPositiveButton(R.string.permission_grant) { _, _ ->
-                    // permissionDialogPending sigue en true mientras el selector está abierto y se
-                    // persiste la concesión: el onResume de la vuelta se ejecuta ANTES de que
-                    // grantUltiMusicRoot termine, y con el flag en false sacaba el toast de
-                    // "Sin la carpeta..." aunque el usuario hubiera concedido.
-                    grantUltiMusicRoot.launch(initialUri)
-                }
-                .show()
-            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
-        }
+    private fun startLibrary() {
+        songsViewModel.loadIfNeeded()
+        offerLegacyRootsRelinkIfNeeded()
     }
 
     /**
-     * Segundo paso del primer arranque, DESPUÉS de conceder `UltiMusic` (y de decidir si se
-     * restaura una BD, ver [LibraryRepository.grantUltiMusicRoot]): si está pendiente, el diálogo
-     * "Ahora elige tu carpeta de música"; si no, la oferta de siempre de re-enlazar carpetas de
-     * antes de la migración a SAF.
-     */
-    private fun offerExtraFolderStep() {
-        if (SafStorage.isMusicFolderPromptPending(this)) showMusicFolderPrompt()
-        else offerLegacyRootsRelinkIfNeeded()
-    }
-
-    private fun showMusicFolderPrompt() {
-        SafStorage.setMusicFolderPromptPending(this, false)
-        SafStorage.markOfferedLegacyRootsRelink(this)   // este diálogo ya cumple la función de la oferta vieja
-        val dialog = AlertDialog.Builder(this)
-            .setTitle(R.string.permission_needed_title)
-            .setMessage(R.string.music_folder_prompt_message)
-            .setCancelable(false)
-            .setPositiveButton(R.string.permission_grant) { _, _ ->
-                grantExtraLibraryRoot.launch(SafStorage.internalStorageRootUri())
-            }
-            .setNegativeButton(R.string.music_folder_prompt_cancel) { _, _ ->
-                // "Ahora no": ya no queda nada que decidir, las listas pueden llenarse.
-                lifecycleScope.launch { LibraryRepository.get(this@MainActivity).releaseFirstRunGate() }
-            }
-            .show()
-        AccentTint.buttons(dialog, playerViewModel.accentColor.value)
-    }
-
-    private val grantUltiMusicRoot =
-        registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri == null) {
-                Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
-                checkStoragePermission()   // el diálogo no tiene "Cancelar": vuelve a salir
-                return@registerForActivityResult
-            }
-            lifecycleScope.launch {
-                // Antes de nada, porque la restauración puede reiniciar el proceso: tras el reinicio
-                // el segundo diálogo sigue pendiente (ver offerExtraFolderStep).
-                SafStorage.setMusicFolderPromptPending(this@MainActivity, true)
-                val restartNeeded = LibraryRepository.get(this@MainActivity).grantUltiMusicRoot(uri)
-                if (restartNeeded) {
-                    // Se encontró una copia de la BD más completa que la recién creada: entra en
-                    // su lugar al arrancar (ver UltiMusicDatabase.restoreFromBackupIfNeeded).
-                    Toast.makeText(this@MainActivity, R.string.restoring_database, Toast.LENGTH_LONG).show()
-                    kotlinx.coroutines.delay(1000)   // que dé tiempo a verse antes de que muera el proceso
-                    packageManager.getLaunchIntentForPackage(packageName)?.let {
-                        startActivity(it.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK))
-                    }
-                    android.os.Process.killProcess(android.os.Process.myPid())
-                    return@launch
-                }
-                permissionDialogPending = false
-                // Conceder la carpeta siempre reescanea (reload() fuerza el escaneo aunque ya
-                // hubiera uno hecho); la pestaña de Canciones ya está visible, con el recycler
-                // vacío y el aviso de actualización, mientras tanto.
-                songsViewModel.reload()
-                loadIfPermitted()
-                offerExtraFolderStep()
-            }
-        }
-
-    /**
-     * Tras conceder `UltiMusic`, si queda alguna canción catalogada ANTES de la migración a SAF sin
+     * Al arrancar, si queda alguna canción catalogada ANTES de la migración a SAF sin
      * re-enlazar (ver [LibraryRepository.hasUnlinkedLegacySongs]), ofrece re-conceder también
      * Download/Music/una raíz propia con el mismo selector. Se pregunta como mucho una vez en la vida
      * de la instalación ([SafStorage.hasOfferedLegacyRootsRelink]): quien la salta siempre puede
@@ -387,7 +307,7 @@ class MainActivity : AppCompatActivity() {
                 .setTitle(R.string.relink_legacy_roots_title)
                 .setMessage(R.string.relink_legacy_roots_message)
                 .setPositiveButton(R.string.relink_legacy_roots_action) { _, _ ->
-                    grantExtraLibraryRoot.launch(SafStorage.internalStorageRootUri())
+                    grantExtraLibraryRoot.launch(SafStorage.musicPickerInitialUri())
                 }
                 .setNegativeButton(R.string.relink_legacy_roots_skip, null)
                 .show()
@@ -397,24 +317,18 @@ class MainActivity : AppCompatActivity() {
 
     private val grantExtraLibraryRoot =
         registerForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            lifecycleScope.launch {
-                val repository = LibraryRepository.get(this@MainActivity)
-                // addLibraryRoot ya reconcilia; solo DESPUÉS se abren las listas (ver releaseFirstRunGate).
-                if (uri != null) repository.addLibraryRoot(uri)
-                repository.releaseFirstRunGate()
-            }
+            if (uri == null) return@registerForActivityResult
+            lifecycleScope.launch { LibraryRepository.get(this@MainActivity).addLibraryRoot(uri) }
         }
 
 
     /** OBTENEMOS LA LISTA DE CANCIONES **/
     override fun onResume() {
         super.onResume()
-        loadIfPermitted()
+        songsViewModel.loadIfNeeded()
         // Si un permiso se ha revocado/concedido fuera de la app, la lista se ajusta ya: nada que no
         // se pueda abrir se queda listado.
         lifecycleScope.launch { LibraryRepository.get(this@MainActivity).recheckRootPermissions() }
-        // Si UltiMusic no se podía leer y la vigilancia ya se rindió (pasado 1 minuto), la reactiva.
-        CoverArt.watchRoot(this)
         // Estando la aplicación en segundo plano, el sistema puede haber matado el PlaybackService
         // (no está en primer plano mientras no suene nada). Lo revivimos aquí, al volver, en vez de
         // esperar a que el usuario toque una canción: así la cola y el mini-reproductor ya están de
@@ -423,9 +337,10 @@ class MainActivity : AppCompatActivity() {
     }
 
     /**
-     * Al pasar a segundo plano, exportamos una copia visible de la base de datos a
-     * ~/UltiMusic/databases (best-effort, prioridad baja). El scope de la app garantiza que
-     * termine aunque la Activity se destruya. También guardamos qué estaba sonando: si Android
+     * Al pasar a segundo plano, se pasa el WAL a `ultimusic.db` (ver
+     * [LibraryRepository.checkpointDatabase]): la copia automática de Android suele hacerse con la
+     * app en segundo plano, y así copia una BD completa. El scope de la app garantiza que termine
+     * aunque la Activity se destruya. También guardamos qué estaba sonando: si Android
      * mata el proceso mientras la app está en segundo plano (frecuente pasado un rato), sin esto
      * `PlayerViewModel` se recrearía en blanco y la app "olvidaría" la canción, aunque la base de
      * datos siga intacta.
@@ -434,7 +349,13 @@ class MainActivity : AppCompatActivity() {
         super.onStop()
         playerViewModel.savePlaybackState()
         val repository = LibraryRepository.get(this)
-        appScope.launch { repository.exportDatabaseCopy() }
+        appScope.launch { repository.checkpointDatabase() }
+    }
+
+    /** Fuerza a repintar las decoraciones (las tarjetas borrosas) de todas las listas bajo [view]. */
+    private fun invalidateRecyclers(view: View) {
+        if (view is RecyclerView) view.invalidateItemDecorations()
+        if (view is ViewGroup) for (i in 0 until view.childCount) invalidateRecyclers(view.getChildAt(i))
     }
 
     private fun setupToolbar() {
@@ -975,22 +896,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
             }
-        }
-    }
-
-    // --- Permiso de almacenamiento (Storage Access Framework, ver SafStorage) ---
-
-    private fun hasStoragePermission(): Boolean {
-        val treeUri = SafStorage.ultiMusicTreeUri(this) ?: return false
-        return SafStorage.isRootReadable(this, treeUri)
-    }
-
-    // Se llama desde el onResume = recargamos la lista de canciones cada vez que volvemos a la aplicación
-    private fun loadIfPermitted() {
-        if (hasStoragePermission()) {
-            songsViewModel.loadIfNeeded()
-        } else if (!permissionDialogPending) {
-            Toast.makeText(this, R.string.permission_denied, Toast.LENGTH_LONG).show()
         }
     }
 

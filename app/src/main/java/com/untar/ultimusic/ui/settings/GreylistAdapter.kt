@@ -11,7 +11,6 @@ import com.google.android.material.materialswitch.MaterialSwitch
 import com.untar.ultimusic.R
 import com.untar.ultimusic.model.GreylistFolder
 import com.untar.ultimusic.util.DynamicColor
-import com.untar.ultimusic.util.SafStorage
 
 /**
  * Lista de subcarpetas de la lista gris (ajustes > Lista gris). Cada fila muestra la ruta relativa a
@@ -73,7 +72,7 @@ class GreylistAdapter(
             onDelete: (GreylistFolder) -> Unit,
             accent: Int
         ) {
-            path.text = relativeToUltiMusic(itemView, folder.path)
+            path.text = folder.path
 
             // El listener se quita y se vuelve a poner SIEMPRE (barato, y tiene que capturar el
             // `folder` de esta llamada: el ViewHolder se recicla entre carpetas, así que uno viejo
@@ -114,11 +113,6 @@ class GreylistAdapter(
             }
 
             delete.setOnClickListener { onDelete(folder) }
-        }
-
-        private fun relativeToUltiMusic(itemView: View, path: String): String {
-            val root = SafStorage.ultiMusicDocPath(itemView.context) ?: return path
-            return path.removePrefix("$root/")
         }
     }
 }

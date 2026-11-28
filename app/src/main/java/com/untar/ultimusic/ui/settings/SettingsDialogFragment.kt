@@ -52,8 +52,10 @@ import com.untar.ultimusic.data.ArtistSeparatorPreferences
 import com.untar.ultimusic.data.DynamicColorPreferences
 import com.untar.ultimusic.data.KeepScreenOnPreferences
 import com.untar.ultimusic.data.MinDurationPreferences
+import com.untar.ultimusic.data.BackgroundPreferences
 import com.untar.ultimusic.data.SleepTimerPreferences
 import com.untar.ultimusic.data.ThemePreferences
+import com.untar.ultimusic.data.backup.BackupArchive
 import com.untar.ultimusic.data.remote.GeniusTokenStore
 import com.untar.ultimusic.data.remote.YouTubeApiKeyStore
 import com.untar.ultimusic.model.GreylistFolder
@@ -190,6 +192,7 @@ class SettingsDialogFragment : DialogFragment() {
     private lateinit var dynamicsUnsupported: View
 
     private lateinit var servicesSectionTitle: TextView
+    private lateinit var backupSectionTitle: TextView
     private lateinit var geniusTitle: TextView
     private lateinit var geniusStatus: TextView
     private lateinit var btnConfigureGenius: TextView
@@ -308,6 +311,7 @@ class SettingsDialogFragment : DialogFragment() {
         dynamicsSlider = view.findViewById(R.id.dynamicsSlider)
         dynamicsUnsupported = view.findViewById(R.id.dynamicsUnsupported)
         servicesSectionTitle = view.findViewById(R.id.servicesSectionTitle)
+        backupSectionTitle = view.findViewById(R.id.backupSectionTitle)
         geniusTitle = view.findViewById(R.id.geniusTitle)
         geniusStatus = view.findViewById(R.id.geniusStatus)
         btnConfigureGenius = view.findViewById(R.id.btnConfigureGenius)
@@ -357,6 +361,7 @@ class SettingsDialogFragment : DialogFragment() {
         setupEqualizer(eqBandsContainer)
         setupServices()
         setupRecount(openRecountButton)
+        setupBackup(view.findViewById(R.id.btnExportBackup), view.findViewById(R.id.btnImportBackup))
         setupRefreshLibrary()
         setupSleepTimer()
         setupBackground(view.findViewById(R.id.backgroundRecycler))
@@ -417,9 +422,44 @@ class SettingsDialogFragment : DialogFragment() {
     }
 
     private fun setupBackground(recycler: RecyclerView) {
-        backgroundAdapter = BackgroundPickerAdapter()
+        backgroundAdapter = BackgroundPickerAdapter(onUpload = {
+            pickBackgroundLauncher.launch(
+                androidx.activity.result.PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+            )
+        })
+        backgroundAdapter.setUploads(BackgroundPreferences.uploads.value)
+        backgroundAdapter.setSelected(BackgroundPreferences.selected.value)
         recycler.adapter = backgroundAdapter
+        viewLifecycleOwner.lifecycleScope.launch {
+            launch {
+                var count = BackgroundPreferences.uploads.value.size
+                BackgroundPreferences.uploads.collect { names ->
+                    backgroundAdapter.setUploads(names)
+                    // La recién subida queda al final, justo antes del "+": que se vea.
+                    if (names.size > count) recycler.smoothScrollToPosition(backgroundAdapter.itemCount - 1)
+                    count = names.size
+                }
+            }
+            launch { BackgroundPreferences.selected.collect { backgroundAdapter.setSelected(it) } }
+        }
     }
+
+    /**
+     * Selector de fotos del sistema, como el de las carátulas del editor: sin permisos, el usuario
+     * elige la imagen en una pantalla del propio sistema. La copia (reducida) se hace fuera del hilo
+     * principal y la deja elegida; MainActivity cambia el fondo en cuanto cambia la elección.
+     */
+    private val pickBackgroundLauncher =
+        registerForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val appContext = requireContext().applicationContext
+            lifecycleScope.launch {
+                val ok = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    BackgroundPreferences.importImage(appContext, uri)
+                }
+                if (!ok && isAdded) toast(R.string.settings_background_upload_error)
+            }
+        }
 
     private fun setupTheme() {
         val ids = mapOf(
@@ -572,7 +612,7 @@ class SettingsDialogFragment : DialogFragment() {
         // Con null Android abriría el selector en la última carpeta usada (`UltiMusic`): se pide que
         // empiece en la raíz del almacenamiento interno, igual que los diálogos de MainActivity.
         addFolderButton.setOnClickListener {
-            addLibraryRootLauncher.launch(com.untar.ultimusic.util.SafStorage.internalStorageRootUri())
+            addLibraryRootLauncher.launch(com.untar.ultimusic.util.SafStorage.musicPickerInitialUri())
         }
     }
 
@@ -1101,6 +1141,80 @@ class SettingsDialogFragment : DialogFragment() {
         }
     }
 
+    // --- Copia de seguridad (ver BackupArchive) ---
+
+    private val exportBackupLauncher =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("application/zip")) { uri ->
+            if (uri == null) return@registerForActivityResult
+            runBackupTask { app ->
+                val ok = BackupArchive.export(app, uri)
+                Toast.makeText(
+                    app,
+                    if (ok) R.string.settings_backup_export_done else R.string.settings_backup_export_failed,
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
+
+    private val importBackupLauncher =
+        registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+            if (uri == null) return@registerForActivityResult
+            val dialog = AlertDialog.Builder(requireContext())
+                .setTitle(R.string.settings_backup_import)
+                .setMessage(R.string.settings_backup_import_confirm)
+                .setNegativeButton(R.string.dialog_cancel, null)
+                .setPositiveButton(R.string.dialog_ok) { _, _ -> importBackup(uri) }
+                .show()
+            AccentTint.buttons(dialog, playerViewModel.accentTarget.value)
+        }
+
+    private fun setupBackup(exportButton: TextView, importButton: TextView) {
+        exportButton.setOnClickListener {
+            if (!backupInProgress) exportBackupLauncher.launch(BackupArchive.suggestedName())
+        }
+        importButton.setOnClickListener {
+            // Algunos gestores de archivos no etiquetan los .zip como application/zip.
+            if (!backupInProgress) importBackupLauncher.launch(arrayOf("application/zip", "application/octet-stream", "application/x-zip-compressed"))
+        }
+    }
+
+    private fun importBackup(uri: Uri) = runBackupTask { app ->
+        when (BackupArchive.import(app, uri)) {
+            BackupArchive.ImportResult.OK -> {
+                // Como al restaurar la antigua copia de la BD: la nueva solo entra al arrancar de
+                // cero (ver UltiMusicDatabase.restoreFromBackupIfNeeded), así que se reinicia ya.
+                Toast.makeText(app, R.string.settings_backup_import_done, Toast.LENGTH_LONG).show()
+                kotlinx.coroutines.delay(1000)   // que dé tiempo a verse antes de que muera el proceso
+                app.packageManager.getLaunchIntentForPackage(app.packageName)?.let {
+                    app.startActivity(
+                        it.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                    )
+                }
+                android.os.Process.killProcess(android.os.Process.myPid())
+            }
+            BackupArchive.ImportResult.TOO_NEW -> Toast.makeText(app, R.string.settings_backup_import_too_new, Toast.LENGTH_LONG).show()
+            BackupArchive.ImportResult.INVALID -> Toast.makeText(app, R.string.settings_backup_import_invalid, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    /**
+     * Lanza [block] con un aviso de "trabajando" y sin permitir otra a la vez. Va en [backupScope]
+     * (de proceso), no en el del fragmento: si el usuario cierra Ajustes a mitad, la importación
+     * tiene que llegar igual al reinicio, y el aviso final salir igual (con el contexto de la app).
+     */
+    private fun runBackupTask(block: suspend (Context) -> Unit) {
+        val app = requireContext().applicationContext
+        backupInProgress = true
+        Toast.makeText(app, R.string.settings_backup_working, Toast.LENGTH_SHORT).show()
+        backupScope.launch {
+            try {
+                block(app)
+            } finally {
+                backupInProgress = false
+            }
+        }
+    }
+
     private fun observeState() {
         viewLifecycleOwner.lifecycleScope.launch {
             viewLifecycleOwner.repeatOnLifecycle(Lifecycle.State.STARTED) {
@@ -1244,6 +1358,7 @@ class SettingsDialogFragment : DialogFragment() {
                         dynamicsSlider.trackActiveTintList = tint
                         dynamicsSlider.thumbTintList = tint
                         servicesSectionTitle.setTextColor(accent)
+                        backupSectionTitle.setTextColor(accent)
                         geniusTitle.setTextColor(accent)
                         youtubeTitle.setTextColor(accent)
                         recountSectionTitle.setTextColor(accent)
@@ -1312,6 +1427,14 @@ class SettingsDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "settings"
+
+        /** Ver [runBackupTask]: sobrevive al fragmento. */
+        private val backupScope = kotlinx.coroutines.CoroutineScope(
+            kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.Main
+        )
+
+        @Volatile
+        private var backupInProgress = false
 
         /** Opciones del desplegable del alfabeto del serbocroata: cada una en su propia escritura. */
         private val SCRIPT_LABELS = listOf("Latinica", "Ћирилица")

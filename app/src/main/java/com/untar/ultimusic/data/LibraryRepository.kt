@@ -32,6 +32,7 @@ import com.untar.ultimusic.model.PersonSummary
 import com.untar.ultimusic.model.Song
 import com.untar.ultimusic.model.SystemTagKey
 import com.untar.ultimusic.model.TagSummary
+import com.untar.ultimusic.util.AppStorage
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.CoverRef
@@ -90,7 +91,7 @@ class LibraryRepository private constructor(
     private val sharing = SharingStarted.WhileSubscribed(5_000, replayExpirationMillis = 0)
 
     /**
-     * Reenlaza, UNA sola vez por instalación, las imágenes de `UltiMusic/images` que ninguna fila
+     * Reenlaza, UNA sola vez por instalación, las imágenes de `files/images` que ninguna fila
      * tiene asignadas, a las canciones y álbumes SIN imagen cuyo nombre esperado
      * (`<artistas> - <título>.img`, ver [CoverArt.imageBaseName]) coincide exactamente con un archivo.
      * Recupera las carátulas de filas que se borraron y volvieron a catalogarse de cero (ver
@@ -104,12 +105,15 @@ class LibraryRepository private constructor(
      */
     suspend fun relinkOrphanImages(): Int = withContext(Dispatchers.IO) {
         if (SafStorage.isOrphanImageRelinkDone(appContext)) return@withContext 0
-        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@withContext 0
-        val dir = CoverArt.imagesDocPath(appContext) ?: return@withContext 0
-        val files = SafStorage.listChildren(appContext, treeUri, dir)
-            .filter { !it.isDirectory }.mapTo(HashSet()) { it.name }
-        // Carpeta aún sin indexar (ver imagesDocPath): no se da por hecho, se reintenta otra vez.
-        if (files.isEmpty()) return@withContext 0
+        // Hasta que no se hayan copiado las imágenes de la antigua carpeta UltiMusic no hay nada
+        // que reenlazar (ver migrateLegacyUltiMusicFolder): se reintenta en la siguiente llamada.
+        if (!SafStorage.isStorageMigrated(appContext)) return@withContext 0
+        val files = CoverArt.imagesDir(appContext).listFiles().orEmpty()
+            .filter { it.isFile }.mapTo(HashSet()) { it.name }
+        if (files.isEmpty()) {
+            SafStorage.markOrphanImageRelinkDone(appContext)
+            return@withContext 0
+        }
 
         val taken = dao.allUsedImageNames().toHashSet()
         var relinked = 0
@@ -136,23 +140,11 @@ class LibraryRepository private constructor(
         relinked
     }
 
-    /** Se incrementa al conceder la carpeta `UltiMusic` para que [songs] se recalcule (esa raíz no
-     *  vive en `library_roots`, así que ninguna escritura en Room avisaría del cambio). Debe
-     *  declararse ANTES de [songs]: su inicializador la lee al construir la clase. */
+    /** Se incrementa cuando cambia qué raíces se pueden leer sin que cambie `library_roots` (permiso
+     *  revocado o concedido desde fuera de la app, o la antigua carpeta `UltiMusic` migrada), para que
+     *  [songs] se recalcule. Debe declararse ANTES de [songs]: su inicializador la lee al construir
+     *  la clase. */
     private val grantEpoch = MutableStateFlow(0)
-
-    /**
-     * "Puerta" del primer arranque: mientras está cerrada, [songs], [albums] y los artistas salen
-     * VACÍOS (y con ellos todo lo que se deriva: géneros, etiquetas...). Se cierra al conceder la
-     * carpeta `UltiMusic` ([grantUltiMusicRoot]) y se abre cuando el usuario termina el segundo
-     * diálogo ("elige tu carpeta de música", ver [releaseFirstRunGate]). Sin esto, una base de datos
-     * restaurada de una copia enseñaba al instante filas de carpetas que aún no se han concedido
-     * (o de archivos que ya no están donde decían) hasta que acababa el primer escaneo.
-     *
-     * Arranca cerrada si el segundo diálogo sigue pendiente (la restauración de la copia reinicia
-     * el proceso entre medias). Debe declararse ANTES de [songs].
-     */
-    private val firstRunGate = MutableStateFlow(SafStorage.isMusicFolderPromptPending(appContext))
 
     /** Canciones persistidas, reactivas: cualquier edición reemite la lista. `distinctUntilChanged`
      *  porque Room reemite ante CUALQUIER escritura en las tablas que lee (aunque el resultado sea el
@@ -160,22 +152,21 @@ class LibraryRepository private constructor(
      *  si la lista no ha cambiado de verdad. */
     val songs: Flow<List<Song>> =
         // Solo se listan las canciones que SE PUEDEN REPRODUCIR: las que cuelgan de una carpeta
-        // concedida y legible ahora mismo. Tras reinstalar (la BD vuelve de la copia con filas de
-        // Download/Music, pero solo se ha concedido UltiMusic) o con una fila antigua de ruta
-        // absoluta aún sin re-enlazar, la fila existe pero no hay forma de abrir su archivo: mostrarla
-        // sería prometer algo que luego falla en silencio. Se repinta sola al cambiar las raíces
-        // (tabla library_roots) o al conceder UltiMusic ([grantEpoch]).
+        // concedida y legible ahora mismo. Tras restaurar la copia automática de Android o el .zip
+        // (la BD vuelve con filas de carpetas que en esta instalación aún no se han concedido) o con
+        // una fila antigua de ruta absoluta aún sin re-enlazar, la fila existe pero no hay forma de
+        // abrir su archivo: mostrarla sería prometer algo que luego falla en silencio. Se repinta
+        // sola al cambiar las raíces (tabla library_roots, o [grantEpoch]).
         // También se ocultan (sin borrarlas de la BD) las más cortas que la duración mínima de
         // Ajustes (ver [MinDurationPreferences]); como todo lo demás sale de aquí, álbumes,
         // artistas y fichas las dejan de contar solas.
         combine(
-            dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch, firstRunGate, MinDurationPreferences.seconds
-        ) { list, _, _, gated, minSeconds ->
+            dao.observeSongs(), dao.observeLibraryRoots(), grantEpoch, MinDurationPreferences.seconds
+        ) { list, _, _, minSeconds ->
             refreshSafRegistry()
             val prefixes = readableRootPrefixes()
             lastReadablePrefixes = prefixes.toSet()
-            if (gated) emptyList()
-            else list.filter { isUnderRoots(it.song.filePath, prefixes) && isLongEnough(it.song.duration, minSeconds) }
+            list.filter { isUnderRoots(it.song.filePath, prefixes) && isLongEnough(it.song.duration, minSeconds) }
                 .map { it.toDomain() }
         }
             .distinctUntilChanged()
@@ -245,8 +236,7 @@ class LibraryRepository private constructor(
     // Álbumes, artistas y sus fichas SOLO cuentan canciones que se pueden reproducir (las de [songs]:
     // bajo una carpeta concedida y legible, ni ocultas por la lista gris ni perdidas). Las consultas
     // de Room no saben de permisos, así que aquí se descarta lo que no tiene ninguna canción
-    // accesible y se recalculan sus cifras con las que sí. [songs] sale vacía mientras la puerta
-    // del primer arranque ([firstRunGate]) está cerrada, y con ella todo lo de aquí.
+    // accesible y se recalculan sus cifras con las que sí.
 
     val albums: Flow<List<AlbumSummary>> =
         combine(dao.observeAlbumSummaries(null), songs) { rows, playable ->
@@ -746,7 +736,13 @@ class LibraryRepository private constructor(
      *  escaneo lo disparó ella misma como si lo disparó, por ejemplo, añadir una carpeta desde
      *  Ajustes. */
     private val _reconciling = MutableStateFlow(false)
-    val reconciling: Flow<Boolean> = _reconciling
+
+    /** Hay una carpeta recién concedida en proceso ([addLibraryRoot]): cuenta como "actualizando"
+     *  desde que se vuelve del selector, no solo desde que arranca el escaneo, porque antes van el
+     *  permiso, el reenlazado y la espera a otro escaneo en marcha, y mientras tanto la pantalla seguía
+     *  mostrando "no hay canciones" como si no hubiera funcionado. */
+    private val _addingRoot = MutableStateFlow(false)
+    val reconciling: Flow<Boolean> = combine(_reconciling, _addingRoot) { scanning, adding -> scanning || adding }
 
     /** Progreso (0-100) de la reconciliación en curso, compartido igual que [reconciling]. Solo tiene
      *  sentido mientras [reconciling] vale `true`. */
@@ -773,31 +769,33 @@ class LibraryRepository private constructor(
      */
     suspend fun reconcile(onProgress: (current: Int, total: Int) -> Unit = { _, _ -> }) {
         observerScope.launch {
-            reconcileMutex.withLock {
-                refreshSafRegistry()
-                // Una carpeta registrada que no se puede leer ahora mismo (permiso revocado desde
-                // Ajustes del sistema, tarjeta desmontada, BD restaurada tras reinstalar...) se vería
-                // vacía y sus canciones parecerían haber desaparecido. Por eso el escaneo se salta
-                // esas carpetas y LibraryDao.reconcile no da de baja ninguna fila que cuelgue de
-                // ellas ([unreadable]); pero las carpetas LEGIBLES sí se escanean, para que un
-                // archivo movido a una de ellas se reenlace aunque la carpeta de origen ya no sea
-                // accesible. Solo si no hay NINGUNA legible no se hace nada. Ver
-                // MusicScanner.unreadableRootPrefixes.
-                val unreadable = MusicScanner.unreadableRootPrefixes(appContext) ?: return@withLock
-                _reconciling.value = true
-                _reconcileProgress.value = 0
-                try {
-                    val knownPaths = dao.allSongPaths().toHashSet()
-                    val result = MusicScanner.scan(appContext, knownPaths) { current, total ->
-                        _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
-                        onProgress(current, total)
-                    }
-                    dao.reconcile(result.newSongs, result.currentPaths, result.currentSizes, unreadable)
-                } finally {
-                    _reconciling.value = false
-                }
-            }
+            reconcileMutex.withLock { reconcileLocked(onProgress) }
         }.join()
+    }
+
+    private suspend fun reconcileLocked(onProgress: (current: Int, total: Int) -> Unit) {
+        refreshSafRegistry()
+        // Una carpeta registrada que no se puede leer ahora mismo (permiso revocado desde
+        // Ajustes del sistema, tarjeta desmontada, BD restaurada tras reinstalar...) se vería
+        // vacía y sus canciones parecerían haber desaparecido. Por eso el escaneo se salta
+        // esas carpetas y LibraryDao.reconcile no da de baja ninguna fila que cuelgue de
+        // ellas ([unreadable]); pero las carpetas LEGIBLES sí se escanean, para que un
+        // archivo movido a una de ellas se reenlace aunque la carpeta de origen ya no sea
+        // accesible. Solo si no hay NINGUNA legible no se hace nada. Ver
+        // MusicScanner.unreadableRootPrefixes.
+        val unreadable = MusicScanner.unreadableRootPrefixes(appContext) ?: return
+        _reconciling.value = true
+        _reconcileProgress.value = 0
+        try {
+            val knownPaths = dao.allSongPaths().toHashSet()
+            val result = MusicScanner.scan(appContext, knownPaths) { current, total ->
+                _reconcileProgress.value = if (total > 0) (current * 100) / total else 0
+                onProgress(current, total)
+            }
+            dao.reconcile(result.newSongs, result.currentPaths, result.currentSizes, unreadable)
+        } finally {
+            _reconciling.value = false
+        }
     }
 
     /**
@@ -978,11 +976,18 @@ class LibraryRepository private constructor(
     // selector, su corrutina se cancela, y antes eso mataba la función a medias (la raíz ya guardada
     // pero SIN el reenlazado ni el reescaneo: "0 canciones" sin ningún aviso).
     suspend fun addLibraryRoot(treeUri: Uri) = observerScope.async {
-        SafStorage.takePersistablePermission(appContext, treeUri)
-        dao.insertLibraryRoot(LibraryRootEntity(path = treeUri.toString()))
-        refreshSafRegistry()
-        relinkAfterGrant(treeUri)
-        reconcile()
+        _addingRoot.value = true
+        // Sin un escaneo en marcha, el porcentaje empieza en 0 (si lo hay, se respeta el suyo).
+        if (!_reconciling.value) _reconcileProgress.value = 0
+        try {
+            SafStorage.takePersistablePermission(appContext, treeUri)
+            dao.insertLibraryRoot(LibraryRootEntity(path = treeUri.toString()))
+            refreshSafRegistry()
+            relinkAfterGrant(treeUri)
+            reconcile()
+        } finally {
+            _addingRoot.value = false
+        }
     }.await()
 
     suspend fun removeLibraryRoot(treeUri: Uri) = observerScope.async {
@@ -1047,91 +1052,152 @@ class LibraryRepository private constructor(
         dao.allSongPaths().any { it.startsWith("/") }
     }
 
-    /**
-     * Concede la carpeta `UltiMusic` (obligatoria: sin ella no hay fonoteca) y re-enlaza lo que
-     * pueda de lo ya catalogado antes de la migración a SAF.
-     */
-    suspend fun grantUltiMusicRoot(treeUri: Uri): Boolean = observerScope.async {
-        decisionInProgress = true
-        firstRunGate.value = true   // ver [firstRunGate]; la abre [releaseFirstRunGate]
-        try {
-            SafStorage.setUltiMusicTreeUri(appContext, treeUri)
-            refreshSafRegistry()
-            grantEpoch.value++
-            // Reinstalación: la BD interna nació vacía antes de poder leer la copia (el permiso de
-            // la carpeta se revoca al desinstalar). Si la copia es más rica, se prepara para entrar
-            // en el próximo arranque y se pide reiniciar; el reenlazado ya lo hará la BD buena.
-            val restartNeeded = stageBackupRestoreIfRicher()
-            SafStorage.markBackupChecked(appContext)
-            if (restartNeeded) return@async true
-            relinkAfterGrant(treeUri)
-            // El reescaneo NO se hace aquí: lo lanza MainActivity justo después con
-            // SongsViewModel.reload().
-            false
-        } finally {
-            decisionInProgress = false
-        }
-    }.await()
+    // --- Almacenamiento interno (ver AppStorage): migración y reparación al arrancar ---
 
     /**
-     * Abre la puerta del primer arranque (ver [firstRunGate]): el usuario ha cerrado el segundo
-     * diálogo (carpeta concedida, o "ahora no"). Espera antes a que termine el escaneo en curso, si
-     * lo hay, para que las listas se llenen ya con filas verificadas contra el disco. Idempotente.
+     * Lo que hay que hacer en cada arranque, en este orden, ANTES de que nada dé por buena la
+     * carpeta de imágenes. Lo lanza [com.untar.ultimusic.UltiMusicApp]. Barato salvo la primera vez
+     * tras actualizar (la migración copia archivos).
      */
-    suspend fun releaseFirstRunGate() {
-        if (!firstRunGate.value) return
-        // Todo en observerScope: si la Activity se destruye al volver del selector de carpeta, la
-        // puerta no puede quedarse cerrada por una cancelación.
-        observerScope.async {
-            reconcileMutex.withLock { }
-            firstRunGate.value = false
-        }.await()
+    suspend fun prepareStorage() = withContext(Dispatchers.IO) {
+        runCatching { AppStorage.deleteStaleTempFiles(appContext) }
+        runCatching { migrateLegacyUltiMusicFolder() }
+        runCatching { pruneStaleLibraryRoots() }
+        // Solo con la migración ya hecha: antes, las imágenes de quien actualiza siguen en la
+        // antigua carpeta UltiMusic y aquí parecerían perdidas.
+        if (SafStorage.isStorageMigrated(appContext)) runCatching { repairMissingImages() }
+        Unit
     }
 
     /**
-     * ¿Es la copia de `UltiMusic/databases/` más rica (más filas en total) que la BD interna? Si
-     * lo es -y su esquema no es de una versión futura de la app-, la deja como
-     * [UltiMusicDatabase.STAGED_RESTORE_NAME] y devuelve true. Se evalúa una sola vez por
-     * instalación (ver [SafStorage.isBackupChecked]): en uso normal la BD real siempre contiene a
-     * la copia, que sale de ella.
+     * Quien actualiza desde una versión que guardaba los datos en `~/UltiMusic` (vía SAF): copia
+     * `images`, `playlists`, `conversions` y `translations` a `files/` ([AppStorage]) SIN borrar los
+     * originales (son archivos del usuario), y convierte esa carpeta en una fila normal de
+     * `library_roots`, así que si tenía música dentro, sigue en la fonoteca. Una sola vez: solo se
+     * marca como hecha si TODO se copió bien, y si no, se reintenta en el siguiente arranque.
+     *
+     * Un archivo que ya existe en `files/` no se pisa: puede ser más nuevo que el de la carpeta.
      */
-    private fun stageBackupRestoreIfRicher(): Boolean = runCatching {
-        val root = SafStorage.ultiMusicDocPath(appContext) ?: return@runCatching false
-        val backupDocPath = "$root/databases/${UltiMusicDatabase.DB_NAME}"
-        if (!SafStorage.exists(appContext, backupDocPath)) return@runCatching false
-
-        val dbFile = appContext.getDatabasePath(UltiMusicDatabase.DB_NAME)
-        val staged = File(dbFile.parentFile, UltiMusicDatabase.STAGED_RESTORE_NAME)
-        try {
-            SafStorage.openInputStream(appContext, backupDocPath)?.use { input ->
-                staged.outputStream().use { input.copyTo(it) }
-            } ?: return@runCatching false
-
-            val live = UltiMusicDatabase.get(appContext)
-            live.query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
-            val liveVersion = live.openHelper.readableDatabase.version
-
-            val (backupVersion, backupRows) = openReadOnly(staged).use { it.version to totalRows(it) }
-            val liveRows = openReadOnly(dbFile).use { totalRows(it) }
-
-            if (backupVersion <= liveVersion && backupRows > liveRows) true
-            else { staged.delete(); false }
-        } catch (t: Throwable) {
-            staged.delete()
-            false
+    private suspend fun migrateLegacyUltiMusicFolder() {
+        if (SafStorage.isStorageMigrated(appContext)) return
+        val treeUri = SafStorage.legacyUltiMusicTreeUri(appContext)
+        val root = SafStorage.legacyUltiMusicDocPath(appContext)
+        if (treeUri == null || root == null) {
+            SafStorage.markStorageMigrated(appContext)   // instalación nueva: nada que migrar
+            return
         }
-    }.getOrDefault(false)
+        if (!SafStorage.isRootReadable(appContext, treeUri)) {
+            // Permiso perdido (revocado a mano, o la prefs sobrevivió sin él): no hay forma de
+            // leerla. Se olvida; si el usuario la quiere, la añade como cualquier otra carpeta.
+            SafStorage.forgetLegacyUltiMusicTree(appContext)
+            SafStorage.markStorageMigrated(appContext)
+            grantEpoch.value++
+            return
+        }
+        SafStorage.ensureLegacyUltiMusicRegistered(appContext)
 
-    private fun openReadOnly(file: File) = android.database.sqlite.SQLiteDatabase.openDatabase(
-        file.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-    )
+        // La carpeta pasa a ser una más de la fonoteca, con su mismo permiso (no se suelta). Antes
+        // de copiar nada: si una copia falla, la carpeta debe salir igualmente en Ajustes.
+        if (treeUri.toString() !in dao.libraryRootPaths()) {
+            dao.insertLibraryRoot(LibraryRootEntity(path = treeUri.toString()))
+            grantEpoch.value++
+        }
 
-    private fun totalRows(d: android.database.sqlite.SQLiteDatabase): Long {
-        val names = d.rawQuery(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
-                "AND name NOT LIKE 'android_%' AND name NOT LIKE 'room_%'", null
-        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
-        return names.sumOf { t -> d.rawQuery("SELECT COUNT(*) FROM \"$t\"", null).use { c -> c.moveToFirst(); c.getLong(0) } }
+        var ok = true
+        for (folder in AppStorage.LEGACY_FOLDERS) {
+            val source = SafStorage.findSubfolder(appContext, treeUri, root, folder) ?: continue
+            val target = AppStorage.dir(appContext, folder)
+            for (entry in SafStorage.listChildren(appContext, treeUri, source)) {
+                if (entry.isDirectory) continue
+                val dest = File(target, entry.name)
+                if (dest.exists()) continue
+                val copied = runCatching {
+                    val tmp = AppStorage.tempFileIn(target)
+                    SafStorage.openInputStream(appContext, entry.docPath)?.use { input ->
+                        tmp.outputStream().use { input.copyTo(it) }
+                    } ?: error("ilegible")
+                    if (!tmp.renameTo(dest)) { tmp.delete(); error("no se pudo renombrar") }
+                }.isSuccess
+                if (!copied) ok = false
+            }
+        }
+        if (!ok) return   // se reintenta en el próximo arranque, sin pisar lo ya copiado
+
+        SafStorage.forgetLegacyUltiMusicTree(appContext)
+        SafStorage.markStorageMigrated(appContext)
+        refreshSafRegistry()
+        grantEpoch.value++
+        CoverArt.touch()
+    }
+
+    /**
+     * Quita las filas de `library_roots` cuyo permiso ya no existe en esta instalación: tras
+     * restaurar la copia automática de Android o el `.zip` (o en otro móvil), la BD recuerda las
+     * carpetas, pero Android no restaura los permisos. Sin esto, volver a elegir la misma carpeta
+     * (mismo URI) daría "ya está añadida" en [com.untar.ultimusic.ui.settings.SettingsViewModel.tryAddLibraryRoot].
+     *
+     * Sus canciones no se borran aquí: el siguiente escaneo las marca como perdidas
+     * ([SongEntity.missingSince]) y vuelven solas, con todas sus ediciones, al conceder la carpeta
+     * otra vez. Pasados [SongEntity.MISSING_GRACE_MS] sí se borran de verdad.
+     *
+     * Solo mira la lista de permisos PERSISTIDOS, no si la carpeta se puede leer ahora mismo: una
+     * tarjeta desmontada conserva su permiso y no debe perder su fila.
+     */
+    private suspend fun pruneStaleLibraryRoots() {
+        val persisted = appContext.contentResolver.persistedUriPermissions
+            .filter { it.isReadPermission }.mapTo(HashSet()) { it.uri.toString() }
+        val stale = dao.libraryRootPaths().filter { it !in persisted }
+        if (stale.isEmpty()) return
+        stale.forEach { dao.deleteLibraryRoot(it) }
+        refreshSafRegistry()
+    }
+
+    /**
+     * Imágenes propias cuyo archivo ya no está en `files/images`: pasa tras restaurar la copia
+     * automática de Android, que no las incluye (límite de 25 MB, ver
+     * `res/xml/data_extraction_rules.xml`). Se quita el nombre de la fila para que la cadena de
+     * carátulas siga sola: arte embebido del archivo → miniatura de YouTube → placeholder (ver
+     * [CoverArt.cover]; aunque no se quitara, [CoverArt.imageUri] ya devuelve null sin archivo, pero
+     * así un nombre viejo no choca con uno nuevo al importar otra carátula). Las miniaturas de
+     * YouTube que falten se vuelven a descargar si la canción conserva su enlace.
+     */
+    private suspend fun repairMissingImages() {
+        val dir = CoverArt.imagesDir(appContext)
+        val present = dir.listFiles().orEmpty().filter { it.isFile }.mapTo(HashSet()) { it.name }
+
+        val missingOwn = dao.allOwnImageNames().filter { CoverArt.isRealImage(it) && it !in present }
+        if (missingOwn.isNotEmpty()) dao.clearImageNames(missingOwn)
+
+        val missingThumbnails = dao.songsWithVideoThumbnail().filter { it.videoThumbnailName !in present }
+        if (missingThumbnails.isEmpty()) {
+            if (missingOwn.isNotEmpty()) CoverArt.touch()
+            return
+        }
+        val artistsBySong = dao.songArtistNames().groupBy({ it.ownerId }, { it.name })
+        for (row in missingThumbnails) {
+            val videoId = YouTubeUrl.videoId(row.videoUrl)
+            if (videoId == null) {
+                dao.setVideoThumbnailName(row.id, null)
+                continue
+            }
+            // Sin red (o vídeo borrado) se deja el nombre tal cual: se reintenta en el próximo
+            // arranque, y mientras tanto imageUri devuelve null y la cadena sigue sola.
+            val name = downloadVideoThumbnail(videoId, CoverArt.imageBaseName(artistsBySong[row.id].orEmpty(), row.title))
+            if (name != null) dao.setVideoThumbnailName(row.id, name)
+        }
+        CoverArt.touch()
+    }
+
+    /**
+     * Pasa los cambios pendientes del WAL a `ultimusic.db`. Lo llama `MainActivity` al pasar a
+     * segundo plano: la copia automática de Android y el `.zip` copian los archivos tal cual, y así
+     * el `.db` ya está completo por sí solo.
+     */
+    suspend fun checkpointDatabase() = withContext(Dispatchers.IO) {
+        runCatching {
+            UltiMusicDatabase.get(appContext).query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
+        }
+        Unit
     }
 
     /**
@@ -1359,7 +1425,7 @@ class LibraryRepository private constructor(
     }
 
     /**
-     * Copia la imagen elegida por el usuario a `UltiMusic/images` (ver [CoverArt.imagesDocPath]) y
+     * Copia la imagen elegida por el usuario a `files/images` (ver [CoverArt.imagesDir]) y
      * devuelve el nombre de archivo resultante (lo que se guarda en `imageName`), nombrado como
      * [title].
      *
@@ -1371,33 +1437,24 @@ class LibraryRepository private constructor(
      * (ver [deleteCoverImage]): así, cuando el título no ha cambiado, el nombre vuelve a estar
      * libre y esta imagen ocupa el mismo hueco en vez de acabar en "Título (2).img".
      *
-     * Aun así, el nombre devuelto es el del `docPath` que de verdad creó el proveedor de
-     * almacenamiento ([SafStorage.createFile]), NO el que se le pidió ([CoverArt.reserveFileName]):
-     * si el borrado anterior falló en silencio (es best-effort, ver [deleteCoverImage]) o hay
-     * cualquier otra colisión de nombre, `DocumentsContract.createDocument` no sobrescribe el
-     * archivo viejo, crea uno nuevo con el nombre cambiado ("Título (1).img") para no chocar. Guardar
-     * el nombre que se PIDIÓ en vez del que de verdad se creó dejaba `Song.imageName` apuntando a un
-     * archivo que no existe -Coil no lo encuentra y cae al recuadro de reserva-, justo el bug que
-     * describió el usuario ("a veces, al cambiar la carátula... aparece el placeholder").
+     * Se escribe en un temporal y se renombra al final: Coil nunca ve una imagen a medias, y un
+     * fallo a mitad no deja un archivo roto con el nombre bueno.
      */
     suspend fun importCoverImage(uri: Uri, baseName: String): String = withContext(Dispatchers.IO) {
-        val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: error("La carpeta UltiMusic no está concedida")
-        val dir = CoverArt.imagesDocPath(appContext, createIfMissing = true) ?: error("La carpeta UltiMusic no está concedida")
+        val dir = CoverArt.imagesDir(appContext)
         val name = CoverArt.reserveFileName(appContext, baseName, "img", null)
-        val docPath = SafStorage.createFile(appContext, treeUri, dir, name, "image/*")
-            ?: error("No se ha podido crear la carátula")
-        appContext.contentResolver.openInputStream(uri)?.use { input ->
-            SafStorage.openOutputStream(appContext, docPath)?.use { output -> input.copyTo(output) }
-                ?: error("No se ha podido escribir la carátula")
-        } ?: error("No se ha podido leer la imagen seleccionada")
-        val finalName = docPath.substringAfterLast('/')
-        // Ver SafStorage.awaitReadable: en algunos dispositivos el archivo recién escrito tarda un
-        // poco en ser legible de verdad. Sin esto, Song.imageName quedaba apuntando (de momento) a
-        // un archivo que Coil no podía leer todavía -el bug del placeholder tras editar la carátula-.
-        if (!SafStorage.awaitReadable(appContext, docPath)) {
-            error("La carátula se escribió pero el sistema todavía no la reconoce")
+        val dest = File(dir, name)
+        val tmp = AppStorage.tempFileIn(dir)
+        try {
+            appContext.contentResolver.openInputStream(uri)?.use { input ->
+                tmp.outputStream().use { output -> input.copyTo(output) }
+            } ?: error("No se ha podido leer la imagen seleccionada")
+            if (!tmp.renameTo(dest)) error("No se ha podido escribir la carátula")
+        } finally {
+            tmp.delete()
         }
-        finalName
+        SafStorage.bumpVersion(dest)
+        name
     }
 
     /**
@@ -1411,18 +1468,22 @@ class LibraryRepository private constructor(
      */
     suspend fun renameImage(oldName: String, baseName: String, suffix: String, ext: String): String =
         withContext(Dispatchers.IO) {
-            val dir = CoverArt.imagesDocPath(appContext) ?: return@withContext oldName
-            if (!SafStorage.exists(appContext, "$dir/$oldName")) return@withContext oldName
+            val dir = CoverArt.imagesDir(appContext)
+            val old = File(dir, oldName)
+            if (!old.isFile) return@withContext oldName
             val baseName = baseName + suffix
             val newName = CoverArt.reserveFileName(appContext, baseName, ext, null)
             if (newName == oldName) return@withContext oldName
-            SafStorage.renameTo(appContext, "$dir/$oldName", newName)?.let { return@withContext newName }
-            oldName
+            val renamed = File(dir, newName)
+            if (!old.renameTo(renamed)) return@withContext oldName
+            SafStorage.bumpVersion(old)
+            SafStorage.bumpVersion(renamed)
+            newName
         }
 
     /**
      * Descarga la miniatura del vídeo [videoId], la recorta al cuadrado central y la guarda en
-     * `UltiMusic/images` nombrada como [title]. Best-effort: si algo falla (sin red, vídeo
+     * `files/images` nombrada como [title]. Best-effort: si algo falla (sin red, vídeo
      * borrado...) devuelve null y la canción se queda sin miniatura, cayendo al recuadro negro.
      */
     suspend fun downloadVideoThumbnail(videoId: String, baseName: String): String? =
@@ -1440,18 +1501,19 @@ class LibraryRepository private constructor(
                     bitmap, (bitmap.width - side) / 2, (bitmap.height - side) / 2, side, side
                 )
 
-                val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@runCatching null
-                val dir = CoverArt.imagesDocPath(appContext, createIfMissing = true) ?: return@runCatching null
+                val dir = CoverArt.imagesDir(appContext)
                 val name = CoverArt.reserveFileName(appContext, "$baseName (video)", "jpg", null)
-                val docPath = SafStorage.createFile(appContext, treeUri, dir, name, "image/jpeg") ?: return@runCatching null
-                SafStorage.openOutputStream(appContext, docPath)?.use { out ->
-                    cropped.compress(Bitmap.CompressFormat.JPEG, 90, out)
-                } ?: return@runCatching null
-                // El nombre real es el del docPath que devolvió el proveedor, no el pedido (ver el
-                // mismo razonamiento en importCoverImage): si hubiera colisión, no coincidirían.
-                // Ver SafStorage.awaitReadable: mismo motivo que en importCoverImage.
-                if (!SafStorage.awaitReadable(appContext, docPath)) return@runCatching null
-                docPath.substringAfterLast('/')
+                val dest = File(dir, name)
+                // Temporal + renombrar, mismo motivo que en importCoverImage.
+                val tmp = AppStorage.tempFileIn(dir)
+                try {
+                    tmp.outputStream().use { out -> cropped.compress(Bitmap.CompressFormat.JPEG, 90, out) }
+                    if (!tmp.renameTo(dest)) return@runCatching null
+                } finally {
+                    tmp.delete()
+                }
+                SafStorage.bumpVersion(dest)
+                name
             }.getOrNull()
         }
 
@@ -1474,121 +1536,21 @@ class LibraryRepository private constructor(
 
     /** Borra una carátula importada que ya no usa nadie (best-effort). */
     suspend fun deleteCoverImage(imageName: String) = withContext(Dispatchers.IO) {
-        val dir = CoverArt.imagesDocPath(appContext)
-        if (dir != null && CoverArt.isRealImage(imageName)) {
-            runCatching { SafStorage.deleteRecursively(appContext, "$dir/$imageName") }
+        CoverArt.imageFile(appContext, imageName)?.let { file ->
+            runCatching { file.delete() }
+            SafStorage.bumpVersion(file)
         }
         Unit
     }
 
     /** Gemela de [deleteCoverImage], para la miniatura de YouTube cacheada. */
     suspend fun deleteVideoThumbnail(name: String) = withContext(Dispatchers.IO) {
-        val dir = CoverArt.imagesDocPath(appContext)
-        if (dir != null) runCatching { SafStorage.deleteRecursively(appContext, "$dir/$name") }
-        Unit
-    }
-
-    /**
-     * Copia (unidireccional, solo para inspección) la base de datos interna a
-     * `UltiMusic/databases/`, porque en algunos móviles no se puede entrar en /data/data.
-     * Best-effort: cualquier fallo se ignora (incluido que `UltiMusic` no esté concedida todavía).
-     * Antes hace checkpoint del WAL para que la copia sea consistente.
-     */
-    suspend fun exportDatabaseCopy() = withContext(Dispatchers.IO) {
-        runCatching {
-            // Nunca exportar antes de haber decidido cuál es la buena (ver SafStorage.isBackupChecked).
-            // Sin la marca pero con la carpeta ya concedida es una instalación anterior a este
-            // control, cuya BD es la de siempre: se da por decidida.
-            if (decisionInProgress) return@runCatching
-            if (!SafStorage.isBackupChecked(appContext)) {
-                if (SafStorage.ultiMusicTreeUri(appContext) == null) return@runCatching
-                SafStorage.markBackupChecked(appContext)
-            }
-
-            val db = UltiMusicDatabase.get(appContext)
-            db.query("PRAGMA wal_checkpoint(TRUNCATE)", null).use { it.moveToFirst() }
-
-            SafStorage.ensureUltiMusicRegistered(appContext)
-            val treeUri = SafStorage.ultiMusicTreeUri(appContext) ?: return@runCatching
-            val root = SafStorage.ultiMusicDocPath(appContext) ?: return@runCatching
-            val destDir = SafStorage.getOrCreateSubfolder(appContext, treeUri, root, "databases") ?: return@runCatching
-
-            val dbFile = appContext.getDatabasePath(UltiMusicDatabase.DB_NAME)
-            preserveBackupIfTableEmptied(treeUri, destDir, dbFile)
-            for (suffix in listOf("", "-wal", "-shm")) {
-                val src = File(dbFile.path + suffix)
-                if (!src.exists()) continue
-                val destName = dbFile.name + suffix
-                val destDocPath = "$destDir/$destName"
-                val docPath = if (SafStorage.exists(appContext, destDocPath)) {
-                    destDocPath
-                } else {
-                    SafStorage.createFile(appContext, treeUri, destDir, destName, "application/octet-stream")
-                } ?: continue
-                SafStorage.openOutputStream(appContext, docPath)?.use { output ->
-                    src.inputStream().use { input -> input.copyTo(output) }
-                }
-            }
-        }
-        Unit
-    }
-
-    /**
-     * Antes de que [exportDatabaseCopy] sobrescriba la copia, mira si alguna tabla que tenía filas
-     * en ella está ahora vacía en la BD real (borrado a propósito, o BD perdida/recreada). Si es así,
-     * guarda la copia antigua como `ultimusic.prev.db` y solo entonces se sobrescribe la principal:
-     * nunca se pierde el último estado "con datos", y si el usuario vació la tabla adrede la copia
-     * principal sigue reflejándolo. `prev` solo se reescribe en el siguiente vaciado, no en cada export.
-     */
-    private fun preserveBackupIfTableEmptied(treeUri: Uri, destDir: String, dbFile: File) {
-        val backupDocPath = "$destDir/${dbFile.name}"
-        if (!SafStorage.exists(appContext, backupDocPath)) return
-        val tmp = File(appContext.cacheDir, "backup_check.db")
-        try {
-            SafStorage.openInputStream(appContext, backupDocPath)?.use { input ->
-                tmp.outputStream().use { input.copyTo(it) }
-            } ?: return
-            val emptied = android.database.sqlite.SQLiteDatabase.openDatabase(
-                tmp.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-            ).use { old ->
-                android.database.sqlite.SQLiteDatabase.openDatabase(
-                    dbFile.path, null, android.database.sqlite.SQLiteDatabase.OPEN_READONLY
-                ).use { cur ->
-                    fun tables(d: android.database.sqlite.SQLiteDatabase) =
-                        d.rawQuery(
-                            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' " +
-                                "AND name NOT LIKE 'android_%' AND name NOT LIKE 'room_%'", null
-                        ).use { c -> buildList { while (c.moveToNext()) add(c.getString(0)) } }
-
-                    fun count(d: android.database.sqlite.SQLiteDatabase, t: String) =
-                        d.rawQuery("SELECT EXISTS(SELECT 1 FROM \"$t\")", null).use { c -> c.moveToFirst() && c.getInt(0) == 1 }
-
-                    val curTables = tables(cur).toSet()
-                    tables(old).any { t -> t in curTables && count(old, t) && !count(cur, t) }
-                }
-            }
-            if (!emptied) return
-            val prevName = "ultimusic.prev.db"
-            val prevDocPath = "$destDir/$prevName"
-            val target = if (SafStorage.exists(appContext, prevDocPath)) prevDocPath
-            else SafStorage.createFile(appContext, treeUri, destDir, prevName, "application/octet-stream")
-            if (target != null) {
-                SafStorage.openOutputStream(appContext, target)?.use { out ->
-                    tmp.inputStream().use { it.copyTo(out) }
-                }
-            }
-        } finally {
-            tmp.delete()
-        }
+        deleteCoverImage(name)
     }
 
     companion object {
         /** Mínimo de canciones de "Descargada recientemente", aunque sean de hace más de un mes. */
         private const val RECENTLY_ADDED_MIN = 20
-
-        /** true mientras [grantUltiMusicRoot] decide entre BD interna y copia: no se exporta. */
-        @Volatile
-        private var decisionInProgress = false
 
         @Volatile
         private var instance: LibraryRepository? = null
