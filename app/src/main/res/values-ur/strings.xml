@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">فنکار کی تصویر</string>
     <string name="shuffle_collection">بے ترتیب چلائیں</string>
+    <string name="shuffle_mode_on">بے ترتیب موڈ آن</string>
+    <string name="shuffle_mode_off">بے ترتیب موڈ آف</string>
     <string name="no_albums">ابھی کوئی البم نہیں ہے</string>
     <string name="no_artists">ابھی کوئی فنکار نہیں ہے</string>
     <string name="artist_others">دیگر</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">آپ تین نقطوں اور \"قطار میں شامل کریں\" پر ٹیپ کر کے قطار میں مزید موسیقی شامل کر سکتے ہیں</string>
     <string name="queue_expand_hint">پلے بیک قطار خود بخود بڑھتی جائے گی۔ قطار میں گانے شامل کرنے کے لیے آپ دائیں طرف گھسیٹ سکتے ہیں یا تین نقطوں اور \"قطار میں شامل کریں\" پر ٹیپ کر سکتے ہیں</string>
-    <string name="queue_expand_hint_genre">پلے بیک قطار آپ کی چنی ہوئی صنف کے گانوں سے خود بخود بڑھتی جائے گی۔ قطار میں گانے شامل کرنے کے لیے آپ دائیں طرف گھسیٹ سکتے ہیں یا تین نقطوں اور \"قطار میں شامل کریں\" پر ٹیپ کر سکتے ہیں</string>
     <string name="queue_hint_playlist">آپ تین نقطوں اور \"فہرست میں شامل کریں\" پر ٹیپ کر کے فہرست میں مزید موسیقی شامل کر سکتے ہیں</string>
     <string name="queue_end">آپ آخر تک پہنچ گئے</string>
     <string name="queue_empty">کوئی پلے بیک قطار نہیں ہے</string>

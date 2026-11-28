@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">শিল্পীর ছবি</string>
     <string name="shuffle_collection">এলোমেলো ক্রমে চালান</string>
+    <string name="shuffle_mode_on">শাফল মোড চালু</string>
+    <string name="shuffle_mode_off">শাফল মোড বন্ধ</string>
     <string name="no_albums">এখনো কোনো অ্যালবাম নেই</string>
     <string name="no_artists">এখনো কোনো শিল্পী নেই</string>
     <string name="artist_others">অন্যান্য</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">তিনটি বিন্দু ও \"সারিতে যোগ করুন\"-এ ট্যাপ করে সারিতে আরও সংগীত যোগ করতে পারেন</string>
     <string name="queue_expand_hint">প্লেব্যাক সারি স্বয়ংক্রিয়ভাবে বাড়তে থাকবে। সারিতে গান যোগ করতে ডানদিকে টানুন অথবা তিনটি বিন্দু ও \"সারিতে যোগ করুন\"-এ ট্যাপ করুন</string>
-    <string name="queue_expand_hint_genre">প্লেব্যাক সারি আপনার বাছাই করা ধরনের গান দিয়ে স্বয়ংক্রিয়ভাবে বাড়তে থাকবে। সারিতে গান যোগ করতে ডানদিকে টানুন অথবা তিনটি বিন্দু ও \"সারিতে যোগ করুন\"-এ ট্যাপ করুন</string>
     <string name="queue_hint_playlist">তিনটি বিন্দু ও \"তালিকায় যোগ করুন\"-এ ট্যাপ করে তালিকায় আরও সংগীত যোগ করতে পারেন</string>
     <string name="queue_end">আপনি শেষে পৌঁছে গেছেন</string>
     <string name="queue_empty">কোনো প্লেব্যাক সারি নেই</string>

@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">Picha ya msanii</string>
     <string name="shuffle_collection">Cheza kwa mpangilio nasibu</string>
+    <string name="shuffle_mode_on">Hali ya kuchanganya imewashwa</string>
+    <string name="shuffle_mode_off">Hali ya kuchanganya imezimwa</string>
     <string name="no_albums">Bado hakuna albamu</string>
     <string name="no_artists">Bado hakuna msanii</string>
     <string name="artist_others">Wengine</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">Unaweza kuongeza muziki zaidi kwenye foleni kwa kugusa vitone vitatu kisha «Ongeza kwenye foleni»</string>
     <string name="queue_expand_hint">Foleni ya kucheza itapanuka kiotomatiki. Ili kuongeza nyimbo kwenye foleni, unaweza kutelezesha kulia au kugusa vitone vitatu kisha «Ongeza kwenye foleni»</string>
-    <string name="queue_expand_hint_genre">Foleni ya kucheza itapanuka kiotomatiki kwa nyimbo za aina uliyochagua. Ili kuongeza nyimbo kwenye foleni, unaweza kutelezesha kulia au kugusa vitone vitatu kisha «Ongeza kwenye foleni»</string>
     <string name="queue_hint_playlist">Unaweza kuongeza muziki zaidi kwenye orodha kwa kugusa vitone vitatu kisha «Ongeza kwenye orodha»</string>
     <string name="queue_end">Umefika mwisho</string>
     <string name="queue_empty">Hakuna foleni ya kucheza</string>

@@ -84,6 +84,8 @@
     </plurals>
     <string name="person_image_desc">Слика извођача</string>
     <string name="shuffle_collection">Репродукуј насумично</string>
+    <string name="shuffle_mode_on">Насумични редосљед укључен</string>
+    <string name="shuffle_mode_off">Насумични редосљед искључен</string>
     <string name="no_albums">Још нема ниједног албума</string>
     <string name="no_artists">Још нема ниједног извођача</string>
     <string name="artist_others">Остали</string>
@@ -270,7 +272,6 @@
     </plurals>
     <string name="queue_hint_loose">Још музике можеш додати у ред додиром на три тачке и на „Додај у ред“</string>
     <string name="queue_expand_hint">Ред за репродукцију прошириће се аутоматски. Да додаш пјесме у ред, можеш повући удесно или додирнути три тачке и „Додај у ред“</string>
-    <string name="queue_expand_hint_genre">Ред за репродукцију аутоматски ће се проширити пјесмама жанра који си изабрао. Да додаш пјесме у ред, можеш повући удесно или додирнути три тачке и „Додај у ред“</string>
     <string name="queue_hint_playlist">Још музике можеш додати на листу додиром на три тачке и на „Додај на листу“</string>
     <string name="queue_end">Стигао си до краја</string>
     <string name="queue_empty">Нема реда репродукције</string>

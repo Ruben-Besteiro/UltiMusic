@@ -42,7 +42,13 @@ data class PlaybackProgress(val positionMs: Long = 0L, val durationMs: Long = 0L
  * [com.untar.ultimusic.ui.collection.CollectionDetailDialogFragment]); [ALBUM] y [ARTIST] los pone
  * la ficha de detalle (ver [com.untar.ultimusic.ui.library.DetailDialogFragment]).
  */
-enum class CollectionKind { LISTA, GENRE, TAG, ALBUM, ARTIST }
+enum class CollectionKind {
+    LISTA, GENRE, TAG, ALBUM, ARTIST;
+
+    /** Si su cola va creciendo de una en una (artista, género, etiqueta) en vez de llenarse entera
+     *  de golpe (álbum, lista). Ver `PlaybackService.startGrowing`. */
+    val grows: Boolean get() = this == GENRE || this == TAG || this == ARTIST
+}
 
 /** Volumen normal: sin amplificar. Es el mínimo del amplificador y su valor por defecto. */
 const val BOOST_MIN_PERCENT = 100
@@ -299,6 +305,9 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
     val queue: StateFlow<List<Song>> = serviceState(emptyList()) { it.queue }
     val currentIndex: StateFlow<Int> = serviceState(0) { it.currentIndex }
     val isLooseQueue: StateFlow<Boolean> = serviceState(false) { it.isLooseQueue }
+
+    /** Ver `PlaybackService.canGrow`: la cola de un artista/género/etiqueta seguirá creciendo sola. */
+    val canGrow: StateFlow<Boolean> = serviceState(false) { it.canGrow }
     val currentSong: StateFlow<Song?> = serviceState(null) { it.currentSong }
     val isPlaying: StateFlow<Boolean> = serviceState(false) { it.isPlaying }
     val progress: StateFlow<PlaybackProgress> = serviceState(PlaybackProgress()) { it.progress }
@@ -413,9 +422,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun play(song: Song) = withService { it.play(song) }
 
-    /** Ver `PlaybackService.playFromGenre`. */
-    fun playFromGenre(song: Song, genreName: String) = withService { it.playFromGenre(song, genreName) }
-
     /** Ver `PlaybackService.playRandomFromLibrary`. */
     fun playRandomFromLibrary() = withService { it.playRandomFromLibrary() }
 
@@ -450,16 +456,6 @@ class PlayerViewModel(app: Application) : AndroidViewModel(app) {
         playlistName: String? = null,
         collectionKind: CollectionKind? = null
     ) = withService { it.playCollection(collection, startIndex, playlistName, collectionKind) }
-
-    fun shuffleCollection(
-        collection: List<Song>,
-        playlistName: String? = null,
-        collectionKind: CollectionKind? = null
-    ) = withService { it.shuffleCollection(collection, playlistName, collectionKind) }
-
-    /** Ver `PlaybackService.setListaShuffle` (toggle de barajar de la ficha de una Lista). */
-    fun setListaShuffle(playlistName: String, songs: List<Song>, enabled: Boolean) =
-        withService { it.setListaShuffle(playlistName, songs, enabled) }
 
     /** Ver `PlaybackService.resetListaHistory` (botón de "N reproducidas" de la ficha de una Lista). */
     fun resetListaHistory(playlistName: String, songs: List<Song>) =

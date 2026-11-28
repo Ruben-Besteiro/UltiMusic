@@ -90,6 +90,8 @@
     </plurals>
     <string name="person_image_desc">صورة الفنان</string>
     <string name="shuffle_collection">تشغيل بترتيب عشوائي</string>
+    <string name="shuffle_mode_on">تم تفعيل التشغيل العشوائي</string>
+    <string name="shuffle_mode_off">تم إيقاف التشغيل العشوائي</string>
     <string name="no_albums">لا توجد ألبومات بعد</string>
     <string name="no_artists">لا يوجد فنانون بعد</string>
     <string name="artist_others">آخرون</string>
@@ -291,7 +293,6 @@
     </plurals>
     <string name="queue_hint_loose">يمكنك إضافة المزيد من الموسيقى إلى قائمة الانتظار بالضغط على النقاط الثلاث ثم \"إضافة إلى قائمة الانتظار\"</string>
     <string name="queue_expand_hint">ستتوسع قائمة انتظار التشغيل تلقائيًا. لإضافة أغانٍ إليها، يمكنك السحب لليمين أو الضغط على النقاط الثلاث ثم \"إضافة إلى قائمة الانتظار\"</string>
-    <string name="queue_expand_hint_genre">ستتوسع قائمة انتظار التشغيل تلقائيًا بأغانٍ من النوع الذي اخترته. لإضافة أغانٍ إليها، يمكنك السحب لليمين أو الضغط على النقاط الثلاث ثم \"إضافة إلى قائمة الانتظار\"</string>
     <string name="queue_hint_playlist">يمكنك إضافة المزيد من الموسيقى إلى القائمة بالضغط على النقاط الثلاث ثم \"إضافة إلى قائمة\"</string>
     <string name="queue_end">وصلت إلى النهاية</string>
     <string name="queue_empty">لا توجد قائمة انتظار للتشغيل</string>

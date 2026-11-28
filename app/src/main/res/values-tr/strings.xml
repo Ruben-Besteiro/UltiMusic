@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">Sanatçı görseli</string>
     <string name="shuffle_collection">Karışık çal</string>
+    <string name="shuffle_mode_on">Karışık çalma açık</string>
+    <string name="shuffle_mode_off">Karışık çalma kapalı</string>
     <string name="no_albums">Henüz hiç albüm yok</string>
     <string name="no_artists">Henüz hiç sanatçı yok</string>
     <string name="artist_others">Diğerleri</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">Üç noktaya ve \"Sıraya ekle\"ye dokunarak sıraya daha fazla müzik ekleyebilirsin</string>
     <string name="queue_expand_hint">Çalma sırası otomatik olarak uzayacak. Sıraya şarkı eklemek için sağa kaydırabilir ya da üç noktaya ve \"Sıraya ekle\"ye dokunabilirsin</string>
-    <string name="queue_expand_hint_genre">Çalma sırası, seçtiğin türdeki şarkılarla otomatik olarak uzayacak. Sıraya şarkı eklemek için sağa kaydırabilir ya da üç noktaya ve \"Sıraya ekle\"ye dokunabilirsin</string>
     <string name="queue_hint_playlist">Üç noktaya ve \"Listeye ekle\"ye dokunarak listeye daha fazla müzik ekleyebilirsin</string>
     <string name="queue_end">Sona ulaştın</string>
     <string name="queue_empty">Çalma sırası yok</string>

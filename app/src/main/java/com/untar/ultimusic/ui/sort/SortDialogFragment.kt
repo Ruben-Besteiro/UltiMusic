@@ -20,6 +20,7 @@ import com.untar.ultimusic.ui.library.LibraryViewModel
 import com.untar.ultimusic.ui.library.TagsViewModel
 import com.untar.ultimusic.ui.playlists.PlaylistsViewModel
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.FichaSort
 import com.untar.ultimusic.util.LibraryTab
 import com.untar.ultimusic.util.SortField
 import com.untar.ultimusic.util.SortOption
@@ -110,7 +111,7 @@ class SortDialogFragment : DialogFragment() {
         // editor de metadatos, no desde Ajustes).
         var lastFieldId = fieldsGroup.checkedRadioButtonId
         fieldsGroup.setOnCheckedChangeListener { group, checkedId ->
-            val noSongHasVideoUrl = checkedId == R.id.sortByPopularity && tab == LibraryTab.SONGS &&
+            val noSongHasVideoUrl = checkedId == R.id.sortByPopularity && tab.sortsSongs &&
                 songsViewModel.songs.value.none { !it.videoUrl.isNullOrBlank() }
             if (checkedId == R.id.sortByPopularity && YouTubeApiKeyStore.key.isEmpty()) {
                 group.check(lastFieldId)
@@ -163,6 +164,7 @@ class SortDialogFragment : DialogFragment() {
         LibraryTab.GENRES -> libraryViewModel.genresSort.value
         LibraryTab.TAGS -> tagsViewModel.sort.value
         LibraryTab.PLAYLISTS -> playlistsViewModel.sort.value
+        LibraryTab.ARTIST_SONGS, LibraryTab.GENRE_SONGS, LibraryTab.TAG_SONGS -> FichaSort.flow(tab).value
     }
 
     private fun applySelection(tab: LibraryTab, fieldButtons: Map<SortField, Int>) {
@@ -179,6 +181,8 @@ class SortDialogFragment : DialogFragment() {
             LibraryTab.PLAYLISTS -> playlistsViewModel.setSort(option)
             LibraryTab.ALBUMS, LibraryTab.ARTISTS, LibraryTab.GENRES ->
                 libraryViewModel.setSort(tab, option)
+            LibraryTab.ARTIST_SONGS, LibraryTab.GENRE_SONGS, LibraryTab.TAG_SONGS ->
+                FichaSort.set(tab, option)
         }
     }
 

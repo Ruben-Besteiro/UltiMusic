@@ -84,6 +84,8 @@
     </plurals>
     <string name="person_image_desc">Immagine dell\'artista</string>
     <string name="shuffle_collection">Riproduci in ordine casuale</string>
+    <string name="shuffle_mode_on">Riproduzione casuale attivata</string>
+    <string name="shuffle_mode_off">Riproduzione casuale disattivata</string>
     <string name="no_albums">Non ci sono ancora album</string>
     <string name="no_artists">Non ci sono ancora artisti</string>
     <string name="artist_others">Altri</string>
@@ -270,7 +272,6 @@
     </plurals>
     <string name="queue_hint_loose">Puoi aggiungere altra musica alla coda toccando i tre puntini e \"Aggiungi alla coda\"</string>
     <string name="queue_expand_hint">La coda di riproduzione si allungherà automaticamente. Per aggiungere brani alla coda, puoi trascinare verso destra o toccare i tre puntini e \"Aggiungi alla coda\"</string>
-    <string name="queue_expand_hint_genre">La coda di riproduzione si allungherà automaticamente con brani del genere che hai scelto. Per aggiungere brani alla coda, puoi trascinare verso destra o toccare i tre puntini e \"Aggiungi alla coda\"</string>
     <string name="queue_hint_playlist">Puoi aggiungere altra musica alla playlist toccando i tre puntini e \"Aggiungi a playlist\"</string>
     <string name="queue_end">Sei arrivato alla fine</string>
     <string name="queue_empty">Non c\'è nessuna coda di riproduzione</string>

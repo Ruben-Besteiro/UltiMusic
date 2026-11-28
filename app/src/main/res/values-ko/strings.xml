@@ -80,6 +80,8 @@
     </plurals>
     <string name="person_image_desc">아티스트 이미지</string>
     <string name="shuffle_collection">무작위 순서로 재생</string>
+    <string name="shuffle_mode_on">무작위 재생 켜짐</string>
+    <string name="shuffle_mode_off">무작위 재생 꺼짐</string>
     <string name="no_albums">아직 앨범이 없습니다</string>
     <string name="no_artists">아직 아티스트가 없습니다</string>
     <string name="artist_others">기타</string>
@@ -256,7 +258,6 @@
     </plurals>
     <string name="queue_hint_loose">점 3개 메뉴에서 \"대기열에 추가\"를 눌러 대기열에 음악을 더 추가할 수 있습니다</string>
     <string name="queue_expand_hint">재생 대기열은 자동으로 늘어납니다. 대기열에 노래를 추가하려면 오른쪽으로 밀거나 점 3개 메뉴에서 \"대기열에 추가\"를 누르세요</string>
-    <string name="queue_expand_hint_genre">재생 대기열은 선택한 장르의 노래로 자동으로 늘어납니다. 대기열에 노래를 추가하려면 오른쪽으로 밀거나 점 3개 메뉴에서 \"대기열에 추가\"를 누르세요</string>
     <string name="queue_hint_playlist">점 3개 메뉴에서 \"재생목록에 추가\"를 눌러 재생목록에 음악을 더 추가할 수 있습니다</string>
     <string name="queue_end">끝까지 왔습니다</string>
     <string name="queue_empty">재생 대기열이 없습니다</string>

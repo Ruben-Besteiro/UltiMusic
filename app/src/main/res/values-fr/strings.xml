@@ -84,6 +84,8 @@
     </plurals>
     <string name="person_image_desc">Image de l\'artiste</string>
     <string name="shuffle_collection">Lecture aléatoire</string>
+    <string name="shuffle_mode_on">Lecture aléatoire activée</string>
+    <string name="shuffle_mode_off">Lecture aléatoire désactivée</string>
     <string name="no_albums">Il n\'y a encore aucun album</string>
     <string name="no_artists">Il n\'y a encore aucun artiste</string>
     <string name="artist_others">Autres</string>
@@ -270,7 +272,6 @@
     </plurals>
     <string name="queue_hint_loose">Tu peux ajouter plus de musique à la file avec les trois points puis « Ajouter à la file »</string>
     <string name="queue_expand_hint">La file de lecture s\'allongera automatiquement. Pour ajouter des titres à la file, tu peux glisser vers la droite ou utiliser les trois points puis « Ajouter à la file »</string>
-    <string name="queue_expand_hint_genre">La file de lecture s\'allongera automatiquement avec des titres du genre choisi. Pour ajouter des titres à la file, tu peux glisser vers la droite ou utiliser les trois points puis « Ajouter à la file »</string>
     <string name="queue_hint_playlist">Tu peux ajouter plus de musique à la playlist avec les trois points puis « Ajouter à une playlist »</string>
     <string name="queue_end">Tu es arrivé à la fin</string>
     <string name="queue_empty">Il n\'y a pas de file de lecture</string>

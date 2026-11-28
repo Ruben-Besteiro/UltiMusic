@@ -80,6 +80,8 @@
     </plurals>
     <string name="person_image_desc">Gambar artis</string>
     <string name="shuffle_collection">Putar secara acak</string>
+    <string name="shuffle_mode_on">Mode acak aktif</string>
+    <string name="shuffle_mode_off">Mode acak nonaktif</string>
     <string name="no_albums">Belum ada album</string>
     <string name="no_artists">Belum ada artis</string>
     <string name="artist_others">Lainnya</string>
@@ -256,7 +258,6 @@
     </plurals>
     <string name="queue_hint_loose">Anda dapat menambahkan lebih banyak musik ke antrean dengan mengetuk tiga titik lalu \"Tambahkan ke antrean\"</string>
     <string name="queue_expand_hint">Antrean pemutaran akan bertambah secara otomatis. Untuk menambahkan lagu ke antrean, Anda dapat menggeser ke kanan atau mengetuk tiga titik lalu \"Tambahkan ke antrean\"</string>
-    <string name="queue_expand_hint_genre">Antrean pemutaran akan bertambah secara otomatis dengan lagu dari genre yang Anda pilih. Untuk menambahkan lagu ke antrean, Anda dapat menggeser ke kanan atau mengetuk tiga titik lalu \"Tambahkan ke antrean\"</string>
     <string name="queue_hint_playlist">Anda dapat menambahkan lebih banyak musik ke daftar putar dengan mengetuk tiga titik lalu \"Tambahkan ke daftar putar\"</string>
     <string name="queue_end">Anda sudah sampai di akhir</string>
     <string name="queue_empty">Tidak ada antrean pemutaran</string>

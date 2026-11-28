@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">Bild des Künstlers</string>
     <string name="shuffle_collection">Zufällig abspielen</string>
+    <string name="shuffle_mode_on">Zufallswiedergabe an</string>
+    <string name="shuffle_mode_off">Zufallswiedergabe aus</string>
     <string name="no_albums">Noch keine Alben vorhanden</string>
     <string name="no_artists">Noch keine Künstler vorhanden</string>
     <string name="artist_others">Andere</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">Du kannst über die drei Punkte und „Zur Warteschlange hinzufügen“ weitere Musik zur Warteschlange hinzufügen</string>
     <string name="queue_expand_hint">Die Warteschlange wird automatisch erweitert. Um Titel zur Warteschlange hinzuzufügen, kannst du nach rechts wischen oder die drei Punkte und „Zur Warteschlange hinzufügen“ verwenden</string>
-    <string name="queue_expand_hint_genre">Die Warteschlange wird automatisch mit Titeln des gewählten Genres erweitert. Um Titel zur Warteschlange hinzuzufügen, kannst du nach rechts wischen oder die drei Punkte und „Zur Warteschlange hinzufügen“ verwenden</string>
     <string name="queue_hint_playlist">Du kannst über die drei Punkte und „Zur Playlist hinzufügen“ weitere Musik zur Playlist hinzufügen</string>
     <string name="queue_end">Du bist am Ende angekommen</string>
     <string name="queue_empty">Es gibt keine Warteschlange</string>

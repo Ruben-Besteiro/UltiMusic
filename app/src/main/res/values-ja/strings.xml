@@ -80,6 +80,8 @@
     </plurals>
     <string name="person_image_desc">アーティストの画像</string>
     <string name="shuffle_collection">シャッフル再生</string>
+    <string name="shuffle_mode_on">シャッフルをオンにしました</string>
+    <string name="shuffle_mode_off">シャッフルをオフにしました</string>
     <string name="no_albums">まだアルバムがありません</string>
     <string name="no_artists">まだアーティストがいません</string>
     <string name="artist_others">その他</string>
@@ -256,7 +258,6 @@
     </plurals>
     <string name="queue_hint_loose">3点メニューから「キューに追加」を選ぶと、キューにさらに曲を追加できます</string>
     <string name="queue_expand_hint">再生キューは自動的に延長されます。キューに曲を追加するには、右にスワイプするか、3点メニューから「キューに追加」を選んでください</string>
-    <string name="queue_expand_hint_genre">再生キューは、選んだジャンルの曲で自動的に延長されます。キューに曲を追加するには、右にスワイプするか、3点メニューから「キューに追加」を選んでください</string>
     <string name="queue_hint_playlist">3点メニューから「プレイリストに追加」を選ぶと、プレイリストにさらに曲を追加できます</string>
     <string name="queue_end">最後まで到達しました</string>
     <string name="queue_empty">再生キューがありません</string>

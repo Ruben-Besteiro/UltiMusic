@@ -82,6 +82,8 @@
     </plurals>
     <string name="person_image_desc">Artist image</string>
     <string name="shuffle_collection">Play in random order</string>
+    <string name="shuffle_mode_on">Shuffle on</string>
+    <string name="shuffle_mode_off">Shuffle off</string>
     <string name="no_albums">There are no albums yet</string>
     <string name="no_artists">There are no artists yet</string>
     <string name="artist_others">Other</string>
@@ -263,7 +265,6 @@
     </plurals>
     <string name="queue_hint_loose">You can add more music to the queue by tapping the three dots and then \"Add to queue\"</string>
     <string name="queue_expand_hint">The playback queue will expand automatically. To add songs to the queue, swipe right or tap the three dots and then \"Add to queue\"</string>
-    <string name="queue_expand_hint_genre">The playback queue will expand automatically with songs from the genre you picked. To add songs to the queue, swipe right or tap the three dots and then \"Add to queue\"</string>
     <string name="queue_hint_playlist">You can add more music to the playlist by tapping the three dots and then \"Add to playlist\"</string>
     <string name="queue_end">You\'ve reached the end</string>
     <string name="queue_empty">There\'s no playback queue</string>

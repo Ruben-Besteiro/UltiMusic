@@ -86,6 +86,8 @@
     </plurals>
     <string name="person_image_desc">Фото исполнителя</string>
     <string name="shuffle_collection">Воспроизвести в случайном порядке</string>
+    <string name="shuffle_mode_on">Случайный порядок включён</string>
+    <string name="shuffle_mode_off">Случайный порядок выключен</string>
     <string name="no_albums">Альбомов пока нет</string>
     <string name="no_artists">Исполнителей пока нет</string>
     <string name="artist_others">Другие</string>
@@ -277,7 +279,6 @@
     </plurals>
     <string name="queue_hint_loose">Добавить музыку в очередь можно через три точки и «Добавить в очередь»</string>
     <string name="queue_expand_hint">Очередь воспроизведения будет пополняться автоматически. Чтобы добавить треки в очередь, проведите вправо или нажмите три точки и «Добавить в очередь»</string>
-    <string name="queue_expand_hint_genre">Очередь воспроизведения будет автоматически пополняться треками выбранного жанра. Чтобы добавить треки в очередь, проведите вправо или нажмите три точки и «Добавить в очередь»</string>
     <string name="queue_hint_playlist">Добавить музыку в плейлист можно через три точки и «Добавить в плейлист»</string>
     <string name="queue_end">Вы дошли до конца</string>
     <string name="queue_empty">Очередь воспроизведения отсутствует</string>

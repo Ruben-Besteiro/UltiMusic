@@ -70,7 +70,8 @@ class LibraryViewModel(app: Application) : AndroidViewModel(app) {
             LibraryTab.ALBUMS -> _albumsSort.value = option
             LibraryTab.ARTISTS -> _artistsSort.value = option
             LibraryTab.GENRES -> _genresSort.value = option
-            LibraryTab.SONGS, LibraryTab.TAGS, LibraryTab.PLAYLISTS ->
+            LibraryTab.SONGS, LibraryTab.TAGS, LibraryTab.PLAYLISTS,
+            LibraryTab.ARTIST_SONGS, LibraryTab.GENRE_SONGS, LibraryTab.TAG_SONGS ->
                 throw IllegalArgumentException("$tab no lo maneja LibraryViewModel")
         }
         SortPreferences.save(tab, option)

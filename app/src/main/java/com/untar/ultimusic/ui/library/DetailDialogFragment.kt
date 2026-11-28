@@ -50,12 +50,13 @@ import com.untar.ultimusic.ui.common.hasTopDialog
 import com.untar.ultimusic.ui.common.highlightNowPlaying
 import com.untar.ultimusic.ui.common.attachSwipeToQueue
 import com.untar.ultimusic.ui.common.sectionLetter
-import com.untar.ultimusic.ui.SongsViewModel
+import com.untar.ultimusic.ui.common.ShuffleToggleIcon
 import com.untar.ultimusic.ui.editor.AlbumEditorDialogFragment
 import com.untar.ultimusic.ui.editor.MetadataEditorDialogFragment
 import com.untar.ultimusic.ui.playlists.AddToPlaylistDialogFragment
 import com.untar.ultimusic.ui.sort.SortDialogFragment
 import com.untar.ultimusic.util.AccentTint
+import com.untar.ultimusic.util.CollectionShuffleStore
 import com.untar.ultimusic.util.CoverArt
 import com.untar.ultimusic.util.CoverLoader
 import com.untar.ultimusic.util.DynamicColor
@@ -81,7 +82,6 @@ class DetailDialogFragment : DialogFragment() {
 
     private val viewModel: DetailViewModel by viewModels()
     private val playerViewModel: PlayerViewModel by activityViewModels()
-    private val songsViewModel: SongsViewModel by activityViewModels()
 
     /** Color de fondo actual de la cabecera; se guarda para reteñir sus líneas al recrearlas. */
     private var currentHeaderColor: Int = Color.BLACK
@@ -94,10 +94,6 @@ class DetailDialogFragment : DialogFragment() {
             DetailKind.valueOf(args.getString(ARG_KIND)!!),
             args.getLong(ARG_ID)
         )
-        // Ver DetailViewModel.bindSongsSort: el ojo de esta ficha (solo para un artista) comparte
-        // criterio con la pestaña Canciones, así que se apunta al SongsViewModel COMPARTIDO de la
-        // actividad, no a uno propio de esta ficha.
-        viewModel.bindSongsSort { songsViewModel.sort }
     }
 
     /** El botón atrás del sistema, con una selección múltiple activa (ver [DetailViewModel.selectedIds]),
@@ -254,13 +250,20 @@ class DetailDialogFragment : DialogFragment() {
                     true
                 }
                 R.id.action_play_album -> {
-                    if (viewModel.songs.isNotEmpty()) {
-                        playerViewModel.playCollection(viewModel.songs, 0, collectionKind = collectionKind())
+                    val songs = viewModel.songs
+                    if (songs.isNotEmpty()) {
+                        // Con el aleatorio de álbumes puesto, "desde el principio" no tiene sentido:
+                        // la primera también sale al azar (el resto ya lo baraja PlaybackService).
+                        val start = if (CollectionShuffleStore.isOn(CollectionKind.ALBUM)) songs.indices.random() else 0
+                        playerViewModel.playCollection(songs, start, collectionKind = collectionKind())
                     }
                     true
                 }
                 R.id.action_shuffle -> {
-                    playerViewModel.shuffleCollection(viewModel.songs, collectionKind = collectionKind())
+                    // Interruptor del aleatorio de ESTE tipo de ficha (todos los álbumes o todos los
+                    // artistas, ver CollectionShuffleStore): no reproduce nada. El icono se repinta
+                    // solo con el `launch` que observa el interruptor, más abajo.
+                    collectionKind()?.let { CollectionShuffleStore.toggle(requireContext(), it) }
                     true
                 }
                 R.id.action_more_menu -> {
@@ -285,7 +288,7 @@ class DetailDialogFragment : DialogFragment() {
                 }
                 R.id.action_sort_artist_songs -> {
                     if (parentFragmentManager.findFragmentByTag(SortDialogFragment.TAG) == null) {
-                        SortDialogFragment.newInstance(LibraryTab.SONGS).show(parentFragmentManager, SortDialogFragment.TAG)
+                        SortDialogFragment.newInstance(LibraryTab.ARTIST_SONGS).show(parentFragmentManager, SortDialogFragment.TAG)
                     }
                     true
                 }
@@ -329,6 +332,14 @@ class DetailDialogFragment : DialogFragment() {
                     }
                 }
                 launch { playerViewModel.currentSong.collect { recyclerAlbums.invalidate() } }
+                launch {
+                    // Repinta el interruptor del aleatorio al tocarlo (o si cambiara desde otra ficha
+                    // del mismo tipo), sin esperar a que cambie el acento.
+                    val kind = collectionKind() ?: return@launch
+                    CollectionShuffleStore.flow(kind).collect {
+                        refreshShuffleIcon(toolbar, playerViewModel.accentColor.value)
+                    }
+                }
                 launch {
                     playerViewModel.accentColor.collect { accent ->
                         // Toda la ficha sigue el acento de LO QUE SUENA, el mismo que lleva el
@@ -422,13 +433,22 @@ class DetailDialogFragment : DialogFragment() {
         headerBox.setBackgroundColor(background)
         toolbar.setTitleTextColor(onBackground)
         toolbar.setNavigationIconTint(onBackground)
-        toolbar.menu.findItem(R.id.action_shuffle)?.icon?.setTint(onBackground)
+        refreshShuffleIcon(toolbar, accent)
         toolbar.menu.findItem(R.id.action_more_menu)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_sort_artist_songs)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_discography)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_discography_album)?.icon?.setTint(onBackground)
         toolbar.menu.findItem(R.id.action_play_album)?.icon?.setTint(onBackground)
         applyTextColor(infoLines, onBackground)
+    }
+
+    /** Pinta el interruptor del aleatorio de este tipo de ficha con su estado (ver [ShuffleToggleIcon]). */
+    private fun refreshShuffleIcon(toolbar: MaterialToolbar, accent: Int) {
+        val item = toolbar.menu.findItem(R.id.action_shuffle) ?: return
+        val kind = collectionKind() ?: return
+        val background = DynamicColor.asBackground(accent)
+        val onBackground = DynamicColor.onColor(background)
+        item.icon = ShuffleToggleIcon.build(requireContext(), CollectionShuffleStore.isOn(kind), background, onBackground)
     }
 
     private fun applyTextColor(infoLines: LinearLayout, color: Int) {

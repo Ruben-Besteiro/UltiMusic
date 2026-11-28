@@ -100,6 +100,10 @@
     <!-- Álbumes y artistas -->
     <string name="person_image_desc">Imagen del artista</string>
     <string name="shuffle_collection">Reproducir en orden aleatorio</string>
+    <!-- Toast al pulsar el interruptor de aleatorio de una ficha (álbum, artista, género, etiqueta o
+         lista, ver CollectionShuffleStore): afecta a todas las fichas de ese tipo. -->
+    <string name="shuffle_mode_on">Modo aleatorio activado</string>
+    <string name="shuffle_mode_off">Modo aleatorio desactivado</string>
     <string name="no_albums">Todavía no hay ningún álbum</string>
     <string name="no_artists">Todavía no hay ningún artista</string>
     <!-- Perfil que agrupa a los artistas con pocas canciones (ver ArtistGroupingPreferences) -->
@@ -396,9 +400,6 @@
          se irá alargando ella sola. Distinto de queue_hint_loose (ese vive siempre en infoBox,
          incluso con la cola ya alargada). -->
     <string name="queue_expand_hint">La cola de reproducción se expandirá automáticamente. Para añadir canciones a la cola, puedes arrastrar hacia la derecha o darle a los tres puntos y a \"Añadir a cola\"</string>
-    <!-- Igual que queue_expand_hint, pero cuando la cola suelta está anclada a un género (ver
-         PlaybackService.playFromGenre): se alarga sola, pero solo con canciones de ese género. -->
-    <string name="queue_expand_hint_genre">La cola de reproducción se expandirá automáticamente con canciones del género que escogiste. Para añadir canciones a la cola, puedes arrastrar hacia la derecha o darle a los tres puntos y a \"Añadir a cola\"</string>
     <string name="queue_hint_playlist">Puedes añadir más música a la lista dándole a los tres puntos y a \"Añadir a lista\"</string>
     <string name="queue_end">Has llegado al final</string>
     <!-- Igual que queue_end, pero para cuando no es que se haya acabado la cola/lista: es que

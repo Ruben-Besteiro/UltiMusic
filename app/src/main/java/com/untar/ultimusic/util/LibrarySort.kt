@@ -67,12 +67,46 @@ enum class LibraryTab(val titleRes: Int, val availableFields: List<SortField>) {
     ARTISTS(R.string.tab_artists, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION, SortField.POPULARITY)),
     GENRES(R.string.tab_genres, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION)),
     TAGS(R.string.tab_tags, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION)),
-    PLAYLISTS(R.string.tab_playlists, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION));
+    PLAYLISTS(R.string.tab_playlists, listOf(SortField.NAME, SortField.SONG_COUNT, SortField.DURATION)),
+
+    // No son pestañas del ViewPager (van DETRÁS de las seis a propósito: MainActivity elige la
+    // pestaña por posición y nunca llega a estas): son las listas de canciones de las fichas de
+    // artista, género y etiqueta, cada tipo con su propio ojo y su propio orden guardado, separado
+    // del de la pestaña Canciones (ver [FichaSort]). Mismos criterios que Canciones.
+    ARTIST_SONGS(R.string.tab_songs, SONGS.availableFields),
+    GENRE_SONGS(R.string.tab_songs, SONGS.availableFields),
+    TAG_SONGS(R.string.tab_songs, SONGS.availableFields);
 
     /** Si [field] no es válido para esta pestaña, cae a [SortField.NAME]: pasa si [SortPreferences]
      *  tenía guardado un criterio de una versión anterior que ya no aplica aquí. */
     fun sanitize(option: SortOption): SortOption =
         if (option.field in availableFields) option else SortOption.DEFAULT
+
+    /** Si lo que ordena son canciones (la pestaña Canciones o la lista de una ficha). */
+    val sortsSongs: Boolean get() = this == SONGS || this == ARTIST_SONGS || this == GENRE_SONGS || this == TAG_SONGS
+}
+
+/**
+ * El orden de la lista de canciones de cada TIPO de ficha (artista, género, etiqueta), el que elige
+ * su ojo. Uno por tipo, no por ficha: todas las fichas de artista comparten orden. Es un `object` con
+ * un [StateFlow] por tipo (y no un ViewModel de la ficha, que muere al cerrarla) para que cambiar el
+ * orden se vea al instante en la ficha abierta y en la próxima que se abra, y para que la cola
+ * que se reproduzca desde ahí siga exactamente ese orden (ver `PlaybackService.startGrowing`).
+ */
+object FichaSort {
+    private val flows = mutableMapOf<LibraryTab, kotlinx.coroutines.flow.MutableStateFlow<SortOption>>()
+
+    private fun mutable(tab: LibraryTab) = synchronized(flows) {
+        // Perezoso: SortPreferences se inicializa en UltiMusicApp, antes de que nadie lea esto.
+        flows.getOrPut(tab) { kotlinx.coroutines.flow.MutableStateFlow(com.untar.ultimusic.data.SortPreferences.get(tab)) }
+    }
+
+    fun flow(tab: LibraryTab): kotlinx.coroutines.flow.StateFlow<SortOption> = mutable(tab)
+
+    fun set(tab: LibraryTab, option: SortOption) {
+        com.untar.ultimusic.data.SortPreferences.save(tab, option)
+        mutable(tab).value = option
+    }
 }
 
 /**
